@@ -19,6 +19,7 @@ function seedFullUser(harness: ReturnType<typeof createFakeFirestore>, uid: stri
   harness.seed(`users/${uid}/workoutProgramState/active`);
   harness.seed(`users/${uid}/workoutExecutions/exec1`);
   harness.seed(`users/${uid}/workoutExecutionState/current`);
+  harness.seed(`users/${uid}/workoutExecutionOccurrenceCounters/exec_wpg1_0_2026-10-03`);
   harness.seed(`users/${uid}/exerciseSubstitutionPreferences/bench_press`);
   harness.seed(`users/${uid}/workoutPrograms/wpg1/progressionEvents/pe1`);
   harness.seed(`users/${uid}/workoutPrograms/wpg1/scheduleState/state1`);
@@ -78,6 +79,7 @@ describe('runFirestoreCleanup — happy path', () => {
     expect(harness.listUnder('users/uid-1/workoutProgramState/')).toHaveLength(0);
     expect(harness.listUnder('users/uid-1/workoutExecutions/')).toHaveLength(0);
     expect(harness.listUnder('users/uid-1/workoutExecutionState/')).toHaveLength(0);
+    expect(harness.listUnder('users/uid-1/workoutExecutionOccurrenceCounters/')).toHaveLength(0);
     expect(harness.listUnder('users/uid-1/exerciseSubstitutionPreferences/')).toHaveLength(0);
     expect(harness.listUnder('users/uid-1/workoutPrograms/wpg1/progressionEvents/')).toHaveLength(0);
     expect(harness.listUnder('users/uid-1/workoutPrograms/wpg1/scheduleState/')).toHaveLength(0);
@@ -194,7 +196,7 @@ describe('runFirestoreCleanup — ordering (Fase 6 §10)', () => {
       'notificationProductWindows', 'notificationAchievementMilestones', 'dailyNotificationRegistration', 'entitlementSignal',
       'workoutProgramDescendants',
       'workoutLifecycleEvents', 'workoutLifecycleAuthorityGrants', 'workoutLifecycleTrustedTelemetryReceipts', 'pendingEvolutions', 'programInstances', 'trainingCycles', 'workoutLifecycleState',
-      'workoutPrograms', 'workoutProgramState', 'exerciseSubstitutionPreferences', 'workoutExecutionState', 'workoutExecutions', 'userProfile',
+      'workoutPrograms', 'workoutProgramState', 'exerciseSubstitutionPreferences', 'workoutExecutionState', 'workoutExecutionOccurrenceCounters', 'workoutExecutions', 'userProfile',
     ]);
   });
 });

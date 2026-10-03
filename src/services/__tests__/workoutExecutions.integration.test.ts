@@ -18,6 +18,7 @@ import {
 } from '@firebase/rules-unit-testing';
 import {
   collection,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -1040,6 +1041,158 @@ describe.skipIf(!enabled)('Workout Execution & History — real Firestore Emulat
     ));
     expect(inProgress.docs.map((item) => item.id)).toEqual([restarted.executionId]);
     expect((await loadActiveExecutionPointer(UID))?.executionId).toBe(restarted.executionId);
+  });
+
+  // ── flexible schedule — same sessionIndex repeating on the same day ────
+  // (2026-10 fix: `programInstanceId + sessionIndex + scheduledLocalDate`
+  // is NOT a unique execution identity under `flexible` — the rotation can
+  // legitimately wrap back onto an already-completed index same-day. A
+  // `fixed` program (the `program()` fixture's default) keeps the exact
+  // pre-fix `SESSION_ALREADY_FINISHED` behavior — already proven above.
+  describe('flexible schedule — multiple occurrences of the same session, same day', () => {
+    function flexibleProgram(overrides: Partial<WorkoutProgramSnapshot> = {}): WorkoutProgramSnapshot {
+      return program({ scheduleMode: 'flexible', ...overrides } as Partial<WorkoutProgramSnapshot>);
+    }
+
+    it('1-session program: A -> A -> A same day produces three distinct, legitimate executions', async () => {
+      const date = '2026-10-03';
+      const oneSessionProgram = flexibleProgram({
+        sessions: [
+          { name: 'A', type: 'strength', exercises: [{ exerciseId: 'bench_press', sourceExerciseId: 'bench_press', sets: 3, reps: '8-12' }] },
+        ],
+      } as never);
+      const a1 = await startOrResumeWorkoutExecution({ uid: UID, program: oneSessionProgram, sessionIndex: 0, scheduledLocalDate: date });
+      await finishWorkoutExecution(UID, a1.executionId);
+      const a2 = await startOrResumeWorkoutExecution({ uid: UID, program: oneSessionProgram, sessionIndex: 0, scheduledLocalDate: date });
+      await finishWorkoutExecution(UID, a2.executionId);
+      const a3 = await startOrResumeWorkoutExecution({ uid: UID, program: oneSessionProgram, sessionIndex: 0, scheduledLocalDate: date });
+
+      expect(new Set([a1.executionId, a2.executionId, a3.executionId]).size).toBe(3);
+      expect(a1.executionId).toBe('exec_wpg_test1_0_2026-10-03');
+      expect(a2.executionId).toBe('exec_wpg_test1_0_2026-10-03_o2');
+      expect(a3.executionId).toBe('exec_wpg_test1_0_2026-10-03_o3');
+      expect(a1.occurrence).toBe(1);
+      expect(a2.occurrence).toBe(2);
+      expect(a3.occurrence).toBe(3);
+    });
+
+    it('2-session program: A -> B -> A -> B same day produces four distinct, legitimate executions', async () => {
+      const date = '2026-10-03';
+      const twoSessionProgram = flexibleProgram({
+        sessions: [
+          { name: 'A', type: 'strength', exercises: [{ exerciseId: 'bench_press', sourceExerciseId: 'bench_press', sets: 3, reps: '8-12' }] },
+          { name: 'B', type: 'strength', exercises: [{ exerciseId: 'squat', sourceExerciseId: 'squat', sets: 3, reps: '8-12' }] },
+        ],
+      } as never);
+      const a1 = await startOrResumeWorkoutExecution({ uid: UID, program: twoSessionProgram, sessionIndex: 0, scheduledLocalDate: date });
+      await finishWorkoutExecution(UID, a1.executionId);
+      const b1 = await startOrResumeWorkoutExecution({ uid: UID, program: twoSessionProgram, sessionIndex: 1, scheduledLocalDate: date });
+      await finishWorkoutExecution(UID, b1.executionId);
+      const a2 = await startOrResumeWorkoutExecution({ uid: UID, program: twoSessionProgram, sessionIndex: 0, scheduledLocalDate: date });
+      await finishWorkoutExecution(UID, a2.executionId);
+      const b2 = await startOrResumeWorkoutExecution({ uid: UID, program: twoSessionProgram, sessionIndex: 1, scheduledLocalDate: date });
+
+      const ids = [a1.executionId, b1.executionId, a2.executionId, b2.executionId];
+      expect(new Set(ids).size).toBe(4);
+      expect(ids).toEqual([
+        'exec_wpg_test1_0_2026-10-03',
+        'exec_wpg_test1_1_2026-10-03',
+        'exec_wpg_test1_0_2026-10-03_o2',
+        'exec_wpg_test1_1_2026-10-03_o2',
+      ]);
+      // Every execution's own history record survives — two same-day
+      // sessions never collapse into one.
+      const history = await listExecutionsForProgram(UID, 'wpg_test1');
+      expect(history.map((item) => item.executionId).sort()).toEqual([...ids].sort());
+    });
+
+    it('3-session program: A -> B -> C -> A same day produces four distinct, legitimate executions', async () => {
+      const date = '2026-10-03';
+      const threeSessionProgram = flexibleProgram({
+        sessions: [
+          { name: 'A', type: 'strength', exercises: [{ exerciseId: 'bench_press', sourceExerciseId: 'bench_press', sets: 3, reps: '8-12' }] },
+          { name: 'B', type: 'strength', exercises: [{ exerciseId: 'squat', sourceExerciseId: 'squat', sets: 3, reps: '8-12' }] },
+          { name: 'C', type: 'strength', exercises: [{ exerciseId: 'deadlift', sourceExerciseId: 'deadlift', sets: 3, reps: '8-12' }] },
+        ],
+      } as never);
+      const a1 = await startOrResumeWorkoutExecution({ uid: UID, program: threeSessionProgram, sessionIndex: 0, scheduledLocalDate: date });
+      await finishWorkoutExecution(UID, a1.executionId);
+      const b1 = await startOrResumeWorkoutExecution({ uid: UID, program: threeSessionProgram, sessionIndex: 1, scheduledLocalDate: date });
+      await finishWorkoutExecution(UID, b1.executionId);
+      const c1 = await startOrResumeWorkoutExecution({ uid: UID, program: threeSessionProgram, sessionIndex: 2, scheduledLocalDate: date });
+      await finishWorkoutExecution(UID, c1.executionId);
+      const a2 = await startOrResumeWorkoutExecution({ uid: UID, program: threeSessionProgram, sessionIndex: 0, scheduledLocalDate: date });
+
+      const ids = [a1.executionId, b1.executionId, c1.executionId, a2.executionId];
+      expect(new Set(ids).size).toBe(4);
+      expect(a2.executionId).toBe('exec_wpg_test1_0_2026-10-03_o2');
+    });
+
+    it('retry/resume of the SAME in-progress occurrence lands on the same id — never allocates a new occurrence', async () => {
+      const date = '2026-10-03';
+      const a1 = await startOrResumeWorkoutExecution({ uid: UID, program: flexibleProgram(), sessionIndex: 0, scheduledLocalDate: date });
+      await finishWorkoutExecution(UID, a1.executionId);
+      const a2 = await startOrResumeWorkoutExecution({ uid: UID, program: flexibleProgram(), sessionIndex: 0, scheduledLocalDate: date });
+      // Retry/resume of the SAME still-IN_PROGRESS occurrence 2 — a double
+      // tap, a network retry, a cold start — must converge on a2, not mint
+      // occurrence 3.
+      const a2Retry = await startOrResumeWorkoutExecution({ uid: UID, program: flexibleProgram(), sessionIndex: 0, scheduledLocalDate: date });
+      expect(a2Retry.executionId).toBe(a2.executionId);
+      const state = await getDoc(doc(mocks.db as never, 'users', UID, 'workoutExecutionState', 'current'));
+      expect(state.data()?.executionId).toBe(a2.executionId);
+    });
+
+    it('two near-simultaneous starts of the next same-day occurrence converge on ONE occurrence, never two', async () => {
+      const date = '2026-10-03';
+      const a1 = await startOrResumeWorkoutExecution({ uid: UID, program: flexibleProgram(), sessionIndex: 0, scheduledLocalDate: date });
+      await finishWorkoutExecution(UID, a1.executionId);
+
+      const [x, y] = await Promise.all([
+        startOrResumeWorkoutExecution({ uid: UID, program: flexibleProgram(), sessionIndex: 0, scheduledLocalDate: date }),
+        startOrResumeWorkoutExecution({ uid: UID, program: flexibleProgram(), sessionIndex: 0, scheduledLocalDate: date }),
+      ]);
+      // Both calls resolve (unlike the DIFFERENT-session conflict case) —
+      // they converge on the SAME occurrence 2, exactly like the existing
+      // "double start() for the SAME session while active" guarantee above.
+      expect(x.executionId).toBe(y.executionId);
+      expect(x.executionId).toBe('exec_wpg_test1_0_2026-10-03_o2');
+      const inProgress = await getDocs(query(
+        collection(mocks.db as never, 'users', UID, 'workoutExecutions'),
+        where('status', '==', 'IN_PROGRESS'),
+      ));
+      // Exactly one IN_PROGRESS doc — never a stray occurrence 3 forked off
+      // by the loser of the race.
+      expect(inProgress.docs.map((item) => item.id)).toEqual([x.executionId]);
+      const state = await getDoc(doc(mocks.db as never, 'users', UID, 'workoutExecutionState', 'current'));
+      expect(state.data()?.executionId).toBe(x.executionId);
+    });
+
+    it('an IN_PROGRESS occurrence still blocks starting a DIFFERENT session the same day (mutex unchanged)', async () => {
+      const date = '2026-10-03';
+      const twoSessionProgram = flexibleProgram({
+        sessions: [
+          { name: 'A', type: 'strength', exercises: [{ exerciseId: 'bench_press', sourceExerciseId: 'bench_press', sets: 3, reps: '8-12' }] },
+          { name: 'B', type: 'strength', exercises: [{ exerciseId: 'squat', sourceExerciseId: 'squat', sets: 3, reps: '8-12' }] },
+        ],
+      } as never);
+      await startOrResumeWorkoutExecution({ uid: UID, program: twoSessionProgram, sessionIndex: 0, scheduledLocalDate: date });
+      await expect(
+        startOrResumeWorkoutExecution({ uid: UID, program: twoSessionProgram, sessionIndex: 1, scheduledLocalDate: date }),
+      ).rejects.toThrow(WorkoutExecutionConflictError);
+    });
+
+    it('a legacy/historical execution doc with no `occurrence` field still loads fine and degrades to occurrence 1', async () => {
+      const started = await startOrResumeWorkoutExecution({ uid: UID, program: flexibleProgram(), sessionIndex: 0, scheduledLocalDate: '2026-10-03' });
+      // Simulates a pre-fix document, written before `occurrence` existed.
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await updateDoc(doc(ctx.firestore(), 'users', UID, 'workoutExecutions', started.executionId), {
+          occurrence: deleteField(),
+        });
+      });
+      const loaded = await loadWorkoutExecution(UID, started.executionId);
+      expect(loaded?.occurrence).toBeUndefined();
+      expect(loaded?.status).toBe('IN_PROGRESS');
+    });
   });
 
   // ── P0 integrity fix (2026-09) — workoutExecutionState/current mutex ────

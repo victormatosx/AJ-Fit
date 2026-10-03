@@ -26,6 +26,7 @@ import type { ManualSubstitutionUserContext } from '../services/exerciseSubstitu
 import {
   finalizeWorkoutSession,
   type FinalizeWorkoutSessionResult,
+  type WorkoutFinalizationMode,
 } from '../services/finalizeWorkoutSession';
 import type { WorkoutProgramSnapshot } from '../services/workoutPrograms';
 import { WorkoutMutationQueue } from '../workoutLifecycle/mutationQueue';
@@ -34,6 +35,7 @@ import {
   type WorkoutStartFlight,
 } from './startSingleFlight';
 import { publishWorkoutLoadRefresh } from '../loadProgress/workoutLoadRefreshBus';
+import { sweepPendingSetsToSkipped } from './types';
 
 function deviceTimezone(): string {
   try {
@@ -111,7 +113,7 @@ export interface WorkoutExecutionController {
    * next either way.
    */
   /** Flushes queued set writes, then atomically finalizes cardio (if supplied), Execution and Schedule server-side. */
-  finalize: (actualCardioDurationSeconds?: number) => Promise<
+  finalize: (actualCardioDurationSeconds?: number, mode?: WorkoutFinalizationMode) => Promise<
     { ok: true; result: FinalizeWorkoutSessionResult } | { ok: false; error: unknown }
   >;
   /**
@@ -454,7 +456,10 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
     }
   }, [uid, execution]);
 
-  const finalize = useCallback(async (actualCardioDurationSeconds?: number): Promise<
+  const finalize = useCallback(async (
+    actualCardioDurationSeconds?: number,
+    mode: WorkoutFinalizationMode = 'NORMAL',
+  ): Promise<
     { ok: true; result: FinalizeWorkoutSessionResult } | { ok: false; error: unknown }
   > => {
     if (!uid || !execution) return { ok: false, error: new Error('no_active_execution') };
@@ -462,6 +467,7 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
       programId: execution.programId,
       executionId: execution.executionId,
       sessionIndex: execution.sessionIndex,
+      mode,
     });
     try {
       const flushStartedAtMs = Date.now();
@@ -484,16 +490,36 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
       }
       const result = await finalizeWorkoutSession({
         executionId: execution.executionId,
+        ...(mode === 'NORMAL' ? {} : { mode }),
         ...(actualCardioDurationSeconds === undefined ? {} : {
           cardio: { actualDurationSeconds: actualCardioDurationSeconds },
         }),
       });
-      setExecution((prev) => (prev ? { ...prev, status: result.executionStatus, finishedAt: prev.finishedAt } : prev));
+      setExecution((prev) => {
+        if (!prev || prev.executionId !== execution.executionId) return prev;
+        const cardio = result.cardioStatus === 'SKIPPED'
+          ? { status: 'SKIPPED' as const, reason: 'EARLY_FINISH' as const, skippedAt: null }
+          : result.cardioStatus === 'COMPLETED' && actualCardioDurationSeconds !== undefined
+            ? { status: 'COMPLETED' as const, actualDurationSeconds: actualCardioDurationSeconds, completedAt: null }
+            : prev.cardio;
+        return {
+          ...prev,
+          status: result.executionStatus,
+          exercises: sweepPendingSetsToSkipped(prev.exercises),
+          cardio,
+          completion: result.completion,
+          // Mirrors exactly what the server just persisted (`data.mode` on
+          // the request this call made) — never inferred from `status`.
+          finalizationMode: mode,
+          timestampAuthority: 'LOCAL_UI_PROJECTION',
+        };
+      });
       logInfo('workout_execution', 'execution_finalization_succeeded', {
         programId: execution.programId,
         executionId: execution.executionId,
         sessionIndex: execution.sessionIndex,
         status: result.executionStatus,
+        mode,
       });
       return { ok: true, result };
     } catch (error) {

@@ -22,6 +22,15 @@ function sets(status: 'PENDING' | 'COMPLETED' = 'COMPLETED') {
   return [0, 1, 2].map((setIndex) => ({ setIndex, status, actualReps: 10, weightKg: 20 }));
 }
 
+function completionSets(completed: number, planned: number) {
+  return Array.from({ length: planned }, (_, setIndex) => ({
+    setIndex,
+    status: setIndex < completed ? 'COMPLETED' : 'PENDING',
+    actualReps: setIndex < completed ? 8 + setIndex : null,
+    weightKg: setIndex < completed ? 20 + setIndex : null,
+  }));
+}
+
 function execution(overrides: Record<string, unknown> = {}) {
   return {
     programId: PROGRAM_ID,
@@ -96,6 +105,7 @@ describe.skipIf(!enabled)('finalizeWorkoutSession — real Firestore Emulator in
   it('atomically terminalizes strength Execution, clears mutex and completes Schedule', async () => {
     await expect(finalize()).resolves.toEqual({
       status: 'COMPLETED', executionStatus: 'COMPLETED', cardioStatus: 'NOT_APPLICABLE', scheduleStatus: 'COMPLETED',
+      completion: { plannedSets: 3, completedSets: 3, percentageBasisPoints: 10_000 },
     });
     const [executionDoc, pointer, event, state] = await Promise.all([
       root.collection('workoutExecutions').doc(EXECUTION_ID).get(),
@@ -108,6 +118,51 @@ describe.skipIf(!enabled)('finalizeWorkoutSession — real Firestore Emulator in
     expect(pointer.exists).toBe(false);
     expect(event.data()).toMatchObject({ type: 'COMPLETED', sessionIndex: 0, scheduledDate: today });
     expect(state.data()).toMatchObject({ nextSessionIndex: 0, lastCompletedAt: today });
+  });
+
+  it.each([
+    [4, 10, 4000],
+    [7, 10, 7000],
+    [9, 10, 9000],
+    [10, 10, 10000],
+  ])('EARLY persists authoritative completion for %i/%i sets', async (completed, planned, basisPoints) => {
+    await Promise.all([
+      root.collection('workoutPrograms').doc(PROGRAM_ID).set({
+        ...program(),
+        sessions: [{ name: 'A', exercises: [{ exerciseId: 'squat', sets: planned }] }],
+      }),
+      root.collection('workoutExecutions').doc(EXECUTION_ID).update({
+        exercises: [{
+          exerciseIndex: 0,
+          prescribedExerciseId: 'squat',
+          exerciseId: 'squat',
+          sets: completionSets(completed, planned),
+        }],
+      }),
+    ]);
+
+    const result = await finalize({ mode: 'EARLY' });
+    expect(result.completion).toEqual({
+      plannedSets: planned,
+      completedSets: completed,
+      percentageBasisPoints: basisPoints,
+    });
+    const terminal = (await root.collection('workoutExecutions').doc(EXECUTION_ID).get()).data()!;
+    expect(terminal.completion).toEqual(result.completion);
+    expect(terminal.exercises[0].sets.filter((set: { status: string }) => set.status === 'PENDING')).toHaveLength(0);
+    expect(terminal.exercises[0].sets.slice(0, completed)).toEqual(completionSets(completed, planned).slice(0, completed));
+    expect(terminal.exercises[0].sets.slice(completed).every((set: { status: string }) => set.status === 'SKIPPED')).toBe(true);
+  });
+
+  it('rejects EARLY with no completed set and leaves execution/schedule untouched', async () => {
+    await root.collection('workoutExecutions').doc(EXECUTION_ID).update({
+      exercises: [{ exerciseIndex: 0, prescribedExerciseId: 'squat', exerciseId: 'squat', sets: sets('PENDING') }],
+    });
+    await expect(finalize({ mode: 'EARLY' })).rejects.toMatchObject({
+      message: 'early_finish_requires_completed_set',
+    });
+    expect((await root.collection('workoutExecutions').doc(EXECUTION_ID).get()).data()?.status).toBe('IN_PROGRESS');
+    expect((await root.collection('workoutExecutionState').doc('current').get()).exists).toBe(true);
   });
 
   it('finalizes Friday early on Thursday against the prescribed Friday opportunity', async () => {
@@ -233,6 +288,61 @@ describe.skipIf(!enabled)('finalizeWorkoutSession — real Firestore Emulator in
     expect(state.data()).toMatchObject({ nextSessionIndex: 1, lastCompletedAt: today });
   });
 
+  // 2026-10 fix (agenda livre): `programInstanceId + sessionIndex +
+  // scheduledLocalDate` is not a unique schedule-event identity under
+  // `flexible` — the SAME sessionIndex can legitimately recur same-day.
+  it('flexible same-day repeat of the same sessionIndex: distinct schedule events, each finalize advances the cursor once, retry never double-advances', async () => {
+    const EXECUTION_ID_2 = 'exec_finalize_0_o2';
+    await Promise.all([
+      root.collection('workoutPrograms').doc(PROGRAM_ID).set({
+        ...program(),
+        scheduleMode: 'flexible',
+        prescribedTrainingFrequency: 1,
+        weeklySchedule: [],
+        sessions: [{ name: 'A', exercises: [{ exerciseId: 'squat', sets: 3 }] }],
+      }),
+      root.collection('programInstances').doc(INSTANCE_ID).update({
+        prescriptionInputSnapshot: { inputs: { scheduleMode: 'flexible', trainingDays: null } },
+      }),
+      root.collection('workoutProgramState').doc('scheduleConfig').set({
+        scheduleMode: 'flexible', trainingDays: [], timezone: 'UTC',
+      }),
+      root.collection('workoutExecutions').doc(EXECUTION_ID_2).set(execution({ occurrence: 2 })),
+    ]);
+
+    // Occurrence 1 finalizes first — sessionCount is 1, so the cursor wraps
+    // right back to 0, exactly the condition that used to collide.
+    await expect(finalize()).resolves.toMatchObject({ status: 'COMPLETED' });
+    const [occurrence1Event, stateAfterFirst] = await Promise.all([
+      root.collection('workoutPrograms').doc(PROGRAM_ID).collection('scheduleEvents')
+        .doc(`${INSTANCE_ID}_completed_0_${today}`).get(),
+      root.collection('workoutPrograms').doc(PROGRAM_ID).collection('scheduleState').doc(INSTANCE_ID).get(),
+    ]);
+    expect(occurrence1Event.exists).toBe(true);
+    expect(stateAfterFirst.data()).toMatchObject({ nextSessionIndex: 0, lastCompletedAt: today });
+
+    // Occurrence 2 — same sessionIndex, same scheduledLocalDate, a DIFFERENT
+    // execution — finalizes normally (agenda livre), never rejected as
+    // "already completed today", and gets its OWN, distinct event.
+    await expect(finalizeWorkoutSessionHandler(request(UID, { executionId: EXECUTION_ID_2 }), db))
+      .resolves.toMatchObject({ status: 'COMPLETED' });
+    const [occurrence2Event, stateAfterSecond] = await Promise.all([
+      root.collection('workoutPrograms').doc(PROGRAM_ID).collection('scheduleEvents')
+        .doc(`${INSTANCE_ID}_completed_0_${today}_o2`).get(),
+      root.collection('workoutPrograms').doc(PROGRAM_ID).collection('scheduleState').doc(INSTANCE_ID).get(),
+    ]);
+    expect(occurrence2Event.exists).toBe(true);
+    expect(occurrence1Event.id).not.toBe(occurrence2Event.id);
+    expect(stateAfterSecond.data()).toMatchObject({ nextSessionIndex: 0, lastCompletedAt: today });
+
+    // Retry of occurrence 2 — idempotent: its event already exists, so no
+    // second COMPLETED event is written and the cursor never advances twice.
+    await expect(finalizeWorkoutSessionHandler(request(UID, { executionId: EXECUTION_ID_2 }), db))
+      .resolves.toMatchObject({ status: 'COMPLETED' });
+    const events = await root.collection('workoutPrograms').doc(PROGRAM_ID).collection('scheduleEvents').get();
+    expect(events.docs.filter((doc) => doc.data().type === 'COMPLETED')).toHaveLength(2);
+  });
+
   it('rejects a flexible execution whose session differs from nextSessionIndex', async () => {
     await Promise.all([
       root.collection('workoutPrograms').doc(PROGRAM_ID).set({
@@ -290,6 +400,61 @@ describe.skipIf(!enabled)('finalizeWorkoutSession — real Firestore Emulator in
     await expect(finalize({ cardio: { actualDurationSeconds: 600 } })).resolves.toMatchObject({ cardioStatus: 'COMPLETED' });
     expect((await root.collection('workoutExecutions').doc(EXECUTION_ID).get()).data()?.cardio)
       .toMatchObject({ status: 'COMPLETED', actualDurationSeconds: 600 });
+  });
+
+  it('EARLY explicitly skips prescribed cardio without fabricating a zero-duration completion', async () => {
+    await root.collection('workoutPrograms').doc(PROGRAM_ID).set(program(true));
+    await expect(finalize({ mode: 'EARLY' })).resolves.toMatchObject({
+      cardioStatus: 'SKIPPED',
+      completion: { plannedSets: 3, completedSets: 3, percentageBasisPoints: 10_000 },
+    });
+    const cardio = (await root.collection('workoutExecutions').doc(EXECUTION_ID).get()).data()?.cardio;
+    expect(cardio).toMatchObject({ status: 'SKIPPED', reason: 'EARLY_FINISH' });
+    expect(cardio).not.toHaveProperty('actualDurationSeconds');
+    expect(cardio).not.toHaveProperty('completedAt');
+  });
+
+  // 2026-10 fix: `PARTIALLY_COMPLETED` is not exclusive to EARLY — a plain
+  // NORMAL finish lands there too whenever sets were skipped. Persist the
+  // actual intent explicitly so the summary screen never has to guess.
+  it('persists the real finalizationMode (NORMAL vs EARLY) on the terminal execution, independent of executionStatus', async () => {
+    await root.collection('workoutExecutions').doc(EXECUTION_ID).update({
+      exercises: [{
+        exerciseIndex: 0, prescribedExerciseId: 'squat', exerciseId: 'squat',
+        sets: completionSets(2, 3),
+      }],
+    });
+    await expect(finalize()).resolves.toMatchObject({ executionStatus: 'PARTIALLY_COMPLETED' });
+    expect((await root.collection('workoutExecutions').doc(EXECUTION_ID).get()).data())
+      .toMatchObject({ status: 'PARTIALLY_COMPLETED', finalizationMode: 'NORMAL' });
+  });
+
+  it('persists finalizationMode EARLY distinctly from a NORMAL partial finish', async () => {
+    await root.collection('workoutExecutions').doc(EXECUTION_ID).update({
+      exercises: [{
+        exerciseIndex: 0, prescribedExerciseId: 'squat', exerciseId: 'squat',
+        sets: completionSets(2, 3),
+      }],
+    });
+    await expect(finalize({ mode: 'EARLY' })).resolves.toMatchObject({ executionStatus: 'PARTIALLY_COMPLETED' });
+    expect((await root.collection('workoutExecutions').doc(EXECUTION_ID).get()).data())
+      .toMatchObject({ status: 'PARTIALLY_COMPLETED', finalizationMode: 'EARLY' });
+  });
+
+  it('retry of an already-terminal finalize never overwrites the original finalizationMode', async () => {
+    await root.collection('workoutExecutions').doc(EXECUTION_ID).update({
+      exercises: [{
+        exerciseIndex: 0, prescribedExerciseId: 'squat', exerciseId: 'squat',
+        sets: completionSets(2, 3),
+      }],
+    });
+    await finalize({ mode: 'EARLY' });
+    // Retry without `mode` (a client resending the base request after a lost
+    // response) must stay idempotent — it never re-sweeps the execution nor
+    // flips the already-persisted finalizationMode to NORMAL.
+    await expect(finalize()).resolves.toMatchObject({ executionStatus: 'PARTIALLY_COMPLETED' });
+    expect((await root.collection('workoutExecutions').doc(EXECUTION_ID).get()).data())
+      .toMatchObject({ finalizationMode: 'EARLY' });
   });
 
   it('finalizes flexible with prescribed cardio and advances the same sequence cursor', async () => {

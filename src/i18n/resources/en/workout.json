@@ -9,8 +9,18 @@
   "exit": {
     "kicker": "Workout in progress",
     "title": "Exit workout?",
-    "body": "Your workout is still in progress. You can minimize it and continue later, or discard it.",
+    "body": "Your workout is still in progress. You can minimize it, finish with your current progress, or discard it.",
     "minimize": "Minimize workout",
+    "finishNow": "Finish workout now",
+    "earlyKicker": "Workout progress",
+    "earlyTitle": "Finish workout?",
+    "earlyProgress": "You completed {{completed}} of {{planned}} sets ({{percentage}}%).",
+    "earlyBody": "The remaining sets will be skipped and your progress will be saved.",
+    "earlyConfirm": "Finish workout",
+    "continueWorkout": "Continue workout",
+    "earlyEmptyTitle": "Complete a set first",
+    "earlyEmptyBody": "To finish early, log at least one set. You can continue or discard this workout.",
+    "finishing": "Finishing…",
     "discard": "Discard workout",
     "cancel": "Cancel",
     "discardConfirmTitle": "Discard workout?",
@@ -109,6 +119,7 @@
     "extendAccessibility": "Add 5 minutes to the cardio goal",
     "finish": "Finish cardio",
     "completed": "Cardio finished",
+    "skipped": "Cardio skipped",
     "finishConfirmTitle": "Finish cardio?",
     "finishConfirmBeforeGoal": "You did {{done}} of the planned {{target}}.",
     "finishConfirmAfterGoal": "You reached your {{target}} goal. Time done: {{done}}.",
@@ -122,6 +133,11 @@
     "exitConfirmTitle": "Leave cardio?",
     "exitConfirmBody": "Your strength work is already complete. Leaving now finishes the workout with {{done}} of cardio logged.",
     "exitConfirmAction": "Finish and leave",
+    "earlyConfirmTitle": "Finish without cardio?",
+    "earlyConfirmBody": "Cardio will be skipped and the workout will be saved with the sets you completed.",
+    "earlyConfirmAction": "Skip cardio and finish",
+    "earlyFinishErrorTitle": "Couldn't finish workout",
+    "earlyFinishErrorBody": "Check your connection and try again. Cardio was not recorded as completed.",
     "accessibility": {
       "close": "Exit cardio",
       "timer": "Cardio timer"
@@ -257,6 +273,60 @@
       "days_other": "{{count}} days",
       "untilRecord_one": "· {{count}} to your record",
       "untilRecord_other": "· {{count}} to your record"
+    },
+    "summary": {
+      "closeAccessibility": "Close and go back to home",
+      "shareCta": "Share workout",
+      "personalRecordsCount_one": "personal record",
+      "personalRecordsCount_other": "personal records",
+      "noRecordsTitle": "No records today",
+      "noRecordsSubtitle": "Stay consistent — the next one could be here.",
+      "metrics": {
+        "records": "Records",
+        "volume": "Volume",
+        "sets": "Sets",
+        "reps": "Reps"
+      },
+      "completion": {
+        "label": "complete",
+        "sets": "{{completed}} of {{planned}} sets",
+        "earlyBadge": "Finished early",
+        "cardioSkippedBadge": "Cardio skipped"
+      },
+      "pulse": {
+        "title": "Workout pulse",
+        "subtitle": "Today vs. your last session at the same scale",
+        "options": {
+          "volume": "Volume",
+          "sets": "Sets",
+          "reps": "Reps",
+          "maxLoad": "Top load"
+        },
+        "previousLabel": "Previous session",
+        "currentLabel": "Today",
+        "noChange": "No change",
+        "emptyTitle": "Your curve starts here",
+        "emptySubtitle": "Repeat this workout to track your progress."
+      },
+      "records": {
+        "title": "Personal records",
+        "loadMetricLabel": "Top load",
+        "previousToNew": "Previous {{previous}} → Today {{current}}",
+        "currentBestLabel": "Current best load",
+        "emptyTitle": "No new record today",
+        "emptySubtitle": "These are your current best values.",
+        "noLoadDataTitle": "No load data",
+        "noLoadDataSubtitle": "This workout uses bodyweight or time-based exercises, so there's no load comparison here."
+      },
+      "muscles": {
+        "title": "Muscles worked"
+      },
+      "highlights": {
+        "title": "Workout highlights",
+        "newRecord": "New record",
+        "improvedVsLast": "Improved since last time",
+        "bestOfSession": "Best load of the session"
+      }
     }
   },
   "substitution": {

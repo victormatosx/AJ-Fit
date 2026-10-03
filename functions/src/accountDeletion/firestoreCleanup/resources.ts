@@ -53,6 +53,7 @@ const WORKOUT_PROGRAMS_COLLECTION = 'workoutPrograms';
 const WORKOUT_PROGRAM_STATE_COLLECTION = 'workoutProgramState';
 const WORKOUT_EXECUTIONS_COLLECTION = 'workoutExecutions';
 const WORKOUT_EXECUTION_STATE_COLLECTION = 'workoutExecutionState';
+const WORKOUT_EXECUTION_OCCURRENCE_COUNTERS_COLLECTION = 'workoutExecutionOccurrenceCounters';
 const EXERCISE_SUBSTITUTION_PREFERENCES_COLLECTION = 'exerciseSubstitutionPreferences';
 const ENTITLEMENT_SIGNALS_COLLECTION = 'entitlementSignals';
 const PROGRESSION_EVENTS_COLLECTION = 'progressionEvents';
@@ -392,6 +393,24 @@ export function deleteUserWorkoutExecutionState(uid: string, db: Firestore = def
     uid,
     WORKOUT_EXECUTION_STATE_COLLECTION,
     'workoutExecutionState',
+    db,
+  );
+}
+
+/**
+ * 2026-10 (agenda livre multiple-sessions-per-day): one tiny counter doc per
+ * (programInstanceId, sessionIndex, scheduledLocalDate) triple, allocated
+ * only when a `flexible` schedule needs a 2nd+ same-day occurrence (see
+ * `src/services/workoutExecutions.ts`'s `startOrResumeWorkoutExecution`).
+ * Same per-user, single-purpose shape as `workoutExecutionState` above —
+ * must be deleted the same way, or it survives account deletion as an
+ * orphan.
+ */
+export function deleteUserWorkoutExecutionOccurrenceCounters(uid: string, db: Firestore = defaultDb) {
+  return deleteWorkoutLifecycleCollection(
+    uid,
+    WORKOUT_EXECUTION_OCCURRENCE_COUNTERS_COLLECTION,
+    'workoutExecutionOccurrenceCounters',
     db,
   );
 }

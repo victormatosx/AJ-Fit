@@ -87,7 +87,10 @@ import {
   runWorkoutDiscardFlow,
   type WorkoutCompletionResult,
 } from '../workoutLifecycle/finishFlow';
-import { workoutFinalizationFailureStage } from '../services/finalizeWorkoutSession';
+import {
+  workoutFinalizationFailureStage,
+  type WorkoutFinalizationMode,
+} from '../services/finalizeWorkoutSession';
 import { useWorkoutEvolution } from '../workoutEvolution/useWorkoutEvolution';
 import { useWorkoutActivitySnapshot } from '../home/useWorkoutActivitySnapshot';
 import { useFrequencyWindow } from '../home/useFrequencyWindow';
@@ -374,6 +377,7 @@ function AppShellContent({
   // finishes. Keep that chain available to the Done CTA so Profile can never
   // open with the previous IN_PROGRESS evaluation still cached.
   const workoutCompletionRef = useRef<Promise<WorkoutCompletionResult> | null>(null);
+  const workoutFinalizationModeRef = useRef<WorkoutFinalizationMode>('NORMAL');
   const workoutCompletionFollowUpRef = useRef<Promise<unknown> | null>(null);
   const workoutHomeSyncRef = useRef<Promise<unknown> | null>(null);
   // True from the instant `onSessionCompleted` fires until the durable
@@ -1075,10 +1079,12 @@ function AppShellContent({
   const runWorkoutCompletion = (
     recovery: boolean,
     actualCardioDurationSeconds?: number,
+    mode: WorkoutFinalizationMode = 'NORMAL',
   ): Promise<WorkoutCompletionResult> => {
     if (workoutCompletionRef.current) {
       return workoutCompletionRef.current;
     }
+    workoutFinalizationModeRef.current = mode;
     setWorkoutCompletionResult(null);
     setDurableCompletionReachedAtMs(null);
     setFinishingSession(true);
@@ -1090,7 +1096,7 @@ function AppShellContent({
     // Cardio keeps the shared Live Activity in its completed state until the
     // user leaves the success screen, including completion recovery after a
     // process restart. Strength-only behavior is unchanged.
-    if (!hasCardioFinisher) endWorkoutSession();
+    if (!hasCardioFinisher || mode === 'EARLY') endWorkoutSession();
     const programId = activeProgram?.programId;
     const executionId = execution.execution?.executionId;
     logInfo('workout', 'workout_finish_requested', {
@@ -1098,6 +1104,7 @@ function AppShellContent({
       programId,
       sessionIndex: activeSessionIndex,
       recovery,
+      mode,
       stage: 'EXECUTION',
     });
     logInfo('workout', recovery ? 'workout_finish_recovery_started' : 'workout_finish_started', {
@@ -1110,7 +1117,7 @@ function AppShellContent({
       const finishFlowStartedAtMs = Date.now();
       logInfo('workout_performance', 'finalize_request_start', { timestampMs: finishFlowStartedAtMs });
       try {
-        const finalized = await execution.finalize(actualCardioDurationSeconds);
+        const finalized = await execution.finalize(actualCardioDurationSeconds, mode);
         const result: WorkoutCompletionResult = finalized.ok
           ? 'COMPLETED'
           : workoutFinalizationFailureStage(finalized.error) === 'SCHEDULE'
@@ -1252,7 +1259,7 @@ function AppShellContent({
       durationMs: Date.now() - retryStartedAtMs,
     });
     try {
-      const result = await runWorkoutCompletion(true);
+      const result = await runWorkoutCompletion(true, undefined, workoutFinalizationModeRef.current);
       logInfo('workout_retry', 'retry_result', {
         timestamp: Date.now(),
         executionId,
@@ -1310,6 +1317,7 @@ function AppShellContent({
       });
       if (navigated) {
         workoutCompletionRef.current = null;
+        workoutFinalizationModeRef.current = 'NORMAL';
         workoutHomeSyncRef.current = null;
         setWorkoutCompletionResult(null);
         setDurableCompletionReachedAtMs(null);
@@ -1336,6 +1344,7 @@ function AppShellContent({
     setWorkoutInProgress(false);
     setWorkoutStartAttempt(null);
     workoutCompletionRef.current = null;
+    workoutFinalizationModeRef.current = 'NORMAL';
     workoutHomeSyncRef.current = null;
     setWorkoutCompletionResult(null);
     setDurableCompletionReachedAtMs(null);
@@ -1457,7 +1466,13 @@ function AppShellContent({
               // treats the session as gone. Never fire-and-forget here.
               onAbandon={discardWorkout}
               onCardioCompleted={async (actualDurationSeconds) => {
-                const result = await runWorkoutCompletion(false, actualDurationSeconds);
+                const result = await runWorkoutCompletion(false, actualDurationSeconds, 'NORMAL');
+                return result === 'COMPLETED'
+                  ? { ok: true as const }
+                  : { ok: false as const, error: new Error(result) };
+              }}
+              onEarlyFinish={async () => {
+                const result = await runWorkoutCompletion(false, undefined, 'EARLY');
                 return result === 'COMPLETED'
                   ? { ok: true as const }
                   : { ok: false as const, error: new Error(result) };
@@ -1506,8 +1521,8 @@ function AppShellContent({
               durableCompletionReachedAtMs={durableCompletionReachedAtMs}
               completionFailed={workoutCompletionResult === 'EXECUTION_FAILED'
                 || workoutCompletionResult === 'SCHEDULE_FAILED'}
-              onSessionCompleted={({ recovery }) => {
-                void runWorkoutCompletion(recovery);
+              onSessionCompleted={({ recovery, mode }) => {
+                void runWorkoutCompletion(recovery, undefined, mode);
               }}
             />
           </View>

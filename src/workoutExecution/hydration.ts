@@ -42,6 +42,10 @@ export interface WorkoutHydrationSnapshot {
    * the session HAS one.
    */
   cardioCompleted: boolean;
+  /** True when the official early finalizer explicitly skipped cardio. */
+  cardioSkipped: boolean;
+  /** A terminal cardio record must never reopen the cardio experience. */
+  cardioSettled: boolean;
 }
 
 /**
@@ -92,12 +96,16 @@ export function deriveWorkoutHydration(
     });
   }
 
+  const cardioCompleted = execution.cardio?.status === 'COMPLETED';
+  const cardioSkipped = execution.cardio?.status === 'SKIPPED';
   return {
     order,
     progress,
     logged,
     loggedReps,
     allDone: order.length === 0,
-    cardioCompleted: execution.cardio?.status === 'COMPLETED',
+    cardioCompleted,
+    cardioSkipped,
+    cardioSettled: cardioCompleted || cardioSkipped,
   };
 }

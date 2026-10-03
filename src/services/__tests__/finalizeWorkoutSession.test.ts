@@ -16,6 +16,7 @@ describe('finalizeWorkoutSession client boundary', () => {
       executionStatus: 'PARTIALLY_COMPLETED' as const,
       cardioStatus: 'NOT_APPLICABLE' as const,
       scheduleStatus: 'COMPLETED' as const,
+      completion: { plannedSets: 5, completedSets: 2, percentageBasisPoints: 4000 },
     }));
     setFinalizeWorkoutSessionTransportForTests(transport);
     await expect(finalizeWorkoutSession({ executionId: 'exec_1' })).resolves.toMatchObject({ status: 'COMPLETED' });
@@ -29,12 +30,26 @@ describe('finalizeWorkoutSession client boundary', () => {
       .mockResolvedValueOnce({
         status: 'COMPLETED', executionStatus: 'COMPLETED',
         cardioStatus: 'COMPLETED', scheduleStatus: 'COMPLETED',
+        completion: { plannedSets: 3, completedSets: 3, percentageBasisPoints: 10_000 },
       });
     setFinalizeWorkoutSessionTransportForTests(transport);
     await expect(finalizeWorkoutSession(input)).rejects.toMatchObject({ code: 'functions/unavailable' });
     await expect(finalizeWorkoutSession(input)).resolves.toMatchObject({ status: 'COMPLETED' });
     expect(transport).toHaveBeenNthCalledWith(1, input);
     expect(transport).toHaveBeenNthCalledWith(2, input);
+  });
+
+  it('passes EARLY as explicit intent without inventing a cardio duration', async () => {
+    const transport = vi.fn(async () => ({
+      status: 'COMPLETED' as const,
+      executionStatus: 'PARTIALLY_COMPLETED' as const,
+      cardioStatus: 'SKIPPED' as const,
+      scheduleStatus: 'COMPLETED' as const,
+      completion: { plannedSets: 10, completedSets: 7, percentageBasisPoints: 7000 },
+    }));
+    setFinalizeWorkoutSessionTransportForTests(transport);
+    await finalizeWorkoutSession({ executionId: 'exec_early', mode: 'EARLY' });
+    expect(transport).toHaveBeenCalledWith({ executionId: 'exec_early', mode: 'EARLY' });
   });
 
   it('maps server Schedule-stage failures without trusting client-supplied status', () => {

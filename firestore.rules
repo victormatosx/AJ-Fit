@@ -641,13 +641,21 @@ service cloud.firestore {
              'programId', 'templateId', 'sessionIndex', 'sessionName',
              'scheduledLocalDate', 'status', 'startedAt', 'finishedAt',
              'exercises', 'executionSchemaVersion', 'createdAt', 'updatedAt',
-             'programInstanceId', 'mutexProtocolVersion', 'cardio', 'performedLocalDate'
+             'programInstanceId', 'mutexProtocolVersion', 'cardio', 'performedLocalDate',
+             'occurrence'
            ])
         // P0-C protocol marker (docs/workout-lifecycle/ hardening plan) —
         // optional so a pre-hardening client omitting it is still valid;
         // once present it must be the real, current value. See
         // `WORKOUT_EXECUTION_MUTEX_PROTOCOL_VERSION` (src/workoutExecution/types.ts).
         && (!('mutexProtocolVersion' in data) || data.mutexProtocolVersion == 1)
+        // 2026-10 fix (agenda livre multiple-sessions-per-day): optional so
+        // every pre-fix execution and every `fixed`-schedule execution
+        // (which never needs more than occurrence 1) stays valid. Shape only
+        // — WHICH occurrence number is legitimate is schedule authority,
+        // enforced server-side at finalize time, never here (same trust
+        // boundary as `sessionIndex`/`scheduledLocalDate` themselves).
+        && (!('occurrence' in data) || (data.occurrence is int && data.occurrence >= 1))
         && data.programId is string
         && program.data.programId == data.programId
         && data.templateId is string
@@ -2137,7 +2145,8 @@ service cloud.firestore {
                  'programId', 'templateId', 'sessionIndex', 'sessionName',
                  'scheduledLocalDate', 'status', 'startedAt', 'finishedAt',
                  'exercises', 'executionSchemaVersion', 'createdAt', 'updatedAt',
-                 'programInstanceId', 'mutexProtocolVersion', 'cardio', 'performedLocalDate'
+                 'programInstanceId', 'mutexProtocolVersion', 'cardio', 'performedLocalDate',
+                 'occurrence', 'finalizationMode'
                ])
             && after.programId == before.programId
             && after.templateId == before.templateId
@@ -2151,10 +2160,19 @@ service cloud.firestore {
             && ('mutexProtocolVersion' in after) == ('mutexProtocolVersion' in before)
             && ('cardio' in after) == ('cardio' in before)
             && ('performedLocalDate' in after) == ('performedLocalDate' in before)
+            && ('occurrence' in after) == ('occurrence' in before)
             && after.get('programInstanceId', null) == before.get('programInstanceId', null)
             && after.get('mutexProtocolVersion', null) == before.get('mutexProtocolVersion', null)
             && after.get('cardio', null) == before.get('cardio', null)
             && after.get('performedLocalDate', null) == before.get('performedLocalDate', null)
+            && after.get('occurrence', null) == before.get('occurrence', null)
+            // 2026-10 fix: `finalizationMode` records which intent (NORMAL
+            // vs EARLY) actually produced this terminal status — it can only
+            // ever newly appear in exactly THIS transition (IN_PROGRESS ->
+            // terminal), never already exist before it, and never be absent
+            // from a VALID value once present.
+            && !('finalizationMode' in before)
+            && (!('finalizationMode' in after) || after.finalizationMode in ['NORMAL', 'EARLY'])
             && after.exercises is list
             && after.exercises.size() == before.exercises.size()
             && after.exercises.size() >= 1
@@ -2344,6 +2362,38 @@ service cloud.firestore {
           && accountActive(userId)
           && stateId == 'current'
           && getAfter(/databases/$(database)/documents/users/$(userId)/workoutExecutions/$(resource.data.executionId)).data.status != 'IN_PROGRESS';
+      }
+
+      // 2026-10 fix (agenda livre multiple-sessions-per-day):
+      // `programInstanceId + sessionIndex + scheduledLocalDate` is NOT a
+      // unique execution identity under `flexible` — the rotation can
+      // legitimately wrap back onto an already-completed sessionIndex the
+      // same day. One tiny counter doc per that triple (keyed by the
+      // triple's own occurrence-1 execution id — no separate encoding)
+      // allocates occurrence numbers 2+ (see `workoutExecutionDocumentId`'s
+      // doc comment, `startOrResumeWorkoutExecution`). `fixed` schedules and
+      // every flexible schedule's first same-day occurrence never touch
+      // this collection at all. Monotonic by construction: a create must
+      // start at 3 (occurrence 2 was just handed out, implicit, never
+      // stored — this doc only ever stores the NEXT occurrence to hand
+      // out), and any update may only advance it by exactly one.
+      match /workoutExecutionOccurrenceCounters/{counterId} {
+        allow read: if isOwner(userId) && accountActive(userId);
+
+        allow create: if isOwner(userId)
+          && accountActive(userId)
+          && request.resource.data.keys().hasOnly(['nextOccurrence', 'updatedAt'])
+          && request.resource.data.nextOccurrence == 3
+          && request.resource.data.updatedAt == request.time;
+
+        allow update: if isOwner(userId)
+          && accountActive(userId)
+          && request.resource.data.keys().hasOnly(['nextOccurrence', 'updatedAt'])
+          && resource.data.nextOccurrence is int
+          && request.resource.data.nextOccurrence == resource.data.nextOccurrence + 1
+          && request.resource.data.updatedAt == request.time;
+
+        allow delete: if false;
       }
 
       // Avaliações físicas do usuário (guiadas ou importadas). Cada documento

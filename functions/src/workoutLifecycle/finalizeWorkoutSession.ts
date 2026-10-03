@@ -14,16 +14,31 @@ import type { ScheduleResolution } from './scheduleEngine/types';
 
 export const MAX_CARDIO_ACTUAL_DURATION_SECONDS = 3 * 60 * 60;
 
+export type WorkoutFinalizationMode = 'NORMAL' | 'EARLY';
+
+export interface WorkoutCompletionResult {
+  plannedSets: number;
+  completedSets: number;
+  percentageBasisPoints: number;
+}
+
 export interface FinalizeWorkoutSessionRequest {
   executionId: string;
+  /** Omitted requests retain the pre-existing NORMAL behavior. */
+  mode?: WorkoutFinalizationMode;
   cardio?: { actualDurationSeconds: number };
 }
+
+type ParsedFinalizeWorkoutSessionRequest = Omit<FinalizeWorkoutSessionRequest, 'mode'> & {
+  mode: WorkoutFinalizationMode;
+};
 
 export interface FinalizeWorkoutSessionResult {
   status: 'COMPLETED';
   executionStatus: 'COMPLETED' | 'PARTIALLY_COMPLETED';
-  cardioStatus: 'NOT_APPLICABLE' | 'COMPLETED';
+  cardioStatus: 'NOT_APPLICABLE' | 'COMPLETED' | 'SKIPPED';
   scheduleStatus: 'COMPLETED';
+  completion: WorkoutCompletionResult;
 }
 
 function plainObject(value: unknown): value is Record<string, unknown> {
@@ -39,7 +54,15 @@ function validDuration(value: unknown): value is number {
     && value >= 0 && value <= MAX_CARDIO_ACTUAL_DURATION_SECONDS;
 }
 
-function parseRequest(value: unknown): FinalizeWorkoutSessionRequest {
+export function completionFromCounts(counts: { completed: number; prescribed: number }): WorkoutCompletionResult {
+  return {
+    plannedSets: counts.prescribed,
+    completedSets: counts.completed,
+    percentageBasisPoints: Math.round((counts.completed / counts.prescribed) * 10_000),
+  };
+}
+
+function parseRequest(value: unknown): ParsedFinalizeWorkoutSessionRequest {
   if (!plainObject(value) || !boundedId(value.executionId)) {
     throw new HttpsError('invalid-argument', 'invalid_finalize_workout_session_request');
   }
@@ -47,11 +70,21 @@ function parseRequest(value: unknown): FinalizeWorkoutSessionRequest {
     && (!plainObject(value.cardio) || !validDuration(value.cardio.actualDurationSeconds))) {
     throw new HttpsError('invalid-argument', 'invalid_cardio_duration');
   }
-  const allowed = new Set(['executionId', 'cardio']);
+  if (value.mode !== undefined && value.mode !== 'NORMAL' && value.mode !== 'EARLY') {
+    throw new HttpsError('invalid-argument', 'invalid_finalize_workout_session_mode');
+  }
+  if (value.mode === 'EARLY' && value.cardio !== undefined) {
+    throw new HttpsError('invalid-argument', 'early_finish_cannot_complete_cardio');
+  }
+  const allowed = new Set(['executionId', 'mode', 'cardio']);
   if (Object.keys(value).some((key) => !allowed.has(key))) {
     throw new HttpsError('invalid-argument', 'invalid_finalize_workout_session_request');
   }
-  return value as unknown as FinalizeWorkoutSessionRequest;
+  return {
+    executionId: value.executionId,
+    mode: value.mode === 'EARLY' ? 'EARLY' : 'NORMAL',
+    ...(value.cardio === undefined ? {} : { cardio: value.cardio as { actualDurationSeconds: number } }),
+  };
 }
 
 function executionShape(execution: DocumentData): string {
@@ -93,8 +126,21 @@ function sweepAndStatus(exercises: DocumentData[]): {
   return { exercises: swept, status: complete ? 'COMPLETED' : 'PARTIALLY_COMPLETED' };
 }
 
-function eventId(instanceId: string, sessionIndex: number, date: string): string {
-  return `${instanceId}_completed_${sessionIndex}_${date}`;
+/**
+ * `occurrence` is read off the execution's own `occurrence` field, never
+ * recomputed independently — the execution document is the single source of
+ * truth for which occurrence it is (docs — `WorkoutExecution.occurrence`'s
+ * doc comment). Omitted/`1` reproduces the original id byte-for-byte, so
+ * every execution written before this field existed, and every `fixed`
+ * schedule, keep their historical completion-event id with no migration.
+ * Only a `flexible` schedule's genuine same-day repeat (`occurrence >= 2`,
+ * which never existed before this field was introduced, so there is no prior
+ * id to collide with) gets a distinguishing suffix — the same `_oN`
+ * convention `workoutExecutionDocumentId` uses for the execution id itself.
+ */
+function eventId(instanceId: string, sessionIndex: number, date: string, occurrence: number): string {
+  const base = `${instanceId}_completed_${sessionIndex}_${date}`;
+  return occurrence > 1 ? `${base}_o${occurrence}` : base;
 }
 
 function mark(startedAt: number, message: string, extra?: Record<string, string | number | boolean | null>): void {
@@ -123,6 +169,7 @@ function safeReasonCode(error: unknown): string {
       case 'session_has_no_cardio_finisher': return 'CARDIO_NOT_EXPECTED';
       case 'cardio_completion_required': return 'CARDIO_COMPLETION_REQUIRED';
       case 'terminal_execution_missing_cardio': return 'TERMINAL_EXECUTION_MISSING_CARDIO';
+      case 'early_finish_requires_completed_set': return 'EARLY_FINISH_REQUIRES_COMPLETED_SET';
       case 'execution_substitution_not_authoritative': return 'SUBSTITUTION_NOT_AUTHORITATIVE';
       case 'execution_not_found': return 'EXECUTION_NOT_FOUND';
       default: return error.code.replace(/[^a-z0-9]+/gi, '_').toUpperCase();
@@ -220,10 +267,14 @@ async function finalizeWorkoutSessionCore(
   const initialProgram = programPreflight.data()!;
   const initialSession = Array.isArray(initialProgram.sessions)
     ? initialProgram.sessions[initialExecution.sessionIndex] : null;
-  if (!initialSession || prescribedExecutionCounts(
+  const initialCounts = initialSession ? prescribedExecutionCounts(
     initialExecution, initialSession, initialExecution.programInstanceId,
-  ) === null) {
+  ) : null;
+  if (!initialSession || initialCounts === null) {
     throw new HttpsError('permission-denied', 'execution_does_not_match_authoritative_prescription');
+  }
+  if (data.mode === 'EARLY' && initialCounts.completed === 0) {
+    throw new HttpsError('failed-precondition', 'early_finish_requires_completed_set');
   }
   const substitution = await validateMaterializedExecutionSubstitutions(uid, initialExecution, firestore);
   if (!substitution.valid) {
@@ -236,11 +287,15 @@ async function finalizeWorkoutSessionCore(
   const cardioCompleted = plainObject(initialExecution.cardio)
     && initialExecution.cardio.status === 'COMPLETED'
     && validDuration(initialExecution.cardio.actualDurationSeconds);
+  const cardioSkipped = plainObject(initialExecution.cardio)
+    && initialExecution.cardio.status === 'SKIPPED'
+    && initialExecution.cardio.reason === 'EARLY_FINISH';
   if (!hasCardio && data.cardio) throw new HttpsError('failed-precondition', 'session_has_no_cardio_finisher');
-  if (hasCardio && !cardioCompleted && !data.cardio) {
+  if (data.mode === 'NORMAL' && hasCardio && !cardioCompleted && !cardioSkipped && !data.cardio) {
     throw new HttpsError('failed-precondition', 'cardio_completion_required');
   }
-  if (hasCardio && !cardioCompleted && initialExecution.status !== 'IN_PROGRESS') {
+  if (data.mode === 'NORMAL' && hasCardio && !cardioCompleted && !cardioSkipped
+    && initialExecution.status !== 'IN_PROGRESS') {
     throw new HttpsError('failed-precondition', 'terminal_execution_missing_cardio');
   }
   mark(startedAt, 'cardio_validation_end');
@@ -249,10 +304,15 @@ async function finalizeWorkoutSessionCore(
   const activeProgramRef = root.collection('workoutProgramState').doc('active');
   const lifecycleStateRef = root.collection('workoutLifecycleState').doc('current');
   const scheduleStateRef = programRef.collection('scheduleState').doc(initialExecution.programInstanceId);
+  // Immutable once the execution exists — safe to read off the preflight
+  // snapshot, same as the other identity fields `eventId` already uses here.
+  const occurrence = Number.isInteger(initialExecution.occurrence) && initialExecution.occurrence > 0
+    ? initialExecution.occurrence : 1;
   const completionEventRef = programRef.collection('scheduleEvents').doc(eventId(
     initialExecution.programInstanceId,
     initialExecution.sessionIndex,
     initialExecution.scheduledLocalDate,
+    occurrence,
   ));
   const currentRef = root.collection('workoutExecutionState').doc('current');
   const validatedShape = executionShape(initialExecution);
@@ -283,9 +343,23 @@ async function finalizeWorkoutSessionCore(
       throw new HttpsError('failed-precondition', 'program_instance_mismatch');
     }
     const session = Array.isArray(program.sessions) ? program.sessions[execution.sessionIndex] : null;
-    if (!session || prescribedExecutionCounts(execution, session, execution.programInstanceId) === null) {
+    const freshCounts = session
+      ? prescribedExecutionCounts(execution, session, execution.programInstanceId)
+      : null;
+    if (!session || freshCounts === null) {
       throw new HttpsError('permission-denied', 'execution_does_not_match_authoritative_prescription');
     }
+    if (data.mode === 'EARLY' && freshCounts.completed === 0) {
+      throw new HttpsError('failed-precondition', 'early_finish_requires_completed_set');
+    }
+    const completion = completionFromCounts(freshCounts);
+    const freshHasCardio = plainObject(session.cardioFinisher);
+    const freshCardioCompleted = plainObject(execution.cardio)
+      && execution.cardio.status === 'COMPLETED'
+      && validDuration(execution.cardio.actualDurationSeconds);
+    const freshCardioSkipped = plainObject(execution.cardio)
+      && execution.cardio.status === 'SKIPPED'
+      && execution.cardio.reason === 'EARLY_FINISH';
     const context = buildScheduleAuthorityContext({
       scheduleConfigData: configSnapshot.data() ?? {},
       stateData: stateSnapshot.exists ? stateSnapshot.data()! : null,
@@ -418,7 +492,20 @@ async function finalizeWorkoutSessionCore(
       transaction.update(executionRef, {
         exercises: terminal.exercises,
         status: terminal.status,
-        ...(hasCardio && !cardioCompleted ? {
+        completion,
+        // Persisted explicitly so `PARTIALLY_COMPLETED` is never conflated
+        // with "the user chose to finish early" — a plain NORMAL finish can
+        // also land on PARTIALLY_COMPLETED if sets were skipped along the
+        // way (docs — `WorkoutExecution.finalizationMode`'s doc comment).
+        finalizationMode: data.mode,
+        ...(data.mode === 'EARLY' && freshHasCardio && !freshCardioCompleted ? {
+          cardio: {
+            status: 'SKIPPED',
+            reason: 'EARLY_FINISH',
+            skippedAt: FieldValue.serverTimestamp(),
+          },
+        } : {}),
+        ...(data.mode === 'NORMAL' && freshHasCardio && !freshCardioCompleted && data.cardio ? {
           cardio: {
             status: 'COMPLETED',
             actualDurationSeconds: data.cardio!.actualDurationSeconds,
@@ -456,8 +543,15 @@ async function finalizeWorkoutSessionCore(
     return {
       status: 'COMPLETED' as const,
       executionStatus,
-      cardioStatus: hasCardio ? 'COMPLETED' as const : 'NOT_APPLICABLE' as const,
+      cardioStatus: !freshHasCardio
+        ? 'NOT_APPLICABLE' as const
+        : freshCardioCompleted || (execution.status === 'IN_PROGRESS' && data.mode === 'NORMAL' && !!data.cardio)
+          ? 'COMPLETED' as const
+          : freshCardioSkipped || data.mode === 'EARLY'
+            ? 'SKIPPED' as const
+            : 'NOT_APPLICABLE' as const,
       scheduleStatus: 'COMPLETED' as const,
+      completion,
     };
     });
   } catch (error) {

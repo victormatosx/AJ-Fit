@@ -113,6 +113,15 @@ export function useLoadProgress(uid: string | null) {
 
   return {
     ...progress,
+    /**
+     * The raw, bounded execution list this hook already fetched
+     * (`listWorkoutExecutionsForLoadProgress`) — exposed so consumers that
+     * need a different in-memory projection over the SAME data (e.g. the
+     * post-workout summary's "previous equivalent session" lookup,
+     * `findPreviousEquivalentExecution`) never issue a second Firestore
+     * query for it.
+     */
+    executions: hasResolvedCurrentUid ? executions : [],
     todayLocalDate,
     loading: !hasResolvedCurrentUid || loading,
     error: hasResolvedCurrentUid ? error : null,

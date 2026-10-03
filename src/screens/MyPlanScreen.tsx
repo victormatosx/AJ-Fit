@@ -650,12 +650,16 @@ function WorkoutCard({
         </View>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 15, color: theme.colors.textPrimary }} numberOfLines={1}>
+            <Text
+              style={{ flexShrink: 1, fontFamily: theme.fonts.uiBold, fontSize: 15, color: theme.colors.textPrimary }}
+              numberOfLines={1}
+            >
               {sessionName}
             </Text>
             {isDueToday ? (
               <View
                 style={{
+                  flexShrink: 0,
                   paddingHorizontal: 7,
                   paddingVertical: 2,
                   borderRadius: 6,

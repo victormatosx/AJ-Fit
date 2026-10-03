@@ -1,15 +1,21 @@
 import { logInfo } from '../lib/logger';
+import type { WorkoutCompletion } from '../workoutExecution/types';
+
+export type WorkoutFinalizationMode = 'NORMAL' | 'EARLY';
 
 export interface FinalizeWorkoutSessionInput {
   executionId: string;
+  /** Omitted callers retain the pre-existing NORMAL behavior. */
+  mode?: WorkoutFinalizationMode;
   cardio?: { actualDurationSeconds: number };
 }
 
 export interface FinalizeWorkoutSessionResult {
   status: 'COMPLETED';
   executionStatus: 'COMPLETED' | 'PARTIALLY_COMPLETED';
-  cardioStatus: 'NOT_APPLICABLE' | 'COMPLETED';
+  cardioStatus: 'NOT_APPLICABLE' | 'COMPLETED' | 'SKIPPED';
   scheduleStatus: 'COMPLETED';
+  completion: WorkoutCompletion;
 }
 
 export type FinalizeWorkoutSessionTransport = (

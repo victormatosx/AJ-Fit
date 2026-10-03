@@ -36,6 +36,8 @@ describe('deriveWorkoutHydration', () => {
       loggedReps: {},
       allDone: false,
       cardioCompleted: false,
+      cardioSkipped: false,
+      cardioSettled: false,
     });
   });
 
@@ -154,5 +156,17 @@ describe('deriveWorkoutHydration — cardioCompleted', () => {
     );
     expect(hydration.allDone).toBe(true);
     expect(hydration.cardioCompleted).toBe(true);
+    expect(hydration.cardioSettled).toBe(true);
+  });
+
+  it('treats EARLY_FINISH cardio as settled without calling it completed', () => {
+    const exercises = allDoneExercises();
+    const hydration = deriveWorkoutHydration(
+      { exercises, cardio: { status: 'SKIPPED', reason: 'EARLY_FINISH', skippedAt: null } },
+      EXERCISE_IDS,
+    );
+    expect(hydration.cardioCompleted).toBe(false);
+    expect(hydration.cardioSkipped).toBe(true);
+    expect(hydration.cardioSettled).toBe(true);
   });
 });

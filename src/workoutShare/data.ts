@@ -49,9 +49,13 @@ export function buildWorkoutShareData(input: {
   execution: PersistedWorkoutExecution | null | undefined;
   durationSeconds: number;
 }): WorkoutShareData {
+  const performedExerciseCount = input.execution?.exercises.filter((exercise) =>
+    exercise.sets.some((set) => set.status === 'COMPLETED')).length;
   return {
     workoutName: input.workoutName,
-    exerciseCount: input.exerciseCount,
+    // A completed-workout card reports what was actually performed. Fall
+    // back to the caller's plan count only when no execution snapshot exists.
+    exerciseCount: performedExerciseCount ?? input.exerciseCount,
     completedSetCount: countCompletedExecutionSets(input.execution),
     durationSeconds: Math.max(0, Math.floor(input.durationSeconds)),
     bodyMap: buildWorkoutShareBodyMap(input.execution),

@@ -57,6 +57,7 @@ describe.skipIf(!enabled)('Firestore Cleanup Engine — real Emulator integratio
       wipeCollectionGroup('scheduleEvents'),
       wipeCollectionGroup('workoutProgramState'),
       wipeCollectionGroup('workoutExecutions'),
+      wipeCollectionGroup('workoutExecutionOccurrenceCounters'),
       wipeCollectionGroup('workoutLifecycleState'),
       wipeCollectionGroup('trainingCycles'),
       wipeCollectionGroup('programInstances'),
@@ -120,6 +121,8 @@ describe.skipIf(!enabled)('Firestore Cleanup Engine — real Emulator integratio
     await programRef.collection('scheduleEvents').doc('se1').set({ type: 'COMPLETED' });
     await db.collection('users').doc(uid).collection('workoutProgramState').doc('active').set({ programId: 'wpg1' });
     await db.collection('users').doc(uid).collection('workoutExecutions').doc('exec1').set({ status: 'COMPLETED' });
+    await db.collection('users').doc(uid).collection('workoutExecutionOccurrenceCounters')
+      .doc('exec_wpg1_0_2026-10-03').set({ nextOccurrence: 3 });
     await db.collection('users').doc(uid).collection('workoutLifecycleState').doc('current').set({ currentCycleId: 'cycle1' });
     await db.collection('users').doc(uid).collection('trainingCycles').doc('cycle1').set({ status: 'ACTIVE' });
     await db.collection('users').doc(uid).collection('programInstances').doc('instance1').set({
@@ -264,6 +267,7 @@ describe.skipIf(!enabled)('Firestore Cleanup Engine — real Emulator integratio
         .toBe(false);
       for (const collectionName of [
         'workoutExecutions',
+        'workoutExecutionOccurrenceCounters',
         'workoutLifecycleState',
         'trainingCycles',
         'programInstances',
@@ -321,6 +325,13 @@ describe.skipIf(!enabled)('Firestore Cleanup Engine — real Emulator integratio
         .doc('current')
         .get();
       expect(otherPending.exists).toBe(true);
+      const otherOccurrenceCounter = await db
+        .collection('users')
+        .doc('test-uid-cleanup-B')
+        .collection('workoutExecutionOccurrenceCounters')
+        .doc('exec_wpg1_0_2026-10-03')
+        .get();
+      expect(otherOccurrenceCounter.exists).toBe(true);
       const otherVault = await db
         .collection('users')
         .doc('test-uid-cleanup-B')

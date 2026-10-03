@@ -86,6 +86,36 @@ describe('workout — exit sheet (X → Minimizar/Descartar/Cancelar) per locale
   });
 });
 
+describe('workout — early finish copy per locale', () => {
+  it.each([
+    ['pt-BR', 'exit.finishNow', /finalizar treino agora/i],
+    ['en', 'exit.finishNow', /finish workout now/i],
+    ['es', 'exit.finishNow', /finalizar entreno ahora/i],
+    ['pt-BR', 'exit.earlyEmptyBody', /pelo menos uma série/i],
+    ['en', 'exit.earlyEmptyBody', /at least one set/i],
+    ['es', 'exit.earlyEmptyBody', /al menos una serie/i],
+    ['pt-BR', 'done.summary.completion.earlyBadge', /antecipadamente/i],
+    ['en', 'done.summary.completion.earlyBadge', /early/i],
+    ['es', 'done.summary.completion.earlyBadge', /antes/i],
+  ] as Array<[SupportedLanguage, string, RegExp]>)('[%s] workout:%s', async (lang, key, re) => {
+    const i18n = await freshI18nAt(lang);
+    const t = i18n.getFixedT(lang, 'workout' as 'workout') as unknown as LooseT;
+    expect(t(key)).toMatch(re);
+  });
+
+  it('interpolates completed, planned and percentage in every locale', async () => {
+    for (const lang of ['pt-BR', 'en', 'es'] as const) {
+      const i18n = await freshI18nAt(lang);
+      const t = i18n.getFixedT(lang, 'workout' as 'workout') as unknown as LooseT;
+      const out = t('exit.earlyProgress', { completed: 7, planned: 10, percentage: 70 });
+      expect(out).toContain('7');
+      expect(out).toContain('10');
+      expect(out).toContain('70');
+      expect(out).not.toContain('{{');
+    }
+  });
+});
+
 describe('workout — main actions per locale', () => {
   it.each([
     ['pt-BR', 'actions.viewExecution', /ver execução/i],

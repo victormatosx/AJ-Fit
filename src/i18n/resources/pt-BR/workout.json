@@ -9,8 +9,18 @@
   "exit": {
     "kicker": "Treino em andamento",
     "title": "Sair do treino?",
-    "body": "Seu treino ainda está em andamento. Você pode minimizar e continuar depois, ou descartar.",
+    "body": "Seu treino ainda está em andamento. Você pode minimizar, finalizar com o progresso atual ou descartar.",
     "minimize": "Minimizar treino",
+    "finishNow": "Finalizar treino agora",
+    "earlyKicker": "Progresso do treino",
+    "earlyTitle": "Finalizar treino?",
+    "earlyProgress": "Você concluiu {{completed}} de {{planned}} séries ({{percentage}}%).",
+    "earlyBody": "As séries restantes serão ignoradas e seu progresso será salvo.",
+    "earlyConfirm": "Finalizar treino",
+    "continueWorkout": "Continuar treino",
+    "earlyEmptyTitle": "Conclua uma série primeiro",
+    "earlyEmptyBody": "Para finalizar antecipadamente, registre pelo menos uma série. Você pode continuar ou descartar este treino.",
+    "finishing": "Finalizando…",
     "discard": "Descartar treino",
     "cancel": "Cancelar",
     "discardConfirmTitle": "Descartar treino?",
@@ -109,6 +119,7 @@
     "extendAccessibility": "Adicionar 5 minutos à meta do cardio",
     "finish": "Finalizar cardio",
     "completed": "Cardio finalizado",
+    "skipped": "Cardio ignorado",
     "finishConfirmTitle": "Finalizar cardio?",
     "finishConfirmBeforeGoal": "Você realizou {{done}} de {{target}} planejados.",
     "finishConfirmAfterGoal": "Você concluiu sua meta de {{target}}. Tempo realizado: {{done}}.",
@@ -122,6 +133,11 @@
     "exitConfirmTitle": "Sair do cardio?",
     "exitConfirmBody": "Sua musculação já está completa. Ao sair agora finalizamos o treino com {{done}} de cardio registrados.",
     "exitConfirmAction": "Finalizar e sair",
+    "earlyConfirmTitle": "Finalizar sem cardio?",
+    "earlyConfirmBody": "O cardio será ignorado e o treino será salvo com as séries que você concluiu.",
+    "earlyConfirmAction": "Ignorar cardio e finalizar",
+    "earlyFinishErrorTitle": "Não foi possível finalizar",
+    "earlyFinishErrorBody": "Verifique sua conexão e tente novamente. O cardio não foi registrado como concluído.",
     "accessibility": {
       "close": "Sair do cardio",
       "timer": "Cronômetro do cardio"
@@ -257,6 +273,60 @@
       "days_other": "{{count}} dias",
       "untilRecord_one": "· falta {{count}} p/ seu recorde",
       "untilRecord_other": "· faltam {{count}} p/ seu recorde"
+    },
+    "summary": {
+      "closeAccessibility": "Fechar e voltar para o início",
+      "shareCta": "Compartilhar treino",
+      "personalRecordsCount_one": "recorde pessoal",
+      "personalRecordsCount_other": "recordes pessoais",
+      "noRecordsTitle": "Sem recordes hoje",
+      "noRecordsSubtitle": "Continue consistente — o próximo pode ser aqui.",
+      "metrics": {
+        "records": "Recordes",
+        "volume": "Volume",
+        "sets": "Séries",
+        "reps": "Repetições"
+      },
+      "completion": {
+        "label": "concluído",
+        "sets": "{{completed}} de {{planned}} séries",
+        "earlyBadge": "Finalizado antecipadamente",
+        "cardioSkippedBadge": "Cardio ignorado"
+      },
+      "pulse": {
+        "title": "Pulso do treino",
+        "subtitle": "Hoje vs. sua última sessão na mesma escala",
+        "options": {
+          "volume": "Volume",
+          "sets": "Séries",
+          "reps": "Repetições",
+          "maxLoad": "Maior carga"
+        },
+        "previousLabel": "Sessão anterior",
+        "currentLabel": "Hoje",
+        "noChange": "Sem variação",
+        "emptyTitle": "Sua curva começa aqui",
+        "emptySubtitle": "Repita este treino para acompanhar sua evolução."
+      },
+      "records": {
+        "title": "Recordes pessoais",
+        "loadMetricLabel": "Maior carga",
+        "previousToNew": "Anterior {{previous}} → Hoje {{current}}",
+        "currentBestLabel": "Melhor carga atual",
+        "emptyTitle": "Nenhum recorde novo hoje",
+        "emptySubtitle": "Esses são seus melhores valores atuais.",
+        "noLoadDataTitle": "Sem dados de carga",
+        "noLoadDataSubtitle": "Esse treino usa exercícios de peso corporal ou de tempo, sem comparação de carga por aqui."
+      },
+      "muscles": {
+        "title": "Músculos trabalhados"
+      },
+      "highlights": {
+        "title": "Destaques do treino",
+        "newRecord": "Novo recorde",
+        "improvedVsLast": "Evoluiu desde a última vez",
+        "bestOfSession": "Melhor carga da sessão"
+      }
     }
   },
   "substitution": {

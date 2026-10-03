@@ -94,7 +94,9 @@ import {
   commitConfirmedSubstitution,
 } from '../workoutExecution/substitutionSingleFlight';
 import { WorkoutShareComposer } from '../components/workoutShare/WorkoutShareComposer';
+import { WorkoutSummaryScreen } from '../components/workoutSummary/WorkoutSummaryScreen';
 import { buildWorkoutShareData } from '../workoutShare/data';
+import { useWorkoutSummaryData } from '../workoutExecution/useWorkoutSummaryData';
 import {
   derivePreviousExerciseLastLoad,
   derivePreviousExerciseRecords,
@@ -154,7 +156,7 @@ type Props = {
    * not from a fresh user action just now (docs — Cardio Finisher Completion
    * Recovery hardening; used only for observability, never changes behavior).
    */
-  onSessionCompleted?: (context: { recovery: boolean }) => void;
+  onSessionCompleted?: (context: { recovery: boolean; mode: 'NORMAL' | 'EARLY' }) => void;
   /**
    * True while `onSessionCompleted`'s durable finish chain is still in
    * flight — drives the "Finalizando treino..." state so the
@@ -190,6 +192,8 @@ type Props = {
    * only advances to `finished` once this resolves `{ ok: true }`.
    */
   onCardioCompleted?: (actualDurationSeconds: number) => Promise<{ ok: true } | { ok: false; error: unknown }>;
+  /** Uses the same official finalizer, explicitly marking the user's intent to stop before every prescribed item is complete. */
+  onEarlyFinish: () => Promise<{ ok: true } | { ok: false; error: unknown }>;
   /**
    * The user's current declared limitation regions + equipment context —
    * exactly what the server-side manual-substitution resolver uses too
@@ -245,7 +249,7 @@ function translateMuscleGroup(tLoose: LooseT, target: string): string {
   return target;
 }
 
-export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, onMinimize, sessionIndex = 0, execution, workoutStartedAtMs, hasUnreconciledMutations, onSessionCompleted, finishing, completionConfirmed, durableCompletionReachedAtMs, completionFailed, onSetLogged, onAbandon, onCardioCompleted, manualSubstitutionContext, manualSubstitutionContextStatus, onRetryManualSubstitutionContext, onApplySubstitution }: Props) {
+export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, onMinimize, sessionIndex = 0, execution, workoutStartedAtMs, hasUnreconciledMutations, onSessionCompleted, finishing, completionConfirmed, durableCompletionReachedAtMs, completionFailed, onSetLogged, onAbandon, onCardioCompleted, onEarlyFinish, manualSubstitutionContext, manualSubstitutionContextStatus, onRetryManualSubstitutionContext, onApplySubstitution }: Props) {
   useEffect(() => {
     if (typeof __DEV__ === 'undefined' || !__DEV__) return undefined;
     logInfo('workout_performance', 'workout_screen_mount', {
@@ -273,7 +277,7 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
   // silently and close the screen anyway; now every destructive path is
   // gated behind an explicit confirmation and a result the UI actually
   // reacts to).
-  const [exitSheet, setExitSheet] = useState<'choice' | 'discard' | null>(null);
+  const [exitSheet, setExitSheet] = useState<'choice' | 'early' | 'earlyEmpty' | 'discard' | null>(null);
   const [discardError, setDiscardError] = useState(false);
   // Docs §8: guards against a second tap firing a second `abandon()` while
   // the first is still persisting — the discard button becomes
@@ -281,6 +285,7 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
   // abandon settles. Also the single source of truth gating `onDone()` —
   // nothing may navigate away while this is true.
   const [abandoning, setAbandoning] = useState(false);
+  const earlyFinishRequestedRef = useRef(false);
   const exercises = useMemo(
     () => workoutExercisesFromPlan(plan, i18n.language, sessionIndex),
     [i18n.language, plan, sessionIndex],
@@ -298,6 +303,16 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [execution?.executionId],
   );
+  const initialSetCounts = useMemo(() => ({
+    completed: execution?.exercises.reduce(
+      (total, exercise) => total + exercise.sets.filter((set) => set.status === 'COMPLETED').length,
+      0,
+    ) ?? 0,
+    settled: Object.values(hydration?.progress ?? {}).reduce((total, count) => total + count, 0),
+  // Like hydration, these are the immutable resume snapshot. Live progress
+  // is added below; re-reading execution updates here would double-count it.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [execution?.executionId]);
   const headerButtonStyle = {
     width: 38,
     height: 38,
@@ -454,18 +469,23 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
   // the two cases that go straight to `finished`; only "cardio exists on
   // this plan and genuinely hasn't been completed yet" goes to
   // `showCardioFinisher`.
-  const cardioAlreadyCompleted = !!hydration?.cardioCompleted;
-  const [finished, setFinished] = useState(() => !!hydration?.allDone && (!cardioFinisher || cardioAlreadyCompleted));
+  const cardioAlreadySettled = !!hydration?.cardioSettled;
+  const [finished, setFinished] = useState(() => !!hydration?.allDone && (!cardioFinisher || cardioAlreadySettled));
   const [finalCompletionAnimationElapsed, setFinalCompletionAnimationElapsed] = useState(false);
+  // The post-workout summary is the terminal screen's first page; the share
+  // composer (unchanged) only mounts once the user taps "Compartilhar
+  // treino" on it — never shown first anymore.
+  const [showShareComposer, setShowShareComposer] = useState(false);
   const completionSignaledRef = useRef(false);
+  const completionModeRef = useRef<'NORMAL' | 'EARLY'>('NORMAL');
   // Captured once at mount — never re-evaluated as `finished ping-pongs`
   // later in the session, so observability can tell "this finish chain
   // started from a resumed-already-done session" apart from "the user just
   // finished it right now" (docs — Cardio Finisher Completion Recovery
   // hardening; `onSessionCompleted`'s `recovery` context).
-  const finishedViaRecoveryRef = useRef(!!hydration?.allDone && (!cardioFinisher || cardioAlreadyCompleted));
+  const finishedViaRecoveryRef = useRef(!!hydration?.allDone && (!cardioFinisher || cardioAlreadySettled));
   const [showCardioFinisher, setShowCardioFinisher] = useState(
-    () => !!hydration?.allDone && !!cardioFinisher && !cardioAlreadyCompleted,
+    () => !!hydration?.allDone && !!cardioFinisher && !cardioAlreadySettled,
   );
   const [sessionNow, setSessionNow] = useState(Date.now);
   const [restNow, setRestNow] = useState(Date.now);
@@ -637,6 +657,39 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
     0
   );
   const pct = doneSets / totalSets;
+  const completedSetsForEarlyFinish = Math.min(
+    totalSets,
+    initialSetCounts.completed + Math.max(0, doneSets - initialSetCounts.settled),
+  );
+  const earlyCompletionPercentage = totalSets > 0
+    ? Math.round((completedSetsForEarlyFinish / totalSets) * 100)
+    : 0;
+  const requestEarlyFinish = () => {
+    if (completedSetsForEarlyFinish === 0) {
+      setExitSheet('earlyEmpty');
+      return;
+    }
+    setExitSheet('early');
+  };
+  const confirmEarlyFinish = () => {
+    if (completedSetsForEarlyFinish === 0 || earlyFinishRequestedRef.current || finishing) return;
+    earlyFinishRequestedRef.current = true;
+    completionModeRef.current = 'EARLY';
+    setExitSheet(null);
+    setExComplete({
+      name: ex.name,
+      nextName: t('done.finishing'),
+      finalizesWorkout: true,
+    });
+    // This callback already enters AppShell's single-flight
+    // runWorkoutCompletion path. Mark the generic finished effect handled
+    // before the render flips so it cannot issue a second NORMAL request.
+    completionSignaledRef.current = true;
+    void onEarlyFinish().catch((error) => {
+      logWarn('workout', 'early_finish_callback_failed', { error });
+    });
+    setFinished(true);
+  };
   const wasSkipped = skipped.includes(exIdx);
   const isSubbed = !!ovr(exIdx);
   const isLastOverall = order.length === 1 && setIdx === ex.sets.length - 1;
@@ -1018,7 +1071,10 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
   useEffect(() => {
     if (finished && !completionSignaledRef.current) {
       completionSignaledRef.current = true;
-      onSessionCompleted?.({ recovery: finishedViaRecoveryRef.current });
+      onSessionCompleted?.({
+        recovery: finishedViaRecoveryRef.current,
+        mode: completionModeRef.current,
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finished]);
@@ -1055,6 +1111,19 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
     successVisibleRef.current = visible;
   }, [completionConfirmed, completionFailed, durableCompletionReachedAtMs, finalCompletionAnimationElapsed, finished]);
 
+  const workoutDisplayName = currentSession
+    ? resolveSessionDisplayName(tLoose, currentSession.name, currentSession.type, currentSession.displayName)
+    : '';
+  // Hooks must run unconditionally every render, but the summary itself is
+  // only ever shown once `finished` — gating `execution`/`durationSeconds`
+  // to `null`/0 until then keeps this from recomputing every second off the
+  // live `elapsed` ticker while the workout is still in progress.
+  const workoutSummaryData = useWorkoutSummaryData({
+    workoutName: workoutDisplayName,
+    execution: finished ? execution : null,
+    durationSeconds: finished ? elapsed : 0,
+  });
+
   if (finished) {
     if (completionFailed && !finishing) {
       return <WorkoutCompletionError onRetry={onRetryCompletion} />;
@@ -1065,14 +1134,7 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
     if (!completionConfirmed || !finalCompletionAnimationElapsed || finishing) {
       const finalizingName = exComplete?.finalizesWorkout
         ? exComplete.name
-        : currentSession
-          ? resolveSessionDisplayName(
-              tLoose,
-              currentSession.name,
-              currentSession.type,
-              currentSession.displayName,
-            )
-          : t('done.kicker');
+        : (workoutDisplayName || t('done.kicker'));
       return (
         <ScreenBg>
           <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
@@ -1088,34 +1150,44 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
         </ScreenBg>
       );
     }
+    const finishAndGoHome = () => {
+      // Diagnostic instrumentation (Phase 2, Part F) — only the true
+      // post-completion navigation (this branch only renders once
+      // `finished` is true), never the early-exit/abandon path. This is the
+      // same finish/cleanup callback WorkoutDone's "Back to home" CTA used
+      // to invoke — whichever terminal screen is visible (summary or share
+      // composer), both reach here.
+      logInfo('workout', 'workout_done_cta_pressed', {
+        templateId: plan.templateId,
+        sessionIndex,
+      });
+      onDone();
+    };
+
+    // The summary is the terminal screen's first page; tapping "Compartilhar
+    // treino" on it swaps to the exact same share composer/flow that used
+    // to be shown first, unchanged. A `null` summary (execution not adopted
+    // yet) falls back straight to the composer rather than blocking on data
+    // that should already exist by the time `finished` is true.
+    if (!showShareComposer && workoutSummaryData) {
+      return (
+        <WorkoutSummaryScreen
+          data={workoutSummaryData}
+          onClose={finishAndGoHome}
+          onShare={() => setShowShareComposer(true)}
+        />
+      );
+    }
+
     return (
       <WorkoutShareComposer
         data={buildWorkoutShareData({
-          workoutName: currentSession
-            ? resolveSessionDisplayName(
-                tLoose,
-                currentSession.name,
-                currentSession.type,
-                currentSession.displayName,
-              )
-            : '',
+          workoutName: workoutDisplayName,
           exerciseCount: currentSession?.exercises.length ?? 0,
           execution,
           durationSeconds: elapsed,
         })}
-        onDone={() => {
-          // Diagnostic instrumentation (Phase 2, Part F) — only the true
-          // post-completion navigation (this branch only renders once
-          // `finished` is true), never the early-exit/abandon path. This is
-          // the same finish/cleanup callback WorkoutDone's "Back to home"
-          // CTA used to invoke — the composer is now the terminal screen, so
-          // both its header close and its own "Back to home" CTA reach here.
-          logInfo('workout', 'workout_done_cta_pressed', {
-            templateId: plan.templateId,
-            sessionIndex,
-          });
-          onDone();
-        }}
+        onDone={finishAndGoHome}
       />
     );
   }
@@ -1145,6 +1217,11 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
           if (result.ok) completionSignaledRef.current = true;
           return result;
         } : undefined}
+        onEarlyFinish={async () => {
+          const result = await onEarlyFinish();
+          if (result.ok) completionSignaledRef.current = true;
+          return result;
+        }}
         onFinish={(actualDurationSeconds) => {
           logInfo('workout', 'cardio_finished', {
             templateId: plan.templateId,
@@ -1152,6 +1229,15 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
             plannedDurationSeconds: parsePrescribedCardioDurationSeconds(cardioFinisher.duration),
             actualDurationSeconds,
           });
+          setFinalCompletionAnimationElapsed(true);
+          setFinished(true);
+        }}
+        onEarlyFinished={() => {
+          logInfo('workout', 'cardio_skipped_by_early_finish', {
+            templateId: plan.templateId,
+            sessionIndex,
+          });
+          completionModeRef.current = 'EARLY';
           setFinalCompletionAnimationElapsed(true);
           setFinished(true);
         }}
@@ -2335,20 +2421,20 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
           </Pressable>
         </Modal>
 
-        {/* EXIT DIALOG — Minimizar / Descartar / Cancelar (docs §8 P0 follow-up) */}
+        {/* EXIT DIALOG — Minimizar / Finalizar / Descartar / Cancelar */}
         <Modal
           visible={exitSheet !== null}
           transparent
           animationType="fade"
           statusBarTranslucent
           onRequestClose={() => {
-            if (abandoning) return;
+            if (abandoning || finishing || earlyFinishRequestedRef.current) return;
             setExitSheet(null);
           }}
         >
           <Pressable
             onPress={() => {
-              if (abandoning) return;
+              if (abandoning || finishing || earlyFinishRequestedRef.current) return;
               setExitSheet(null);
             }}
             accessibilityRole="button"
@@ -2438,6 +2524,26 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
                     </Pressable>
                     <Pressable
                       accessibilityRole="button"
+                      accessibilityLabel={t('exit.finishNow')}
+                      onPress={requestEarlyFinish}
+                      style={{
+                        height: 48,
+                        marginTop: 10,
+                        paddingHorizontal: 14,
+                        borderRadius: 10,
+                        borderBottomRightRadius: 0,
+                        borderWidth: 1,
+                        borderColor: exitDialogTheme.colors.primaryBorderQuiet,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Text style={{ color: exitDialogTheme.colors.primaryEmphasis, fontFamily: exitDialogTheme.fonts.uiSemi, fontSize: 13 }}>
+                        {t('exit.finishNow')}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
                       accessibilityLabel={t('exit.discard')}
                       onPress={() => {
                         setDiscardError(false);
@@ -2467,6 +2573,109 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
                     >
                       <Text style={{ color: exitDialogTheme.colors.textMuted, fontFamily: exitDialogTheme.fonts.ui, fontSize: 13 }}>
                         {t('exit.cancel')}
+                      </Text>
+                    </Pressable>
+                  </>
+                )}
+                {exitSheet === 'early' && (
+                  <>
+                    <Slash accentColor={exitDialogTheme.colors.primaryEmphasis} textColor={exitDialogTheme.colors.textFaint}>
+                      {t('exit.earlyKicker').toUpperCase()}
+                    </Slash>
+                    <Display size={26} color={exitDialogTheme.colors.textPrimary} style={{ marginTop: 9 }}>
+                      {t('exit.earlyTitle').toUpperCase()}
+                    </Display>
+                    <Text style={{ marginTop: 8, fontFamily: exitDialogTheme.fonts.ui, fontSize: 13, color: exitDialogTheme.colors.textSecondaryStrong, lineHeight: 19 }}>
+                      {t('exit.earlyProgress', {
+                        completed: completedSetsForEarlyFinish,
+                        planned: totalSets,
+                        percentage: earlyCompletionPercentage,
+                      })}
+                    </Text>
+                    <Text style={{ marginTop: 8, fontFamily: exitDialogTheme.fonts.ui, fontSize: 13, color: exitDialogTheme.colors.textMuted, lineHeight: 19 }}>
+                      {t('exit.earlyBody')}
+                    </Text>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={t('exit.earlyConfirm')}
+                      accessibilityState={{ disabled: !!finishing || earlyFinishRequestedRef.current }}
+                      disabled={!!finishing || earlyFinishRequestedRef.current}
+                      onPress={confirmEarlyFinish}
+                      style={{
+                        height: 48,
+                        marginTop: 18,
+                        borderRadius: 10,
+                        borderBottomRightRadius: 0,
+                        backgroundColor: exitDialogTheme.colors.inverseSurface,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 9,
+                        opacity: finishing || earlyFinishRequestedRef.current ? 0.6 : 1,
+                      }}
+                    >
+                      {finishing || earlyFinishRequestedRef.current ? (
+                        <ActivityIndicator color={exitDialogTheme.colors.inverseForeground} />
+                      ) : (
+                        <Icon name="check" size={12} color={exitDialogTheme.colors.inverseForeground} />
+                      )}
+                      <Text style={{ color: exitDialogTheme.colors.inverseForeground, fontFamily: exitDialogTheme.fonts.display, fontSize: 14, letterSpacing: 1.2, textTransform: 'uppercase' }}>
+                        {finishing || earlyFinishRequestedRef.current ? t('exit.finishing') : t('exit.earlyConfirm')}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={t('exit.continueWorkout')}
+                      disabled={!!finishing || earlyFinishRequestedRef.current}
+                      onPress={() => setExitSheet(null)}
+                      style={{ alignSelf: 'center', marginTop: 10, paddingVertical: 10, paddingHorizontal: 18 }}
+                    >
+                      <Text style={{ color: exitDialogTheme.colors.textMuted, fontFamily: exitDialogTheme.fonts.ui, fontSize: 13 }}>
+                        {t('exit.continueWorkout')}
+                      </Text>
+                    </Pressable>
+                  </>
+                )}
+                {exitSheet === 'earlyEmpty' && (
+                  <>
+                    <Slash accentColor={exitDialogTheme.colors.primaryEmphasis} textColor={exitDialogTheme.colors.textFaint}>
+                      {t('exit.earlyKicker').toUpperCase()}
+                    </Slash>
+                    <Display size={26} color={exitDialogTheme.colors.textPrimary} style={{ marginTop: 9 }}>
+                      {t('exit.earlyEmptyTitle').toUpperCase()}
+                    </Display>
+                    <Text accessibilityRole="alert" style={{ marginTop: 8, fontFamily: exitDialogTheme.fonts.ui, fontSize: 13, color: exitDialogTheme.colors.textSecondaryStrong, lineHeight: 19 }}>
+                      {t('exit.earlyEmptyBody')}
+                    </Text>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={t('exit.continueWorkout')}
+                      onPress={() => setExitSheet(null)}
+                      style={{
+                        height: 48,
+                        marginTop: 18,
+                        borderRadius: 10,
+                        borderBottomRightRadius: 0,
+                        backgroundColor: exitDialogTheme.colors.inverseSurface,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Text style={{ color: exitDialogTheme.colors.inverseForeground, fontFamily: exitDialogTheme.fonts.display, fontSize: 14, letterSpacing: 1.2, textTransform: 'uppercase' }}>
+                        {t('exit.continueWorkout')}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={t('exit.discard')}
+                      onPress={() => {
+                        setDiscardError(false);
+                        setExitSheet('discard');
+                      }}
+                      style={{ alignSelf: 'center', marginTop: 10, paddingVertical: 10, paddingHorizontal: 18 }}
+                    >
+                      <Text style={{ color: exitDialogTheme.colors.textMuted, fontFamily: exitDialogTheme.fonts.ui, fontSize: 13 }}>
+                        {t('exit.discard')}
                       </Text>
                     </Pressable>
                   </>
@@ -2556,204 +2765,6 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
   );
 }
 
-function WorkoutExitDialog({
-  step,
-  abandoning,
-  discardError,
-  onDismiss,
-  onMinimize,
-  onRequestDiscard,
-  onConfirmDiscard,
-  onBack,
-}: {
-  step: 'choice' | 'discard' | null;
-  abandoning: boolean;
-  discardError: boolean;
-  onDismiss: () => void;
-  onMinimize: () => void;
-  onRequestDiscard: () => void;
-  onConfirmDiscard: () => void;
-  onBack: () => void;
-}) {
-  const { t } = useTranslation('workout');
-  const theme = darkTheme;
-  const close = () => {
-    if (!abandoning) onDismiss();
-  };
-
-  return (
-    <Modal
-      visible={step !== null}
-      transparent
-      animationType="fade"
-      statusBarTranslucent
-      onRequestClose={close}
-    >
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={t('exit.cancel')}
-        onPress={close}
-        style={{
-          flex: 1,
-          backgroundColor: theme.colors.overlayStrong,
-          justifyContent: 'center',
-          paddingHorizontal: spacing[6],
-        }}
-      >
-        <Pressable
-          accessibilityRole="none"
-          onPress={(event) => event.stopPropagation()}
-          style={{
-            width: '100%',
-            maxWidth: sizes.modalMaxWidth,
-            alignSelf: 'center',
-            borderRadius: radii.xl,
-            borderBottomRightRadius: 0,
-            overflow: 'hidden',
-            borderWidth: 1,
-            borderColor: theme.colors.primaryBorderQuiet,
-            backgroundColor: theme.colors.background,
-            shadowColor: theme.colors.primary,
-            shadowOpacity: 0.18,
-            shadowRadius: 20,
-            shadowOffset: { width: 0, height: 10 },
-            elevation: 10,
-          }}
-        >
-          <LinearGradient
-            colors={theme.gradients.poster}
-            locations={[0, 0.45, 1]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={{ padding: spacing[5] }}
-          >
-            <HudCorners color={theme.colors.hudCorner} />
-            <Slash accentColor={theme.colors.primaryEmphasis} textColor={theme.colors.textFaint}>
-              {t('exit.kicker').toUpperCase()}
-            </Slash>
-
-            {step === 'choice' ? (
-              <>
-                <Display size={26} color={theme.colors.textPrimary} style={{ marginTop: 9 }}>
-                  {t('exit.title').toUpperCase()}
-                </Display>
-                <Text style={{ marginTop: 8, fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textSecondaryStrong, lineHeight: 19 }}>
-                  {t('exit.body')}
-                </Text>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={t('exit.minimize')}
-                  onPress={onMinimize}
-                  style={{
-                    height: 48,
-                    marginTop: 18,
-                    borderRadius: 10,
-                    borderBottomRightRadius: 0,
-                    backgroundColor: theme.colors.inverseSurface,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 9,
-                  }}
-                >
-                  <Icon name="minus" size={12} color={theme.colors.inverseForeground} />
-                  <Text style={{ color: theme.colors.inverseForeground, fontFamily: theme.fonts.display, fontSize: 15, letterSpacing: 1.4, textTransform: 'uppercase' }}>
-                    {t('exit.minimize')}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={t('exit.discard')}
-                  onPress={onRequestDiscard}
-                  style={{
-                    height: 48,
-                    marginTop: 10,
-                    paddingHorizontal: 14,
-                    borderRadius: 10,
-                    borderBottomRightRadius: 0,
-                    borderWidth: 1,
-                    borderColor: theme.colors.controlBorder,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Text style={{ color: theme.colors.textSecondaryStrong, fontFamily: theme.fonts.ui, fontSize: 13 }}>
-                    {t('exit.discard')}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={t('exit.cancel')}
-                  onPress={onDismiss}
-                  style={{ alignSelf: 'center', paddingHorizontal: 18, paddingTop: 13, paddingBottom: 2 }}
-                >
-                  <Text style={{ color: theme.colors.textMuted, fontFamily: theme.fonts.ui, fontSize: 13 }}>
-                    {t('exit.cancel')}
-                  </Text>
-                </Pressable>
-              </>
-            ) : (
-              <>
-                <Display size={26} color={theme.colors.textPrimary} style={{ marginTop: 9 }}>
-                  {t('exit.discardConfirmTitle').toUpperCase()}
-                </Display>
-                <Text style={{ marginTop: 8, fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textSecondaryStrong, lineHeight: 19 }}>
-                  {t('exit.discardConfirmBody')}
-                </Text>
-                {discardError && (
-                  <Text accessibilityRole="alert" style={{ color: theme.colors.warning, fontFamily: theme.fonts.ui, fontSize: 12, lineHeight: 17, marginTop: 8 }}>
-                    {t('exit.discardError')}
-                  </Text>
-                )}
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={t('exit.discardConfirmYes')}
-                  accessibilityState={{ disabled: abandoning }}
-                  disabled={abandoning}
-                  onPress={onConfirmDiscard}
-                  style={{
-                    height: 48,
-                    marginTop: 18,
-                    borderRadius: 10,
-                    borderBottomRightRadius: 0,
-                    backgroundColor: theme.colors.inverseSurface,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 9,
-                    opacity: abandoning ? 0.6 : 1,
-                  }}
-                >
-                  {abandoning ? (
-                    <ActivityIndicator color={theme.colors.inverseForeground} />
-                  ) : (
-                    <Icon name="x" size={12} color={theme.colors.inverseForeground} />
-                  )}
-                  <Text style={{ color: theme.colors.inverseForeground, fontFamily: theme.fonts.display, fontSize: 14, letterSpacing: 1.2, textTransform: 'uppercase' }}>
-                    {abandoning ? t('exit.discarding') : t('exit.discardConfirmYes')}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={t('exit.discardConfirmBack')}
-                  accessibilityState={{ disabled: abandoning }}
-                  disabled={abandoning}
-                  onPress={onBack}
-                  style={{ alignSelf: 'center', marginTop: 10, paddingVertical: 10, paddingHorizontal: 18 }}
-                >
-                  <Text style={{ color: theme.colors.textMuted, fontFamily: theme.fonts.ui, fontSize: 13 }}>
-                    {t('exit.discardConfirmBack')}
-                  </Text>
-                </Pressable>
-              </>
-            )}
-          </LinearGradient>
-        </Pressable>
-      </Pressable>
-    </Modal>
-  );
-}
-
 function Badge({
   children,
   bg,
@@ -2816,14 +2827,18 @@ function CardioScreen({
   cardioFinisher,
   ownerKey,
   onCardioCompleted,
+  onEarlyFinish,
   onFinish,
+  onEarlyFinished,
 }: {
   cardioFinisher: FinalCardioFinisher;
   /** Identifies this workout attempt — from `workoutStartedAtMs`, so a stale persisted session from a previous attempt is never mistakenly restored. */
   ownerKey: string;
   /** See `Props.onCardioCompleted`'s doc comment above. */
   onCardioCompleted?: (actualDurationSeconds: number) => Promise<{ ok: true } | { ok: false; error: unknown }>;
+  onEarlyFinish: () => Promise<{ ok: true } | { ok: false; error: unknown }>;
   onFinish: (actualDurationSeconds: number) => void;
+  onEarlyFinished: () => void;
 }) {
   const { theme } = useTheme();
   const { t } = useTranslation('workout');
@@ -2976,6 +2991,7 @@ function CardioScreen({
     // or the modal's "Tentar novamente" pressed twice) can never fire two
     // concurrent `completeCardioExecution` calls.
     if (finishingRef.current) return;
+    const finalizationMode = confirmSheet === 'early' ? 'EARLY' : 'NORMAL';
     finishingRef.current = true;
     setFinishState('finalizing');
     logInfo('workout_performance', 'finish_ui_transition_started', { timestampMs: Date.now(), source: 'cardio' });
@@ -2988,17 +3004,19 @@ function CardioScreen({
     // stuck on the error state), but a single attempt always persists and
     // locally freezes the exact same duration, never two different values
     // for one confirmed tap.
-    const finishedSession = finishCardio(session, Date.now());
-    const actualDurationSeconds = finishedSession.actualDurationSeconds ?? 0;
+    const finishedSession = finalizationMode === 'NORMAL'
+      ? finishCardio(session, Date.now())
+      : null;
+    const actualDurationSeconds = finishedSession?.actualDurationSeconds ?? 0;
 
     const cardioPersistStartedAtMs = Date.now();
     logInfo('workout_performance', 'cardio_persist_start', { timestampMs: cardioPersistStartedAtMs });
     // The callback owns the durable workout-finalization boundary and runs in
     // parallel with the animation. `Promise.all` keeps that same animated
     // surface mounted until both the visual beat and the server work finish.
-    const persistence = onCardioCompleted
-      ? onCardioCompleted(actualDurationSeconds)
-      : Promise.resolve({ ok: true } as const);
+    const persistence = finalizationMode === 'EARLY'
+      ? onEarlyFinish()
+      : (onCardioCompleted?.(actualDurationSeconds) ?? Promise.resolve({ ok: true } as const));
     const [result] = await Promise.all([persistence, completionAnimation]);
     logInfo('workout_performance', 'cardio_persist_end', {
       timestampMs: Date.now(),
@@ -3013,21 +3031,24 @@ function CardioScreen({
     }
     // The durable boundary succeeded. Only now may local cardio state become
     // FINISHED and its recovery record be removed.
-    publish(finishedSession);
-    publishLiveActivity(
-      finishedSession,
-      session.status === 'READY' ? 'start' : 'update',
-      finishedSession.cardioFinishedAt ?? Date.now(),
-    );
+    if (finishedSession) {
+      publish(finishedSession);
+      publishLiveActivity(
+        finishedSession,
+        session.status === 'READY' ? 'start' : 'update',
+        finishedSession.cardioFinishedAt ?? Date.now(),
+      );
+    }
     void clearCardioSession();
-    onFinish(actualDurationSeconds);
+    if (finalizationMode === 'EARLY') onEarlyFinished();
+    else onFinish(actualDurationSeconds);
   };
 
-  const [confirmSheet, setConfirmSheet] = useState<'finish' | 'exit' | null>(null);
+  const [confirmSheet, setConfirmSheet] = useState<'finish' | 'early' | null>(null);
   const finishModalVisible = confirmSheet !== null || finishState !== 'idle';
 
   const handleHeaderClose = () => {
-    setConfirmSheet('exit');
+    setConfirmSheet('early');
   };
 
   const doneClock = formatCardioClock(elapsed);
@@ -3040,7 +3061,7 @@ function CardioScreen({
           <ExerciseDoneOverlay
             name={t('cardioFinisher.title')}
             nextName={t('done.finishing')}
-            completedLabel={t('cardioSession.completed')}
+            completedLabel={t(confirmSheet === 'early' ? 'cardioSession.skipped' : 'cardioSession.completed')}
             finalizingWorkout
           />
         </SafeAreaView>
@@ -3061,7 +3082,7 @@ function CardioScreen({
           progress={progress}
           finishing={false}
           onClose={handleHeaderClose}
-          onSkip={() => void finalizeNow()}
+          onSkip={() => setConfirmSheet('early')}
           onStart={handleStart}
           onExtend={handleExtend}
           onPauseToggle={handlePauseToggle}
@@ -3148,10 +3169,14 @@ function CardioScreen({
               {finishState === 'error' ? (
                 <>
                   <Display size={26} color={theme.colors.textPrimary} style={{ marginTop: 9 }}>
-                    {t('cardioSession.finishErrorTitle').toUpperCase()}
+                    {t(confirmSheet === 'early'
+                      ? 'cardioSession.earlyFinishErrorTitle'
+                      : 'cardioSession.finishErrorTitle').toUpperCase()}
                   </Display>
                   <Text style={{ marginTop: 8, fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textSecondaryStrong, lineHeight: 19 }}>
-                    {t('cardioSession.finishErrorBody')}
+                    {t(confirmSheet === 'early'
+                      ? 'cardioSession.earlyFinishErrorBody'
+                      : 'cardioSession.finishErrorBody')}
                   </Text>
                   <Pressable
                     accessibilityRole="button"
@@ -3191,13 +3216,13 @@ function CardioScreen({
               ) : (
                 <>
                   <Display size={26} color={theme.colors.textPrimary} style={{ marginTop: 9 }}>
-                    {t(confirmSheet === 'exit'
-                      ? 'cardioSession.exitConfirmTitle'
+                    {t(confirmSheet === 'early'
+                      ? 'cardioSession.earlyConfirmTitle'
                       : 'cardioSession.finishConfirmTitle').toUpperCase()}
                   </Display>
                   <Text style={{ marginTop: 8, fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textSecondaryStrong, lineHeight: 19 }}>
-                    {confirmSheet === 'exit'
-                      ? t('cardioSession.exitConfirmBody', { done: doneClock })
+                    {confirmSheet === 'early'
+                      ? t('cardioSession.earlyConfirmBody')
                       : t(targetReached ? 'cardioSession.finishConfirmAfterGoal' : 'cardioSession.finishConfirmBeforeGoal', {
                           done: doneClock,
                           target: targetClock,
@@ -3205,8 +3230,8 @@ function CardioScreen({
                   </Text>
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel={t(confirmSheet === 'exit'
-                      ? 'cardioSession.exitConfirmAction'
+                    accessibilityLabel={t(confirmSheet === 'early'
+                      ? 'cardioSession.earlyConfirmAction'
                       : 'cardioSession.confirmFinish')}
                     onPress={() => void finalizeNow()}
                     style={{
@@ -3223,8 +3248,8 @@ function CardioScreen({
                   >
                     <Icon name="check" size={12} color={theme.colors.inverseForeground} />
                     <Text style={{ color: theme.colors.inverseForeground, fontFamily: theme.fonts.display, fontSize: 15, letterSpacing: 1.4, textTransform: 'uppercase' }}>
-                      {t(confirmSheet === 'exit'
-                        ? 'cardioSession.exitConfirmAction'
+                      {t(confirmSheet === 'early'
+                        ? 'cardioSession.earlyConfirmAction'
                         : 'cardioSession.confirmFinish')}
                     </Text>
                   </Pressable>

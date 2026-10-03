@@ -15,27 +15,44 @@ export type SetExecutionStatus = 'PENDING' | 'COMPLETED' | 'SKIPPED';
  * Cardio Finisher Completion Recovery hardening (2026-09): the durable,
  * server-side answer to "was this execution's cardio finisher completed" —
  * never derived from the local timer (`lib/cardioTimer.ts`'s `CardioSession`,
- * AsyncStorage-only) or from transient React state. Deliberately only ONE
- * meaningful status: this record is written exactly once, the instant the
- * user confirms "Finalizar cardio" (`completeCardioExecution`), and never
- * again — there is no persisted `NOT_STARTED`/`IN_PROGRESS` value because
- * nothing durable needs to distinguish them (a cardio attempt that never
- * reached completion resumes fine from local timer state the same way it
- * always has; only "already completed" needs to survive a process death, so
- * WorkoutScreen's hydration never re-offers a finished cardio finisher as
- * fresh — see `hydration.ts`'s `cardioCompleted`). Absent (`null`, the field
- * always exists once this schema is in effect) is the "not completed yet"
- * state, and is also what every execution written before this field existed
- * degrades to (`fromDoc` in `services/workoutExecutions.ts`).
+ * AsyncStorage-only) or from transient React state. `COMPLETED` is written
+ * when the user confirms "Finalizar cardio"; `SKIPPED/EARLY_FINISH` is
+ * written only by the official workout finalizer when the user explicitly
+ * ends the workout before cardio. There is no persisted
+ * `NOT_STARTED`/`IN_PROGRESS` value. Absent (`null`) remains the "not settled
+ * yet" state and is also how executions written before this field existed
+ * degrade (`fromDoc` in `services/workoutExecutions.ts`).
  */
-export type CardioExecutionStatus = 'COMPLETED';
+export type CardioExecutionStatus = 'COMPLETED' | 'SKIPPED';
 
-export interface CardioExecutionRecord {
-  status: CardioExecutionStatus;
+export interface CompletedCardioExecutionRecord {
+  status: 'COMPLETED';
   /** Frozen the instant cardio was marked complete — same semantics as `CardioSession.actualDurationSeconds` (`lib/cardioTimer.ts`). Never a tick count. */
   actualDurationSeconds: number;
   /** `FieldValue.serverTimestamp()` sentinel when writing, a resolved `Timestamp` when read back. */
   completedAt: unknown;
+  reason?: never;
+  skippedAt?: never;
+}
+
+export interface SkippedCardioExecutionRecord {
+  status: 'SKIPPED';
+  reason: 'EARLY_FINISH';
+  /** `FieldValue.serverTimestamp()` sentinel when writing, a resolved `Timestamp` when read back. */
+  skippedAt: unknown;
+  actualDurationSeconds?: never;
+  completedAt?: never;
+}
+
+export type CardioExecutionRecord = CompletedCardioExecutionRecord | SkippedCardioExecutionRecord;
+
+export interface WorkoutCompletion {
+  /** Set opportunities frozen from the server-validated prescription. */
+  plannedSets: number;
+  /** Only sets durably recorded as COMPLETED. */
+  completedSets: number;
+  /** Integer percentage in hundredths of one percent (0..10000). */
+  percentageBasisPoints: number;
 }
 
 export interface SetExecution {
@@ -189,6 +206,34 @@ export interface WorkoutExecution {
    * execution record.
    */
   cardio: CardioExecutionRecord | null;
+  /**
+   * Server-authoritative terminal completion facts. Optional only for
+   * executions finalized before this field existed; historical readers may
+   * derive a safe fallback from the immutable set snapshot.
+   */
+  completion?: WorkoutCompletion;
+  /**
+   * 1-based disambiguator for a `flexible` schedule repeating the same
+   * sessionIndex on the same `scheduledLocalDate` (docs — agenda livre
+   * multiple-sessions-per-day). Absent on every execution written before
+   * this field existed and on every `fixed`-schedule execution — both
+   * degrade identically to `1`, the implicit first/only occurrence. Never
+   * recompute this from the id string; it is the single source of truth the
+   * finalizer's schedule-event identity derives from.
+   */
+  occurrence?: number;
+  /**
+   * The finalization intent actually used to terminalize this execution —
+   * persisted explicitly so `PARTIALLY_COMPLETED` is never conflated with
+   * "the user tapped Finalizar antes". A plain `NORMAL` finish can also land
+   * on `PARTIALLY_COMPLETED` if sets were skipped along the way, so `status`
+   * alone can never answer "was this an early finish". Absent on every
+   * execution finalized before this field existed and on every still
+   * `IN_PROGRESS`/`ABANDONED` execution — absence must never be read as
+   * `'EARLY'` (nor as `'NORMAL'`): a surface that cares must check
+   * `=== 'EARLY'` explicitly, never infer from `!== 'EARLY'` or from `status`.
+   */
+  finalizationMode?: 'NORMAL' | 'EARLY';
   executionSchemaVersion: number;
   /** P0-C protocol marker — see `WORKOUT_EXECUTION_MUTEX_PROTOCOL_VERSION`'s doc comment. Absent on every pre-P0-C write. */
   mutexProtocolVersion?: number;
@@ -196,9 +241,20 @@ export interface WorkoutExecution {
   updatedAt: unknown;
 }
 
-/** Deterministic — a retried "start workout" (double tap, network retry, cold start) lands on the same doc instead of creating a duplicate execution (docs §22 Idempotência). */
-export function workoutExecutionId(programOrInstanceId: string, sessionIndex: number, scheduledLocalDate: string): string {
-  return workoutExecutionDocumentId(programOrInstanceId, sessionIndex, scheduledLocalDate);
+/**
+ * Deterministic — a retried "start workout" (double tap, network retry, cold
+ * start) lands on the same doc instead of creating a duplicate execution
+ * (docs §22 Idempotência). `occurrence` (omitted/`1` = original behavior)
+ * only ever varies for a `flexible` schedule's same-day repeat — see
+ * `workoutExecutionDocumentId`'s doc comment.
+ */
+export function workoutExecutionId(
+  programOrInstanceId: string,
+  sessionIndex: number,
+  scheduledLocalDate: string,
+  occurrence?: number,
+): string {
+  return workoutExecutionDocumentId(programOrInstanceId, sessionIndex, scheduledLocalDate, occurrence);
 }
 
 /** Backward-compatible visual/activity date. Never use this as schedule authority. */

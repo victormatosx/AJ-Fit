@@ -55,6 +55,7 @@ import {
   deleteUserQuestionnaires,
   deleteUserWorkoutExecutions,
   deleteUserWorkoutExecutionState,
+  deleteUserWorkoutExecutionOccurrenceCounters,
   deleteUserExerciseSubstitutionPreferences,
   deleteUserWorkoutLifecycleEvents,
   deleteUserWorkoutLifecycleAuthorityGrants,
@@ -149,6 +150,7 @@ export async function runFirestoreCleanup(
     deleteUserWorkoutProgramState,
     deleteUserExerciseSubstitutionPreferences,
     deleteUserWorkoutExecutionState,
+    deleteUserWorkoutExecutionOccurrenceCounters,
     deleteUserWorkoutExecutions,
     // Always last — see this module's doc comment on why `users/{uid}`
     // must be deleted only after its deletable subcollections.

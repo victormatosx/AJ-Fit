@@ -36,6 +36,7 @@ import {
   type ResolvedPermanentSubstitutionOverride,
   type SetExecution,
   type WorkoutExecution,
+  type WorkoutCompletion,
   type WorkoutExecutionStatePointer,
   type WorkoutExecutionStatus,
 } from '../workoutExecution/types';
@@ -55,6 +56,15 @@ const USERS = 'users';
 const WORKOUT_EXECUTIONS = 'workoutExecutions';
 const WORKOUT_EXECUTION_STATE = 'workoutExecutionState';
 const WORKOUT_EXECUTION_STATE_DOC_ID = 'current';
+/**
+ * One tiny counter doc per (programInstanceId, sessionIndex, scheduledLocalDate)
+ * tuple — keyed by that tuple's own occurrence-1 execution id, so no parallel
+ * encoding is invented. Only ever read/written when a `flexible` schedule
+ * needs a 2nd+ same-day occurrence (see `startOrResumeWorkoutExecution`);
+ * `fixed` schedules and every flexible schedule's first occurrence of the day
+ * never touch this collection.
+ */
+const WORKOUT_EXECUTION_OCCURRENCE_COUNTERS = 'workoutExecutionOccurrenceCounters';
 
 function executionsCollection(uid: string) {
   return collection(db, USERS, uid, WORKOUT_EXECUTIONS);
@@ -194,7 +204,25 @@ interface PersistedWorkoutExecution extends Omit<WorkoutExecution, 'startedAt' |
   timestampAuthority: 'SERVER' | 'LOCAL_UI_PROJECTION';
 }
 
+function parseWorkoutCompletion(value: unknown): WorkoutCompletion | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  const candidate = value as Record<string, unknown>;
+  const { plannedSets, completedSets, percentageBasisPoints } = candidate;
+  if (!Number.isInteger(plannedSets) || !Number.isInteger(completedSets) || !Number.isInteger(percentageBasisPoints)) {
+    return undefined;
+  }
+  const planned = plannedSets as number;
+  const completed = completedSets as number;
+  const basisPoints = percentageBasisPoints as number;
+  if (planned <= 0 || completed < 0 || completed > planned || basisPoints < 0 || basisPoints > 10_000) {
+    return undefined;
+  }
+  if (basisPoints !== Math.round((completed / planned) * 10_000)) return undefined;
+  return { plannedSets: planned, completedSets: completed, percentageBasisPoints: basisPoints };
+}
+
 function fromDoc(executionId: string, data: Record<string, unknown>): PersistedWorkoutExecution {
+  const completion = parseWorkoutCompletion(data.completion);
   return {
     executionId,
     programId: data.programId as string,
@@ -214,6 +242,17 @@ function fromDoc(executionId: string, data: Record<string, unknown>): PersistedW
     // every execution whose session has no cardio finisher — both degrade
     // identically to "not completed" (docs — `CardioExecutionRecord`).
     cardio: (data.cardio as CardioExecutionRecord | null | undefined) ?? null,
+    ...(completion ? { completion } : {}),
+    // Absent on every execution written before this field existed and on
+    // every `fixed`-schedule execution — both degrade to `1` (docs —
+    // `WorkoutExecution.occurrence`'s doc comment).
+    ...(Number.isInteger(data.occurrence) && (data.occurrence as number) > 0
+      ? { occurrence: data.occurrence as number } : {}),
+    // Absent on every execution finalized before this field existed — never
+    // defaulted to 'NORMAL' or 'EARLY' (docs — `WorkoutExecution.finalizationMode`'s
+    // doc comment); a consumer that needs this fact must handle `undefined`.
+    ...(data.finalizationMode === 'NORMAL' || data.finalizationMode === 'EARLY'
+      ? { finalizationMode: data.finalizationMode } : {}),
     executionSchemaVersion: data.executionSchemaVersion as number,
     createdAt: data.createdAt as Timestamp,
     updatedAt: data.updatedAt as Timestamp,
@@ -279,8 +318,21 @@ export function subscribeToInProgressWorkoutExecutionIds(
  *   this is semantically a NEW attempt, and the session timer
  *   (`elapsed = Date.now() - startedAt`) must not show hours/days of stale
  *   duration from the abandoned attempt (docs §13).
- * - `COMPLETED`/`PARTIALLY_COMPLETED` → this session is already done; throws
- *   rather than silently reopening a finished, immutable record.
+ * - `COMPLETED`/`PARTIALLY_COMPLETED` → this session is already done.
+ *   `fixed` schedules throw rather than silently reopening a finished,
+ *   immutable record — a given (sessionIndex, date) pair only ever occurs
+ *   once in a fixed rotation, so this is always a genuine re-finish attempt.
+ *   `flexible` schedules instead allocate a brand-new, distinct occurrence
+ *   (docs — agenda livre: freedom of date, never freedom of sequence, so the
+ *   rotation legitimately wraps back onto an already-completed sessionIndex
+ *   on the SAME day). See `workoutExecutionDocumentId`'s doc comment for the
+ *   occurrence id scheme; `WORKOUT_EXECUTION_OCCURRENCE_COUNTERS` allocates
+ *   occurrence numbers 2+ transactionally so two near-simultaneous starts of
+ *   "the next same-day session" can never allocate two different occurrences
+ *   for what is really one attempt — the SAME mutex-contention retry this
+ *   function already relies on for occurrence 1 covers this too (see the
+ *   `trackedMatchesThisTarget` branch below, which resumes whatever
+ *   occurrence a live pointer already tracks instead of re-deriving an id).
  *
  * Legacy data predating this mutex (an `IN_PROGRESS` execution with no
  * `current` pointer) is detected up front: if it's the exact execution being
@@ -304,9 +356,18 @@ export async function startOrResumeWorkoutExecution(input: {
   const session = program.sessions[sessionIndex];
   if (!session) throw new Error('SESSION_INDEX_OUT_OF_RANGE');
   const executionScopeId = program.programInstanceId ?? program.programId;
-  const executionId = workoutExecutionId(executionScopeId, sessionIndex, scheduledLocalDate);
-  const ref = executionRef(uid, executionId);
+  // `flexible` schedules let the same sessionIndex legitimately recur on the
+  // same scheduledLocalDate (agenda-livre multiple-sessions-per-day) — the
+  // base (occurrence-1) id alone is then not a unique execution identity.
+  // `fixed` schedules never need more than the base id (a given (sessionIndex,
+  // date) pair only ever occurs once in a fixed rotation), so every branch
+  // below that doesn't explicitly mention `flexible` is byte-for-byte the
+  // pre-existing behavior.
+  const scheduleMode = program.scheduleMode ?? 'fixed';
+  const baseExecutionId = workoutExecutionId(executionScopeId, sessionIndex, scheduledLocalDate);
+  const baseRef = executionRef(uid, baseExecutionId);
   const stateRef = executionStateRef(uid);
+  const occurrenceCounterRef = doc(db, USERS, uid, WORKOUT_EXECUTION_OCCURRENCE_COUNTERS, baseExecutionId);
 
   // Legacy compatibility snapshot (outside the transaction because client
   // transactions cannot query). New-protocol writes are mutexed; old clients
@@ -348,15 +409,15 @@ export async function startOrResumeWorkoutExecution(input: {
     mutexProtocolVersion: WORKOUT_EXECUTION_MUTEX_PROTOCOL_VERSION,
     finishedAt: null,
   };
-  const pointer = {
-    executionId,
+  const pointerFor = (targetExecutionId: string) => ({
+    executionId: targetExecutionId,
     programId: program.programId,
     programInstanceId: program.programInstanceId ?? null,
     sessionIndex,
     scheduledLocalDate,
     status: 'IN_PROGRESS' as const,
     schemaVersion: WORKOUT_EXECUTION_STATE_SCHEMA_VERSION,
-  };
+  });
 
   const transactionStartedAtMs = Date.now();
   if (typeof __DEV__ !== 'undefined' && __DEV__) {
@@ -366,52 +427,64 @@ export async function startOrResumeWorkoutExecution(input: {
   }
   type TransactionResult =
     | { kind: 'existing'; execution: PersistedWorkoutExecution }
-    | { kind: 'created' }
-    | { kind: 'restarted'; createdAt: Timestamp };
+    | { kind: 'created'; executionId: string; occurrence: number }
+    | { kind: 'restarted'; executionId: string; occurrence: number; createdAt: Timestamp };
   let transactionResult: TransactionResult | null = null;
   let transactionCallbackRun = 0;
   try {
     transactionResult = await runTransaction(db, async (transaction): Promise<TransactionResult> => {
       transactionCallbackRun += 1;
-      const [snapshot, stateSnapshot] = await Promise.all([transaction.get(ref), transaction.get(stateRef)]);
-      const trackedExecutionId = stateSnapshot.exists()
-        ? stateSnapshot.data().executionId as string
-        : null;
+      const stateSnapshot = await transaction.get(stateRef);
+      const tracked = stateSnapshot.exists() ? stateSnapshot.data() : null;
+      const trackedExecutionId = tracked ? tracked.executionId as string : null;
+      // Whatever occurrence is currently tracked (if any) for THIS exact
+      // target, compared by the pointer's own tuple fields — never by
+      // guessing/re-deriving an id, since a tracked occurrence >= 2 has no id
+      // this function could recompute without re-reading the counter. A
+      // match here is authoritative proof this is a retry/resume of one live
+      // attempt, regardless of which occurrence number it is.
+      const trackedMatchesThisTarget = tracked !== null
+        && tracked.sessionIndex === sessionIndex
+        && tracked.scheduledLocalDate === scheduledLocalDate
+        && (tracked.programInstanceId ?? null) === (program.programInstanceId ?? null);
 
       // A tracked execution must not conceal a second live execution written
       // by a legacy client. This comparison is made only after the mutex read
       // is authoritative, replacing the former non-transactional pointer peek.
-      const representedLegacyId = trackedExecutionId ?? executionId;
+      const representedLegacyId = trackedExecutionId ?? baseExecutionId;
       const untrackedLegacyIds = legacyExecutionIds.filter((id) => id !== representedLegacyId);
       if (untrackedLegacyIds.length > 0) {
         logWarn('workout_execution', 'legacy_in_progress_execution_detected', { count: untrackedLegacyIds.length });
         throw new WorkoutExecutionLegacyPendingError(untrackedLegacyIds);
       }
 
-      if (trackedExecutionId && trackedExecutionId !== executionId) {
-        const tracked = stateSnapshot.data()!;
+      if (tracked !== null && !trackedMatchesThisTarget) {
         throw new WorkoutExecutionConflictError({
-          executionId: trackedExecutionId,
+          executionId: trackedExecutionId!,
           sessionIndex: tracked.sessionIndex as number,
           scheduledLocalDate: tracked.scheduledLocalDate as string,
         });
       }
 
-      if (stateSnapshot.exists()) {
-        if (trackedExecutionId !== executionId) {
-          throw new Error('EXECUTION_STATE_INVALID');
-        }
+      if (trackedMatchesThisTarget) {
         // A pointer without its execution (or pointing at a terminal one) is
         // inconsistent. Validate it inside the same authoritative read set;
         // the old post-transaction server read used to catch only the missing
         // document and added a full round trip to every healthy start.
+        const trackedRef = executionRef(uid, trackedExecutionId!);
+        const snapshot = await transaction.get(trackedRef);
         if (!snapshot.exists()) throw new Error('EXECUTION_WRITE_FAILED');
-        const trackedExecution = fromDoc(executionId, snapshot.data());
+        const trackedExecution = fromDoc(trackedExecutionId!, snapshot.data());
         if (trackedExecution.status !== 'IN_PROGRESS') throw new Error('EXECUTION_NOT_IN_PROGRESS');
         // Idempotent resume needs no write and can return the transaction's
         // already-authoritative snapshot directly.
         return { kind: 'existing', execution: trackedExecution };
       }
+
+      // No live pointer tracks this target — resolve the base (occurrence 1)
+      // doc, exactly as before this fix for every `fixed` schedule and every
+      // `flexible` schedule's first same-day attempt.
+      const snapshot = await transaction.get(baseRef);
 
       if (snapshot.exists()) {
         const status = snapshot.data().status as WorkoutExecutionStatus;
@@ -419,29 +492,67 @@ export async function startOrResumeWorkoutExecution(input: {
           // Legacy execution predating the mutex, matching exactly the id
           // being started, with no `current` pointer yet — safe, deterministic
           // adoption: only the pointer is created, execution data untouched.
-          transaction.set(stateRef, { ...pointer, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-          return { kind: 'existing', execution: fromDoc(executionId, snapshot.data()) };
+          transaction.set(stateRef, { ...pointerFor(baseExecutionId), createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+          return { kind: 'existing', execution: fromDoc(baseExecutionId, snapshot.data()) };
         }
-        if (status !== 'ABANDONED') throw new Error('SESSION_ALREADY_FINISHED');
-        // Restart after abandon: the abandoned attempt's logged sets are
-        // discarded — nothing was counted from it. `startedAt` is renewed
-        // (docs §13) since this is a genuinely new attempt; `createdAt` stays put.
-        const previousCreatedAt = snapshot.data().createdAt as Timestamp;
-        // `performedLocalDate` is immutable once this deterministic
-        // opportunity document exists. Restarting an abandoned attempt keeps
-        // the first attempt's real date (or keeps the field absent for a
-        // legacy document) while renewing only the attempt timestamp/data.
-        const restartBase = 'performedLocalDate' in snapshot.data()
-          ? { ...base, performedLocalDate: snapshot.data().performedLocalDate }
-          : Object.fromEntries(Object.entries(base).filter(([key]) => key !== 'performedLocalDate'));
-        transaction.update(ref, { ...restartBase, startedAt: serverTimestamp(), updatedAt: serverTimestamp() });
-        transaction.set(stateRef, { ...pointer, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-        return { kind: 'restarted', createdAt: previousCreatedAt };
+        if (status === 'ABANDONED') {
+          // Restart after abandon: the abandoned attempt's logged sets are
+          // discarded — nothing was counted from it. `startedAt` is renewed
+          // (docs §13) since this is a genuinely new attempt; `createdAt` stays put.
+          const previousCreatedAt = snapshot.data().createdAt as Timestamp;
+          // `performedLocalDate` is immutable once this deterministic
+          // opportunity document exists. Restarting an abandoned attempt keeps
+          // the first attempt's real date (or keeps the field absent for a
+          // legacy document) while renewing only the attempt timestamp/data.
+          const restartBase = 'performedLocalDate' in snapshot.data()
+            ? { ...base, performedLocalDate: snapshot.data().performedLocalDate }
+            : Object.fromEntries(Object.entries(base).filter(([key]) => key !== 'performedLocalDate'));
+          transaction.update(baseRef, { ...restartBase, occurrence: 1, startedAt: serverTimestamp(), updatedAt: serverTimestamp() });
+          transaction.set(stateRef, { ...pointerFor(baseExecutionId), createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+          return { kind: 'restarted', executionId: baseExecutionId, occurrence: 1, createdAt: previousCreatedAt };
+        }
+        // Terminal (COMPLETED/PARTIALLY_COMPLETED): this exact occurrence is
+        // done. `fixed` keeps the historical hard stop — it never
+        // legitimately re-offers this (sessionIndex, date) pair. `flexible`
+        // explicitly allows the SAME session to recur same-day, so a
+        // genuinely new occurrence is allocated instead of blocking. (An
+        // abandoned occurrence 2+ is intentionally not resumed here — abandon
+        // is an explicit user action, not a retry, and always allocating a
+        // fresh occurrence after one keeps this allocator's only required
+        // guarantee — concurrent starts of ONE attempt never fork into two
+        // occurrences — without also having to re-locate a specific
+        // abandoned non-base doc.)
+        if (scheduleMode !== 'flexible') {
+          throw new Error('SESSION_ALREADY_FINISHED');
+        }
+        const occurrenceSnapshot = await transaction.get(occurrenceCounterRef);
+        // Occurrence 1 is always the base doc itself and is never counted
+        // here — the counter only ever tracks occurrences 2+, so its absence
+        // means exactly one prior occurrence (the base doc) exists.
+        const nextOccurrence = occurrenceSnapshot.exists()
+          && Number.isInteger(occurrenceSnapshot.data()?.nextOccurrence)
+          ? occurrenceSnapshot.data()!.nextOccurrence as number
+          : 2;
+        const newExecutionId = workoutExecutionId(executionScopeId, sessionIndex, scheduledLocalDate, nextOccurrence);
+        const newRef = executionRef(uid, newExecutionId);
+        const newSnapshot = await transaction.get(newRef);
+        if (newSnapshot.exists()) {
+          // Should be unreachable — the counter is the sole allocator of this
+          // id, read-then-incremented in this same transaction. Fails closed
+          // rather than silently overwriting a real execution.
+          throw new Error('EXECUTION_OCCURRENCE_COLLISION');
+        }
+        transaction.set(occurrenceCounterRef, { nextOccurrence: nextOccurrence + 1, updatedAt: serverTimestamp() });
+        transaction.set(newRef, {
+          ...base, occurrence: nextOccurrence, startedAt: serverTimestamp(), createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+        });
+        transaction.set(stateRef, { ...pointerFor(newExecutionId), createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+        return { kind: 'created', executionId: newExecutionId, occurrence: nextOccurrence };
       }
 
-      transaction.set(ref, { ...base, startedAt: serverTimestamp(), createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-      transaction.set(stateRef, { ...pointer, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-      return { kind: 'created' };
+      transaction.set(baseRef, { ...base, occurrence: 1, startedAt: serverTimestamp(), createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+      transaction.set(stateRef, { ...pointerFor(baseExecutionId), createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+      return { kind: 'created', executionId: baseExecutionId, occurrence: 1 };
     });
     logInfo('workout_execution', 'start_transaction_completed', {
       durationMs: Date.now() - transactionStartedAtMs,
@@ -497,8 +608,9 @@ export async function startOrResumeWorkoutExecution(input: {
   // canonical values in the hook without blocking WorkoutScreen.
   const projectedAt = Timestamp.fromMillis(serviceStartedAtMs);
   const result: PersistedWorkoutExecution = {
-    executionId,
+    executionId: transactionResult.executionId,
     ...base,
+    occurrence: transactionResult.occurrence,
     startedAt: projectedAt,
     createdAt: transactionResult.kind === 'restarted' ? transactionResult.createdAt : projectedAt,
     updatedAt: projectedAt,
