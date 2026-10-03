@@ -36,6 +36,7 @@ import {
   abandonWorkoutExecution,
   activeExecutionId,
   completeCardioExecution,
+  editCompletedSetExecution,
   finishWorkoutExecution,
   listCompletedWorkoutActivityDatesInRange,
   listCompletedWorkoutDatesInRange,
@@ -470,6 +471,61 @@ describe.skipIf(!enabled)('Workout Execution & History — real Firestore Emulat
     expect(loaded?.exercises[0].sets.map((s) => [s.actualReps, s.weightKg])).toEqual([[10, 30], [10, 35], [8, 35]]);
     expect(loaded?.exercises[0].prescribedSets).toBe(3);
     expect(loaded?.exercises[0].prescribedReps).toBe('8-12');
+  });
+
+  it('edits the selected COMPLETED set in place while preserving execution identity and neighboring sets', async () => {
+    const started = await startOrResumeWorkoutExecution({ uid: UID, program: program(), sessionIndex: 0, scheduledLocalDate: '2026-08-25' });
+    await recordSetExecution({ uid: UID, executionId: started.executionId, exerciseIndex: 0, setIndex: 0, actualReps: 10, weightKg: 50 });
+    await recordSetExecution({ uid: UID, executionId: started.executionId, exerciseIndex: 0, setIndex: 1, actualReps: 10, weightKg: 45 });
+    const before = await loadWorkoutExecution(UID, started.executionId);
+
+    const repsEdited = await editCompletedSetExecution({
+      uid: UID,
+      executionId: started.executionId,
+      exerciseIndex: 0,
+      setIndex: 0,
+      patch: { actualReps: 8 },
+    });
+    expect(repsEdited).toMatchObject({ status: 'COMPLETED', actualReps: 8, weightKg: 50 });
+
+    const bothEdited = await editCompletedSetExecution({
+      uid: UID,
+      executionId: started.executionId,
+      exerciseIndex: 0,
+      setIndex: 0,
+      patch: { actualReps: 8, weightKg: 60 },
+    });
+    expect(bothEdited).toMatchObject({ status: 'COMPLETED', actualReps: 8, weightKg: 60 });
+
+    const loaded = await loadWorkoutExecution(UID, started.executionId);
+    expect(loaded?.status).toBe('IN_PROGRESS');
+    expect(loaded?.executionId).toBe(started.executionId);
+    expect(loaded?.startedAt.toMillis()).toBe(before?.startedAt.toMillis());
+    expect(loaded?.scheduledLocalDate).toBe(before?.scheduledLocalDate);
+    expect(loaded?.occurrence).toBe(before?.occurrence);
+    expect(loaded?.exercises[0].sets[0]).toMatchObject({ status: 'COMPLETED', actualReps: 8, weightKg: 60 });
+    expect(loaded?.exercises[0].sets[1]).toMatchObject({ status: 'COMPLETED', actualReps: 10, weightKg: 45 });
+  });
+
+  it('refuses to edit a PENDING set or any set after the execution becomes terminal', async () => {
+    const started = await startOrResumeWorkoutExecution({ uid: UID, program: program(), sessionIndex: 0, scheduledLocalDate: '2026-08-25' });
+    await expect(editCompletedSetExecution({
+      uid: UID,
+      executionId: started.executionId,
+      exerciseIndex: 0,
+      setIndex: 0,
+      patch: { actualReps: 8 },
+    })).rejects.toMatchObject({ code: 'SET_NOT_COMPLETED' });
+
+    await recordSetExecution({ uid: UID, executionId: started.executionId, exerciseIndex: 0, setIndex: 0, actualReps: 10, weightKg: 50 });
+    await finishWorkoutExecution(UID, started.executionId);
+    await expect(editCompletedSetExecution({
+      uid: UID,
+      executionId: started.executionId,
+      exerciseIndex: 0,
+      setIndex: 0,
+      patch: { weightKg: 60 },
+    })).rejects.toThrow('EXECUTION_NOT_IN_PROGRESS');
   });
 
   it('§83 a skipped set is SKIPPED, never a falsely-completed 0-rep set', async () => {

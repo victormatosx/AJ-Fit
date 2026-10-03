@@ -1479,6 +1479,8 @@ function AppShellContent({
               }}
               onSetLogged={(exerciseIndex, setIndex, weightKg, actualReps) =>
                 execution.recordSet(exerciseIndex, setIndex, weightKg, actualReps ?? null)}
+              onCompletedSetEdited={(exerciseIndex, setIndex, patch) =>
+                execution.editCompletedSet(exerciseIndex, setIndex, patch)}
               manualSubstitutionContext={manualSubstitutionContextState.context}
               manualSubstitutionContextStatus={manualSubstitutionContextState.status}
               onRetryManualSubstitutionContext={retryManualSubstitutionContext}

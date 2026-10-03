@@ -184,6 +184,26 @@
     "summaryReps_one": "{{reps}} rep",
     "summaryReps_other": "{{reps}} reps"
   },
+  "editSet": {
+    "kicker": "Edit set",
+    "repetitions": "Repetitions",
+    "load": "Load",
+    "save": "Save changes",
+    "cancel": "Cancel",
+    "invalidValue": "Enter a valid value.",
+    "saveError": "Couldn't save your changes. Your values are still here; try again.",
+    "accessibility": {
+      "open": "Edit logged set {{number}}",
+      "decreaseReps": "Decrease repetitions",
+      "increaseReps": "Increase repetitions",
+      "repsInput": "Repetitions performed",
+      "decreaseLoad": "Decrease load in {{unit}}",
+      "increaseLoad": "Increase load in {{unit}}",
+      "loadInput": "Load in {{unit}}",
+      "save": "Save set changes",
+      "cancel": "Cancel set editing"
+    }
+  },
   "reps": {
     "label": "Reps"
   },

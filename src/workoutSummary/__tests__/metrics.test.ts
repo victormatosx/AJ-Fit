@@ -8,6 +8,7 @@ import {
   performedExerciseIds,
 } from '../metrics';
 import { buildExecution, completedSet, exercise, skippedSet } from './testFixtures';
+import { applyCompletedSetEdit } from '../../workoutExecution/setEdit';
 
 describe('computeSessionVolumeKg', () => {
   it('sums weightKg x actualReps over COMPLETED, reps-based sets only', () => {
@@ -43,6 +44,22 @@ describe('computeSessionVolumeKg', () => {
   it('returns 0 for a null/undefined execution', () => {
     expect(computeSessionVolumeKg(null)).toBe(0);
     expect(computeSessionVolumeKg(undefined)).toBe(0);
+  });
+
+  it('uses edited facts for every later metric (10 × 50 becomes 8 × 60)', () => {
+    const original = buildExecution({
+      executionId: 'active',
+      scheduledLocalDate: '2026-09-01',
+      status: 'IN_PROGRESS',
+      exercises: [exercise('bench', 0, [completedSet(50, 10)])],
+    });
+    const edited = applyCompletedSetEdit(original.exercises, 0, 0, { actualReps: 8, weightKg: 60 });
+    const current = { ...original, exercises: edited.exercises };
+
+    expect(computeSessionVolumeKg(original)).toBe(500);
+    expect(computeSessionVolumeKg(current)).toBe(480);
+    expect(computeTotalCompletedReps(current)).toBe(8);
+    expect(computeSessionMaxLoadKg(current)).toBe(60);
   });
 });
 

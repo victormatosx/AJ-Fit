@@ -6,6 +6,7 @@ import { advancedWorkoutTarget } from '../scheduleEngine/advanceWorkout';
 import type { ScheduleResolution } from '../scheduleEngine/types';
 import {
   abandonWorkoutExecution,
+  editCompletedSetExecution,
   recordSetExecution,
   skipExerciseExecution,
   skipSetExecution,
@@ -36,6 +37,15 @@ import {
 } from './startSingleFlight';
 import { publishWorkoutLoadRefresh } from '../loadProgress/workoutLoadRefreshBus';
 import { sweepPendingSetsToSkipped } from './types';
+import type { SetExecution } from './types';
+import type { CompletedSetEditPatch } from './setEdit';
+import { beginCompletedSetEditFlight } from './setEdit';
+import {
+  beginSetRecordFlight,
+  classifySetRecordFailure,
+  projectSetCompleted,
+  rollbackOptimisticSetCompletion,
+} from './setRecording';
 
 function deviceTimezone(): string {
   try {
@@ -59,6 +69,10 @@ export type WorkoutExecutionStartError =
 export type WorkoutExecutionStartResult =
   | { execution: PersistedWorkoutExecution; error: null }
   | { execution: null; error: WorkoutExecutionStartError };
+
+export type EditCompletedSetResult =
+  | { ok: true; set: SetExecution }
+  | { ok: false; error: unknown };
 
 export interface WorkoutExecutionController {
   execution: PersistedWorkoutExecution | null;
@@ -98,6 +112,12 @@ export interface WorkoutExecutionController {
    */
   adoptExecution: (execution: PersistedWorkoutExecution) => void;
   recordSet: (exerciseIndex: number, setIndex: number, weightKg: number | null, actualReps?: number | null) => Promise<void>;
+  /** Updates actual values on one persisted COMPLETED set while the execution remains IN_PROGRESS. */
+  editCompletedSet: (
+    exerciseIndex: number,
+    setIndex: number,
+    patch: CompletedSetEditPatch,
+  ) => Promise<EditCompletedSetResult>;
   skipSet: (exerciseIndex: number, setIndex: number) => Promise<void>;
   skipExercise: (exerciseIndex: number) => Promise<void>;
   /**
@@ -153,6 +173,8 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
   const [hasUnreconciledMutations, setHasUnreconciledMutations] = useState(false);
   const startInFlightRef = useRef<WorkoutStartFlight<WorkoutExecutionStartResult> | null>(null);
   const mutationQueueRef = useRef(new WorkoutMutationQueue());
+  const recordSetFlightsRef = useRef(new Map<string, Promise<void>>());
+  const editSetFlightsRef = useRef(new Map<string, Promise<EditCompletedSetResult>>());
   // Presentation-only start instant for a newly committed execution. It is
   // cleared only when canonical server timestamps arrive (or start fails).
   const pendingStartedAtMsRef = useRef<number | null>(null);
@@ -369,36 +391,126 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
     setExecution(next);
   }, []);
 
-  const recordSet = useCallback(async (exerciseIndex: number, setIndex: number, weightKg: number | null, actualReps: number | null = null) => {
-    if (!uid || !execution) return;
-    try {
-      await mutationQueueRef.current.enqueue(
-        `set:${exerciseIndex}:${setIndex}`,
-        async () => {
-          await recordSetExecution({ uid, executionId: execution.executionId, exerciseIndex, setIndex, weightKg, actualReps });
-          // Keep this projection inside the queued operation so a successful
-          // finish-barrier retry projects the same committed status too.
-          setExecution((current) => current && current.executionId === execution.executionId ? {
+  const recordSet = useCallback((exerciseIndex: number, setIndex: number, weightKg: number | null, actualReps: number | null = null) => {
+    if (!uid || !execution) return Promise.resolve();
+    const mutationKey = `set:${exerciseIndex}:${setIndex}`;
+    const executionId = execution.executionId;
+
+    return beginSetRecordFlight(recordSetFlightsRef.current, mutationKey, () => {
+      const projection = projectSetCompleted(
+        execution.exercises,
+        exerciseIndex,
+        setIndex,
+        { weightKg, actualReps, actualDurationSeconds: null },
+      );
+      const acceptedAtMs = Date.now();
+
+      // Register the durable mutation first, then project within the same JS
+      // turn. React cannot paint a success that has no corresponding queued
+      // write, and it still never awaits Firestore before painting.
+      const persistence = mutationQueueRef.current.enqueue(mutationKey, async () => {
+        await recordSetExecution({ uid, executionId, exerciseIndex, setIndex, weightKg, actualReps });
+        publishWorkoutLoadRefresh(uid, executionId);
+      });
+      setExecution((current) => {
+        if (!current || current.executionId !== executionId) return current;
+        return {
+          ...current,
+          exercises: projectSetCompleted(
+            current.exercises,
+            exerciseIndex,
+            setIndex,
+            { weightKg, actualReps, actualDurationSeconds: null },
+          ).exercises,
+        };
+      });
+
+      const flight = persistence.then(() => {
+        setHasUnreconciledMutations(mutationQueueRef.current.hasUnreconciledMutations());
+        if (typeof __DEV__ !== 'undefined' && __DEV__) {
+          logInfo('workout_performance', 'set_persist_confirmed', {
+            exerciseIndex,
+            setIndex,
+            durationMs: Date.now() - acceptedAtMs,
+          });
+        }
+      }).catch((error) => {
+        const failureKind = classifySetRecordFailure(error);
+        if (failureKind === 'PERMANENT') {
+          mutationQueueRef.current.markFailedMutationPermanent(mutationKey, error);
+          setExecution((current) => current && current.executionId === executionId ? {
             ...current,
-            exercises: current.exercises.map((exercise, index) => index !== exerciseIndex ? exercise : {
+            exercises: rollbackOptimisticSetCompletion(
+              current.exercises,
+              exerciseIndex,
+              setIndex,
+              projection.optimistic,
+              projection.previous,
+            ),
+          } : current);
+        }
+        setHasUnreconciledMutations(true);
+        logWarn('workout_execution', 'record_set_failed', {
+          error,
+          exerciseIndex,
+          setIndex,
+          failureKind,
+        });
+      });
+      return flight;
+    });
+  }, [uid, execution]);
+
+  const editCompletedSet = useCallback((
+    exerciseIndex: number,
+    setIndex: number,
+    patch: CompletedSetEditPatch,
+  ): Promise<EditCompletedSetResult> => {
+    if (!uid || !execution || execution.status !== 'IN_PROGRESS') {
+      return Promise.resolve({ ok: false, error: new Error('EXECUTION_NOT_IN_PROGRESS') });
+    }
+    const recordMutationKey = `set:${exerciseIndex}:${setIndex}`;
+    const editMutationKey = `${recordMutationKey}:edit`;
+    const executionId = execution.executionId;
+    return beginCompletedSetEditFlight(editSetFlightsRef.current, recordMutationKey, async (): Promise<EditCompletedSetResult> => {
+      try {
+        // The optimistic projection makes the editor available before the
+        // original transaction lands. Wait for that exact write, then retry
+        // a transient failure before attempting the edit transaction.
+        await recordSetFlightsRef.current.get(recordMutationKey);
+        await mutationQueueRef.current.retryFailedMutation(recordMutationKey);
+        let persistedSet: SetExecution | null = null;
+        await mutationQueueRef.current.enqueue(editMutationKey, async () => {
+          persistedSet = await editCompletedSetExecution({
+            uid,
+            executionId,
+            exerciseIndex,
+            setIndex,
+            patch,
+          });
+          const confirmedSet = persistedSet;
+          setExecution((current) => current && current.executionId === executionId ? {
+            ...current,
+            exercises: current.exercises.map((exercise) => exercise.exerciseIndex !== exerciseIndex ? exercise : {
               ...exercise,
-              sets: exercise.sets.map((set) => set.setIndex !== setIndex ? set : {
-                ...set,
-                status: 'COMPLETED' as const,
-                weightKg,
-                actualReps,
-                actualDurationSeconds: null,
-              }),
+              sets: exercise.sets.map((set) => set.setIndex !== setIndex ? set : confirmedSet!),
             }),
           } : current);
-        },
-      );
-      setHasUnreconciledMutations(mutationQueueRef.current.hasUnreconciledMutations());
-      publishWorkoutLoadRefresh(uid, execution.executionId);
-    } catch (error) {
-      setHasUnreconciledMutations(true);
-      logWarn('workout_execution', 'record_set_failed', { error });
-    }
+        });
+        if (!persistedSet) throw new Error('EDIT_COMPLETED_SET_RESULT_MISSING');
+        setHasUnreconciledMutations(mutationQueueRef.current.hasUnreconciledMutations());
+        publishWorkoutLoadRefresh(uid, executionId);
+        return { ok: true, set: persistedSet };
+      } catch (error) {
+        // The modal itself retains this draft and offers the explicit retry.
+        // Do not leave a failed editor operation for finish() to replay after
+        // the user cancels the modal; cancellation must truly discard it.
+        mutationQueueRef.current.discardFailedMutation(editMutationKey);
+        setHasUnreconciledMutations(mutationQueueRef.current.hasUnreconciledMutations());
+        logWarn('workout_execution', 'edit_completed_set_failed', { error, exerciseIndex, setIndex });
+        return { ok: false, error };
+      }
+    });
   }, [uid, execution]);
 
   const skipSet = useCallback(async (exerciseIndex: number, setIndex: number) => {
@@ -567,6 +679,6 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
 
   return {
     execution, starting, startError, workoutStartedAtMs, hasUnreconciledMutations,
-    start, startAdvanced, adoptExecution, recordSet, skipSet, skipExercise, finalize, abandon, abandonExecutionById,
+    start, startAdvanced, adoptExecution, recordSet, editCompletedSet, skipSet, skipExercise, finalize, abandon, abandonExecutionById,
   };
 }

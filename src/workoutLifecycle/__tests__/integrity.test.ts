@@ -234,4 +234,47 @@ describe('recordSet → finish barrier', () => {
     await expect(queue.flush()).resolves.toBeUndefined();
     expect(attempt).toBe(2);
   });
+
+  it('can discard a failed modal edit so cancel never replays it at finish', async () => {
+    const queue = new WorkoutMutationQueue();
+    let attempts = 0;
+    await expect(queue.enqueue('set:0:0', async () => {
+      attempts += 1;
+      throw new Error('offline');
+    })).rejects.toThrow('offline');
+
+    queue.discardFailedMutation('set:0:0');
+    await expect(queue.flush()).resolves.toBeUndefined();
+    expect(attempts).toBe(1);
+  });
+
+  it('retries a failed original set before a same-set edit', async () => {
+    const queue = new WorkoutMutationQueue();
+    const order: string[] = [];
+    let attempt = 0;
+    const record = async () => {
+      attempt += 1;
+      order.push(`record:${attempt}`);
+      if (attempt === 1) throw new Error('offline');
+    };
+    await expect(queue.enqueue('set:0:0', record)).rejects.toThrow('offline');
+    await expect(queue.retryFailedMutation('set:0:0')).resolves.toBe(true);
+    await queue.enqueue('set:0:0:edit', async () => { order.push('edit'); });
+    expect(order).toEqual(['record:1', 'record:2', 'edit']);
+    await expect(queue.flush()).resolves.toBeUndefined();
+  });
+
+  it('keeps a permanent set failure as a finish blocker without retrying it', async () => {
+    const queue = new WorkoutMutationQueue();
+    let attempts = 0;
+    const error = Object.assign(new Error('rules'), { code: 'permission-denied' });
+    await expect(queue.enqueue('set:0:0', async () => {
+      attempts += 1;
+      throw error;
+    })).rejects.toBe(error);
+    queue.markFailedMutationPermanent('set:0:0', error);
+    await expect(queue.retryFailedMutation('set:0:0')).rejects.toBe(error);
+    await expect(queue.flush()).rejects.toThrow('WORKOUT_MUTATIONS_UNRECONCILED:set:0:0');
+    expect(attempts).toBe(1);
+  });
 });

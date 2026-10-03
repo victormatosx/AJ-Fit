@@ -47,6 +47,36 @@ export class WorkoutMutationQueue {
     return this.failedKeys.size > 0;
   }
 
+  /**
+   * Retries one prerequisite mutation in the same serialized queue. A
+   * permanent failure has no replay operation and is thrown immediately.
+   */
+  async retryFailedMutation(key: string): Promise<boolean> {
+    const operation = this.failedOperations.get(key);
+    if (operation) {
+      await this.enqueue(key, operation);
+      return true;
+    }
+    if (this.failedKeys.has(key)) throw this.failedKeys.get(key);
+    return false;
+  }
+
+  /** Keeps finish blocked but prevents futile automatic retries. */
+  markFailedMutationPermanent(key: string, error: unknown): void {
+    this.failedKeys.set(key, error);
+    this.failedOperations.delete(key);
+  }
+
+  /**
+   * For an editor that keeps the failed draft visibly open for an explicit
+   * user retry. Forgetting that failed operation prevents a later workout
+   * finish from silently applying values the user subsequently cancelled.
+   */
+  discardFailedMutation(key: string): void {
+    this.failedKeys.delete(key);
+    this.failedOperations.delete(key);
+  }
+
   reset(): void {
     this.tail = Promise.resolve();
     this.failedKeys.clear();

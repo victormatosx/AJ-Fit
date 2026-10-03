@@ -51,6 +51,10 @@ import { loadManualSubstitutionUserContext } from './exerciseSubstitutionContext
 import { loadPermanentExerciseSubstitutionPreferences } from './exerciseSubstitutionPreferences';
 import type { ManualSubstitutionUserContext } from './exerciseSubstitutionContext';
 import { addDaysLocal } from '../scheduleEngine/calendar';
+import {
+  applyCompletedSetEdit,
+  type CompletedSetEditPatch,
+} from '../workoutExecution/setEdit';
 
 const USERS = 'users';
 const WORKOUT_EXECUTIONS = 'workoutExecutions';
@@ -713,6 +717,38 @@ export async function recordSetExecution(input: {
       actualDurationSeconds: input.actualDurationSeconds ?? null,
     }),
   );
+}
+
+/**
+ * Edits the actual facts of an already-COMPLETED set in the same authoritative
+ * execution array. The surrounding execution must still be IN_PROGRESS and
+ * the selected set must still be COMPLETED when the transaction reads it.
+ * A partial patch lets a reps-only edit preserve a concurrently-updated load
+ * (and vice versa); Firestore retries the transaction against the latest
+ * document snapshot on contention.
+ */
+export async function editCompletedSetExecution(input: {
+  uid: string;
+  executionId: string;
+  exerciseIndex: number;
+  setIndex: number;
+  patch: CompletedSetEditPatch;
+}): Promise<SetExecution> {
+  const ref = executionRef(input.uid, input.executionId);
+  return runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists()) throw new Error('EXECUTION_NOT_FOUND');
+    const data = snapshot.data();
+    if (data.status !== 'IN_PROGRESS') throw new Error('EXECUTION_NOT_IN_PROGRESS');
+    const edited = applyCompletedSetEdit(
+      data.exercises as ExerciseExecution[],
+      input.exerciseIndex,
+      input.setIndex,
+      input.patch,
+    );
+    transaction.update(ref, { exercises: edited.exercises, updatedAt: serverTimestamp() });
+    return edited.set;
+  });
 }
 
 /** Semantically distinct from a 0-rep completion — a skipped set was never performed at all (docs §29). */

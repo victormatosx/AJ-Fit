@@ -11,6 +11,8 @@ import {
   Easing,
   Keyboard,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -64,6 +66,13 @@ import {
 import { computeRemainingSeconds, computeRestProgress } from '../lib/restTimer';
 import { deriveWorkoutHydration } from '../workoutExecution/hydration';
 import type { PersistedWorkoutExecution } from '../services/workoutExecutions';
+import type { SetExecution } from '../workoutExecution/types';
+import type { CompletedSetEditPatch } from '../workoutExecution/setEdit';
+import {
+  adjustSetEditRepsText,
+  adjustSetEditWeightText,
+  parseSetEditDraft,
+} from '../workoutExecution/setEdit';
 import { computeWorkoutElapsedSeconds } from '../lib/workoutSessionTimer';
 import { useRestSession } from '../state/RestSessionContext';
 import { materializeRestNextAction } from '../workoutExecution/restActivityProjection';
@@ -173,6 +182,12 @@ type Props = {
   completionFailed?: boolean;
   /** Fires once a set's weight (and, optionally, actually-performed reps) is logged (docs/workout-lifecycle/09_WORKOUT_EXECUTION_AND_HISTORY.md) — `exerciseIndex` matches this exercise's position in `plan.sessions[sessionIndex].exercises`, the same identity the Execution record uses. `actualReps` is `null` when not informed or when the exercise isn't reps-doseKind — never the prescribed range. */
   onSetLogged?: (exerciseIndex: number, setIndex: number, weightKg: number, actualReps?: number | null) => void | Promise<void>;
+  /** Edits only actual reps/load on a persisted COMPLETED set in the active execution. */
+  onCompletedSetEdited?: (
+    exerciseIndex: number,
+    setIndex: number,
+    patch: CompletedSetEditPatch,
+  ) => Promise<{ ok: true; set: SetExecution } | { ok: false; error: unknown }>;
   /**
    * Fires when the user confirms "discard" from the exit sheet — distinct
    * from a normal finish; the Schedule Engine must never advance because of
@@ -249,7 +264,7 @@ function translateMuscleGroup(tLoose: LooseT, target: string): string {
   return target;
 }
 
-export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, onMinimize, sessionIndex = 0, execution, workoutStartedAtMs, hasUnreconciledMutations, onSessionCompleted, finishing, completionConfirmed, durableCompletionReachedAtMs, completionFailed, onSetLogged, onAbandon, onCardioCompleted, onEarlyFinish, manualSubstitutionContext, manualSubstitutionContextStatus, onRetryManualSubstitutionContext, onApplySubstitution }: Props) {
+export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, onMinimize, sessionIndex = 0, execution, workoutStartedAtMs, hasUnreconciledMutations, onSessionCompleted, finishing, completionConfirmed, durableCompletionReachedAtMs, completionFailed, onSetLogged, onCompletedSetEdited, onAbandon, onCardioCompleted, onEarlyFinish, manualSubstitutionContext, manualSubstitutionContextStatus, onRetryManualSubstitutionContext, onApplySubstitution }: Props) {
   useEffect(() => {
     if (typeof __DEV__ === 'undefined' || !__DEV__) return undefined;
     logInfo('workout_performance', 'workout_screen_mount', {
@@ -452,6 +467,18 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
   const [videoOpen, setVideoOpen] = useState(false);
   const [subSheet, setSubSheet] = useState(false);
   const [pendingSub, setPendingSub] = useState<SubOption | null>(null);
+  const [setEditor, setSetEditor] = useState<{
+    exerciseIndex: number;
+    setIndex: number;
+    exerciseName: string;
+    repsEnabled: boolean;
+    set: SetExecution;
+  } | null>(null);
+  const pendingRegisteredPerfRef = useRef(new Map<string, {
+    exerciseIndex: number;
+    setIndex: number;
+    startedAtMs: number;
+  }>());
 
   // A resumed session whose exercises were all already done when the app
   // died (only `finish()` itself never ran) opens straight on the
@@ -735,8 +762,62 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workoutActivityQueue, workoutSessionId, workoutStartedAtMs]);
 
-  const lastWeight = (e: Exercise, i: number) =>
-    logged[`${e.id}-${i}`] ?? e.sets[i].w;
+  // `execution` includes the hook's immediate local projection while the
+  // matching Firestore mutation is still serialized in the queue.
+  const executionSetAt = (exerciseIndex: number, setIndex: number) =>
+    execution?.exercises
+      .find((exercise) => exercise.exerciseIndex === exerciseIndex)
+      ?.sets.find((set) => set.setIndex === setIndex);
+
+  const lastWeight = (e: Exercise, i: number) => {
+    const executionSet = executionSetAt(exIdx, i);
+    if (executionSet?.status === 'COMPLETED') return executionSet.weightKg ?? 0;
+    return logged[`${e.id}-${i}`] ?? e.sets[i].w;
+  };
+
+  const openCompletedSetEditor = (exerciseIndex: number, setIndex: number, exerciseName: string, repsEnabled: boolean) => {
+    const executionSet = executionSetAt(exerciseIndex, setIndex);
+    if (execution?.status !== 'IN_PROGRESS' || executionSet?.status !== 'COMPLETED') return;
+    setSetEditor({ exerciseIndex, setIndex, exerciseName, repsEnabled, set: executionSet });
+  };
+
+  // useEffect runs after the render carrying both the optimistic COMPLETED
+  // projection and the advanced progress. This DEV mark is therefore the
+  // closest JS-side measurement of tap/advance -> REGISTRADO committed UI.
+  useEffect(() => {
+    if (typeof __DEV__ === 'undefined' || !__DEV__) return;
+    for (const [key, mark] of pendingRegisteredPerfRef.current) {
+      const set = execution?.exercises
+        .find((exercise) => exercise.exerciseIndex === mark.exerciseIndex)
+        ?.sets.find((item) => item.setIndex === mark.setIndex);
+      if (set?.status !== 'COMPLETED' || (progress[mark.exerciseIndex] ?? 0) <= mark.setIndex) continue;
+      logInfo('workout_performance', 'set_registered_visible', {
+        exerciseIndex: mark.exerciseIndex,
+        setIndex: mark.setIndex,
+        durationMs: Date.now() - mark.startedAtMs,
+      });
+      pendingRegisteredPerfRef.current.delete(key);
+    }
+  }, [execution?.exercises, progress]);
+
+  const commitCompletedSetEdit = async (patch: CompletedSetEditPatch) => {
+    if (!setEditor || !onCompletedSetEdited) {
+      return { ok: false as const, error: new Error('COMPLETED_SET_EDITOR_UNAVAILABLE') };
+    }
+    const result = await onCompletedSetEdited(setEditor.exerciseIndex, setEditor.setIndex, patch);
+    if (!result.ok) return result;
+
+    const key = `${exercises[setEditor.exerciseIndex]?.id}-${setEditor.setIndex}`;
+    setLogged((current) => ({ ...current, [key]: result.set.weightKg ?? 0 }));
+    setLoggedReps((current) => {
+      const next = { ...current };
+      if (result.set.actualReps === null) delete next[key];
+      else next[key] = result.set.actualReps;
+      return next;
+    });
+    setSetEditor(null);
+    return result;
+  };
 
   const fmt = (s: number) =>
     `${Math.floor(Math.max(0, s) / 60)}:${String(Math.max(0, s) % 60).padStart(2, '0')}`;
@@ -805,6 +886,14 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
       // synchronously before returning the Promise. The UI transition stays
       // synchronous to preserve the final-set render invariant; finish() is
       // the authoritative await/flush barrier.
+      const mutationKey = `set:${transitionPending.exIdx}:${transitionPending.setIdx}`;
+      if (!pendingRegisteredPerfRef.current.has(mutationKey)) {
+        pendingRegisteredPerfRef.current.set(mutationKey, {
+          exerciseIndex: transitionPending.exIdx,
+          setIndex: transitionPending.setIdx,
+          startedAtMs: Date.now(),
+        });
+      }
       onSetLogged?.(transitionPending.exIdx, transitionPending.setIdx, finalWeight, finalReps);
     }
     const finishedSet = setIdx + 1;
@@ -1631,7 +1720,9 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
             const done = i < setIdx;
             const now = i === setIdx;
             const w = lastWeight(ex, i);
-            const justLogged = logged[`${ex.id}-${i}`] != null && done;
+            const executionSet = executionSetAt(exIdx, i);
+            const justLogged = executionSet?.status === 'COMPLETED' && done;
+            const editable = justLogged && execution?.status === 'IN_PROGRESS' && !!onCompletedSetEdited;
             // Actually-performed reps override the prescribed range only for
             // a completed reps-doseKind set that actually recorded one —
             // never the prescription itself, and never for duration/
@@ -1640,8 +1731,12 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
               ? resolveDisplayedReps(loggedReps[`${ex.id}-${i}`], s0.r)
               : s0.r;
             return (
-              <View
+              <Pressable
                 key={i}
+                accessibilityRole={editable ? 'button' : undefined}
+                accessibilityLabel={editable ? t('editSet.accessibility.open', { number: i + 1 }) : undefined}
+                disabled={!editable}
+                onPress={() => openCompletedSetEditor(exIdx, i, ex.name, ex.doseKind === 'reps')}
                 style={{
                   flexDirection: 'row',
                   flexWrap: 'nowrap',
@@ -1717,7 +1812,7 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
                     </MonoLabel>
                   )}
                 </View>
-              </View>
+              </Pressable>
             );
           })}
         </ScrollView>
@@ -1768,6 +1863,17 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
             )}
           </View>
         </View>
+
+        {setEditor && (
+          <EditCompletedSetModal
+            setNumber={setEditor.setIndex + 1}
+            exerciseName={setEditor.exerciseName}
+            initialSet={setEditor.set}
+            repsEnabled={setEditor.repsEnabled}
+            onCancel={() => setSetEditor(null)}
+            onSave={commitCompletedSetEdit}
+          />
+        )}
 
         {/* REST OVERLAY */}
         {(resting || finalSetLoadEntry) && (
@@ -3281,6 +3387,319 @@ function CardioScreen({
         </Pressable>
       </Modal>
     </ScreenBg>
+  );
+}
+
+/* ───────────────────────── COMPLETED SET EDITOR ───────────────────────── */
+
+function EditCompletedSetModal({
+  setNumber,
+  exerciseName,
+  initialSet,
+  repsEnabled,
+  onCancel,
+  onSave,
+}: {
+  setNumber: number;
+  exerciseName: string;
+  initialSet: SetExecution;
+  repsEnabled: boolean;
+  onCancel: () => void;
+  onSave: (patch: CompletedSetEditPatch) => Promise<
+    { ok: true; set: SetExecution } | { ok: false; error: unknown }
+  >;
+}) {
+  const theme = darkTheme;
+  const { t } = useTranslation('workout');
+  const insets = useSafeAreaInsets();
+  const { resolvedUnits } = useUnits();
+  const loadUnit = workoutLoadUnit(resolvedUnits);
+  const initialRepsText = initialSet.actualReps === null ? '' : String(initialSet.actualReps);
+  const initialWeightText = initialSet.weightKg === null
+    ? ''
+    : formatWorkoutLoadFromKg(initialSet.weightKg, resolvedUnits);
+  const [repsText, setRepsText] = useState(initialRepsText);
+  const [weightText, setWeightText] = useState(initialWeightText);
+  const [saving, setSaving] = useState(false);
+  const [invalidField, setInvalidField] = useState<'actualReps' | 'weightKg' | null>(null);
+  const [saveFailed, setSaveFailed] = useState(false);
+  const savingRef = useRef(false);
+
+  const close = () => {
+    if (savingRef.current) return;
+    Keyboard.dismiss();
+    onCancel();
+  };
+
+  const save = async () => {
+    // Ref is the synchronous double-tap barrier; state drives presentation.
+    if (savingRef.current) return;
+    const parsed = parseSetEditDraft(repsEnabled ? repsText : '', weightText, resolvedUnits);
+    if (!parsed.ok) {
+      setInvalidField(parsed.field);
+      return;
+    }
+
+    const patch: CompletedSetEditPatch = {};
+    if (repsEnabled && repsText.trim() !== initialRepsText) patch.actualReps = parsed.actualReps;
+    if (weightText.trim().replace(',', '.') !== initialWeightText) patch.weightKg = parsed.weightKg;
+    if (Object.keys(patch).length === 0) {
+      close();
+      return;
+    }
+
+    savingRef.current = true;
+    setSaving(true);
+    setSaveFailed(false);
+    Keyboard.dismiss();
+    const result = await onSave(patch);
+    savingRef.current = false;
+    setSaving(false);
+    if (!result.ok) setSaveFailed(true);
+  };
+
+  const controlButtonStyle = ({ pressed }: { pressed: boolean }) => ({
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: pressed ? theme.colors.surfaceSelected : theme.colors.surfaceQuiet,
+    borderWidth: 1,
+    borderColor: theme.colors.controlBorder,
+    opacity: saving ? 0.45 : 1,
+  });
+  const valueInputStyle = {
+    minWidth: 96,
+    textAlign: 'center' as const,
+    paddingVertical: 0,
+    color: theme.colors.inputText,
+    fontFamily: theme.fonts.display,
+    fontSize: 32,
+    lineHeight: displayLineHeight(32),
+    transform: [{ skewX: '-8deg' }],
+  };
+
+  return (
+    <Modal
+      visible
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={close}
+    >
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
+      >
+        <Pressable
+          accessibilityRole="none"
+          onPress={close}
+          style={{
+            flex: 1,
+            justifyContent: 'flex-end',
+            backgroundColor: theme.colors.modalBackdrop,
+          }}
+        >
+          <Pressable
+            accessibilityRole="none"
+            onPress={(event) => event.stopPropagation()}
+            style={{
+              paddingHorizontal: 20,
+              paddingTop: 16,
+              paddingBottom: Math.max(insets.bottom, 10),
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              backgroundColor: theme.colors.background,
+              borderWidth: 1,
+              borderColor: theme.colors.borderStrong,
+            }}
+          >
+            <View style={{ width: 36, height: 3, borderRadius: 2, backgroundColor: theme.colors.dividerStrong, alignSelf: 'center', marginBottom: 16 }} />
+            <Slash>{t('editSet.kicker').toUpperCase()}</Slash>
+            <Text
+              style={{
+                marginTop: 5,
+                fontFamily: theme.fonts.display,
+                fontSize: 27,
+                lineHeight: displayLineHeight(27),
+                color: theme.colors.textPrimary,
+                textTransform: 'uppercase',
+                transform: [{ skewX: '-8deg' }],
+              }}
+            >
+              {t('sets.number', { number: setNumber })}
+            </Text>
+            <Text
+              numberOfLines={1}
+              style={{ marginTop: 1, marginBottom: 14, color: theme.colors.textMuted, fontFamily: theme.fonts.ui, fontSize: 13 }}
+            >
+              {exerciseName}
+            </Text>
+
+            <View
+              style={{
+                borderRadius: 16,
+                paddingHorizontal: 16,
+                backgroundColor: theme.colors.inputBackgroundQuiet,
+                borderWidth: 1,
+                borderColor: theme.colors.inputBorderSubtle,
+              }}
+            >
+              {repsEnabled && (
+                <View style={{ paddingVertical: 14 }}>
+                  <MonoLabel color={invalidField === 'actualReps' ? theme.colors.danger : theme.colors.textMuted}>
+                    {t('editSet.repetitions').toUpperCase()}
+                  </MonoLabel>
+                  <View style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={t('editSet.accessibility.decreaseReps')}
+                      disabled={saving}
+                      onPress={() => {
+                        setInvalidField(null);
+                        setSaveFailed(false);
+                        setRepsText((value) => adjustSetEditRepsText(value, -1));
+                      }}
+                      style={controlButtonStyle}
+                    >
+                      <Icon name="minus" size={15} color={theme.colors.primaryEmphasis} />
+                    </Pressable>
+                    <TextInput
+                      accessibilityLabel={t('editSet.accessibility.repsInput')}
+                      editable={!saving}
+                      value={repsText}
+                      placeholder="—"
+                      placeholderTextColor={theme.colors.textFaint}
+                      keyboardType="number-pad"
+                      selectTextOnFocus
+                      onChangeText={(value) => {
+                        setInvalidField(null);
+                        setSaveFailed(false);
+                        setRepsText(value.replace(/[^0-9]/g, ''));
+                      }}
+                      style={valueInputStyle}
+                    />
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={t('editSet.accessibility.increaseReps')}
+                      disabled={saving}
+                      onPress={() => {
+                        setInvalidField(null);
+                        setSaveFailed(false);
+                        setRepsText((value) => adjustSetEditRepsText(value, 1));
+                      }}
+                      style={controlButtonStyle}
+                    >
+                      <Icon name="plus" size={15} color={theme.colors.primaryEmphasis} />
+                    </Pressable>
+                  </View>
+                </View>
+              )}
+
+              <View style={{ paddingVertical: 14, borderTopWidth: repsEnabled ? 1 : 0, borderTopColor: theme.colors.divider }}>
+                <MonoLabel color={invalidField === 'weightKg' ? theme.colors.danger : theme.colors.textMuted}>
+                  {t('editSet.load').toUpperCase()}
+                </MonoLabel>
+                <View style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={t('editSet.accessibility.decreaseLoad', { unit: loadUnit })}
+                    disabled={saving}
+                    onPress={() => {
+                      setInvalidField(null);
+                      setSaveFailed(false);
+                      setWeightText((value) => adjustSetEditWeightText(value, -1, resolvedUnits));
+                    }}
+                    style={controlButtonStyle}
+                  >
+                    <Icon name="minus" size={15} color={theme.colors.primaryEmphasis} />
+                  </Pressable>
+                  <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+                    <TextInput
+                      accessibilityLabel={t('editSet.accessibility.loadInput', { unit: loadUnit })}
+                      editable={!saving}
+                      value={weightText}
+                      placeholder="—"
+                      placeholderTextColor={theme.colors.textFaint}
+                      keyboardType="decimal-pad"
+                      selectTextOnFocus
+                      onChangeText={(value) => {
+                        setInvalidField(null);
+                        setSaveFailed(false);
+                        setWeightText(value.replace(/[^0-9.,]/g, ''));
+                      }}
+                      style={valueInputStyle}
+                    />
+                    <Text style={{ marginLeft: 2, color: theme.colors.textMuted, fontFamily: theme.fonts.mono, fontSize: 11 }}>
+                      {loadUnit}
+                    </Text>
+                  </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={t('editSet.accessibility.increaseLoad', { unit: loadUnit })}
+                    disabled={saving}
+                    onPress={() => {
+                      setInvalidField(null);
+                      setSaveFailed(false);
+                      setWeightText((value) => adjustSetEditWeightText(value, 1, resolvedUnits));
+                    }}
+                    style={controlButtonStyle}
+                  >
+                    <Icon name="plus" size={15} color={theme.colors.primaryEmphasis} />
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+
+            {(invalidField || saveFailed) && (
+              <Text
+                accessibilityRole="alert"
+                style={{ marginTop: 9, textAlign: 'center', color: theme.colors.danger, fontFamily: theme.fonts.ui, fontSize: 12, lineHeight: 17 }}
+              >
+                {invalidField ? t('editSet.invalidValue') : t('editSet.saveError')}
+              </Text>
+            )}
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('editSet.accessibility.save')}
+              accessibilityState={{ disabled: saving, busy: saving }}
+              disabled={saving}
+              onPress={() => { void save(); }}
+              style={({ pressed }) => ({
+                minHeight: 48,
+                marginTop: invalidField || saveFailed ? 10 : 14,
+                borderRadius: 12,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: theme.colors.primary,
+                opacity: saving ? 0.7 : pressed ? 0.88 : 1,
+              })}
+            >
+              {saving ? (
+                <ActivityIndicator color={theme.colors.primaryForeground} />
+              ) : (
+                <Text style={{ color: theme.colors.primaryForeground, fontFamily: theme.fonts.display, fontSize: 15, letterSpacing: 1.1 }}>
+                  {t('editSet.save').toUpperCase()}
+                </Text>
+              )}
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('editSet.accessibility.cancel')}
+              disabled={saving}
+              onPress={close}
+              style={{ minHeight: 42, alignItems: 'center', justifyContent: 'center', opacity: saving ? 0.45 : 1 }}
+            >
+              <Text style={{ color: theme.colors.textMuted, fontFamily: theme.fonts.uiSemi, fontSize: 13 }}>
+                {t('editSet.cancel')}
+              </Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }
 

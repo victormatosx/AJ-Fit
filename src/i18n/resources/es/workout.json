@@ -184,6 +184,26 @@
     "summaryReps_one": "{{reps}} rep",
     "summaryReps_other": "{{reps}} reps"
   },
+  "editSet": {
+    "kicker": "Editar serie",
+    "repetitions": "Repeticiones",
+    "load": "Carga",
+    "save": "Guardar cambios",
+    "cancel": "Cancelar",
+    "invalidValue": "Introduce un valor válido.",
+    "saveError": "No se pudieron guardar los cambios. Tus valores se mantienen; inténtalo de nuevo.",
+    "accessibility": {
+      "open": "Editar serie {{number}} registrada",
+      "decreaseReps": "Disminuir repeticiones",
+      "increaseReps": "Aumentar repeticiones",
+      "repsInput": "Repeticiones realizadas",
+      "decreaseLoad": "Disminuir carga en {{unit}}",
+      "increaseLoad": "Aumentar carga en {{unit}}",
+      "loadInput": "Carga en {{unit}}",
+      "save": "Guardar cambios de la serie",
+      "cancel": "Cancelar edición de la serie"
+    }
+  },
   "reps": {
     "label": "Reps"
   },
