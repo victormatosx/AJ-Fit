@@ -11,7 +11,7 @@ import { OutlineNumber } from '../components/ui/OutlineNumber';
 import { CtaButton } from '../components/ui/CtaButton';
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { darkTheme, useTheme } from '../theme';
-import { useAppState, TabId } from '../state/AppState';
+import { useAppState, TabId, type Sex } from '../state/AppState';
 import { useAuth } from '../state/AuthContext';
 import { PremiumActionProvider } from '../state/PremiumActionContext';
 import { PremiumAction } from '../components/premium/PremiumAction';
@@ -193,12 +193,20 @@ const FULL_BLEED = StyleSheet.create({
  */
 export function AppShell({ onHomeReady }: { onHomeReady?: () => void }) {
   const [showPremium, setShowPremium] = useState(false);
-  const { user } = useAuth();
+  const { user, questionnaire } = useAuth();
+  const sex = questionnaire?.answers.sex;
+
+  // App.tsx normally guarantees this before mounting AppShell. Keep this
+  // defensive boundary neutral so an unexpected intermediate/legacy state
+  // can never flash the male anatomy before the questionnaire resolves.
+  if (!sex) return <FullScreenLoading />;
+
   return (
     <PremiumActionProvider onRequestUpgrade={() => setShowPremium(true)}>
       <LoadProgressProvider uid={user?.uid ?? null}>
         <RestSessionProvider key={user?.uid ?? 'signed-out'}>
           <AppShellContent
+            sex={sex}
             showPremium={showPremium}
             setShowPremium={setShowPremium}
             onHomeReady={onHomeReady}
@@ -210,10 +218,12 @@ export function AppShell({ onHomeReady }: { onHomeReady?: () => void }) {
 }
 
 function AppShellContent({
+  sex,
   showPremium,
   setShowPremium,
   onHomeReady,
 }: {
+  sex: Sex;
   showPremium: boolean;
   setShowPremium: (value: boolean) => void;
   onHomeReady?: () => void;
@@ -1379,6 +1389,7 @@ function AppShellContent({
       >
         <PersistentScreen active={tab === 'home'} activeStyle={FULL_BLEED.tab} inactiveMode="materialized">
           <HomeScreen
+            sex={sex}
             prescription={prescription}
             loading={prescriptionLoading}
             generating={generatingWorkout}
@@ -1451,6 +1462,7 @@ function AppShellContent({
             ]}
           >
             <WorkoutScreen
+              sex={sex}
               plan={prescription.plan}
               sessionIndex={activeSessionIndex}
               execution={execution.execution}

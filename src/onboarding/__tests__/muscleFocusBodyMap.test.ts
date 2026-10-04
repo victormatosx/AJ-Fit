@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defaultQuiz } from '../../state/AppState';
-import { BODY_MUSCLE_MAP_MALE } from '../../data/bodyMuscleMapAnatomy';
+import { getBodyMuscleMapAnatomy } from '../../data/bodyMuscleMapAnatomy';
 import { getMusclePartIds } from '../../lib/muscleMapRegions';
 import {
   MUSCLE_FOCUS_IDS,
@@ -36,9 +36,11 @@ describe('muscleFocus Body Map interaction', () => {
   });
 
   it('maps posterior arm regions such as triceps to a precise visual group and legacy arms value', () => {
-    const backPartIds = new Set(BODY_MUSCLE_MAP_MALE.back.muscles.map((part) => part.id));
     expect(SELECTABLE_MUSCLE_FOCUS_MAP_MUSCLES).toContain('triceps');
-    expect(getMusclePartIds('triceps').some((partId) => backPartIds.has(partId))).toBe(true);
+    for (const sex of ['m', 'f'] as const) {
+      const backPartIds = new Set(getBodyMuscleMapAnatomy(sex).back.muscles.map((part) => part.id));
+      expect(getMusclePartIds('triceps').some((partId) => backPartIds.has(partId))).toBe(true);
+    }
     expect(visualGroupForMapMuscle('triceps')).toBe('triceps');
     expect(muscleFocusForMapMuscle('triceps')).toBe('arms');
     expect(mapMusclesForVisualGroups(['triceps'])).toEqual(['triceps']);

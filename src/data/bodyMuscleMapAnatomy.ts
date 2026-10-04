@@ -1,15 +1,18 @@
-// Anatomical body-map path data for BodyMuscleMap (Home 'today workout' card).
+import type { Sex } from '../state/AppState';
+import { BODY_MUSCLE_MAP_FEMALE } from './bodyMuscleMapFemaleAnatomy';
+
+// Anatomical body-map path data for BodyMuscleMap.
 //
 // Source: @musclemap/assets v1.0.1 (MIT) — https://github.com/Jsplice/MuscleMap
 // Vendored as static data rather than an npm dependency — the package ships
-// zero runtime dependencies of its own, so copying the two view exports we
-// use avoids adding a dependency for a handful of static values. Trimmed to
-// MALE_FRONT/MALE_BACK only (this app doesn't render the female body or the
-// bundled AI-generated photoreal body photos).
+// zero runtime dependencies of its own, so copying the four SVG diagram
+// exports we use avoids adding a dependency for static values. Male data is
+// below; female data lives in bodyMuscleMapFemaleAnatomy.ts so each vendored
+// source remains auditable against its exact upstream export.
 //
 // Full attribution and the MIT license text: see THIRD_PARTY_NOTICES.md at
-// the repo root. Do not hand-edit path data — re-vendor from a newer
-// @musclemap/assets release instead.
+// the repo root. Do not hand-edit path data — re-vendor from the pinned
+// @musclemap/assets@1.0.1 source tag unless an upgrade is separately audited.
 
 export interface MuscleMapMuscle {
   group: string;
@@ -28,6 +31,22 @@ export interface MuscleMapDiagram {
   viewBox: string;
   outline: MuscleMapOutlinePart[];
   muscles: MuscleMapMuscle[];
+}
+
+export const BODY_MUSCLE_MAP_ASSET_VERSION = '1.0.1' as const;
+export const BODY_MUSCLE_MAP_VIEW_BOX = '0 0 1024 1536' as const;
+
+/**
+ * The only production decision point for male/female Body Map anatomy.
+ * Invalid or unresolved values fail explicitly instead of silently showing
+ * the male body while questionnaire state is still loading.
+ */
+export function getBodyMuscleMapAnatomy(
+  sex: Sex,
+): { front: MuscleMapDiagram; back: MuscleMapDiagram } {
+  if (sex === 'm') return BODY_MUSCLE_MAP_MALE;
+  if (sex === 'f') return BODY_MUSCLE_MAP_FEMALE;
+  throw new Error(`unsupported Body Map sex: ${String(sex)}`);
 }
 
 export const BODY_MUSCLE_MAP_MALE: { front: MuscleMapDiagram; back: MuscleMapDiagram } = {

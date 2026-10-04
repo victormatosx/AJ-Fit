@@ -24,6 +24,7 @@ import { Icon } from '../ui/Icon';
 import { useTheme } from '../../theme';
 import { resolvePhotoActionsMode, shouldShowRemovePhotoButton } from '../../workoutShare/composerUi';
 import type { WorkoutShareData } from '../../workoutShare/data';
+import type { Sex } from '../../state/AppState';
 import { captureWorkoutSharePoster } from '../../workoutShare/export';
 import { cleanupWorkoutShareFiles } from '../../workoutShare/files';
 import { DEFAULT_WORKOUT_SHARE_LAYOUT_ID, workoutShareLayoutIndex } from '../../workoutShare/layouts';
@@ -39,6 +40,7 @@ import { ShareToRow } from './ShareToRow';
 type Photo = WorkoutSharePhoto;
 
 type Props = {
+  sex: Sex;
   data: WorkoutShareData;
   /**
    * This composer is the post-workout terminal screen — there is no prior
@@ -141,7 +143,7 @@ function PageDots({ selectedIndex, onSelect }: { selectedIndex: number; onSelect
   );
 }
 
-export function WorkoutShareComposer({ data, onDone }: Props) {
+export function WorkoutShareComposer({ sex, data, onDone }: Props) {
   const { theme } = useTheme();
   const { t } = useTranslation(['workout', 'common']);
   const scrollRef = useRef<ScrollView>(null);
@@ -342,6 +344,7 @@ export function WorkoutShareComposer({ data, onDone }: Props) {
                         >
                           {mounted ? (
                             <PosterComponent
+                              sex={sex}
                               data={data}
                               photo={photo}
                               width={previewWidth}

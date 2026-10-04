@@ -1,9 +1,15 @@
 import { View, type StyleProp, type ViewStyle } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import type { MuscleId } from '../../types/exercise';
+import type { Sex } from '../../state/AppState';
 import { resolveMuscleIntensity } from '../../lib/muscleFillIntensity';
 import { muscleForPartId } from '../../lib/muscleMapRegions';
-import { BODY_MUSCLE_MAP_MALE, type MuscleMapDiagram } from '../../data/bodyMuscleMapAnatomy';
+import {
+  bodyMuscleMapDiagramKey,
+  bodyMuscleMapPathKey,
+  type BodyMuscleMapDiagramKey,
+} from '../../lib/bodyMuscleMapKeys';
+import { getBodyMuscleMapAnatomy, type MuscleMapDiagram } from '../../data/bodyMuscleMapAnatomy';
 
 /**
  * Visual-only projection of session muscles onto a real anatomical body map.
@@ -19,6 +25,8 @@ import { BODY_MUSCLE_MAP_MALE, type MuscleMapDiagram } from '../../data/bodyMusc
  * `src/lib/muscleMapRegions.ts` for the `MuscleId` -> region mapping.
  */
 export interface BodyMuscleMapProps {
+  /** Resolved questionnaire sex. This component never guesses a fallback. */
+  sex: Sex;
   /** Muscles to render at full intensity. */
   primaryMuscles: readonly MuscleId[];
   /** Muscles to render at reduced intensity — always visually subordinate to primary. */
@@ -49,6 +57,7 @@ const DEFAULT_SIZE = 58;
 const DEFAULT_SECONDARY_OPACITY = 0.35;
 
 function DiagramView({
+  diagramKey,
   diagram,
   size,
   primarySet,
@@ -61,6 +70,7 @@ function DiagramView({
   selectableSet,
   muscleAccessibilityLabel,
 }: {
+  diagramKey: BodyMuscleMapDiagramKey;
   diagram: MuscleMapDiagram;
   size: number;
   primarySet: ReadonlySet<MuscleId>;
@@ -79,7 +89,13 @@ function DiagramView({
   return (
     <Svg width={size} height={height} viewBox={diagram.viewBox}>
       {diagram.outline.map((part, index) => (
-        <Path key={`outline-${index}`} d={part.d} fill={baseColor} stroke={outlineColor} strokeWidth={2} />
+        <Path
+          key={bodyMuscleMapPathKey(diagramKey, 'outline', part, index)}
+          d={part.d}
+          fill={baseColor}
+          stroke={outlineColor}
+          strokeWidth={2}
+        />
       ))}
       {diagram.muscles.map((muscle, index) => {
         const muscleId = muscleForPartId(muscle.id);
@@ -89,10 +105,9 @@ function DiagramView({
           && (!selectableSet || selectableSet.has(muscleId)),
         );
         if (!interactive || !muscleId) return null;
-        const key = muscle.id ?? `${muscle.group}-${muscle.side ?? 'center'}-${index}`;
         return (
           <Path
-            key={`hit-${key}`}
+            key={bodyMuscleMapPathKey(diagramKey, 'hit', muscle, index)}
             d={muscle.d}
             fill="rgba(0,0,0,0.001)"
             stroke="rgba(0,0,0,0.001)"
@@ -109,7 +124,6 @@ function DiagramView({
         const intensity = muscleId ? resolveMuscleIntensity(muscleId, primarySet, secondarySet) : 'inactive';
         const fill = intensity === 'inactive' ? baseColor : activeColor;
         const fillOpacity = intensity === 'primary' ? 1 : intensity === 'secondary' ? secondaryOpacity : 1;
-        const key = muscle.id ?? `${muscle.group}-${muscle.side ?? 'center'}-${index}`;
         const interactive = Boolean(
           muscleId
           && onMusclePress
@@ -117,7 +131,7 @@ function DiagramView({
         );
         return (
           <Path
-            key={key}
+            key={bodyMuscleMapPathKey(diagramKey, 'visual', muscle, index)}
             d={muscle.d}
             fill={fill}
             fillOpacity={fillOpacity}
@@ -134,6 +148,7 @@ function DiagramView({
 }
 
 export function BodyMuscleMap({
+  sex,
   primaryMuscles,
   secondaryMuscles = [],
   showSecondary = true,
@@ -148,6 +163,7 @@ export function BodyMuscleMap({
   gap = 6,
   style,
 }: BodyMuscleMapProps) {
+  const anatomy = getBodyMuscleMapAnatomy(sex);
   const primarySet = new Set(primaryMuscles);
   const secondarySet = new Set(
     (showSecondary ? secondaryMuscles : []).filter((muscle) => !primarySet.has(muscle)),
@@ -170,8 +186,16 @@ export function BodyMuscleMap({
 
   return (
     <View style={[{ flexDirection: 'row', gap }, style]}>
-      <DiagramView diagram={BODY_MUSCLE_MAP_MALE.front} {...sharedProps} />
-      <DiagramView diagram={BODY_MUSCLE_MAP_MALE.back} {...sharedProps} />
+      <DiagramView
+        diagramKey={bodyMuscleMapDiagramKey(sex, 'front')}
+        diagram={anatomy.front}
+        {...sharedProps}
+      />
+      <DiagramView
+        diagramKey={bodyMuscleMapDiagramKey(sex, 'back')}
+        diagram={anatomy.back}
+        {...sharedProps}
+      />
     </View>
   );
 }

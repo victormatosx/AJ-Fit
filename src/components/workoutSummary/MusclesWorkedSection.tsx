@@ -6,6 +6,7 @@ import { Slash } from '../ui/Display';
 import { useTheme } from '../../theme';
 import { spacing } from '../../theme/tokens';
 import type { SessionMuscleBreakdown } from '../../lib/sessionMuscles';
+import type { Sex } from '../../state/AppState';
 
 type LooseT = (key: string, options?: Record<string, unknown>) => string;
 
@@ -13,7 +14,13 @@ function translateMuscle(tLoose: LooseT, muscleId: string): string {
   return tLoose(`muscleGroups.${muscleId}`, { defaultValue: muscleId });
 }
 
-export function MusclesWorkedSection({ bodyMap }: { bodyMap: SessionMuscleBreakdown }) {
+export function MusclesWorkedSection({
+  sex,
+  bodyMap,
+}: {
+  sex: Sex;
+  bodyMap: SessionMuscleBreakdown;
+}) {
   const { theme } = useTheme();
   const { t } = useTranslation('workout');
   const tLoose = t as unknown as LooseT;
@@ -29,6 +36,7 @@ export function MusclesWorkedSection({ bodyMap }: { bodyMap: SessionMuscleBreakd
         {primaryLabels.join(' · ')}
       </Text>
       <BodyMuscleMap
+        sex={sex}
         primaryMuscles={bodyMap.primary}
         secondaryMuscles={bodyMap.secondary}
         size={96}

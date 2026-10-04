@@ -9,6 +9,7 @@ import { HudCorners } from '../components/ui/Card';
 import { Icon } from '../components/ui/Icon';
 import { darkTheme, useTheme } from '../theme';
 import { useAuth } from '../state/AuthContext';
+import type { Sex } from '../state/AppState';
 import { getDisplayFirstName } from '../lib/userName';
 import { recordPerfMark } from '../lib/perf';
 import { ProfileAvatar } from '../components/ui/ProfileAvatar';
@@ -43,6 +44,7 @@ const TODAY_WORKOUT_THEME = darkTheme;
 const MISSED_INFO_POPOVER_WIDTH = 220;
 
 export function HomeScreen({
+  sex,
   prescription,
   loading,
   generating,
@@ -78,6 +80,7 @@ export function HomeScreen({
   homeInitialVisualReady = false,
   onInitialLayoutCommitted,
 }: {
+  sex: Sex;
   prescription: PrescriptionResult;
   /**
    * True until the FIRST resolution of `prescription` for the current
@@ -621,6 +624,7 @@ export function HomeScreen({
 
                 {showBodyMuscleMap && (
                   <BodyMuscleMap
+                    sex={sex}
                     primaryMuscles={sessionMuscles.primary}
                     secondaryMuscles={sessionMuscles.secondary}
                     activeColor={TODAY_WORKOUT_THEME.colors.primaryEmphasis}

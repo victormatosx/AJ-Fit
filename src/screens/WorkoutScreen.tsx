@@ -112,6 +112,7 @@ import {
   derivePreviousExerciseSetLoads,
 } from '../loadProgress/loadProgress';
 import { useLoadProgressState } from '../loadProgress/LoadProgressContext';
+import type { Sex } from '../state/AppState';
 import {
   evaluateSetForPersonalRecord,
   loggedWeightsForExercise,
@@ -119,6 +120,7 @@ import {
 } from '../workoutExecution/personalRecord';
 
 type Props = {
+  sex: Sex;
   plan: FinalWorkoutPlan;
   /** Leaves the completion screen only after the durable finish chain succeeds. */
   onDone: () => void;
@@ -264,7 +266,7 @@ function translateMuscleGroup(tLoose: LooseT, target: string): string {
   return target;
 }
 
-export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, onMinimize, sessionIndex = 0, execution, workoutStartedAtMs, hasUnreconciledMutations, onSessionCompleted, finishing, completionConfirmed, durableCompletionReachedAtMs, completionFailed, onSetLogged, onCompletedSetEdited, onAbandon, onCardioCompleted, onEarlyFinish, manualSubstitutionContext, manualSubstitutionContextStatus, onRetryManualSubstitutionContext, onApplySubstitution }: Props) {
+export function WorkoutScreen({ sex, plan, onDone, onRetryCompletion, onDiscarded, onMinimize, sessionIndex = 0, execution, workoutStartedAtMs, hasUnreconciledMutations, onSessionCompleted, finishing, completionConfirmed, durableCompletionReachedAtMs, completionFailed, onSetLogged, onCompletedSetEdited, onAbandon, onCardioCompleted, onEarlyFinish, manualSubstitutionContext, manualSubstitutionContextStatus, onRetryManualSubstitutionContext, onApplySubstitution }: Props) {
   useEffect(() => {
     if (typeof __DEV__ === 'undefined' || !__DEV__) return undefined;
     logInfo('workout_performance', 'workout_screen_mount', {
@@ -1261,6 +1263,7 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
     if (!showShareComposer && workoutSummaryData) {
       return (
         <WorkoutSummaryScreen
+          sex={sex}
           data={workoutSummaryData}
           onClose={finishAndGoHome}
           onShare={() => setShowShareComposer(true)}
@@ -1270,6 +1273,7 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
 
     return (
       <WorkoutShareComposer
+        sex={sex}
         data={buildWorkoutShareData({
           workoutName: workoutDisplayName,
           exerciseCount: currentSession?.exercises.length ?? 0,

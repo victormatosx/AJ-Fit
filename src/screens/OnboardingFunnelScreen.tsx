@@ -175,8 +175,9 @@ export function OnboardingFunnelScreen({
         validateBeforeNext={() => onboardingSafetyBlock(currentStepId, quiz)}
         answerControl={isScheduleQuestion ? (
           <WeeklySchedulePicker value={scheduleValue} onChange={setSchedule} />
-        ) : isMuscleFocusQuestion ? (
+        ) : isMuscleFocusQuestion && quiz.sex ? (
           <MuscleFocusBodyMapPicker
+            sex={quiz.sex}
             value={selectedMuscleGroups}
             onChange={setMuscleGroups}
             maxSelections={MAX_MUSCLE_FOCUS}

@@ -2,6 +2,7 @@ import type { RefObject } from 'react';
 import type { View } from 'react-native';
 
 import type { WorkoutShareData } from '../../../workoutShare/data';
+import type { Sex } from '../../../state/AppState';
 
 export type WorkoutSharePhoto = { uri: string; width: number; height: number };
 
@@ -11,6 +12,7 @@ export type WorkoutSharePhoto = { uri: string; width: number; height: number };
  * without a single `if (layoutId === ...)` branch.
  */
 export interface WorkoutSharePosterProps {
+  sex: Sex;
   data: WorkoutShareData;
   photo: WorkoutSharePhoto | null;
   width: number;
