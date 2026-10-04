@@ -20,4 +20,14 @@ describe('decimal input', () => {
     expect(parseDecimalInput('80,25')).toBe(80.25);
     expect(parseDecimalInput('80.25')).toBe(80.25);
   });
+
+  it('preserves a trailing comma while the user continues typing a fractional load', () => {
+    const withSeparator = normalizeDecimalInput('80,', 2);
+    expect(withSeparator).toBe('80,');
+    expect(parseDecimalInput(withSeparator)).toBe(80);
+
+    const withFraction = normalizeDecimalInput(`${withSeparator}5`, 2);
+    expect(withFraction).toBe('80,5');
+    expect(parseDecimalInput(withFraction)).toBe(80.5);
+  });
 });

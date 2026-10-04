@@ -118,6 +118,7 @@ import {
   loggedWeightsForExercise,
   replayQueuedPersonalRecordChecks,
 } from '../workoutExecution/personalRecord';
+import { normalizeDecimalInput, parseDecimalInput } from '../lib/decimalInput';
 
 type Props = {
   sex: Sex;
@@ -3763,6 +3764,29 @@ function RestOverlay({
   const { resolvedUnits } = useUnits();
   const loadUnit = workoutLoadUnit(resolvedUnits);
   const [hasUnregisteredInput, setHasUnregisteredInput] = useState(false);
+  // Keep the editable representation separate from the canonical numeric
+  // value. If the TextInput is driven directly by `regWeight`, typing `80,`
+  // immediately parses to 80 and the controlled render erases the separator
+  // before the fractional digit can be entered.
+  const formatWeightDraft = useMemo(
+    () => (weightKg: number) =>
+      weightKg > 0 ? formatWorkoutLoadFromKg(weightKg, resolvedUnits) : '',
+    [resolvedUnits],
+  );
+  const [weightText, setWeightText] = useState(() => formatWeightDraft(regWeight));
+  const weightInputFocusedRef = useRef(false);
+  const weightDraftContextRef = useRef(`${setNumber}:${resolvedUnits}`);
+  useEffect(() => {
+    const context = `${setNumber}:${resolvedUnits}`;
+    const contextChanged = weightDraftContextRef.current !== context;
+    if (contextChanged) {
+      weightDraftContextRef.current = context;
+      weightInputFocusedRef.current = false;
+    }
+    if (contextChanged || !weightInputFocusedRef.current) {
+      setWeightText(formatWeightDraft(regWeight));
+    }
+  }, [formatWeightDraft, regWeight, resolvedUnits, setNumber]);
   useEffect(() => {
     setHasUnregisteredInput(false);
   }, [setNumber]);
@@ -3977,7 +4001,9 @@ function RestOverlay({
             <Pressable
               onPress={() => {
                 if (regWeight > 0) setHasUnregisteredInput(true);
-                setRegWeight((kg: number) => adjustWorkoutLoadKg(kg, -1, resolvedUnits));
+                const next = adjustWorkoutLoadKg(regWeight, -1, resolvedUnits);
+                setRegWeight(next);
+                setWeightText(formatWeightDraft(next));
               }}
               style={registerButtonStyle}
             >
@@ -3985,14 +4011,25 @@ function RestOverlay({
             </Pressable>
             <View style={centralValueContainerStyle}>
               <TextInput
-                value={regWeight > 0 ? formatWorkoutLoadFromKg(regWeight, resolvedUnits) : ''}
+                value={weightText}
                 placeholder={previousLoadKg != null ? formatWorkoutLoadFromKg(previousLoadKg, resolvedUnits) : '—'}
                 placeholderTextColor={theme.colors.textFaint}
                 keyboardType="decimal-pad"
-                onChangeText={(t) => {
+                onFocus={() => {
+                  weightInputFocusedRef.current = true;
+                }}
+                onBlur={() => {
+                  weightInputFocusedRef.current = false;
+                  setWeightText(formatWeightDraft(regWeight));
+                }}
+                onChangeText={(text) => {
                   setHasUnregisteredInput(true);
-                  const v = t.replace(',', '.').replace(/[^0-9.]/g, '');
-                  setRegWeight(v === '' ? 0 : workoutLoadToKg(parseFloat(v) || 0, resolvedUnits));
+                  const normalized = normalizeDecimalInput(text, 2);
+                  setWeightText(normalized);
+                  const displayedWeight = parseDecimalInput(normalized);
+                  setRegWeight(Number.isFinite(displayedWeight)
+                    ? workoutLoadToKg(displayedWeight, resolvedUnits)
+                    : 0);
                 }}
                 style={centralValueTextStyle}
               />
@@ -4003,7 +4040,9 @@ function RestOverlay({
             <Pressable
               onPress={() => {
                 setHasUnregisteredInput(true);
-                setRegWeight((kg: number) => adjustWorkoutLoadKg(kg, 1, resolvedUnits));
+                const next = adjustWorkoutLoadKg(regWeight, 1, resolvedUnits);
+                setRegWeight(next);
+                setWeightText(formatWeightDraft(next));
               }}
               style={registerButtonStyle}
             >
