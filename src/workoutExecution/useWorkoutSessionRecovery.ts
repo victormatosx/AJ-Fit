@@ -34,7 +34,7 @@ export interface WorkoutSessionRecoveryController {
   state: WorkoutSessionRecoveryState;
   /** Re-runs the bootstrap check against Firestore — call right before acting on "Continuar"/"Descartar" to guard against another device having changed things while the modal was open. */
   recheck: () => Promise<WorkoutSessionRecoveryState>;
-  /** Locally dismisses the recovery UI once the pending session has been handled (continued, discarded, or acknowledged as unrecoverable) — never itself writes to Firestore. */
+  /** Clears the local recovery UI only after the pending session was authoritatively continued, finalized, or discarded — never itself writes to Firestore. */
   resolve: () => void;
 }
 

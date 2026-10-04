@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest';
  */
 const source = readFileSync(new URL('../WorkoutSessionRecoveryModal.tsx', import.meta.url), 'utf8');
 const appShell = readFileSync(new URL('../../../screens/AppShell.tsx', import.meta.url), 'utf8');
+const workoutScreen = readFileSync(new URL('../../../screens/WorkoutScreen.tsx', import.meta.url), 'utf8');
 
 describe('WorkoutSessionRecoveryModal — long-session alert', () => {
   it('derives elapsed/format/threshold from the shared workoutSessionTimer module, never a reimplementation', () => {
@@ -45,22 +46,89 @@ describe('WorkoutSessionRecoveryModal — long-session alert', () => {
   });
 });
 
-describe('"Agora não" (dismiss) — must stay a non-destructive, purely local deferral', () => {
-  it('dismissRecovery only clears local recovery state, never abandons, never touches schedule, never starts a workout', () => {
-    const start = appShell.indexOf('const dismissRecovery = () => {');
-    expect(start).toBeGreaterThan(-1);
-    const end = appShell.indexOf('};', start);
-    const body = appShell.slice(start, end);
-    expect(body).toContain('recovery.resolve()');
-    expect(body).not.toContain('abandonWorkoutExecution');
-    expect(body).not.toContain('schedule.');
-    expect(body).not.toContain('execution.start');
-    expect(body).not.toContain('execution.adoptExecution');
+describe('explicit recovery resolution — continue, finish, or discard', () => {
+  it('removes "Agora não" and every dismiss callback from the recovery modal', () => {
+    expect(source).not.toContain("t('sessionRecovery.later')");
+    expect(source).not.toContain('onDismiss');
+    expect(appShell).not.toContain('dismissRecovery');
+    expect(appShell).not.toContain('onDismiss={dismissRecovery}');
   });
 
-  it('is wired to the modal\'s onDismiss, distinct from onResume/onDiscard', () => {
-    expect(appShell).toContain('onDismiss={dismissRecovery}');
-    expect(appShell).not.toContain('onResume={dismissRecovery}');
-    expect(appShell).not.toContain('onDiscard={dismissRecovery}');
+  it('keeps the orphan-pointer acknowledgement strictly unavailable to a real pending execution', () => {
+    expect(source).toContain('{executionMissing && (');
+    expect(source).toContain('onPress={onAcknowledgeMissing}');
+    const start = appShell.indexOf('const acknowledgeMissingRecovery = () => {');
+    const end = appShell.indexOf('const runWorkoutCompletion = (', start);
+    const body = appShell.slice(start, end);
+    expect(body).toContain("recovery.state.reason !== 'EXECUTION_MISSING'");
+    expect(body).toContain('recovery.state.execution !== null');
+    expect(body).toContain('recovery.resolve()');
+  });
+
+  it('does not dismiss on backdrop press or Android Back', () => {
+    expect(source).toContain('onRequestClose={() => undefined}');
+    const modalBody = source.slice(source.indexOf('<Modal'), source.indexOf('</Modal>'));
+    expect(modalBody).toContain('<View\n        style={{ flex: 1');
+    expect(modalBody).not.toContain('onPress={dismiss}');
+  });
+
+  it('renders the finish action with loading and disables every action while it is in flight', () => {
+    expect(source).toContain("t('sessionRecovery.finishNow')");
+    expect(source).toContain("t('sessionRecovery.finishing')");
+    expect(source).toContain('const busy = resuming || finishing || discarding');
+    expect(source).toContain('onPress={onFinish}');
+    expect(source).toContain('disabled={busy}');
+    expect(source).toContain("t('sessionRecovery.finishError')");
+  });
+
+  it('keeps Continue and Discard wired to their original, distinct handlers', () => {
+    expect(appShell).toContain('onResume={() => { void handleResumeRecovery(); }}');
+    expect(appShell).toContain('onDiscard={() => { void handleDiscardRecovery(); }}');
+    expect(appShell).toContain('onFinish={handleFinishRecovery}');
+  });
+
+  it('guards same-tick finish double taps and retains recovery on failure', () => {
+    const start = appShell.indexOf('const handleFinishRecovery = () => {');
+    const end = appShell.indexOf('const retryWorkoutCompletion = async () =>', start);
+    const body = appShell.slice(start, end);
+    expect(body).toContain('recoveryFinishInFlightRef.current');
+    expect(body).toContain("setRecoveryAction('finishing')");
+    expect(body).toContain("if (result !== 'COMPLETED'");
+    expect(body).toContain('setRecoveryFinishError(true)');
+    const failedResultBranch = body.slice(
+      body.indexOf("if (result !== 'COMPLETED'"),
+      body.indexOf('// The callable result is the durable authority'),
+    );
+    expect(failedResultBranch).toContain('setRecoveryFinishError(true)');
+    expect(failedResultBranch).toContain('return;');
+    expect(failedResultBranch).not.toContain('recovery.resolve()');
+  });
+
+  it('finalizes the exact pointer execution through the shared authoritative callable', () => {
+    const runStart = appShell.indexOf('const runWorkoutCompletion = (');
+    const runEnd = appShell.indexOf('const handleFinishRecovery = () =>', runStart);
+    const runBody = appShell.slice(runStart, runEnd);
+    const finishStart = appShell.indexOf('const handleFinishRecovery = () =>');
+    const finishEnd = appShell.indexOf('const retryWorkoutCompletion = async () =>', finishStart);
+    const finishBody = appShell.slice(finishStart, finishEnd);
+    expect(finishBody).toContain('loadWorkoutExecution(user.uid, recoveredPointer.executionId)');
+    expect(finishBody).toContain('runWorkoutCompletion(true, undefined, mode, fresh)');
+    expect(runBody).toContain('finalizeWorkoutSession({');
+    expect(runBody).toContain('executionId: recoveredExecution.executionId');
+    expect(runBody).toContain('execution.finalize(actualCardioDurationSeconds, mode)');
+  });
+
+  it('resolves recovery only after durable success and prepares the normal completion UI from a terminal Firestore reload', () => {
+    const start = appShell.indexOf('const handleFinishRecovery = () => {');
+    const end = appShell.indexOf('const retryWorkoutCompletion = async () =>', start);
+    const body = appShell.slice(start, end);
+    expect(body.indexOf('await runWorkoutCompletion')).toBeLessThan(body.indexOf('recovery.resolve()'));
+    expect(body).toContain("['COMPLETED', 'PARTIALLY_COMPLETED'].includes(loaded.status)");
+    expect(body).toContain('execution.adoptExecution(terminal)');
+    expect(body).toContain("setTab('workout')");
+    expect(body).toContain('workoutHomeSyncRef.current');
+    expect(body).toContain('workoutCompletionFollowUpRef.current');
+    expect(workoutScreen).toContain("execution?.status === 'COMPLETED' || execution?.status === 'PARTIALLY_COMPLETED'");
+    expect(workoutScreen).toContain('execution.finishedAt.toMillis()');
   });
 });

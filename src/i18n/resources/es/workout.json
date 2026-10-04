@@ -63,6 +63,9 @@
     "inconsistentTerminalBody": "Esta sesión ya se había finalizado en otro dispositivo. Puedes descartarla con seguridad.",
     "resume": "Continuar entrenamiento",
     "resuming": "Reanudando…",
+    "finishNow": "Finalizar entrenamiento ahora",
+    "finishing": "Finalizando…",
+    "finishError": "No se pudo finalizar el entrenamiento. Verifica tu conexión e inténtalo de nuevo.",
     "discard": "Descartar entrenamiento",
     "discardConfirmTitle": "¿Descartar este entrenamiento?",
     "discardConfirmBody": "Las series ya registradas permanecen en tu historial, pero este entrenamiento no contará como completado.",
@@ -70,8 +73,7 @@
     "discardConfirmBack": "Volver",
     "discarding": "Descartando…",
     "discardError": "No se pudo descartar. Inténtalo de nuevo.",
-    "dismiss": "Entendido",
-    "later": "Ahora no"
+    "dismiss": "Entendido"
   },
   "actions": {
     "viewExecution": "Cómo hacer",

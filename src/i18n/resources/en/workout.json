@@ -63,6 +63,9 @@
     "inconsistentTerminalBody": "This session was already finished on another device. You can safely discard it.",
     "resume": "Continue workout",
     "resuming": "Resuming…",
+    "finishNow": "Finish workout now",
+    "finishing": "Finishing…",
+    "finishError": "Couldn't finish the workout. Check your connection and try again.",
     "discard": "Discard workout",
     "discardConfirmTitle": "Discard this workout?",
     "discardConfirmBody": "Sets already logged stay in your history, but this session won't count as completed.",
@@ -70,8 +73,7 @@
     "discardConfirmBack": "Back",
     "discarding": "Discarding…",
     "discardError": "Couldn't discard it. Please try again.",
-    "dismiss": "Got it",
-    "later": "Not now"
+    "dismiss": "Got it"
   },
   "actions": {
     "viewExecution": "See how to",

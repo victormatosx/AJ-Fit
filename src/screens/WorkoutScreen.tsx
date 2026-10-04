@@ -505,7 +505,14 @@ export function WorkoutScreen({ sex, plan, onDone, onRetryCompletion, onDiscarde
   // composer (unchanged) only mounts once the user taps "Compartilhar
   // treino" on it — never shown first anymore.
   const [showShareComposer, setShowShareComposer] = useState(false);
-  const completionSignaledRef = useRef(false);
+  // A terminal execution can be adopted after the recovery modal finalized
+  // it directly. Its authoritative completion has already happened, so the
+  // normal summary may render but this mount must not signal a second finish
+  // request. IN_PROGRESS recovery remains unchanged and self-heals through
+  // the effect below when every persisted step was already settled.
+  const completionSignaledRef = useRef(
+    execution?.status === 'COMPLETED' || execution?.status === 'PARTIALLY_COMPLETED',
+  );
   const completionModeRef = useRef<'NORMAL' | 'EARLY'>('NORMAL');
   // Captured once at mount — never re-evaluated as `finished ping-pongs`
   // later in the session, so observability can tell "this finish chain
@@ -592,9 +599,12 @@ export function WorkoutScreen({ sex, plan, onDone, onRetryCompletion, onDiscarde
     finalizesWorkout?: boolean;
   } | null>(null);
 
-  // Session duration is `sessionNow - workoutStartedAtMs` (wall clock), never
-  // a tick count — `workoutStartedAtMs` is the persisted execution's
-  // `startedAt`, so this stays correct across background/lock/cold start.
+  // Session duration is wall-clock endpoint minus `workoutStartedAtMs`, never
+  // a tick count. While active the endpoint is `sessionNow`; a recovered
+  // terminal execution uses its persisted `finishedAt`, so the summary does
+  // not count the time between finalization and reopening. The start is the
+  // persisted execution's `startedAt`, keeping background/lock/cold start
+  // duration correct.
   // The interval below only forces a re-render once a second; it never owns
   // or increments the duration itself. It stops the instant the session
   // finishes (`finished` dependency): without this, the interval kept
@@ -637,7 +647,10 @@ export function WorkoutScreen({ sex, plan, onDone, onRetryCompletion, onDiscarde
     return () => subscription.remove();
   }, [finished]);
 
-  const elapsed = computeWorkoutElapsedSeconds(workoutStartedAtMs ?? sessionNow, sessionNow);
+  const sessionEndMs = finished && execution?.finishedAt
+    ? execution.finishedAt.toMillis()
+    : sessionNow;
+  const elapsed = computeWorkoutElapsedSeconds(workoutStartedAtMs ?? sessionEndMs, sessionEndMs);
 
   // Foreground-only visual ticker. It never owns or decrements countdown
   // state; every render is derived from the single absolute `endsAt`.

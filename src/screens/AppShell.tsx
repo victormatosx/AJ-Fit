@@ -80,6 +80,7 @@ import {
 } from '../services/workoutExecutions';
 import {
   applyWorkoutCompletionNavigation,
+  recoveryFinalizationMode,
   runWorkoutHomeProjectionSync,
   runWorkoutCompletionFollowUp,
   runWorkoutCompletionAttempt,
@@ -88,7 +89,9 @@ import {
   type WorkoutCompletionResult,
 } from '../workoutLifecycle/finishFlow';
 import {
+  finalizeWorkoutSession,
   workoutFinalizationFailureStage,
+  type FinalizeWorkoutSessionResult,
   type WorkoutFinalizationMode,
 } from '../services/finalizeWorkoutSession';
 import { useWorkoutEvolution } from '../workoutEvolution/useWorkoutEvolution';
@@ -289,7 +292,9 @@ function AppShellContent({
   // bootstrap check for `workoutExecutionState/current`, independent of the
   // user ever tapping "Iniciar treino" (docs §4/§13).
   const recovery = useWorkoutSessionRecovery(user?.uid ?? null);
-  const [recoveryAction, setRecoveryAction] = useState<'idle' | 'resuming' | 'discarding'>('idle');
+  const [recoveryAction, setRecoveryAction] = useState<'idle' | 'resuming' | 'finishing' | 'discarding'>('idle');
+  const recoveryFinishInFlightRef = useRef(false);
+  const [recoveryFinishError, setRecoveryFinishError] = useState(false);
   const [recoveryDiscardError, setRecoveryDiscardError] = useState(false);
   // Fase 5 — single canonical evolution view-model/actions for the whole
   // app (docs product §144/§146); reconciles once per AppShell mount.
@@ -1026,10 +1031,18 @@ function AppShellContent({
   const recoveryCanResume = recovery.state.status === 'pending' && !!activeProgram
     && (recovery.state.execution.programInstanceId ?? recovery.state.execution.programId)
       === (activeProgram.programInstanceId ?? activeProgram.programId);
+  const recoveryExecution = recovery.state.status === 'pending' || recovery.state.status === 'inconsistent'
+    ? recovery.state.execution
+    : null;
+  const recoveryCanFinalize = !!recoveryExecution && !!activeProgram
+    && ['IN_PROGRESS', 'COMPLETED', 'PARTIALLY_COMPLETED'].includes(recoveryExecution.status)
+    && (recoveryExecution.programInstanceId ?? recoveryExecution.programId)
+      === (activeProgram.programInstanceId ?? activeProgram.programId);
 
   const handleResumeRecovery = async () => {
     if (recovery.state.status !== 'pending' || recoveryAction !== 'idle' || !user) return;
     setRecoveryAction('resuming');
+    setRecoveryFinishError(false);
     setRecoveryDiscardError(false);
     try {
       // Re-validate freshness immediately before acting — another device
@@ -1063,6 +1076,7 @@ function AppShellContent({
     if (recovery.state.status !== 'pending' && recovery.state.status !== 'inconsistent') return;
     const { pointer } = recovery.state;
     setRecoveryAction('discarding');
+    setRecoveryFinishError(false);
     setRecoveryDiscardError(false);
     try {
       // Safe in every case reachable here: if the execution is already
@@ -1080,8 +1094,12 @@ function AppShellContent({
     }
   };
 
-  const dismissRecovery = () => {
+  const acknowledgeMissingRecovery = () => {
     if (recoveryAction !== 'idle') return;
+    if (recovery.state.status !== 'inconsistent'
+      || recovery.state.reason !== 'EXECUTION_MISSING'
+      || recovery.state.execution !== null) return;
+    setRecoveryFinishError(false);
     setRecoveryDiscardError(false);
     recovery.resolve();
   };
@@ -1090,6 +1108,7 @@ function AppShellContent({
     recovery: boolean,
     actualCardioDurationSeconds?: number,
     mode: WorkoutFinalizationMode = 'NORMAL',
+    recoveredExecution?: PersistedWorkoutExecution,
   ): Promise<WorkoutCompletionResult> => {
     if (workoutCompletionRef.current) {
       return workoutCompletionRef.current;
@@ -1099,7 +1118,9 @@ function AppShellContent({
     setDurableCompletionReachedAtMs(null);
     setFinishingSession(true);
     logInfo('workout_performance', 'finalization_started', { timestampMs: Date.now() });
-    const hasCardioFinisher = !!activeProgram?.sessions[activeSessionIndex]?.cardioFinisher;
+    const targetExecution = recoveredExecution ?? execution.execution;
+    const targetSessionIndex = targetExecution?.sessionIndex ?? activeSessionIndex;
+    const hasCardioFinisher = !!activeProgram?.sessions[targetSessionIndex]?.cardioFinisher;
     if (!hasCardioFinisher) {
       logInfo('workout_performance', 'finish_ui_transition_started', { timestampMs: Date.now(), source: 'strength' });
     }
@@ -1107,12 +1128,12 @@ function AppShellContent({
     // user leaves the success screen, including completion recovery after a
     // process restart. Strength-only behavior is unchanged.
     if (!hasCardioFinisher || mode === 'EARLY') endWorkoutSession();
-    const programId = activeProgram?.programId;
-    const executionId = execution.execution?.executionId;
+    const programId = targetExecution?.programId ?? activeProgram?.programId;
+    const executionId = targetExecution?.executionId;
     logInfo('workout', 'workout_finish_requested', {
       executionId,
       programId,
-      sessionIndex: activeSessionIndex,
+      sessionIndex: targetSessionIndex,
       recovery,
       mode,
       stage: 'EXECUTION',
@@ -1120,14 +1141,32 @@ function AppShellContent({
     logInfo('workout', recovery ? 'workout_finish_recovery_started' : 'workout_finish_started', {
       executionId,
       programId,
-      sessionIndex: activeSessionIndex,
+      sessionIndex: targetSessionIndex,
     });
 
     return runWorkoutCompletionAttempt(workoutCompletionRef, async (): Promise<WorkoutCompletionResult> => {
       const finishFlowStartedAtMs = Date.now();
       logInfo('workout_performance', 'finalize_request_start', { timestampMs: finishFlowStartedAtMs });
       try {
-        const finalized = await execution.finalize(actualCardioDurationSeconds, mode);
+        let finalized: { ok: true; result: FinalizeWorkoutSessionResult } | { ok: false; error: unknown };
+        if (recoveredExecution) {
+          try {
+            finalized = {
+              ok: true,
+              result: await finalizeWorkoutSession({
+                executionId: recoveredExecution.executionId,
+                ...(mode === 'NORMAL' ? {} : { mode }),
+                ...(actualCardioDurationSeconds === undefined ? {} : {
+                  cardio: { actualDurationSeconds: actualCardioDurationSeconds },
+                }),
+              }),
+            };
+          } catch (error) {
+            finalized = { ok: false, error };
+          }
+        } else {
+          finalized = await execution.finalize(actualCardioDurationSeconds, mode);
+        }
         const result: WorkoutCompletionResult = finalized.ok
           ? 'COMPLETED'
           : workoutFinalizationFailureStage(finalized.error) === 'SCHEDULE'
@@ -1216,20 +1255,20 @@ function AppShellContent({
         setWorkoutCompletionResult(result);
         if (result === 'COMPLETED') {
           logInfo('workout', 'workout_finish_succeeded', {
-            executionId, programId, sessionIndex: activeSessionIndex, stage: 'COMPLETE', result,
+            executionId, programId, sessionIndex: targetSessionIndex, stage: 'COMPLETE', result,
           });
           logInfo('workout', recovery ? 'workout_finish_recovery_completed' : 'workout_finish_completed', {
-            executionId, programId, sessionIndex: activeSessionIndex, result,
+            executionId, programId, sessionIndex: targetSessionIndex, result,
           });
         } else {
           const stage = result === 'EXECUTION_FAILED'
             ? 'EXECUTION'
             : result === 'SCHEDULE_FAILED' ? 'SCHEDULE' : 'LIFECYCLE_FOLLOW_UP';
           logWarn('workout', 'workout_finish_incomplete', {
-            executionId, programId, sessionIndex: activeSessionIndex, stage, result,
+            executionId, programId, sessionIndex: targetSessionIndex, stage, result,
           });
           logWarn('workout', recovery ? 'workout_finish_recovery_failed' : 'workout_finish_failed', {
-            executionId, programId, sessionIndex: activeSessionIndex, stage, result,
+            executionId, programId, sessionIndex: targetSessionIndex, stage, result,
           });
         }
         return result;
@@ -1237,6 +1276,86 @@ function AppShellContent({
         setFinishingSession(false);
       }
     });
+  };
+
+  const handleFinishRecovery = () => {
+    if (recoveryFinishInFlightRef.current || recoveryAction !== 'idle' || !user || !activeProgram) return;
+    if (recovery.state.status !== 'pending' && recovery.state.status !== 'inconsistent') return;
+    if (!recovery.state.execution) return;
+
+    const recoveredPointer = recovery.state.pointer;
+    recoveryFinishInFlightRef.current = true;
+    setRecoveryAction('finishing');
+    setRecoveryFinishError(false);
+    setRecoveryDiscardError(false);
+
+    void (async () => {
+      try {
+        // The modal snapshot may be minutes old. Re-read the exact execution
+        // named by the durable pointer immediately before finalization so a
+        // retry/other-device completion always converges on server state.
+        const fresh = await loadWorkoutExecution(user.uid, recoveredPointer.executionId);
+        if (!fresh || fresh.status === 'ABANDONED') {
+          await recovery.recheck();
+          return;
+        }
+        const freshProgramIdentity = fresh.programInstanceId ?? fresh.programId;
+        const activeProgramIdentity = activeProgram.programInstanceId ?? activeProgram.programId;
+        if (freshProgramIdentity !== activeProgramIdentity) {
+          await recovery.recheck();
+          return;
+        }
+
+        const mode = recoveryFinalizationMode(
+          fresh,
+          !!activeProgram.sessions[fresh.sessionIndex]?.cardioFinisher,
+        );
+        const result = await runWorkoutCompletion(true, undefined, mode, fresh);
+        if (result !== 'COMPLETED' && result !== 'LIFECYCLE_FOLLOW_UP_FAILED') {
+          setRecoveryFinishError(true);
+          return;
+        }
+
+        // The callable result is the durable authority. This follow-up read
+        // exists only to feed the regular completed-workout UI with the real
+        // terminal document (completion facts, swept sets and timestamps) —
+        // never a client-invented summary projection.
+        let terminal: PersistedWorkoutExecution | null = null;
+        try {
+          const loaded = await loadWorkoutExecution(user.uid, fresh.executionId);
+          if (loaded && ['COMPLETED', 'PARTIALLY_COMPLETED'].includes(loaded.status)) terminal = loaded;
+        } catch (error) {
+          logWarn('workout_execution', 'session_recovery_terminal_reload_failed', { error });
+        }
+
+        if (terminal) {
+          execution.adoptExecution(terminal);
+          setActiveSessionIndex(terminal.sessionIndex);
+          setWorkoutInProgress(true);
+          setTab('workout');
+        } else {
+          // Completion is already durable, so a secondary read failure must
+          // not resurrect the recovery modal. Without an authoritative
+          // terminal snapshot there is no honest summary to render; wait for
+          // the same projections the normal summary CTA awaits, then reveal
+          // Home instead.
+          await Promise.all([
+            workoutHomeSyncRef.current,
+            workoutCompletionFollowUpRef.current,
+          ]);
+          endWorkoutSession();
+          setWorkoutInProgress(false);
+          setTab('home');
+        }
+        recovery.resolve();
+      } catch (error) {
+        logWarn('workout_execution', 'session_recovery_finish_failed', { error });
+        setRecoveryFinishError(true);
+      } finally {
+        recoveryFinishInFlightRef.current = false;
+        setRecoveryAction('idle');
+      }
+    })();
   };
 
   const retryWorkoutCompletion = async () => {
@@ -1635,12 +1754,16 @@ function AppShellContent({
         <WorkoutSessionRecoveryModal
           state={recovery.state}
           canResume={recoveryCanResume}
+          canFinalize={recoveryCanFinalize}
           resuming={recoveryAction === 'resuming'}
+          finishing={recoveryAction === 'finishing'}
           discarding={recoveryAction === 'discarding'}
+          finishError={recoveryFinishError}
           discardError={recoveryDiscardError}
           onResume={() => { void handleResumeRecovery(); }}
+          onFinish={handleFinishRecovery}
           onDiscard={() => { void handleDiscardRecovery(); }}
-          onDismiss={dismissRecovery}
+          onAcknowledgeMissing={acknowledgeMissingRecovery}
         />
       ) : null}
       <MissedSessionDecisionModal
