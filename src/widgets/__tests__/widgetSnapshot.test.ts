@@ -21,13 +21,13 @@ const baseFixedInput: WidgetSnapshotBuilderInput = {
 describe('buildWidgetSnapshot — empty states', () => {
   it('UNAUTHENTICATED carries nothing else — no localDate, no streak, no activity', () => {
     const snapshot = buildWidgetSnapshot({ ...baseFixedInput, isAuthenticated: false });
-    expect(snapshot).toEqual({ schemaVersion: 1, status: 'UNAUTHENTICATED' });
+    expect(snapshot).toEqual({ schemaVersion: 2, status: 'UNAUTHENTICATED' });
   });
 
   it('NO_PROGRAM is distinct from a zeroed-out READY snapshot', () => {
     const snapshot = buildWidgetSnapshot({ ...baseFixedInput, hasActiveProgram: false });
     expect(snapshot).toEqual({
-      schemaVersion: 1,
+      schemaVersion: 2,
       status: 'NO_PROGRAM',
       localDate: '2026-09-09',
       generatedAtMs: 1_000_000,
@@ -360,16 +360,16 @@ describe('buildWidgetSnapshot — determinism', () => {
 });
 
 describe('buildWidgetSnapshot — schemaVersion', () => {
-  it('every status variant carries schemaVersion 1', () => {
-    expect(buildWidgetSnapshot({ ...baseFixedInput, isAuthenticated: false }).schemaVersion).toBe(1);
-    expect(buildWidgetSnapshot({ ...baseFixedInput, hasActiveProgram: false }).schemaVersion).toBe(1);
-    expect(buildWidgetSnapshot(baseFixedInput).schemaVersion).toBe(1);
-    expect(WIDGET_SNAPSHOT_SCHEMA_VERSION).toBe(1);
+  it('every newly built status variant carries schemaVersion 2 while V1 stays readable', () => {
+    expect(buildWidgetSnapshot({ ...baseFixedInput, isAuthenticated: false }).schemaVersion).toBe(2);
+    expect(buildWidgetSnapshot({ ...baseFixedInput, hasActiveProgram: false }).schemaVersion).toBe(2);
+    expect(buildWidgetSnapshot(baseFixedInput).schemaVersion).toBe(2);
+    expect(WIDGET_SNAPSHOT_SCHEMA_VERSION).toBe(2);
   });
 
   it('isSupportedWidgetSnapshotVersion rejects unknown future versions', () => {
     expect(isSupportedWidgetSnapshotVersion(1)).toBe(true);
-    expect(isSupportedWidgetSnapshotVersion(2)).toBe(false);
+    expect(isSupportedWidgetSnapshotVersion(2)).toBe(true);
     expect(isSupportedWidgetSnapshotVersion(0)).toBe(false);
   });
 });

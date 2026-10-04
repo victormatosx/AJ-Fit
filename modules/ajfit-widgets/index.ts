@@ -2,7 +2,7 @@ import { requireOptionalNativeModule } from 'expo-modules-core';
 
 /**
  * Deliberately tiny — this module has zero business logic. It receives an
- * already-serialized `WidgetSnapshotV1` JSON string (built in TypeScript —
+ * already-serialized versioned WidgetSnapshot JSON string (built in TypeScript —
  * see `src/widgets/widgetSnapshot.ts`) and persists/clears/reads it from the
  * platform-appropriate shared storage (iOS: `UserDefaults(suiteName:
  * "group.com.ajfit.app.widgets")`; Android: a dedicated `SharedPreferences`

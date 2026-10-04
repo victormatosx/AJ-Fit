@@ -9,7 +9,8 @@ class AJFitWidgetSnapshotTest {
     assertEquals("UNAUTHENTICATED", AJFitWidgetSnapshotDecoder.decode("{\"schemaVersion\":1,\"status\":\"UNAUTHENTICATED\"}")?.status)
     assertEquals("NO_PROGRAM", AJFitWidgetSnapshotDecoder.decode("{\"schemaVersion\":1,\"status\":\"NO_PROGRAM\",\"localDate\":\"2026-09-01\",\"generatedAtMs\":1}")?.status)
     assertNull(AJFitWidgetSnapshotDecoder.decode("not-json"))
-    assertNull(AJFitWidgetSnapshotDecoder.decode("{\"schemaVersion\":2,\"status\":\"UNAUTHENTICATED\"}"))
+    assertEquals("UNAUTHENTICATED", AJFitWidgetSnapshotDecoder.decode("{\"schemaVersion\":2,\"status\":\"UNAUTHENTICATED\"}")?.status)
+    assertNull(AJFitWidgetSnapshotDecoder.decode("{\"schemaVersion\":3,\"status\":\"UNAUTHENTICATED\"}"))
   }
 
   @Test fun effectiveEntryBoundariesAndMultipleFutureEntries() {
@@ -47,6 +48,21 @@ class AJFitWidgetSnapshotTest {
     assertEquals("TREINO", AJFitStreak("fixed", "obligations", 1, true).unitLabel)
     assertEquals("SEMANAS", AJFitStreak("flexible", "weeks", 2, true).unitLabel)
     assertEquals("12+", AJFitStreak("fixed", "obligations", 12, false).displayValue)
+  }
+
+  @Test fun workoutProjectionDecodesAndExpires() {
+    val raw = ready().replace(
+      "\"schemaVersion\":1",
+      "\"schemaVersion\":2,\"workout\":{\"state\":\"IN_PROGRESS\",\"eyebrow\":\"TREINO EM ANDAMENTO\",\"workoutName\":\"Lower 1\",\"exerciseCount\":5,\"setCount\":18,\"exercisesLabel\":\"5 EXERCÍCIOS\",\"setsLabel\":\"18 SÉRIES\",\"metricsLabel\":\"5 EXERCÍCIOS · 18 SÉRIES\",\"dateLabel\":\"TER., 06 OUT.\",\"todayLabel\":\"HOJE\",\"dateBecomesTodayAtMs\":4500,\"bodyMap\":{\"sex\":\"m\",\"primaryMuscles\":[\"quads\",\"glutes\"],\"secondaryMuscles\":[\"calves\"]},\"staleAtMs\":5000}",
+    )
+    val snapshot = AJFitWidgetSnapshotDecoder.decode(raw)
+    val workout = AJFitWorkoutResolver.resolve(snapshot, 4_999)
+    assertEquals("Lower 1", workout?.workoutName)
+    assertEquals("m", workout?.bodyMap?.sex)
+    assertEquals(listOf("quads", "glutes"), workout?.bodyMap?.primaryMuscles)
+    assertEquals("TER., 06 OUT.", workout?.displayedDateLabel(4_499))
+    assertEquals("HOJE", workout?.displayedDateLabel(4_500))
+    assertNull(AJFitWorkoutResolver.resolve(snapshot, 5_000))
   }
 
   private fun ready(): String {

@@ -8,5 +8,6 @@ struct AJFitWidgetsBundle: WidgetBundle {
     AJFitWeeklyWidget()
     AJFitCompactWidget()
     AJFitFrequencyWidget()
+    AJFitWorkoutWidget()
   }
 }

@@ -63,7 +63,7 @@ export function beginWidgetSnapshotSession(): void {
 }
 
 /**
- * Builds a `WidgetSnapshotV1` from already-resolved domain inputs (see
+ * Builds the current widget snapshot from already-resolved domain inputs (see
  * `buildWidgetSnapshot` — this function adds zero business logic of its
  * own) and persists it, UNLESS a newer session has started since this call
  * began. Safe to call multiple times concurrently for the same session —

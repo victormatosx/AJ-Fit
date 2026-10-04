@@ -71,6 +71,57 @@ struct AJFitReadyFields: Codable, Equatable {
   let frequencyWindow: AJFitFrequencyWindow
 }
 
+struct AJFitWorkout: Codable, Equatable {
+  let state: String
+  let eyebrow: String
+  let workoutName: String
+  let exerciseCount: Int
+  let setCount: Int
+  let exercisesLabel: String
+  let setsLabel: String
+  let metricsLabel: String
+  let dateLabel: String?
+  let todayLabel: String?
+  let dateBecomesTodayAtMs: Double?
+  let bodyMap: AJFitWorkoutBodyMap?
+  let staleAtMs: Double
+
+  var isValid: Bool {
+    ["NEXT", "IN_PROGRESS"].contains(state)
+      && !eyebrow.isEmpty && !workoutName.isEmpty
+      && exerciseCount >= 0 && setCount >= 0
+      && (bodyMap?.isValid ?? true)
+  }
+
+  func displayedDateLabel(at date: Date) -> String? {
+    guard let todayLabel, let dateBecomesTodayAtMs,
+          date.timeIntervalSince1970 * 1000 >= dateBecomesTodayAtMs else {
+      return dateLabel
+    }
+    return todayLabel
+  }
+}
+
+struct AJFitWorkoutBodyMap: Codable, Equatable {
+  let sex: String
+  let primaryMuscles: [String]
+  let secondaryMuscles: [String]
+
+  private static let supportedMuscles: Set<String> = [
+    "chest", "lats", "upper_back", "traps", "lower_back",
+    "front_deltoid", "side_deltoid", "rear_deltoid", "biceps", "triceps",
+    "forearms", "quads", "hamstrings", "glutes", "adductors", "abductors",
+    "calves", "abs",
+  ]
+
+  var isValid: Bool {
+    ["m", "f"].contains(sex)
+      && !primaryMuscles.isEmpty
+      && primaryMuscles.allSatisfy(Self.supportedMuscles.contains)
+      && secondaryMuscles.allSatisfy(Self.supportedMuscles.contains)
+  }
+}
+
 struct AJFitFutureEntry: Codable, Equatable {
   let effectiveLocalDate: String
   let effectiveAtMs: Double
@@ -94,6 +145,11 @@ enum AJFitWidgetContent: Equatable {
   case empty(AJFitEmptyReason)
 }
 
+enum AJFitWorkoutWidgetContent: Equatable {
+  case ready(AJFitWorkout)
+  case empty(AJFitEmptyReason)
+}
+
 struct AJFitDecodedSnapshot: Codable {
   let schemaVersion: Int
   let status: String
@@ -105,6 +161,7 @@ struct AJFitDecodedSnapshot: Codable {
   let monthlyActivity: AJFitMonthlyActivity?
   let frequencyWindow: AJFitFrequencyWindow?
   let futureEntries: [AJFitFutureEntry]?
+  let workout: AJFitWorkout?
 
   func currentFields() -> AJFitReadyFields? {
     guard let streak, let weeklyActivity, weeklyActivity.count == 7,
@@ -117,17 +174,30 @@ struct AJFitDecodedSnapshot: Codable {
 }
 
 enum AJFitSnapshotDecoder {
-  static let supportedSchemaVersion = 1
+  static let supportedSchemaVersions: Set<Int> = [1, 2]
 
   static func decode(_ json: String?) -> AJFitDecodedSnapshot? {
     guard let json, let data = json.data(using: .utf8),
           let snapshot = try? JSONDecoder().decode(AJFitDecodedSnapshot.self, from: data),
-          snapshot.schemaVersion == supportedSchemaVersion,
+          supportedSchemaVersions.contains(snapshot.schemaVersion),
           ["UNAUTHENTICATED", "NO_PROGRAM", "READY"].contains(snapshot.status) else { return nil }
     if snapshot.status == "READY" {
       guard snapshot.effectiveAtMs != nil, snapshot.currentFields() != nil else { return nil }
     }
     return snapshot
+  }
+}
+
+enum AJFitWorkoutResolver {
+  static func resolve(snapshot: AJFitDecodedSnapshot?, now: Date) -> AJFitWorkoutWidgetContent {
+    guard let snapshot else { return .empty(.unavailable) }
+    if snapshot.status == "UNAUTHENTICATED" { return .empty(.unauthenticated) }
+    if snapshot.status == "NO_PROGRAM" { return .empty(.noProgram) }
+    guard let workout = snapshot.workout, workout.isValid,
+          now.timeIntervalSince1970 * 1000 < workout.staleAtMs else {
+      return .empty(.unavailable)
+    }
+    return .ready(workout)
   }
 }
 

@@ -2,7 +2,7 @@ Pod::Spec.new do |s|
   s.name           = 'AJFitWidgets'
   s.version        = '1.0.0'
   s.summary        = 'Shared-storage bridge for AJ Fit Home Screen Widgets.'
-  s.description    = 'Persists a pre-resolved WidgetSnapshotV1 JSON blob into the widgets App Group container. No business logic.'
+  s.description    = 'Persists a pre-resolved versioned WidgetSnapshot JSON blob into the widgets App Group container. No business logic.'
   s.license        = { :type => 'MIT' }
   s.author         = 'AJ Fit'
   s.homepage       = 'https://ajfit.app'

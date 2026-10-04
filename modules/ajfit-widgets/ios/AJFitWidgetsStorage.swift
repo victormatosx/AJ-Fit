@@ -18,7 +18,7 @@ public enum AJFitWidgetsStorage {
   /// `src/widgets/widgetSnapshot.ts` — hand-kept in sync today (single
   /// integer, changes rarely); if a second schema version ever ships, keep
   /// both lists updated together.
-  private static let supportedSchemaVersions: Set<Int> = [1]
+  private static let supportedSchemaVersions: Set<Int> = [1, 2]
 
   private static var defaults: UserDefaults? {
     UserDefaults(suiteName: appGroupIdentifier)

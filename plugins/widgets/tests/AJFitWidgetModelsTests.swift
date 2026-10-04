@@ -36,8 +36,10 @@ private struct AJFitWidgetModelsTestRunner {
 static func main() {
 expect(AJFitSnapshotDecoder.decode(nil) == nil, "missing snapshot")
 expect(AJFitSnapshotDecoder.decode("not-json") == nil, "corrupt JSON")
-expect(AJFitSnapshotDecoder.decode(json(["schemaVersion": 2, "status": "UNAUTHENTICATED"])) == nil,
+expect(AJFitSnapshotDecoder.decode(json(["schemaVersion": 3, "status": "UNAUTHENTICATED"])) == nil,
        "unknown schema")
+expect(AJFitSnapshotDecoder.decode(json(["schemaVersion": 2, "status": "UNAUTHENTICATED"]))?.status == "UNAUTHENTICATED",
+       "v2 schema")
 expect(AJFitSnapshotDecoder.decode(json(["schemaVersion": 1, "status": "UNAUTHENTICATED"]))?.status == "UNAUTHENTICATED",
        "unauthenticated")
 expect(AJFitSnapshotDecoder.decode(json(["schemaVersion": 1, "status": "NO_PROGRAM", "localDate": "2026-09-01", "generatedAtMs": 1]))?.status == "NO_PROGRAM",
@@ -84,6 +86,29 @@ expect(timeline[1].date.timeIntervalSince1970 == 3, "effectiveAtMs converts dire
 
 let unavailable = AJFitTimelineResolver.resolve(snapshot: nil, now: now)
 expect(unavailable.first?.content == .empty(.unavailable), "missing/App Group failure is safe")
+
+var workoutPayload = readyDictionary()
+workoutPayload["schemaVersion"] = 2
+workoutPayload["workout"] = [
+  "state": "NEXT", "eyebrow": "PRÓXIMO TREINO", "workoutName": "Lower 1",
+  "exerciseCount": 5, "setCount": 18, "exercisesLabel": "5 EXERCÍCIOS",
+  "setsLabel": "18 SÉRIES", "metricsLabel": "5 EXERCÍCIOS · 18 SÉRIES",
+  "dateLabel": "TER., 06 OUT.", "todayLabel": "HOJE", "dateBecomesTodayAtMs": 4_500,
+  "bodyMap": ["sex": "f", "primaryMuscles": ["quads", "glutes"], "secondaryMuscles": ["calves"]],
+  "staleAtMs": 5_000,
+] as [String: Any]
+let workoutSnapshot = AJFitSnapshotDecoder.decode(json(workoutPayload))
+expect(AJFitWorkoutResolver.resolve(snapshot: workoutSnapshot, now: Date(timeIntervalSince1970: 4))
+  == .ready(workoutSnapshot!.workout!), "workout projection decodes")
+expect(workoutSnapshot!.workout!.displayedDateLabel(at: Date(timeIntervalSince1970: 4)) == "TER., 06 OUT.",
+       "future workout keeps its formatted date")
+expect(workoutSnapshot!.workout!.displayedDateLabel(at: Date(timeIntervalSince1970: 4.5)) == "HOJE",
+       "workout date becomes today at the app-projected boundary")
+expect(workoutSnapshot!.workout!.bodyMap?.sex == "f"
+  && workoutSnapshot!.workout!.bodyMap?.primaryMuscles == ["quads", "glutes"],
+  "sex-specific BodyMap projection decodes")
+expect(AJFitWorkoutResolver.resolve(snapshot: workoutSnapshot, now: Date(timeIntervalSince1970: 5))
+  == .empty(.unavailable), "stale workout is hidden")
 
 func calendarDays(_ daysInMonth: Int, _ start: AJFitWeekday) -> [Int] {
   AJFitCalendarLayout.slots(daysInMonth: daysInMonth, startWeekday: start).compactMap {

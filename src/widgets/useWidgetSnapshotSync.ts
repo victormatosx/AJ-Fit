@@ -1,22 +1,36 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../state/AuthContext';
 import { logWarn } from '../lib/logger';
-import type { ScheduleMode, Weekday } from '../state/AppState';
+import type { ScheduleMode, Sex, Weekday } from '../state/AppState';
 import type { LocalDate } from '../scheduleEngine/calendar';
 import { localDateInTimezone } from '../scheduleEngine/localDate';
-import { listCompletedWorkoutActivityDatesInRange } from '../services/workoutExecutions';
+import type { ScheduleResolution } from '../scheduleEngine/types';
+import type { FinalWorkoutSession } from '../workoutPrescription/types';
+import { resolveSessionDisplayName, type LooseTranslate } from '../workoutPrescription/sessionPresentation';
+import {
+  listCompletedWorkoutActivityDatesInRange,
+  loadActiveExecutionPointer,
+  loadWorkoutExecution,
+} from '../services/workoutExecutions';
 import { beginWidgetSnapshotSession, syncWidgetSnapshot } from './widgetSnapshotSync';
 import { fetchWidgetStreakHistory } from './widgetStreakHistoryFetch';
+import { buildWorkoutWidgetData, type WorkoutWidgetExecution } from './workoutWidgetProjection';
 
 export interface WidgetSnapshotSyncInput {
   timezone: string;
+  sex: Sex;
   hasActiveProgram: boolean;
   scheduleMode?: ScheduleMode;
   prescribedTrainingFrequency?: number;
   trainingDays: readonly Weekday[];
   activeRecoveryDays: readonly Weekday[];
   activatedAtLocalDate: LocalDate | null;
+  sessions: readonly FinalWorkoutSession[];
+  scheduleResolution: ScheduleResolution | null;
+  /** Stable identity for the immutable active program snapshot. */
+  programIdentity: string | null;
 }
 
 export interface WidgetSnapshotSyncController {
@@ -26,7 +40,20 @@ export interface WidgetSnapshotSyncController {
    * resolved `COMPLETED` (see `AppShell.tsx`'s `result === 'COMPLETED'`
    * branch). Never call this optimistically before a backend confirmation.
    */
-  resyncNow: () => Promise<void>;
+  resyncNow: (options?: { scheduleResolution?: ScheduleResolution | null }) => Promise<void>;
+}
+
+/** Reads the durable mutex first and trusts an execution only when it still backs that pointer. */
+export async function loadAuthoritativeWidgetExecution(uid: string): Promise<WorkoutWidgetExecution | null> {
+  const pointer = await loadActiveExecutionPointer(uid);
+  if (!pointer) return null;
+  const execution = await loadWorkoutExecution(uid, pointer.executionId);
+  if (!execution || execution.status !== 'IN_PROGRESS' || execution.executionId !== pointer.executionId) return null;
+  return {
+    status: 'IN_PROGRESS',
+    sessionName: execution.sessionName,
+    exercises: execution.exercises,
+  };
 }
 
 /**
@@ -55,37 +82,73 @@ export interface WidgetSnapshotSyncController {
  */
 export function useWidgetSnapshotSync(input: WidgetSnapshotSyncInput): WidgetSnapshotSyncController {
   const { user } = useAuth();
+  const { t, i18n } = useTranslation('workout');
   const uid = user?.uid ?? null;
   const previousUidRef = useRef<string | null>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
   const trainingDaysKey = input.trainingDays.join(',');
   const activeRecoveryDaysKey = input.activeRecoveryDays.join(',');
+  const scheduleResolutionKey = JSON.stringify(input.scheduleResolution);
+  const locale = i18n.resolvedLanguage ?? i18n.language;
 
-  const resyncNow = useCallback(async () => {
+  const resyncNow = useCallback(async (options?: { scheduleResolution?: ScheduleResolution | null }) => {
     if (!uid || !input.hasActiveProgram) return;
     try {
       const today = localDateInTimezone(new Date(), input.timezone);
       // Incremental-block search (Phase 2.5 §A) — never a single
       // unconditionally-wide fetch, never a silent truncation. See
       // `fetchWidgetStreakHistory`'s own doc comment for the cost analysis.
-      const history = await fetchWidgetStreakHistory({
-        uid,
+      const [history, activeExecution] = await Promise.all([
+        fetchWidgetStreakHistory({
+          uid,
+          todayLocalDate: today,
+          streakInput: {
+            scheduleMode: input.scheduleMode,
+            prescribedTrainingFrequency: input.prescribedTrainingFrequency,
+            trainingDays: input.trainingDays,
+            activeRecoveryDays: input.activeRecoveryDays,
+          },
+          fetchRange: listCompletedWorkoutActivityDatesInRange,
+        }),
+        loadAuthoritativeWidgetExecution(uid),
+      ]);
+      const effectiveResolution = options && Object.prototype.hasOwnProperty.call(options, 'scheduleResolution')
+        ? options.scheduleResolution ?? null
+        : input.scheduleResolution;
+      const generatedAtMs = Date.now();
+      const workout = buildWorkoutWidgetData({
+        scheduleMode: input.scheduleMode ?? 'fixed',
         todayLocalDate: today,
-        streakInput: {
-          scheduleMode: input.scheduleMode,
-          prescribedTrainingFrequency: input.prescribedTrainingFrequency,
-          trainingDays: input.trainingDays,
-          activeRecoveryDays: input.activeRecoveryDays,
+        timezone: input.timezone,
+        generatedAtMs,
+        sex: input.sex,
+        sessions: input.sessions,
+        resolution: effectiveResolution,
+        activeExecution,
+        copy: {
+          nextWorkout: t('widget.nextWorkout'),
+          inProgress: t('widget.inProgress'),
+          today: t('widget.today'),
+          exercises: (count) => t('widget.exercises', { count }),
+          sets: (count) => t('widget.sets', { count }),
         },
-        fetchRange: listCompletedWorkoutActivityDatesInRange,
+        resolveSessionName: (session) => resolveSessionDisplayName(
+          t as unknown as LooseTranslate,
+          session.name,
+          session.type,
+          session.displayName,
+        ),
+        formatDate: (localDate) => new Intl.DateTimeFormat(locale, {
+          weekday: 'short', day: '2-digit', month: 'short', timeZone: 'UTC',
+        }).format(new Date(`${localDate}T12:00:00Z`)).replace(/\.$/, '').toLocaleUpperCase(locale),
       });
       await syncWidgetSnapshot({
         isAuthenticated: true,
         hasActiveProgram: true,
         todayLocalDate: today,
         timezone: input.timezone,
-        generatedAtMs: Date.now(),
+        generatedAtMs,
         scheduleMode: input.scheduleMode,
         prescribedTrainingFrequency: input.prescribedTrainingFrequency,
         trainingDays: input.trainingDays,
@@ -94,6 +157,7 @@ export function useWidgetSnapshotSync(input: WidgetSnapshotSyncInput): WidgetSna
         completedDates: history.completedDates,
         fulfilledScheduledDates: history.fulfilledScheduledDates,
         historyAvailableFromLocalDate: history.historyAvailableFromLocalDate,
+        workout,
       });
     } catch (error) {
       // Deliberately swallow: leave whatever snapshot is already stored as
@@ -113,11 +177,17 @@ export function useWidgetSnapshotSync(input: WidgetSnapshotSyncInput): WidgetSna
     uid,
     input.hasActiveProgram,
     input.timezone,
+    input.sex,
     input.scheduleMode,
     input.prescribedTrainingFrequency,
     trainingDaysKey,
     activeRecoveryDaysKey,
     input.activatedAtLocalDate,
+    input.programIdentity,
+    input.sessions,
+    scheduleResolutionKey,
+    locale,
+    t,
   ]);
 
   useEffect(() => {
@@ -154,11 +224,15 @@ export function useWidgetSnapshotSync(input: WidgetSnapshotSyncInput): WidgetSna
     uid,
     input.hasActiveProgram,
     input.timezone,
+    input.sex,
     input.scheduleMode,
     input.prescribedTrainingFrequency,
     trainingDaysKey,
     activeRecoveryDaysKey,
     input.activatedAtLocalDate,
+    input.programIdentity,
+    scheduleResolutionKey,
+    locale,
   ]);
 
   useEffect(() => {

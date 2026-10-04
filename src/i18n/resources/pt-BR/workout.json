@@ -512,6 +512,15 @@
     "activeRecovery": "Recuperação ativa",
     "balanceCardio": "Cardio + Equilíbrio"
   },
+  "widget": {
+    "nextWorkout": "PRÓXIMO TREINO",
+    "inProgress": "TREINO EM ANDAMENTO",
+    "today": "HOJE",
+    "exercises_one": "{{count}} EXERCÍCIO",
+    "exercises_other": "{{count}} EXERCÍCIOS",
+    "sets_one": "{{count}} SÉRIE",
+    "sets_other": "{{count}} SÉRIES"
+  },
   "prescription": {
     "reps": "repetições",
     "duration": "duração",

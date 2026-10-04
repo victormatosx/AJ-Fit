@@ -512,6 +512,15 @@
     "activeRecovery": "Active recovery",
     "balanceCardio": "Cardio + Balance"
   },
+  "widget": {
+    "nextWorkout": "NEXT WORKOUT",
+    "inProgress": "WORKOUT IN PROGRESS",
+    "today": "TODAY",
+    "exercises_one": "{{count}} EXERCISE",
+    "exercises_other": "{{count}} EXERCISES",
+    "sets_one": "{{count}} SET",
+    "sets_other": "{{count}} SETS"
+  },
   "prescription": {
     "reps": "reps",
     "duration": "duration",

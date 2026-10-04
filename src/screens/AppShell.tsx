@@ -325,12 +325,16 @@ function AppShellContent({
   // `frequencyWindow`'s already-loaded state isn't sufficient for streak).
   const widgetSnapshotSync = useWidgetSnapshotSync({
     timezone: schedule.config?.timezone ?? deviceTimezone(),
-    hasActiveProgram: activeProgram !== null && schedule.config !== null,
+    sex,
+    hasActiveProgram: activeProgram !== null,
     scheduleMode: activeProgram?.scheduleMode ?? 'fixed',
     prescribedTrainingFrequency: activeProgram?.prescribedTrainingFrequency ?? activeProgram?.prescribedStructuredDays,
     trainingDays: schedule.config?.trainingDays ?? [],
     activeRecoveryDays: schedule.config?.activeRecoveryDays ?? [],
     activatedAtLocalDate,
+    sessions: activeProgram?.sessions ?? [],
+    scheduleResolution: schedule.matchesActiveProgram ? schedule.resolution : null,
+    programIdentity: activeProgram?.programInstanceId ?? activeProgram?.programId ?? null,
   });
   const { pendingIntent, consumeIntent } = useDeepLinkIntent();
   const {
@@ -921,6 +925,7 @@ function AppShellContent({
       setWorkoutInProgress(true);
       setWorkoutStartPending(false);
       beginPersistedWorkoutSession(started, sessionIndex);
+      void widgetSnapshotSync.resyncNow();
       logInfo('workout_execution', 'start_ui_confirmed', { attemptId, sessionIndex, durationMs });
     } catch (error) {
       // useWorkoutExecution currently converts failures to typed results;
@@ -993,6 +998,7 @@ function AppShellContent({
       setWorkoutInProgress(true);
       setWorkoutStartPending(false);
       beginPersistedWorkoutSession(started, sessionIndex);
+      void widgetSnapshotSync.resyncNow();
       logInfo('workout_execution', 'advanced_start_ui_confirmed', { attemptId, sessionIndex, durationMs });
     } catch (error) {
       setWorkoutStartPending(false);
@@ -1013,6 +1019,7 @@ function AppShellContent({
     setResolvingPendingExecution(true);
     try {
       await execution.abandonExecutionById(executionId);
+      void widgetSnapshotSync.resyncNow();
       setStartWorkoutError(null);
       if (lastWorkoutStartKindRef.current === 'advanced') await startAdvancedWorkout();
       else await startWorkout();
@@ -1066,6 +1073,7 @@ function AppShellContent({
       setTab('workout');
       beginPersistedWorkoutSession(fresh, fresh.sessionIndex);
       recovery.resolve();
+      void widgetSnapshotSync.resyncNow();
     } finally {
       setRecoveryAction('idle');
     }
@@ -1086,6 +1094,7 @@ function AppShellContent({
       // and never touches schedule/lifecycle (docs §11).
       await abandonWorkoutExecution(user.uid, pointer.executionId);
       recovery.resolve();
+      void widgetSnapshotSync.resyncNow();
     } catch (error) {
       logWarn('workout_execution', 'session_recovery_discard_failed', { error });
       setRecoveryDiscardError(true);
@@ -1187,7 +1196,10 @@ function AppShellContent({
           // failure handling (`useWidgetSnapshotSync`'s `resyncNow` swallows
           // and logs, never throws). Fired only here, after `result ===
           // 'COMPLETED'` — never optimistically before this point.
-          void widgetSnapshotSync.resyncNow();
+          // The execution is already terminal but Schedule is refreshed just
+          // below. Publish a neutral workout state now so the widget stops
+          // saying "in progress" without briefly advertising the old cursor.
+          void widgetSnapshotSync.resyncNow({ scheduleResolution: null });
           workoutHomeSyncRef.current = runWorkoutHomeProjectionSync({
             refreshSchedule: schedule.reload,
             refreshWeek: activitySnapshot.reload,
@@ -1458,7 +1470,8 @@ function AppShellContent({
   // the local workout surface; routing it through finishWorkoutSession would
   // ask the finalizer to finish an ABANDONED record; server authority
   // correctly rejects that as execution_not_finishable.
-  const discardWorkout = () => runWorkoutDiscardFlow({
+  const discardWorkout = async () => {
+    const result = await runWorkoutDiscardFlow({
       abandon: execution.abandon,
       refreshProjection: evolution.refreshProjection,
       onProjectionFailure: (error) => {
@@ -1467,6 +1480,9 @@ function AppShellContent({
         });
       },
     });
+    if (result.ok) void widgetSnapshotSync.resyncNow();
+    return result;
+  };
 
   const leaveDiscardedWorkout = async () => {
     endWorkoutSession();

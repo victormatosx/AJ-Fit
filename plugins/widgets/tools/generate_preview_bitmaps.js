@@ -169,7 +169,7 @@ fs.mkdirSync(OUTDIR, { recursive: true });
 // same adaptation as the real widget) + streak block + dots.
 {
   const c = new Canvas(200, 200, BG);
-  c.strokeCircle(170, 40, 60, 3, [77, 163, 255, 45]); // AJ watermark proxy, top-right corner
+  c.strokeCircle(170, 40, 60, 3, [77, 163, 255, 15]); // nearly transparent AJ watermark
   c.fillRoundRect(14, 14, 64, 9, 3, [77, 163, 255, 220]); // "SEQUENCIA" label
   c.fillRoundRect(14, 36, 78, 48, 10, [255, 255, 255, 235]); // big streak number block
   let dx = 14;
@@ -201,6 +201,29 @@ fs.mkdirSync(OUTDIR, { recursive: true });
   c.fillRoundRect(14, footerY, 70, 8, 3, [255, 255, 255, 150]); // footer "N treinos"
   c.fillRoundRect(W - 14 - 56, footerY, 56, 8, 3, [255, 255, 255, 90]); // footer "30 DIAS"
   fs.writeFileSync(path.join(OUTDIR, 'ajfit_preview_frequency.png'), c.toPNG());
+}
+
+// Próximo Treino preview — representative small-family hierarchy: eyebrow
+// and logo, workout title, centered BodyMap, then one metric per line.
+{
+  const c = new Canvas(200, 200, BG);
+  c.fillRoundRect(14, 14, 88, 9, 3, [77, 163, 255, 220]);
+  c.fillCircle(178, 18, 9, EMPHASIS);
+  c.fillRoundRect(14, 40, 154, 14, 4, [255, 255, 255, 235]);
+  c.fillRoundRect(14, 61, 128, 14, 4, [255, 255, 255, 235]);
+  for (const x of [82, 118]) {
+    c.fillCircle(x, 85, 6, [255, 255, 255, 90]);
+    c.fillRoundRect(x - 8, 92, 16, 33, 5, [255, 255, 255, 90]);
+    c.fillRoundRect(x - 13, 95, 5, 30, 2, [255, 255, 255, 90]);
+    c.fillRoundRect(x + 8, 95, 5, 30, 2, [255, 255, 255, 90]);
+    c.fillRoundRect(x - 8, 122, 7, 34, 3, [255, 255, 255, 90]);
+    c.fillRoundRect(x + 1, 122, 7, 34, 3, [255, 255, 255, 90]);
+    c.fillRoundRect(x - 8, 122, 7, 14, 2, EMPHASIS);
+    c.fillRoundRect(x + 1, 122, 7, 14, 2, EMPHASIS);
+  }
+  c.fillRoundRect(14, 168, 78, 7, 3, [255, 255, 255, 150]);
+  c.fillRoundRect(14, 181, 62, 7, 3, [255, 255, 255, 150]);
+  fs.writeFileSync(path.join(OUTDIR, 'ajfit_preview_workout.png'), c.toPNG());
 }
 
 console.log('Generated preview PNGs in', OUTDIR);
