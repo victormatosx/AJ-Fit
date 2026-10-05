@@ -14,6 +14,18 @@ export type AJFitRestActivityNativeModule = {
   cleanup?(): void | Promise<void>;
   /** Optional additive hook used only to deduplicate Android's system prompt. */
   recordNotificationPermissionRequest?(): void | Promise<void>;
+  /**
+   * iOS only. Reads and clears the one-shot flag `AJFitFinishRestIntent`
+   * leaves when the Lock Screen "Finalizar descanso" button ran while this
+   * app wasn't running. Absent on Android/older binaries.
+   */
+  consumePendingRestFinish?(sessionId: string): boolean | Promise<boolean>;
+  /**
+   * iOS only. Reads and clears the accumulated pending seconds
+   * `AJFitAddRestSecondsIntent` left when the Lock Screen "+15s" button ran
+   * one or more times while this app wasn't running (0 = none).
+   */
+  consumePendingAddSeconds?(sessionId: string): number | Promise<number>;
 };
 
 // This remains optional so older binaries and non-Android platforms keep the

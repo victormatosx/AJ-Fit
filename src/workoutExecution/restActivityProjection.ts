@@ -9,6 +9,8 @@ type MaterializeRestNextActionInput = Readonly<{
   totalSets: number;
   /** Resolved name at the head of the real remaining exercise queue. */
   nextExerciseName: string | null;
+  /** That same exercise's own set count, for its first series. */
+  nextExerciseTotalSets: number | null;
 }>;
 
 /**
@@ -40,8 +42,15 @@ export function materializeRestNextAction(
   if (!nextExerciseName) {
     throw new RangeError('next exercise must be materialized after the final set');
   }
+  if (
+    !Number.isInteger(input.nextExerciseTotalSets) ||
+    (input.nextExerciseTotalSets as number) < 1
+  ) {
+    throw new RangeError('next exercise set count must be materialized after the final set');
+  }
   return {
     nextAction: REST_ACTIVITY_NEXT_ACTION.NEXT_EXERCISE,
     nextExerciseName,
+    nextExerciseTotalSets: input.nextExerciseTotalSets as number,
   };
 }

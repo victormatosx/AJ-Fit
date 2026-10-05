@@ -28,8 +28,19 @@ const LIVE_ACTIVITY_LOGO_RENDITIONS = [
 ];
 const SOURCE_FILES = [
   'AJFitRestActivityAttributes.swift',
+  'AJFitRestActivityStorage.swift',
+  'AJFitFinishRestIntent.swift',
+  'AJFitAddRestSecondsIntent.swift',
   'AJFitRestActivityBundle.swift',
   'AJFitRestActivityWidget.swift',
+];
+// Both conform to `LiveActivityIntent` — per ActivityKit, their `perform()`
+// runs in the main app's own process, not the extension's. The extension
+// target membership above is only what lets the widget's `Button(intent:)`
+// reference the types; these are the ones that actually run.
+const APP_TARGET_INTENT_FILES = [
+  'AJFitFinishRestIntent.swift',
+  'AJFitAddRestSecondsIntent.swift',
 ];
 const RESOURCE_FILES = ['Localizable.xcstrings', ASSET_CATALOG];
 // Entitlements files are intentionally excluded from RESOURCE_FILES: they
@@ -117,6 +128,10 @@ function copyExtensionFiles(platformProjectRoot) {
     __dirname,
     '../../modules/ajfit-rest-activity/ios/AJFitRestActivityAttributes.swift',
   );
+  const sharedStorage = path.resolve(
+    __dirname,
+    '../../modules/ajfit-rest-activity/ios/AJFitRestActivityStorage.swift',
+  );
   const sharedAppLogo = path.resolve(__dirname, '../../assets/aj-logo.png');
 
   fs.mkdirSync(targetDirectory, { recursive: true });
@@ -132,7 +147,9 @@ function copyExtensionFiles(platformProjectRoot) {
     const source =
       file === 'AJFitRestActivityAttributes.swift'
         ? sharedAttributes
-        : path.join(templateDirectory, file);
+        : file === 'AJFitRestActivityStorage.swift'
+          ? sharedStorage
+          : path.join(templateDirectory, file);
     if (!fs.existsSync(source)) {
       throw new Error(`AJ Fit rest activity source is missing: ${source}`);
     }
@@ -164,6 +181,22 @@ function copyExtensionFiles(platformProjectRoot) {
       ],
       { stdio: 'pipe' },
     );
+  }
+}
+
+// Each intent must physically exist as a source file of the main app
+// target too (see `addFinishRestIntentsToAppTarget`) — the extension copy
+// above only lets the widget's `Button(intent:)` reference the types.
+// Single canonical source per file (the extension's own template copy),
+// copied a second time so the two can never drift.
+function copyAppTargetIntentFiles(platformProjectRoot, projectName) {
+  const targetDirectory = path.join(platformProjectRoot, projectName);
+  for (const file of APP_TARGET_INTENT_FILES) {
+    const source = path.join(__dirname, 'ios', TARGET_NAME, file);
+    if (!fs.existsSync(source)) {
+      throw new Error(`AJ Fit rest activity source is missing: ${source}`);
+    }
+    fs.copyFileSync(source, path.join(targetDirectory, file));
   }
 }
 
@@ -393,6 +426,31 @@ function withSharedAppGroupEntitlements(config) {
   });
 }
 
+// `LiveActivityIntent.perform()` runs in the main app's process (ActivityKit
+// contract), so the intent must be a real source member of the `AJFit`
+// target's existing Sources phase — not only the extension's. Uses
+// `addSourceFile` (appends to the target's EXISTING Sources phase) rather
+// than `addBuildPhase` (which always creates a new phase — correct for
+// `addExtensionTarget`'s brand-new target, wrong here). Idempotent via
+// `hasFile` so a repeated, non-`--clean` prebuild never double-adds it.
+function addRestActivityIntentsToAppTarget(xcodeProject, projectName) {
+  const appTarget = xcodeProject.getFirstTarget();
+  const mainGroup = xcodeProject.getFirstProject().firstProject.mainGroup;
+  for (const intentFile of APP_TARGET_INTENT_FILES) {
+    const relativePath = `${projectName}/${intentFile}`;
+    if (xcodeProject.hasFile(relativePath)) continue;
+
+    const file = xcodeProject.addSourceFile(
+      relativePath,
+      { target: appTarget.uuid },
+      mainGroup,
+    );
+    if (!file) {
+      throw new Error(`AJ Fit rest activity: failed to add ${intentFile} to the main app target.`);
+    }
+  }
+}
+
 function withRestActivity(config) {
   const bundleIdentifier = extensionBundleIdentifier(config);
   config = declareEasExtension(config, bundleIdentifier);
@@ -415,12 +473,17 @@ function withRestActivity(config) {
     'ios',
     async (dangerousConfig) => {
       copyExtensionFiles(dangerousConfig.modRequest.platformProjectRoot);
+      copyAppTargetIntentFiles(
+        dangerousConfig.modRequest.platformProjectRoot,
+        dangerousConfig.modRequest.projectName,
+      );
       return dangerousConfig;
     },
   ]);
 
   return withXcodeProject(config, (xcodeConfig) => {
     addExtensionTarget(xcodeConfig.modResults, xcodeConfig, bundleIdentifier);
+    addRestActivityIntentsToAppTarget(xcodeConfig.modResults, xcodeConfig.modRequest.projectName);
     return xcodeConfig;
   });
 }

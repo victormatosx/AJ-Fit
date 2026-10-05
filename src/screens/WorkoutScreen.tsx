@@ -388,6 +388,9 @@ export function WorkoutScreen({ sex, plan, onDone, onRetryCompletion, onDiscarde
   const { canPerform } = usePremiumCapabilities();
   const currentSession = plan.sessions[sessionIndex] ?? plan.sessions[0];
   const cardioFinisher = currentSession?.cardioFinisher;
+  const workoutDisplayName = currentSession
+    ? resolveSessionDisplayName(tLoose, currentSession.name, currentSession.type, currentSession.displayName)
+    : '';
   const {
     workoutSessionId,
     status: restStatus,
@@ -765,6 +768,7 @@ export function WorkoutScreen({ sex, plan, onDone, onRetryCompletion, onDiscarde
     syncWorkoutActivity({
       executionId: workoutSessionId,
       startedAt: workoutStartedAtMs,
+      workoutName: workoutDisplayName,
       exercises: workoutActivityQueue,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -987,11 +991,24 @@ export function WorkoutScreen({ sex, plan, onDone, onRetryCompletion, onDiscarde
         setIdx + 1 >= ex.sets.length && order.length > 1
           ? resolve(exercises[order[1]], order[1]).name
           : null,
+      nextExerciseTotalSets:
+        setIdx + 1 >= ex.sets.length && order.length > 1
+          ? exercises[order[1]].sets.length
+          : null,
     });
     startRest({
       durationSeconds: ex.rest,
       exerciseId: ex.id,
+      workoutName: workoutDisplayName,
+      // Session elapsed time for the Live Activity header. Same source of
+      // truth the in-app duration uses; no second clock is introduced.
+      workoutStartedAt: workoutStartedAtMs ?? undefined,
       exerciseName: ex.name,
+      // The load just registered for this set, already in the user's unit.
+      // Omitted (never "0 kg") when nothing was registered.
+      lastSetLoadLabel: completedWeight > 0
+        ? `${formatWorkoutLoadFromKg(completedWeight, resolvedUnits)} ${loadUnit}`
+        : undefined,
       setIndex: setIdx,
       totalSets: ex.sets.length,
       ...nextAction,
@@ -1005,6 +1022,27 @@ export function WorkoutScreen({ sex, plan, onDone, onRetryCompletion, onDiscarde
       publishNextAction(rest.restId);
     }
   };
+
+  // The Lock Screen "+15s"/"Finalizar descanso" buttons run natively, in-
+  // process, with the app not launched — they cannot call back into this
+  // screen's engine. On return to foreground, replay the exact same
+  // `addRestSeconds()`/`skipRest()` the in-app buttons already call, in that
+  // order (a tap could extend a rest that was then also finished), if (and
+  // only if) those buttons actually ran.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (next) => {
+      if (next !== 'active' || !workoutSessionId) return;
+      if (!rest || rest.workoutSessionId !== workoutSessionId) return;
+      void (async () => {
+        const pendingSeconds = await restLiveActivity.consumePendingAddSeconds(workoutSessionId);
+        if (pendingSeconds > 0) addRestSeconds(pendingSeconds);
+        const shouldFinish = await restLiveActivity.consumeManualFinish(workoutSessionId);
+        if (shouldFinish) skipRest();
+      })();
+    });
+    return () => subscription.remove();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rest, workoutSessionId]);
 
   const skipExercise = () => {
     // Defense-in-depth: the action is hidden when false, but the transition
@@ -1188,9 +1226,6 @@ export function WorkoutScreen({ sex, plan, onDone, onRetryCompletion, onDiscarde
     successVisibleRef.current = visible;
   }, [completionConfirmed, completionFailed, durableCompletionReachedAtMs, finished]);
 
-  const workoutDisplayName = currentSession
-    ? resolveSessionDisplayName(tLoose, currentSession.name, currentSession.type, currentSession.displayName)
-    : '';
   // Hooks must run unconditionally every render, but the summary itself is
   // only ever shown once `finished` — gating `execution`/`durationSeconds`
   // to `null`/0 until then keeps this from recomputing every second off the
@@ -1275,6 +1310,7 @@ export function WorkoutScreen({ sex, plan, onDone, onRetryCompletion, onDiscarde
       <CardioScreen
         cardioFinisher={cardioFinisher}
         ownerKey={String(workoutStartedAtMs ?? `${plan.templateId}-${sessionIndex}`)}
+        workoutName={workoutDisplayName}
         onFinalizationStarted={(mode, actualDurationSeconds) => {
           // Cardio starts the authoritative request itself. Mark this before
           // revealing the summary so the generic `finished` effect cannot
@@ -2912,11 +2948,14 @@ function Badge({
 function CardioScreen({
   cardioFinisher,
   ownerKey,
+  workoutName,
   onFinalizationStarted,
 }: {
   cardioFinisher: FinalCardioFinisher;
   /** Identifies this workout attempt — from `workoutStartedAtMs`, so a stale persisted session from a previous attempt is never mistakenly restored. */
   ownerKey: string;
+  /** Already resolved via `resolveSessionDisplayName`. */
+  workoutName: string;
   onFinalizationStarted: (
     mode: 'NORMAL' | 'EARLY',
     actualDurationSeconds?: number,
@@ -2955,6 +2994,7 @@ function CardioScreen({
     const state = projectCardioActivityState({
       session: next,
       workoutSessionId: workoutSessionId ?? ownerKey,
+      workoutName,
       cardioName: cardio.mode,
       nowMs,
     });

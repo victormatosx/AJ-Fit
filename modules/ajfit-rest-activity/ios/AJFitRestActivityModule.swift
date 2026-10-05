@@ -12,13 +12,17 @@ private struct RestActivityStateRecord: Record {
   @Field var sessionId: String = ""
   @Field var startedAt: Int64 = 0
   @Field var endsAt: Int64?
+  @Field var workoutStartedAt: Int64?
+  @Field var workoutName: String = ""
   @Field var exerciseName: String = ""
+  @Field var lastSetLoadLabel: String?
   @Field var setIndex: Int = 0
   @Field var totalSets: Int = 0
   @Field var phase: String = ""
   @Field var nextAction: String = ""
   @Field var nextSetIndex: Int?
   @Field var nextExerciseName: String?
+  @Field var nextExerciseTotalSets: Int?
 
   func materializedState() -> MaterializedRestActivityState? {
     guard
@@ -53,6 +57,7 @@ private struct RestActivityStateRecord: Record {
     guard
       !sessionId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
       startedAt >= 0,
+      !workoutName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
       !exerciseName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
       totalSets >= 1,
       hasValidTiming,
@@ -71,13 +76,22 @@ private struct RestActivityStateRecord: Record {
       sessionId: sessionId,
       startedAt: Date(timeIntervalSince1970: Double(startedAt) / 1_000),
       endsAt: endsAt.map { Date(timeIntervalSince1970: Double($0) / 1_000) },
+      workoutStartedAt: workoutStartedAt.map { Date(timeIntervalSince1970: Double($0) / 1_000) },
+      workoutName: workoutName,
       exerciseName: exerciseName,
+      // Blank is normalized to `nil` here so the surface's "omit the line"
+      // branch is driven by one representation, never by `""`.
+      lastSetLoadLabel: {
+        let trimmed = lastSetLoadLabel?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (trimmed?.isEmpty ?? true) ? nil : trimmed
+      }(),
       setIndex: setIndex,
       totalSets: totalSets,
       phase: materializedPhase,
       nextAction: materializedNextAction,
       nextSetIndex: nextSetIndex,
-      nextExerciseName: trimmedNextExerciseName
+      nextExerciseName: trimmedNextExerciseName,
+      nextExerciseTotalSets: nextExerciseTotalSets
     )
   }
 }
@@ -86,25 +100,33 @@ private struct MaterializedRestActivityState: Sendable {
   let sessionId: String
   let startedAt: Date
   let endsAt: Date?
+  let workoutStartedAt: Date?
+  let workoutName: String
   let exerciseName: String
+  let lastSetLoadLabel: String?
   let setIndex: Int
   let totalSets: Int
   let phase: RestActivityPhase
   let nextAction: RestActivityNextAction
   let nextSetIndex: Int?
   let nextExerciseName: String?
+  let nextExerciseTotalSets: Int?
 
   var contentState: AJFitRestActivityAttributes.ContentState {
     AJFitRestActivityAttributes.ContentState(
       startedAt: startedAt,
       endsAt: endsAt,
+      workoutStartedAt: workoutStartedAt,
+      workoutName: workoutName,
       exerciseName: exerciseName,
+      lastSetLoadLabel: lastSetLoadLabel,
       setIndex: setIndex,
       totalSets: totalSets,
       phase: phase,
       nextAction: nextAction,
       nextSetIndex: nextSetIndex,
-      nextExerciseName: nextExerciseName
+      nextExerciseName: nextExerciseName,
+      nextExerciseTotalSets: nextExerciseTotalSets
     )
   }
 }
@@ -286,6 +308,21 @@ public final class AJFitRestActivityModule: Module {
 
     AsyncFunction("cleanup") { () async -> Void in
       await RestLiveActivityController.shared.cleanup()
+    }
+
+    // Reads and clears the marker `AJFitFinishRestIntent` leaves when the
+    // Lock Screen "Finalizar descanso" button ran while this app wasn't
+    // running. JS calls this on foreground and, if true, replays the exact
+    // same `skipRest()` the in-app button already calls.
+    Function("consumePendingRestFinish") { (sessionId: String) -> Bool in
+      AJFitRestActivityStorage.consumePendingFinish(sessionId: sessionId)
+    }
+
+    // Same pattern as `consumePendingRestFinish`, for the Lock Screen
+    // "+15s" button (`AJFitAddRestSecondsIntent`). Returns the accumulated
+    // pending seconds (0 = none) so repeated taps aren't lost.
+    Function("consumePendingAddSeconds") { (sessionId: String) -> Int in
+      AJFitRestActivityStorage.consumePendingAddSeconds(sessionId: sessionId)
     }
   }
 }

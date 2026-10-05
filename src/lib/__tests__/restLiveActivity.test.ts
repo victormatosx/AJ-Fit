@@ -43,6 +43,7 @@ const BASE_STATE: RestActivityState = {
   sessionId: 'workout-session-1',
   startedAt: 100_000,
   endsAt: 190_000,
+  workoutName: 'Treino 01 - Full body',
   exerciseName: 'Supino reto',
   setIndex: 1,
   totalSets: 4,
@@ -131,6 +132,7 @@ describe('restLiveActivity temporal contract', () => {
     const freshlyStarted = {
       sessionId: 'workout-session-1',
       startedAt: 100_000,
+      workoutName: 'Treino 01 - Full body',
       exerciseName: 'Supino reto',
       setIndex: 0,
       totalSets: 4,
@@ -153,6 +155,7 @@ describe('restLiveActivity temporal contract', () => {
     const freshlyStarted = {
       sessionId: BASE_STATE.sessionId,
       startedAt: 100_000,
+      workoutName: BASE_STATE.workoutName,
       exerciseName: BASE_STATE.exerciseName,
       setIndex: 0,
       totalSets: 4,
@@ -178,6 +181,7 @@ describe('restLiveActivity temporal contract', () => {
       sessionId: BASE_STATE.sessionId,
       startedAt: 100_000,
       endsAt: 700_000,
+      workoutName: BASE_STATE.workoutName,
       exerciseName: 'Esteira',
       setIndex: 1,
       totalSets: 1,
@@ -205,6 +209,7 @@ describe('restLiveActivity temporal contract', () => {
       sessionId: BASE_STATE.sessionId,
       startedAt: 100_000,
       endsAt: 700_000,
+      workoutName: BASE_STATE.workoutName,
       exerciseName: 'Esteira',
       setIndex: 1,
       totalSets: 1,
@@ -237,6 +242,40 @@ describe('restLiveActivity temporal contract', () => {
     expect(payload).not.toHaveProperty('restLeft');
     expect(payload).not.toHaveProperty('exerciseId');
     expect(payload).not.toHaveProperty('templateId');
+  });
+
+  it('forwards the completed set load when one was registered', async () => {
+    const nativeModule = installNativeModule();
+    const facade = await loadFacade();
+
+    await facade.start({ ...BASE_STATE, lastSetLoadLabel: '20 kg' });
+
+    const payload = nativeModule.start.mock.calls[0][0] as Record<string, unknown>;
+    expect(payload.lastSetLoadLabel).toBe('20 kg');
+  });
+
+  it('omits the load entirely rather than publishing a blank placeholder', async () => {
+    const nativeModule = installNativeModule();
+    const facade = await loadFacade();
+
+    await facade.start(BASE_STATE);
+
+    const payload = nativeModule.start.mock.calls[0][0] as Record<string, unknown>;
+    expect(payload).not.toHaveProperty('lastSetLoadLabel');
+  });
+
+  it('rejects a blank load label instead of letting an empty line reach the surface', async () => {
+    const nativeModule = installNativeModule();
+    const facade = await loadFacade();
+
+    await facade.start({ ...BASE_STATE, lastSetLoadLabel: '   ' });
+
+    expect(nativeModule.start).not.toHaveBeenCalled();
+    expect(logs.warn).toHaveBeenCalledWith(
+      'restLiveActivity',
+      'rest_live_native_error',
+      expect.objectContaining({ operation: 'start', reason: 'invalid-state' }),
+    );
   });
 
   it('updates with the complete new absolute state after an extension', async () => {

@@ -10,6 +10,7 @@ describe('workout Live Activity start projection', () => {
     expect(projectWorkoutActiveActivityState({
       executionId: 'execution-1',
       startedAt: 100_000,
+      workoutName: 'Treino 01 - Full body',
       exercises: [
         { exerciseName: 'Supino reto', settledSets: 0, totalSets: 4 },
         { exerciseName: 'Crucifixo', settledSets: 0, totalSets: 3 },
@@ -17,6 +18,10 @@ describe('workout Live Activity start projection', () => {
     })).toEqual({
       sessionId: 'execution-1',
       startedAt: 100_000,
+      // Same instant as `startedAt` in this phase, carried explicitly so the
+      // surface reads one field for elapsed time across every phase.
+      workoutStartedAt: 100_000,
+      workoutName: 'Treino 01 - Full body',
       exerciseName: 'Supino reto',
       setIndex: 0,
       totalSets: 4,
@@ -30,6 +35,7 @@ describe('workout Live Activity start projection', () => {
     expect(projectWorkoutActiveActivityState({
       executionId: 'execution-1',
       startedAt: 100_000,
+      workoutName: 'Treino 01 - Full body',
       exercises: [
         { exerciseName: 'Supino reto', settledSets: 4, totalSets: 4 },
         { exerciseName: 'Crucifixo', settledSets: 1, totalSets: 3 },
@@ -47,6 +53,7 @@ describe('workout Live Activity start projection', () => {
     expect(projectWorkoutActiveActivityState({
       executionId: 'execution-1',
       startedAt: 100_000,
+      workoutName: 'Treino 01 - Full body',
       exercises: [{ exerciseName: 'Supino reto', settledSets: 4, totalSets: 4 }],
     })).toBeNull();
   });
@@ -64,6 +71,7 @@ describe('workout Live Activity re-sync after a skip/occupied requeue', () => {
     expect(projectWorkoutActiveActivityState({
       executionId: 'execution-1',
       startedAt: 100_000,
+      workoutName: 'Treino 01 - Full body',
       exercises: [
         { exerciseName: 'Crucifixo (B)', settledSets: 0, totalSets: 3 },
         { exerciseName: 'Supino reto (A, pulado)', settledSets: 0, totalSets: 4 },
@@ -79,6 +87,7 @@ describe('workout Live Activity re-sync after a skip/occupied requeue', () => {
     expect(projectWorkoutActiveActivityState({
       executionId: 'execution-1',
       startedAt: 100_000,
+      workoutName: 'Treino 01 - Full body',
       exercises: [
         { exerciseName: 'Remada (C)', settledSets: 0, totalSets: 3 },
         { exerciseName: 'Supino reto (A, pulado)', settledSets: 0, totalSets: 4 },
