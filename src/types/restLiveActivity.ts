@@ -37,12 +37,19 @@ export type MaterializedRestNextAction =
       /** One-based upcoming set decided by the workout session. */
       nextSetIndex: number;
       nextExerciseName?: never;
+      nextExerciseTotalSets?: never;
     }>
   | Readonly<{
       nextAction: typeof REST_ACTIVITY_NEXT_ACTION.NEXT_EXERCISE;
       nextSetIndex?: never;
       /** Already localized/materialized by the workout session. */
       nextExerciseName: string;
+      /**
+       * The NEXT exercise's own set count — `totalSets` still describes the
+       * exercise that just finished. Needed so the surface can say
+       * "Série 1/N" for the exercise about to start.
+       */
+      nextExerciseTotalSets: number;
     }>;
 
 /**
@@ -54,8 +61,22 @@ type WorkoutActivityStateBase = Readonly<{
   sessionId: string;
   /** Epoch milliseconds. */
   startedAt: number;
+  /**
+   * Epoch milliseconds of the WORKOUT's start — not of this rest. Lets the
+   * surface show session elapsed time. Optional so Activities published
+   * before this field existed stay decodable.
+   */
+  workoutStartedAt?: number;
+  /** Already resolved via `resolveSessionDisplayName` — never a raw T001-T090 `name`/`type`. */
+  workoutName: string;
   /** Already localized/materialized by the workout layer. */
   exerciseName: string;
+  /**
+   * Display-ready load of the set that was just completed (e.g. `"20 kg"`),
+   * already converted/formatted for the user's unit by the workout layer.
+   * Absent — never `"0 kg"` — when no load was registered for that set.
+   */
+  lastSetLoadLabel?: string;
   /** Set progress; zero is valid only before the first set is complete. */
   setIndex: number;
   totalSets: number;

@@ -58,6 +58,15 @@ function isValidState(state: WorkoutActivityState): boolean {
     state.sessionId.trim().length > 0 &&
     Number.isInteger(state.startedAt) &&
     state.startedAt >= 0 &&
+    (state.workoutStartedAt === undefined ||
+      (Number.isInteger(state.workoutStartedAt) && state.workoutStartedAt >= 0)) &&
+    typeof state.workoutName === 'string' &&
+    state.workoutName.trim().length > 0 &&
+    // Optional, but never an empty/blank placeholder when present — the
+    // surface must omit the line entirely rather than render "" or "0 kg".
+    (state.lastSetLoadLabel === undefined ||
+      (typeof state.lastSetLoadLabel === 'string' &&
+        state.lastSetLoadLabel.trim().length > 0)) &&
     typeof state.exerciseName === 'string' &&
     state.exerciseName.trim().length > 0 &&
     Number.isInteger(state.setIndex) &&
@@ -289,10 +298,58 @@ function cleanup(): Promise<void> {
   });
 }
 
+/**
+ * Reads and clears the marker the Lock Screen "Finalizar descanso" button
+ * leaves (via `AJFitFinishRestIntent`) when it ran while the app wasn't
+ * running. Call on foreground; a `true` result means the caller should
+ * replay its own existing end-rest logic (e.g. `skipRest()`) — this never
+ * ends rest itself, it only reports that the native side already did.
+ */
+async function consumeManualFinish(sessionId: string): Promise<boolean> {
+  const nativeModule = getAJFitRestActivityNativeModule();
+  if (!nativeModule || typeof nativeModule.consumePendingRestFinish !== 'function') {
+    return false;
+  }
+  try {
+    return await nativeModule.consumePendingRestFinish(sessionId);
+  } catch (error) {
+    logWarn('restLiveActivity', 'rest_live_native_error', {
+      operation: 'consumePendingRestFinish',
+      error,
+    });
+    return false;
+  }
+}
+
+/**
+ * Reads and clears the accumulated seconds the Lock Screen "+15s" button
+ * left (via `AJFitAddRestSecondsIntent`) from one or more taps while the
+ * app wasn't running. Call on foreground; a positive result means the
+ * caller should replay its own existing extend-rest logic (e.g.
+ * `addSeconds(result)`) — this never extends rest itself.
+ */
+async function consumePendingAddSeconds(sessionId: string): Promise<number> {
+  const nativeModule = getAJFitRestActivityNativeModule();
+  if (!nativeModule || typeof nativeModule.consumePendingAddSeconds !== 'function') {
+    return 0;
+  }
+  try {
+    return await nativeModule.consumePendingAddSeconds(sessionId);
+  } catch (error) {
+    logWarn('restLiveActivity', 'rest_live_native_error', {
+      operation: 'consumePendingAddSeconds',
+      error,
+    });
+    return 0;
+  }
+}
+
 export const restLiveActivity = Object.freeze({
   getCapabilities,
   start,
   update,
   end,
   cleanup,
+  consumeManualFinish,
+  consumePendingAddSeconds,
 });

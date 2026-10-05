@@ -14,6 +14,8 @@ export type WorkoutActivityExerciseProgress = Readonly<{
 export type WorkoutActivityStartInput = Readonly<{
   executionId: string;
   startedAt: number;
+  /** Already resolved via `resolveSessionDisplayName`. */
+  workoutName: string;
   exercises: readonly WorkoutActivityExerciseProgress[];
 }>;
 
@@ -33,6 +35,10 @@ export function projectWorkoutActiveActivityState(
   return {
     sessionId: input.executionId,
     startedAt: input.startedAt,
+    // Same instant as `startedAt` in this phase, but carried explicitly so the
+    // surface reads one field for session elapsed time across every phase.
+    workoutStartedAt: input.startedAt,
+    workoutName: input.workoutName,
     exerciseName: current.exerciseName,
     setIndex: current.settledSets,
     totalSets: current.totalSets,

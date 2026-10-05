@@ -23,6 +23,7 @@ const project = (session: ReturnType<typeof base>, nowMs: number) =>
   projectCardioActivityState({
     session,
     workoutSessionId: 'execution-1',
+    workoutName: 'Treino 01 - Full body',
     cardioName: 'Esteira',
     nowMs,
   });

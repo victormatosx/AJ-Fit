@@ -17,6 +17,7 @@ import {
 export function projectCardioActivityState(input: {
   session: CardioSession;
   workoutSessionId: string;
+  workoutName: string;
   cardioName: string;
   nowMs: number;
 }): CardioActivityState {
@@ -47,6 +48,7 @@ export function projectCardioActivityState(input: {
     sessionId: input.workoutSessionId,
     startedAt,
     endsAt,
+    workoutName: input.workoutName,
     exerciseName: input.cardioName,
     setIndex: 1,
     totalSets: 1,

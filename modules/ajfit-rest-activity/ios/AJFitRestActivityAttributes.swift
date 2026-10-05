@@ -35,7 +35,17 @@ public struct AJFitRestActivityAttributes: ActivityAttributes {
   public struct ContentState: Codable, Hashable, Sendable {
     public var startedAt: Date
     public var endsAt: Date?
+    /// Start of the WORKOUT (not of this rest), so the header can show session
+    /// elapsed time. Optional: Activities started before this field existed
+    /// simply omit the value instead of showing the rest duration in its place.
+    public var workoutStartedAt: Date?
+    /// Already resolved via `resolveSessionDisplayName` on the JS side — never a raw T001-T090 `name`/`type`.
+    public var workoutName: String
     public var exerciseName: String
+    /// Display-ready load of the set just completed (e.g. `"20 kg"`), already
+    /// converted/formatted for the user's unit by the workout layer. `nil`
+    /// when nothing was registered — the surface omits the line entirely.
+    public var lastSetLoadLabel: String?
     /// One-based series number for presentation. Persisted set identities use
     /// the dedicated zero-based action fields instead.
     public var setIndex: Int
@@ -44,6 +54,10 @@ public struct AJFitRestActivityAttributes: ActivityAttributes {
     public var nextAction: RestActivityNextAction
     public var nextSetIndex: Int?
     public var nextExerciseName: String?
+    /// The NEXT exercise's own set count. `totalSets` still describes the
+    /// exercise that just finished, so this is what "Série 1/N" needs when
+    /// the rest ends on an exercise change. Optional for schema tolerance.
+    public var nextExerciseTotalSets: Int?
 
     // External Set Completion (Live Activity): identifies the exact set a
     // `CompleteSetIntent`/`AdjustStepperIntent` acts on — the same
@@ -75,13 +89,17 @@ public struct AJFitRestActivityAttributes: ActivityAttributes {
     public init(
       startedAt: Date,
       endsAt: Date?,
+      workoutStartedAt: Date? = nil,
+      workoutName: String,
       exerciseName: String,
+      lastSetLoadLabel: String? = nil,
       setIndex: Int,
       totalSets: Int,
       phase: RestActivityPhase,
       nextAction: RestActivityNextAction,
       nextSetIndex: Int? = nil,
       nextExerciseName: String? = nil,
+      nextExerciseTotalSets: Int? = nil,
       exerciseIndex: Int? = nil,
       weightStepKg: Double? = nil,
       weightUnit: String? = nil,
@@ -99,13 +117,17 @@ public struct AJFitRestActivityAttributes: ActivityAttributes {
     ) {
       self.startedAt = startedAt
       self.endsAt = endsAt
+      self.workoutStartedAt = workoutStartedAt
+      self.workoutName = workoutName
       self.exerciseName = exerciseName
+      self.lastSetLoadLabel = lastSetLoadLabel
       self.setIndex = setIndex
       self.totalSets = totalSets
       self.phase = phase
       self.nextAction = nextAction
       self.nextSetIndex = nextSetIndex
       self.nextExerciseName = nextExerciseName
+      self.nextExerciseTotalSets = nextExerciseTotalSets
       self.exerciseIndex = exerciseIndex
       self.weightStepKg = weightStepKg
       self.weightUnit = weightUnit
@@ -123,6 +145,117 @@ public struct AJFitRestActivityAttributes: ActivityAttributes {
     }
 
     public var timerEndsAt: Date { endsAt ?? startedAt }
+
+    /**
+     * The interval every `Text(timerInterval:)`/`ProgressView(timerInterval:)`
+     * on this surface must use.
+     *
+     * `startedAt...timerEndsAt` is NOT safe to build inline: a persisted state
+     * whose `endsAt` ended up earlier than `startedAt` (clock change, a stale
+     * record, a future encoder bug) makes that a reversed `ClosedRange`, which
+     * is a runtime trap — and a trapped widget process renders as an empty
+     * card, not as a partial one. Collapsing to an empty interval degrades to
+     * "0:00" instead.
+     */
+    public var timerRange: ClosedRange<Date> {
+      let end = timerEndsAt
+      return end >= startedAt ? startedAt...end : startedAt...startedAt
+    }
+
+    /**
+     * The exercise the user is about to perform.
+     *
+     * The decision is NOT made here: `materializeRestNextAction`
+     * (`src/workoutExecution/restActivityProjection.ts`) already resolved
+     * whether the rest ends on another set of the same exercise or on a new
+     * one. Swift only reads that verdict.
+     */
+    public var upcomingExerciseName: String {
+      nextAction == .nextExercise ? (nextExerciseName ?? exerciseName) : exerciseName
+    }
+
+    /**
+     * The series the user is about to perform, as `(number, total)`.
+     *
+     * Also read straight from what the projection materialized — no set
+     * arithmetic is invented here. `nil` when the surface has nothing
+     * truthful to show (cardio, or an older payload without the next
+     * exercise's set count), in which case the line is omitted.
+     */
+    public var upcomingSeries: (number: Int, total: Int)? {
+      switch nextAction {
+      case .nextSet:
+        guard let nextSetIndex, nextSetIndex >= 1, totalSets >= nextSetIndex else { return nil }
+        return (nextSetIndex, totalSets)
+      case .nextExercise:
+        guard let nextExerciseTotalSets, nextExerciseTotalSets >= 1 else { return nil }
+        return (1, nextExerciseTotalSets)
+      case .finishWorkout:
+        return nil
+      }
+    }
+
+    /**
+     * Count-up interval for the workout's own elapsed time, for the header.
+     *
+     * `nil` when the workout start was not carried (an Activity from before
+     * the field existed), so the surface omits the value rather than showing
+     * this rest's duration in its place — they are different quantities.
+     *
+     * Bounded instead of `.distantFuture`: a finite upper bound keeps the
+     * range valid and is already far longer than any real session.
+     */
+    public var workoutElapsedRange: ClosedRange<Date>? {
+      guard let workoutStartedAt else { return nil }
+      return workoutStartedAt...workoutStartedAt.addingTimeInterval(86_400)
+    }
+
+    /**
+     * Decoding is deliberately total: it never throws on a missing key.
+     *
+     * ActivityKit persists this state in the system daemon and decodes it with
+     * whatever version of this type the currently-installed build ships. A
+     * required key added later therefore breaks every Activity started by an
+     * older build — and the damage is worse than a blank card: the throw also
+     * makes `Activity.activities` skip that Activity, so `cleanup()`/`end()`
+     * can never see it and it survives reinstalls until the system expires it.
+     *
+     * Verified: a pre-`workoutName` payload fails with the synthesized
+     * initializer and decodes cleanly with this one. Every field added from
+     * here on must keep a default here for the same reason.
+     */
+    public init(from decoder: Decoder) throws {
+      let container = try decoder.container(keyedBy: CodingKeys.self)
+      startedAt = try container.decodeIfPresent(Date.self, forKey: .startedAt) ?? Date()
+      endsAt = try container.decodeIfPresent(Date.self, forKey: .endsAt)
+      workoutStartedAt = try container.decodeIfPresent(Date.self, forKey: .workoutStartedAt)
+      workoutName = try container.decodeIfPresent(String.self, forKey: .workoutName) ?? ""
+      exerciseName = try container.decodeIfPresent(String.self, forKey: .exerciseName) ?? ""
+      lastSetLoadLabel = try container.decodeIfPresent(String.self, forKey: .lastSetLoadLabel)
+      setIndex = try container.decodeIfPresent(Int.self, forKey: .setIndex) ?? 0
+      totalSets = try container.decodeIfPresent(Int.self, forKey: .totalSets) ?? 1
+      phase = try container.decodeIfPresent(RestActivityPhase.self, forKey: .phase) ?? .workoutActive
+      nextAction = try container.decodeIfPresent(RestActivityNextAction.self, forKey: .nextAction) ?? .nextSet
+      nextSetIndex = try container.decodeIfPresent(Int.self, forKey: .nextSetIndex)
+      nextExerciseName = try container.decodeIfPresent(String.self, forKey: .nextExerciseName)
+      nextExerciseTotalSets = try container.decodeIfPresent(Int.self, forKey: .nextExerciseTotalSets)
+      exerciseIndex = try container.decodeIfPresent(Int.self, forKey: .exerciseIndex)
+      weightStepKg = try container.decodeIfPresent(Double.self, forKey: .weightStepKg)
+      weightUnit = try container.decodeIfPresent(String.self, forKey: .weightUnit)
+      repsStep = try container.decodeIfPresent(Int.self, forKey: .repsStep)
+      prefillWeightKg = try container.decodeIfPresent(Double.self, forKey: .prefillWeightKg)
+      prefillReps = try container.decodeIfPresent(Int.self, forKey: .prefillReps)
+      pendingWeightKg = try container.decodeIfPresent(Double.self, forKey: .pendingWeightKg)
+      pendingReps = try container.decodeIfPresent(Int.self, forKey: .pendingReps)
+      prescribedReps = try container.decodeIfPresent(String.self, forKey: .prescribedReps)
+      completedExerciseIndex = try container.decodeIfPresent(Int.self, forKey: .completedExerciseIndex)
+      completedSetIndex = try container.decodeIfPresent(Int.self, forKey: .completedSetIndex)
+      followingExerciseName = try container.decodeIfPresent(String.self, forKey: .followingExerciseName)
+      followingExercisePrescribedReps = try container.decodeIfPresent(
+        String.self, forKey: .followingExercisePrescribedReps
+      )
+      followingExerciseTotalSets = try container.decodeIfPresent(Int.self, forKey: .followingExerciseTotalSets)
+    }
 
     /**
      * `staleDate` may advance presentation while the app is suspended. The

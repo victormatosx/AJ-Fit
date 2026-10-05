@@ -41,8 +41,14 @@ import {
 type StartRestInput = Readonly<{
   durationSeconds: number;
   exerciseId: string;
+  /** Already resolved via `resolveSessionDisplayName`. */
+  workoutName: string;
+  /** Epoch ms of the workout's start, for the surface's session timer. */
+  workoutStartedAt?: number;
   /** Already localized/materialized by the workout layer. */
   exerciseName: string;
+  /** Display-ready load of the set just completed; omitted when none was registered. */
+  lastSetLoadLabel?: string;
   setIndex: number;
   totalSets: number;
 }> & MaterializedRestNextAction;
@@ -78,14 +84,20 @@ const REST_DEADLINE_ALERT_GRACE_MS = 5_000;
 
 function toRestActivityState(
   rest: ActiveRest,
+  workoutName: string,
+  workoutStartedAt: number | undefined,
   exerciseName: string,
+  lastSetLoadLabel: string | undefined,
   nextAction: MaterializedRestNextAction,
 ): RestActivityState {
   return {
     sessionId: rest.workoutSessionId,
     startedAt: rest.startedAt,
     endsAt: rest.endsAt,
+    workoutName,
+    ...(workoutStartedAt !== undefined ? { workoutStartedAt } : {}),
     exerciseName,
+    ...(lastSetLoadLabel ? { lastSetLoadLabel } : {}),
     setIndex: rest.setIndex + 1,
     totalSets: rest.totalSets,
     phase: REST_ACTIVITY_PHASE.RESTING,
@@ -183,7 +195,10 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
     const current = timerStateRef.current;
     if (current.status !== 'idle') return current.rest;
 
-    const { durationSeconds, exerciseId, exerciseName, setIndex, totalSets } = input;
+    const {
+      durationSeconds, exerciseId, workoutName, workoutStartedAt, exerciseName,
+      lastSetLoadLabel, setIndex, totalSets,
+    } = input;
     const rest = createRest({
       durationSeconds,
       exerciseId,
@@ -206,8 +221,11 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
         : {
             nextAction: input.nextAction,
             nextExerciseName: input.nextExerciseName,
+            nextExerciseTotalSets: input.nextExerciseTotalSets,
           };
-    const activityState = toRestActivityState(rest, exerciseName, materializedNextAction);
+    const activityState = toRestActivityState(
+      rest, workoutName, workoutStartedAt, exerciseName, lastSetLoadLabel, materializedNextAction,
+    );
     restActivityStateRef.current = { restId: rest.restId, state: activityState };
     restActivitySessionStartedRef.current = true;
     expirationSourceRef.current = null;

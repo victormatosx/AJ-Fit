@@ -341,9 +341,15 @@ function AppShellContent({
       sessionIndex,
       effectiveExerciseIds,
     );
+    const tLoose = t as unknown as LooseTranslate;
+    const session = activeProgram.sessions[sessionIndex];
+    const workoutName = session
+      ? resolveSessionDisplayName(tLoose, session.name, session.type, session.displayName)
+      : '';
     beginWorkoutSession({
       executionId: started.executionId,
       startedAt: started.startedAt.toMillis(),
+      workoutName,
       exercises: started.exercises.map((exercise) => ({
         exerciseName: materializedExercises[exercise.exerciseIndex]?.name ?? exercise.exerciseId,
         settledSets: (() => {

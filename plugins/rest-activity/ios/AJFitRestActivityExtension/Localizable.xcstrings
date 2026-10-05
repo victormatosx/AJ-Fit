@@ -1,132 +1,534 @@
 {
-  "sourceLanguage" : "en",
-  "strings" : {
-    "workout_activity_active" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "WORKOUT IN PROGRESS" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "ENTRENO EN CURSO" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "TREINO EM ANDAMENTO" } }
+  "sourceLanguage": "en",
+  "strings": {
+    "workout_activity_active": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IN WORKOUT"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EN ENTRENO"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EM TREINO"
+          }
+        }
       }
     },
-    "workout_activity_title" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "AJ FIT · WORKOUT" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "AJ FIT · ENTRENO" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "AJ FIT · TREINO" } }
+    "workout_activity_title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AJ FIT · WORKOUT"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AJ FIT · ENTRENO"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AJ FIT · TREINO"
+          }
+        }
       }
     },
-    "cardio_activity_completed" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "CARDIO COMPLETE" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "CARDIO COMPLETADO" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "CARDIO CONCLUÍDO" } }
+    "cardio_activity_completed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CARDIO COMPLETE"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CARDIO COMPLETADO"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CARDIO CONCLUÍDO"
+          }
+        }
       }
     },
-    "cardio_activity_finish_workout" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Open AJ Fit to finish the workout" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Abre AJ Fit para finalizar el entreno" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Abra o AJ Fit para finalizar o treino" } }
+    "cardio_activity_finish_workout": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open AJ Fit to finish the workout"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre AJ Fit para finalizar el entreno"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abra o AJ Fit para finalizar o treino"
+          }
+        }
       }
     },
-    "cardio_activity_paused" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cardio paused" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Cardio pausado" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Cardio pausado" } }
+    "cardio_activity_paused": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cardio paused"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cardio pausado"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cardio pausado"
+          }
+        }
       }
     },
-    "cardio_activity_time_accessibility" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cardio time remaining" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Tiempo restante de cardio" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Tempo restante do cardio" } }
+    "cardio_activity_time_accessibility": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cardio time remaining"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tiempo restante de cardio"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tempo restante do cardio"
+          }
+        }
       }
     },
-    "cardio_activity_title" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "AJ FIT · CARDIO" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "AJ FIT · CARDIO" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "AJ FIT · CARDIO" } }
+    "cardio_activity_title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AJ FIT · CARDIO"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AJ FIT · CARDIO"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AJ FIT · CARDIO"
+          }
+        }
       }
     },
-    "rest_activity_completed_accessibility" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Rest completed" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Descanso completado" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Descanso concluído" } }
+    "rest_activity_completed_accessibility": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rest completed"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Descanso completado"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Descanso concluído"
+          }
+        }
       }
     },
-    "rest_activity_lock_screen_title" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "REST" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "DESCANSO" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "DESCANSO" } }
+    "rest_activity_add_seconds": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "+15s"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "+15s"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "+15s"
+          }
+        }
       }
     },
-    "rest_activity_next_exercise" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "NEXT EXERCISE" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "SIGUIENTE EJERCICIO" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "PRÓXIMO EXERCÍCIO" } }
+    "rest_activity_finish_rest": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "End rest"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finalizar descanso"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finalizar descanso"
+          }
+        }
       }
     },
-    "rest_activity_next_exercise_compact" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "NEXT EX." } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "SIG. EJ." } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "PRÓX. EX." } }
+    "rest_activity_lock_screen_title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "REST"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DESCANSO"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DESCANSO"
+          }
+        }
       }
     },
-    "rest_activity_next_set" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "NEXT SET" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "SIGUIENTE SERIE" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "PRÓXIMA SÉRIE" } }
+    "rest_activity_next_exercise": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NEXT EXERCISE"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SIGUIENTE EJERCICIO"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PRÓXIMO EXERCÍCIO"
+          }
+        }
       }
     },
-    "rest_activity_next_set_compact" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "NEXT SET" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "SIG. SERIE" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "PRÓX. SÉRIE" } }
+    "rest_activity_next_label": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Siguiente"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Próximo"
+          }
+        }
       }
     },
-    "rest_activity_return_to_workout" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Tap to return to workout" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Toca para volver al entreno" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Toque para voltar ao treino" } }
+    "rest_activity_next_exercise_compact": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NEXT EX."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SIG. EJ."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PRÓX. EX."
+          }
+        }
       }
     },
-    "rest_activity_series_format" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "SET %1$lld / %2$lld" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "SERIE %1$lld / %2$lld" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "SÉRIE %1$lld / %2$lld" } }
+    "rest_activity_next_set": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NEXT SET"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SIGUIENTE SERIE"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PRÓXIMA SÉRIE"
+          }
+        }
       }
     },
-    "rest_activity_tap_to_continue" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Tap to continue" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Toca para continuar" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Toque para continuar" } }
+    "rest_activity_next_set_compact": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NEXT SET"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SIG. SERIE"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PRÓX. SÉRIE"
+          }
+        }
       }
     },
-    "rest_activity_time_accessibility" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Rest time" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Tiempo de descanso" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Tempo de descanso" } }
+    "rest_activity_return_to_workout": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap to return to workout"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toca para volver al entreno"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toque para voltar ao treino"
+          }
+        }
       }
     },
-    "rest_activity_title" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "AJ FIT · REST" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "AJ FIT · DESCANSO" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "AJ FIT · DESCANSO" } }
+    "rest_activity_series_format": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SET %1$lld / %2$lld"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SERIE %1$lld / %2$lld"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SÉRIE %1$lld / %2$lld"
+          }
+        }
+      }
+    },
+    "rest_activity_tap_to_continue": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap to continue"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toca para continuar"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toque para continuar"
+          }
+        }
+      }
+    },
+    "rest_activity_time_accessibility": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rest time"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tiempo de descanso"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tempo de descanso"
+          }
+        }
+      }
+    },
+    "rest_activity_title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AJ FIT · REST"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AJ FIT · DESCANSO"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AJ FIT · DESCANSO"
+          }
+        }
+      }
+    },
+    "rest_activity_next_series_format": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set: %1$lld/%2$lld"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Serie: %1$lld/%2$lld"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Série: %1$lld/%2$lld"
+          }
+        }
+      }
+    },
+    "rest_activity_current_series_format": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set %1$lld/%2$lld"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Serie %1$lld/%2$lld"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Série %1$lld/%2$lld"
+          }
+        }
+      }
+    },
+    "rest_activity_back_to_workout": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back to workout"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volver al entreno"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voltar ao treino"
+          }
+        }
       }
     }
   },
-  "version" : "1.0"
+  "version": "1.0"
 }
