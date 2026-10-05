@@ -3,9 +3,7 @@ import { Text, View } from 'react-native';
 import Animated, {
   cancelAnimation,
   Easing,
-  runOnJS,
   useAnimatedProps,
-  useAnimatedReaction,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
@@ -33,13 +31,16 @@ export type { FinalizationRingPhase } from './finalizationRingAnimation';
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 const EASING = Easing.out(Easing.cubic);
 
-// Called from inside the `useAnimatedReaction`/`useAnimatedProps` worklets
-// below, which run on Reanimated's UI runtime — the 'worklet' directive is
-// what lets the babel plugin bundle this function's own closure into theirs,
-// instead of leaving it a plain JS-thread-only "remote function" (calling one
-// of those synchronously from the UI runtime is exactly what crashed:
-// "[Worklets] Tried to synchronously call a Remote Function"). Same
+// 'worklet'-tagged because the arc's `useAnimatedProps` worklet below calls
+// it on Reanimated's UI runtime — without the directive the babel plugin
+// leaves it a plain JS-thread-only "remote function", and calling one of
+// those synchronously from the UI runtime is exactly what crashed before:
+// "[Worklets] Tried to synchronously call a Remote Function". Same
 // established pattern as `src/lib/wordmarkMotion.ts`'s `clamp01`/`lerp`/etc.
+// Being 'worklet'-tagged doesn't stop this from also being called as an
+// ordinary function from plain JS (the polling loop below does exactly
+// that) — the directive only adds a UI-runtime-safe version, it never
+// removes the normal one.
 function clampPercent(value: number): number {
   'worklet';
   return Math.round(Math.min(100, Math.max(0, value)));
@@ -59,11 +60,25 @@ function clampPercent(value: number): number {
  * resyncs ("100" with the "%" momentarily gone) and, worse, the native
  * text-input view manager occasionally resyncing the displayed text back to
  * `defaultValue` independent of this component's own React lifecycle. There
- * is now exactly one visual source for "number + %": a plain `<Text>`
- * driven by `displayPercent`, a single piece of React state kept in sync
- * with the shared value via `useAnimatedReaction` (fires only when the
- * *rounded* value actually changes, so this is not a re-render-per-frame
- * ticker — the arc above never depends on this state at all).
+ * is now exactly one visual source for "number + %": a plain `<Text>` driven
+ * by `displayPercent`, a single piece of React state.
+ *
+ * A `useAnimatedReaction` + `runOnJS(setDisplayPercent)` pass (one React
+ * state update per changed integer) replaced the TextInput, but on-device it
+ * visibly skipped most intermediate values (0→30→40→99 instead of a steady
+ * climb) — `runOnJS` calls queued from the UI runtime can arrive at the JS
+ * thread in bursts, and React's automatic batching only ever commits the
+ * *last* state update in a burst, silently dropping the rest. This instead
+ * polls `progress.value` directly from the JS thread with
+ * `requestAnimationFrame` — reading a shared value's `.value` (not calling a
+ * function on it) is an explicitly supported cross-thread operation, no
+ * worklet/`runOnJS` involved at all — once per real display frame, for as
+ * long as there's still ground to cover. Every frame re-samples the
+ * *current* value rather than replaying a queued one, so there is no burst
+ * to drop in the first place: whatever the arc has visually reached is
+ * exactly what gets read, every time. The arc itself never depends on this
+ * state — it stays entirely Reanimated/UI-thread-driven via
+ * `useAnimatedProps` below, untouched.
  *
  * All of the "can this ever show 0% again" guarantees live in the pure,
  * unit-tested `decideFinalizationRingAction` (see `finalizationRingAnimation.ts`):
@@ -89,6 +104,34 @@ export const FinalizationProgressRing = memo(function FinalizationProgressRing({
   const progress = useSharedValue(phase === 'completing' ? 100 : 0);
   const transitionStateRef = useRef(INITIAL_FINALIZATION_RING_TRANSITION_STATE);
   const [displayPercent, setDisplayPercent] = useState(() => (phase === 'completing' ? 100 : 0));
+  // Plain JS-thread `requestAnimationFrame` id — not a worklet, not Reanimated
+  // state; just a handle for the polling loop started/stopped below.
+  const pollFrameRef = useRef<number | null>(null);
+
+  const stopPolling = () => {
+    if (pollFrameRef.current !== null) {
+      cancelAnimationFrame(pollFrameRef.current);
+      pollFrameRef.current = null;
+    }
+  };
+
+  const startPolling = () => {
+    stopPolling();
+    const tick = () => {
+      // Reading `.value` here (JS thread, outside React's render phase) is
+      // the explicitly supported way to access a shared value from JS —
+      // this is a plain property read, never a worklet function call, so it
+      // carries none of the "Remote Function" cross-thread-call risk.
+      const rounded = clampPercent(progress.value);
+      setDisplayPercent((current) => (current === rounded ? current : rounded));
+      if (rounded >= 100) {
+        pollFrameRef.current = null;
+        return;
+      }
+      pollFrameRef.current = requestAnimationFrame(tick);
+    };
+    pollFrameRef.current = requestAnimationFrame(tick);
+  };
 
   useEffect(() => {
     const { action, nextState } = decideFinalizationRingAction(transitionStateRef.current, phase);
@@ -101,36 +144,34 @@ export const FinalizationProgressRing = memo(function FinalizationProgressRing({
           duration: FINALIZATION_VISUAL_PROGRESS_CONFIG.rampDurationMs,
           easing: EASING,
         });
+        startPolling();
         break;
       case 'ANIMATE_TO_COMPLETE':
         progress.value = withTiming(100, {
           duration: FINALIZATION_VISUAL_PROGRESS_CONFIG.completionRampMs,
           easing: EASING,
         });
+        startPolling();
         break;
       case 'SNAP_TO_COMPLETE':
+        stopPolling();
         progress.value = 100;
         setDisplayPercent(100);
         break;
       case 'FREEZE':
+        stopPolling();
         cancelAnimation(progress);
         break;
       case 'NONE':
       default:
         break;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `startPolling`/`stopPolling` close over `progress`, already a dep; redeclaring them every render is intentional, not stale
   }, [phase, progress]);
 
-  // The single JS-side mirror of `progress.value` — updates only when the
-  // rounded percentage actually changes (not every animation frame), and
-  // only ever drives this component's own `<Text>`, never the arc.
-  useAnimatedReaction(
-    () => clampPercent(progress.value),
-    (current, previous) => {
-      if (current !== previous) runOnJS(setDisplayPercent)(current);
-    },
-    [],
-  );
+  // Belt-and-suspenders cleanup: cancel any in-flight polling frame if this
+  // component unmounts mid-ramp (normally already stopped by then).
+  useEffect(() => stopPolling, []);
 
   const stroke = size * (11 / 224);
   const radius = (size - stroke * 2.9) / 2;

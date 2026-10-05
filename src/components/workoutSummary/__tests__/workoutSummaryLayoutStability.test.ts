@@ -164,3 +164,28 @@ describe('FinalizationProgressRing — every helper called from inside a Reanima
     expect(ring).toMatch(/function clampPercent\([^)]*\)[^{]*\{\s*\n?\s*'worklet';/);
   });
 });
+
+describe('FinalizationProgressRing — the displayed number tracks the animation closely, without big jumps', () => {
+  // Regression test: a `useAnimatedReaction` + `runOnJS(setDisplayPercent)`
+  // pass used to drive the number, firing once per changed integer — on
+  // device, bursts of queued `runOnJS` calls landed on the JS thread faster
+  // than React could commit them, and automatic batching silently dropped
+  // all but the last of each burst (0→30→40→99 instead of a steady climb).
+
+  it('never uses useAnimatedReaction/runOnJS to drive the number — the exact mechanism that dropped most intermediate values on-device', () => {
+    const importBlock = ring.match(/import Animated,\s*\{[^}]*\}\s*from\s*'react-native-reanimated';/s)?.[0];
+    expect(importBlock).toBeDefined();
+    expect(importBlock).not.toContain('useAnimatedReaction');
+    expect(importBlock).not.toContain('runOnJS');
+  });
+
+  it('polls the shared value from the JS thread with requestAnimationFrame — frame-paced, never a fixed-interval timer', () => {
+    expect(ring).toContain('requestAnimationFrame(tick)');
+    expect(ring).toContain('cancelAnimationFrame');
+    expect(ring).not.toContain('setInterval');
+  });
+
+  it('every poll re-reads the live shared value rather than replaying a queued one, so there is nothing to drop in a burst', () => {
+    expect(ring).toContain('clampPercent(progress.value)');
+  });
+});
