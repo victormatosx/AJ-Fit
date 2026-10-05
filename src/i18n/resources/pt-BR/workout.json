@@ -219,7 +219,8 @@
     "addSecondsAccessibility": "Adicionar {{seconds}} segundos",
     "register": "Registrar",
     "registerAccessibility": "Registrar carga e repetições informadas",
-    "nextSet": "Próxima série"
+    "nextSet": "Próxima série",
+    "nextExercise": "Próximo exercício"
   },
   "record": {
     "new": "Novo recorde",

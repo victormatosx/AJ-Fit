@@ -735,6 +735,12 @@ export function WorkoutScreen({ sex, plan, onDone, onRetryCompletion, onDiscarde
   const finalSetLoadEntry = isLastOverall && pending !== null && !resting;
   const remainingRestSeconds = resting ? computeRemainingSeconds(rest, restNow) : 0;
   const restProgress = resting ? computeRestProgress(rest, restNow) : 0;
+  const nextExerciseAfterRest = resting && pending
+    && pending.setIdx === exercises[pending.exIdx].sets.length - 1
+    && order.length > 1;
+  const nextExerciseName = nextExerciseAfterRest
+    ? resolve(exercises[order[1]], order[1]).name
+    : null;
 
   // Live Activity sync: `order`/`progress` are the sole authority for which
   // exercise is current, no matter why it changed (a completed set, a
@@ -1896,6 +1902,8 @@ export function WorkoutScreen({ sex, plan, onDone, onRetryCompletion, onDiscarde
             setNumber={(pending ? pending.setIdx : setIdx) + 1}
             finalSetLoadEntry={finalSetLoadEntry}
             continuesToCardio={!!cardioFinisher}
+            nextExerciseAfterRest={!!nextExerciseAfterRest}
+            nextExerciseName={nextExerciseName}
             onAdd15={() => addRestSeconds(15)}
             onSkip={finalSetLoadEntry ? () => advanceAfterRest() : skipRest}
             onMinimize={onMinimize}
@@ -3643,6 +3651,8 @@ function RestOverlay({
   setNumber,
   finalSetLoadEntry,
   continuesToCardio,
+  nextExerciseAfterRest,
+  nextExerciseName,
   onAdd15,
   onSkip,
   onMinimize,
@@ -3661,6 +3671,8 @@ function RestOverlay({
   setNumber: number;
   finalSetLoadEntry?: boolean;
   continuesToCardio?: boolean;
+  nextExerciseAfterRest?: boolean;
+  nextExerciseName?: string | null;
   onAdd15: () => void;
   onSkip: () => void;
   onMinimize?: () => void;
@@ -3971,7 +3983,7 @@ function RestOverlay({
         </Text>
       </View>
 
-      <View style={{ flexDirection: 'row', gap: 10, marginTop: 28 }}>
+      <View style={{ width: '100%', maxWidth: 320, flexDirection: 'row', alignItems: 'stretch', justifyContent: 'center', gap: 10, marginTop: 28 }}>
         {hasUnregisteredInput ? (
           <Pressable
             accessibilityRole="button"
@@ -4007,12 +4019,14 @@ function RestOverlay({
                 accessibilityLabel={t('rest.addSecondsAccessibility', { seconds: 15 })}
                 onPress={onAdd15}
                 style={{
-                  paddingVertical: 14,
-                  paddingHorizontal: 22,
+                  paddingVertical: nextExerciseAfterRest ? 10 : 14,
+                  paddingHorizontal: nextExerciseAfterRest ? 12 : 22,
                   borderRadius: 12,
                   backgroundColor: theme.colors.surfacePressed,
                   borderWidth: 1,
                   borderColor: theme.colors.borderStrong,
+                  alignItems: 'center',
+                  justifyContent: 'center',
                 }}
               >
                 {/* "+15s" is a universal compact glyph — kept verbatim across
@@ -4027,8 +4041,9 @@ function RestOverlay({
             <Pressable
               onPress={onSkip}
               style={{
+                flex: 1,
                 paddingVertical: 14,
-                paddingHorizontal: 28,
+                paddingHorizontal: nextExerciseAfterRest ? 10 : 28,
                 minWidth: finalSetLoadEntry ? 220 : undefined,
                 borderRadius: 12,
                 backgroundColor: theme.colors.primary,
@@ -4041,21 +4056,55 @@ function RestOverlay({
                 justifyContent: 'center',
               }}
             >
-              <Text
-                style={{
-                  fontFamily: theme.fonts.display,
-                  fontSize: 14,
-                  letterSpacing: 1.5,
-                  color: theme.colors.primaryForeground,
-                  textTransform: 'uppercase',
-                }}
-              >
-                {finalSetLoadEntry
-                  ? continuesToCardio
-                    ? t('rest.continueToCardio')
-                    : t('rest.finishWorkout')
-                  : t('rest.nextSet')}
-              </Text>
+              {nextExerciseAfterRest && nextExerciseName ? (
+                <View style={{ alignItems: 'center' }}>
+                  <Text
+                    style={{
+                      fontFamily: theme.fonts.display,
+                      fontSize: 16,
+                      letterSpacing: 1.5,
+                      color: theme.colors.primaryForeground,
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    {t('rest.nextExercise')}
+                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 1, maxWidth: '100%' }}>
+                    <Text
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.75}
+                      style={{
+                        flexShrink: 1,
+                        fontFamily: theme.fonts.uiBold,
+                        fontSize: 12,
+                        color: theme.colors.primaryForeground,
+                        opacity: 0.85,
+                      }}
+                    >
+                      {nextExerciseName}
+                    </Text>
+                    <Icon name="arrow-right" size={12} color={theme.colors.primaryForeground} />
+                  </View>
+                </View>
+              ) : (
+                <Text
+                  style={{
+                    textAlign: 'center',
+                    fontFamily: theme.fonts.display,
+                    fontSize: 14,
+                    letterSpacing: 1.5,
+                    color: theme.colors.primaryForeground,
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {finalSetLoadEntry
+                    ? continuesToCardio
+                      ? t('rest.continueToCardio')
+                      : t('rest.finishWorkout')
+                    : t('rest.nextSet')}
+                </Text>
+              )}
             </Pressable>
           </>
         )}

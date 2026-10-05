@@ -219,7 +219,8 @@
     "addSecondsAccessibility": "Add {{seconds}} seconds",
     "register": "Register",
     "registerAccessibility": "Register entered load and repetitions",
-    "nextSet": "Next set"
+    "nextSet": "Next set",
+    "nextExercise": "Next exercise"
   },
   "record": {
     "new": "New record",
