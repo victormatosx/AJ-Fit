@@ -1,3 +1,6 @@
+import type { PersistedWorkoutExecution } from '../services/workoutExecutions';
+import type { WorkoutFinalizationMode } from '../services/finalizeWorkoutSession';
+
 /**
  * Integrity boundary shared by AppShell and unit tests. Schedule completion
  * can happen only after a durable terminal Execution snapshot exists.
@@ -10,6 +13,29 @@ export type WorkoutCompletionResult =
 
 export interface WorkoutCompletionAttemptRef {
   current: Promise<WorkoutCompletionResult> | null;
+}
+
+/**
+ * Mirrors WorkoutScreen's existing completion semantics for a persisted
+ * cold-start recovery snapshot. An execution with pending strength work, or
+ * an unsettled cardio finisher, is the same "finalizar agora"/EARLY action
+ * the live exit sheet uses. A fully-settled execution keeps the normal
+ * completion mode. No progress is synthesized here; the server remains the
+ * authority for validating and terminalizing the referenced execution.
+ */
+export function recoveryFinalizationMode(
+  execution: PersistedWorkoutExecution,
+  hasCardioFinisher: boolean,
+): WorkoutFinalizationMode {
+  // A lost response can leave the modal open even though the backend already
+  // committed a terminal execution. Preserve that immutable decision on the
+  // idempotent retry (notably, EARLY must still end any cardio Live Activity).
+  if (execution.finalizationMode) return execution.finalizationMode;
+  const hasPendingSet = execution.exercises.some((exercise) =>
+    exercise.sets.some((set) => set.status === 'PENDING'));
+  const cardioSettled = execution.cardio?.status === 'COMPLETED'
+    || execution.cardio?.status === 'SKIPPED';
+  return hasPendingSet || (hasCardioFinisher && !cardioSettled) ? 'EARLY' : 'NORMAL';
 }
 
 /**

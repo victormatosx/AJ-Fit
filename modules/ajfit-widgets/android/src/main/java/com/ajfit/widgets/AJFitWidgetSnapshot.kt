@@ -18,6 +18,30 @@ data class AJFitMonthlyActivity(val year: Int, val month: Int, val daysInMonth: 
 data class AJFitFrequencyWindow(val startLocalDate: String, val endLocalDate: String, val startWeekday: AJFitWeekday, val completedLocalDates: Set<String>)
 data class AJFitReadyFields(val streak: AJFitStreak, val weeklyActivity: List<AJFitWeekEntry>, val monthlyActivity: AJFitMonthlyActivity, val frequencyWindow: AJFitFrequencyWindow)
 data class AJFitTimedFields(val effectiveAtMs: Long, val fields: AJFitReadyFields)
+data class AJFitWorkout(
+  val state: String,
+  val eyebrow: String,
+  val workoutName: String,
+  val exerciseCount: Int,
+  val setCount: Int,
+  val exercisesLabel: String,
+  val setsLabel: String,
+  val metricsLabel: String,
+  val dateLabel: String?,
+  val todayLabel: String?,
+  val dateBecomesTodayAtMs: Long?,
+  val bodyMap: AJFitWorkoutBodyMap?,
+  val staleAtMs: Long,
+) {
+  fun displayedDateLabel(nowMs: Long): String? =
+    if (todayLabel != null && dateBecomesTodayAtMs != null && nowMs >= dateBecomesTodayAtMs) todayLabel else dateLabel
+}
+
+data class AJFitWorkoutBodyMap(
+  val sex: String,
+  val primaryMuscles: List<String>,
+  val secondaryMuscles: List<String>,
+)
 
 sealed interface AJFitWidgetContent {
   data class Ready(val fields: AJFitReadyFields, val nextEffectiveAtMs: Long?) : AJFitWidgetContent
@@ -29,6 +53,7 @@ data class AJFitDecodedSnapshot(
   val status: String,
   val current: AJFitTimedFields? = null,
   val future: List<AJFitTimedFields> = emptyList(),
+  val workout: AJFitWorkout? = null,
 )
 
 object AJFitWidgetSnapshotDecoder {
@@ -36,7 +61,7 @@ object AJFitWidgetSnapshotDecoder {
     return try {
     if (raw == null) return null
     val root = JSONObject(raw)
-    if (root.optInt("schemaVersion", -1) != 1) return null
+    if (root.optInt("schemaVersion", -1) !in setOf(1, 2)) return null
     when (val status = root.optString("status")) {
       "UNAUTHENTICATED" -> AJFitDecodedSnapshot(status)
       "NO_PROGRAM" -> AJFitDecodedSnapshot(status)
@@ -45,11 +70,41 @@ object AJFitWidgetSnapshotDecoder {
         val future = root.optJSONArray("futureEntries")?.objects()?.map {
           AJFitTimedFields(it.requiredLong("effectiveAtMs"), decodeFields(it))
         } ?: emptyList()
-        AJFitDecodedSnapshot(status, current, future)
+        AJFitDecodedSnapshot(status, current, future, decodeWorkout(root.optJSONObject("workout")))
       }
       else -> null
     }
     } catch (_: Throwable) { null }
+  }
+
+  private fun decodeWorkout(json: JSONObject?): AJFitWorkout? {
+    if (json == null) return null
+    val state = json.getString("state").also { require(it == "NEXT" || it == "IN_PROGRESS") }
+    return AJFitWorkout(
+      state = state,
+      eyebrow = json.getString("eyebrow").also { require(it.isNotBlank()) },
+      workoutName = json.getString("workoutName").also { require(it.isNotBlank()) },
+      exerciseCount = json.getInt("exerciseCount").also { require(it >= 0) },
+      setCount = json.getInt("setCount").also { require(it >= 0) },
+      exercisesLabel = json.getString("exercisesLabel"),
+      setsLabel = json.getString("setsLabel"),
+      metricsLabel = json.getString("metricsLabel"),
+      dateLabel = json.optString("dateLabel").takeIf { !json.isNull("dateLabel") && it.isNotBlank() },
+      todayLabel = json.optString("todayLabel").takeIf { !json.isNull("todayLabel") && it.isNotBlank() },
+      dateBecomesTodayAtMs = json.optLong("dateBecomesTodayAtMs").takeIf { !json.isNull("dateBecomesTodayAtMs") && it >= 0 },
+      bodyMap = decodeBodyMap(json.optJSONObject("bodyMap")),
+      staleAtMs = json.requiredLong("staleAtMs"),
+    )
+  }
+
+  private fun decodeBodyMap(json: JSONObject?): AJFitWorkoutBodyMap? {
+    if (json == null) return null
+    val sex = json.getString("sex").also { require(it == "m" || it == "f") }
+    fun muscles(key: String): List<String> = json.getJSONArray(key).strings().also { values ->
+      require(values.all(SUPPORTED_MUSCLES::contains))
+    }
+    val primary = muscles("primaryMuscles").also { require(it.isNotEmpty()) }
+    return AJFitWorkoutBodyMap(sex, primary, muscles("secondaryMuscles"))
   }
 
   private fun decodeFields(json: JSONObject): AJFitReadyFields {
@@ -80,7 +135,21 @@ object AJFitWidgetSnapshotDecoder {
   private fun JSONObject.requiredDate(key: String): String = getString(key).also { require(DATE.matches(it)) }
   private fun JSONArray.objects() = (0 until length()).map { getJSONObject(it) }
   private fun JSONArray.dates() = (0 until length()).map { getString(it).also { date -> require(DATE.matches(date)) } }.toSet()
+  private fun JSONArray.strings() = (0 until length()).map { getString(it) }
   private val DATE = Regex("\\d{4}-\\d{2}-\\d{2}")
+  private val SUPPORTED_MUSCLES = setOf(
+    "chest", "lats", "upper_back", "traps", "lower_back",
+    "front_deltoid", "side_deltoid", "rear_deltoid", "biceps", "triceps",
+    "forearms", "quads", "hamstrings", "glutes", "adductors", "abductors",
+    "calves", "abs",
+  )
+}
+
+object AJFitWorkoutResolver {
+  fun resolve(snapshot: AJFitDecodedSnapshot?, nowMs: Long): AJFitWorkout? {
+    if (snapshot?.status != "READY") return null
+    return snapshot.workout?.takeIf { nowMs < it.staleAtMs }
+  }
 }
 
 object AJFitWidgetEntryResolver {

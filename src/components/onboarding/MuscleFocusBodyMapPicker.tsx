@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { Text, View, type LayoutChangeEvent } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { BodyMuscleMap } from '../fitness/BodyMuscleMap';
-import { BODY_MUSCLE_MAP_MALE } from '../../data/bodyMuscleMapAnatomy';
 import { useTheme } from '../../theme';
+import type { Sex } from '../../state/AppState';
 import type { MuscleId } from '../../types/exercise';
 import {
   SELECTABLE_MUSCLE_FOCUS_MAP_MUSCLES,
@@ -13,23 +13,21 @@ import {
   type MuscleFocusVisualGroup,
 } from '../../onboarding/muscleFocusBodyMap';
 
-// Both silhouettes share one viewBox (front/back), so their height/width
-// ratio is a single constant derived at runtime instead of hardcoded, so it
-// stays correct if the source anatomy is ever redrawn at a new resolution.
-const [, , DIAGRAM_VB_WIDTH, DIAGRAM_VB_HEIGHT] = BODY_MUSCLE_MAP_MALE.front.viewBox
-  .split(' ')
-  .map(Number);
-const DIAGRAM_ASPECT_RATIO = DIAGRAM_VB_HEIGHT / DIAGRAM_VB_WIDTH;
+// All four @musclemap/assets v1.0.1 diagrams share `0 0 1024 1536`.
+// Keep layout independent from either sex-specific anatomy export.
+const DIAGRAM_ASPECT_RATIO = 1536 / 1024;
 
 const MAP_GAP = 16;
 const MIN_MAP_SIZE = 120;
 const MAX_MAP_SIZE = 260;
 
 export function MuscleFocusBodyMapPicker({
+  sex,
   value,
   onChange,
   maxSelections,
 }: {
+  sex: Sex;
   value: MuscleFocusVisualGroup[];
   onChange: (value: MuscleFocusVisualGroup[]) => void;
   maxSelections: number;
@@ -139,6 +137,7 @@ export function MuscleFocusBodyMapPicker({
 
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }} onLayout={onMapAreaLayout}>
         <BodyMuscleMap
+          sex={sex}
           primaryMuscles={selectedMapMuscles}
           showSecondary={false}
           size={mapSize}

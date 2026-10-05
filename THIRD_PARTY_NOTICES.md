@@ -1,14 +1,18 @@
 # Third-Party Notices
 
-## Body muscle map anatomy (`src/data/bodyMuscleMapAnatomy.ts`)
+## Body muscle map anatomy (`src/data/bodyMuscleMapAnatomy.ts`, `src/data/bodyMuscleMapFemaleAnatomy.ts`)
 
 Source: **@musclemap/assets** v1.0.1 (MIT) — https://github.com/Jsplice/MuscleMap
 
 Vendored as static SVG path data (no npm dependency — `@musclemap/assets` ships
 zero runtime dependencies of its own; the data is copied directly instead of
-adding a dependency for a handful of static values). Trimmed to `MALE_FRONT`/
-`MALE_BACK` only — the app doesn't use the female body or the bundled
-AI-generated photoreal body photos.
+adding a dependency for a handful of static values). Includes the exact
+`MALE_FRONT`, `MALE_BACK`, `FEMALE_FRONT`, and `FEMALE_BACK` SVG diagram data
+from the `@musclemap/assets@1.0.1` tag. The bundled AI-generated photoreal body
+photos are not included or used.
+
+Exact source tag:
+https://github.com/Jsplice/MuscleMap/tree/%40musclemap%2Fassets%401.0.1
 
 Per the package's own README: "the path data is original work, hand-traced in
 Inkscape" — not derived from any other third-party muscle-map asset. Full

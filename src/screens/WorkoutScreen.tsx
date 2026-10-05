@@ -112,13 +112,16 @@ import {
   derivePreviousExerciseSetLoads,
 } from '../loadProgress/loadProgress';
 import { useLoadProgressState } from '../loadProgress/LoadProgressContext';
+import type { Sex } from '../state/AppState';
 import {
   evaluateSetForPersonalRecord,
   loggedWeightsForExercise,
   replayQueuedPersonalRecordChecks,
 } from '../workoutExecution/personalRecord';
+import { normalizeDecimalInput, parseDecimalInput } from '../lib/decimalInput';
 
 type Props = {
+  sex: Sex;
   plan: FinalWorkoutPlan;
   /** Leaves the completion screen only after the durable finish chain succeeds. */
   onDone: () => void;
@@ -264,7 +267,7 @@ function translateMuscleGroup(tLoose: LooseT, target: string): string {
   return target;
 }
 
-export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, onMinimize, sessionIndex = 0, execution, workoutStartedAtMs, hasUnreconciledMutations, onSessionCompleted, finishing, completionConfirmed, durableCompletionReachedAtMs, completionFailed, onSetLogged, onCompletedSetEdited, onAbandon, onCardioCompleted, onEarlyFinish, manualSubstitutionContext, manualSubstitutionContextStatus, onRetryManualSubstitutionContext, onApplySubstitution }: Props) {
+export function WorkoutScreen({ sex, plan, onDone, onRetryCompletion, onDiscarded, onMinimize, sessionIndex = 0, execution, workoutStartedAtMs, hasUnreconciledMutations, onSessionCompleted, finishing, completionConfirmed, durableCompletionReachedAtMs, completionFailed, onSetLogged, onCompletedSetEdited, onAbandon, onCardioCompleted, onEarlyFinish, manualSubstitutionContext, manualSubstitutionContextStatus, onRetryManualSubstitutionContext, onApplySubstitution }: Props) {
   useEffect(() => {
     if (typeof __DEV__ === 'undefined' || !__DEV__) return undefined;
     logInfo('workout_performance', 'workout_screen_mount', {
@@ -506,7 +509,14 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
   // composer (unchanged) only mounts once the user taps "Compartilhar
   // treino" on it — never shown first anymore.
   const [showShareComposer, setShowShareComposer] = useState(false);
-  const completionSignaledRef = useRef(false);
+  // A terminal execution can be adopted after the recovery modal finalized
+  // it directly. Its authoritative completion has already happened, so the
+  // normal summary may render but this mount must not signal a second finish
+  // request. IN_PROGRESS recovery remains unchanged and self-heals through
+  // the effect below when every persisted step was already settled.
+  const completionSignaledRef = useRef(
+    execution?.status === 'COMPLETED' || execution?.status === 'PARTIALLY_COMPLETED',
+  );
   const completionModeRef = useRef<'NORMAL' | 'EARLY'>('NORMAL');
   // Captured once at mount — never re-evaluated as `finished ping-pongs`
   // later in the session, so observability can tell "this finish chain
@@ -593,9 +603,12 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
     finalizesWorkout?: boolean;
   } | null>(null);
 
-  // Session duration is `sessionNow - workoutStartedAtMs` (wall clock), never
-  // a tick count — `workoutStartedAtMs` is the persisted execution's
-  // `startedAt`, so this stays correct across background/lock/cold start.
+  // Session duration is wall-clock endpoint minus `workoutStartedAtMs`, never
+  // a tick count. While active the endpoint is `sessionNow`; a recovered
+  // terminal execution uses its persisted `finishedAt`, so the summary does
+  // not count the time between finalization and reopening. The start is the
+  // persisted execution's `startedAt`, keeping background/lock/cold start
+  // duration correct.
   // The interval below only forces a re-render once a second; it never owns
   // or increments the duration itself. It stops the instant the session
   // finishes (`finished` dependency): without this, the interval kept
@@ -638,7 +651,10 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
     return () => subscription.remove();
   }, [finished]);
 
-  const elapsed = computeWorkoutElapsedSeconds(workoutStartedAtMs ?? sessionNow, sessionNow);
+  const sessionEndMs = finished && execution?.finishedAt
+    ? execution.finishedAt.toMillis()
+    : sessionNow;
+  const elapsed = computeWorkoutElapsedSeconds(workoutStartedAtMs ?? sessionEndMs, sessionEndMs);
 
   // Foreground-only visual ticker. It never owns or decrements countdown
   // state; every render is derived from the single absolute `endsAt`.
@@ -1296,6 +1312,7 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
     if (!showShareComposer && workoutSummaryData) {
       return (
         <WorkoutSummaryScreen
+          sex={sex}
           data={workoutSummaryData}
           onClose={finishAndGoHome}
           onShare={() => setShowShareComposer(true)}
@@ -1305,6 +1322,7 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
 
     return (
       <WorkoutShareComposer
+        sex={sex}
         data={buildWorkoutShareData({
           workoutName: workoutDisplayName,
           exerciseCount: currentSession?.exercises.length ?? 0,
@@ -3786,6 +3804,29 @@ function RestOverlay({
   const { resolvedUnits } = useUnits();
   const loadUnit = workoutLoadUnit(resolvedUnits);
   const [hasUnregisteredInput, setHasUnregisteredInput] = useState(false);
+  // Keep the editable representation separate from the canonical numeric
+  // value. If the TextInput is driven directly by `regWeight`, typing `80,`
+  // immediately parses to 80 and the controlled render erases the separator
+  // before the fractional digit can be entered.
+  const formatWeightDraft = useMemo(
+    () => (weightKg: number) =>
+      weightKg > 0 ? formatWorkoutLoadFromKg(weightKg, resolvedUnits) : '',
+    [resolvedUnits],
+  );
+  const [weightText, setWeightText] = useState(() => formatWeightDraft(regWeight));
+  const weightInputFocusedRef = useRef(false);
+  const weightDraftContextRef = useRef(`${setNumber}:${resolvedUnits}`);
+  useEffect(() => {
+    const context = `${setNumber}:${resolvedUnits}`;
+    const contextChanged = weightDraftContextRef.current !== context;
+    if (contextChanged) {
+      weightDraftContextRef.current = context;
+      weightInputFocusedRef.current = false;
+    }
+    if (contextChanged || !weightInputFocusedRef.current) {
+      setWeightText(formatWeightDraft(regWeight));
+    }
+  }, [formatWeightDraft, regWeight, resolvedUnits, setNumber]);
   useEffect(() => {
     setHasUnregisteredInput(false);
   }, [setNumber]);
@@ -4000,7 +4041,9 @@ function RestOverlay({
             <Pressable
               onPress={() => {
                 if (regWeight > 0) setHasUnregisteredInput(true);
-                setRegWeight((kg: number) => adjustWorkoutLoadKg(kg, -1, resolvedUnits));
+                const next = adjustWorkoutLoadKg(regWeight, -1, resolvedUnits);
+                setRegWeight(next);
+                setWeightText(formatWeightDraft(next));
               }}
               style={registerButtonStyle}
             >
@@ -4008,14 +4051,25 @@ function RestOverlay({
             </Pressable>
             <View style={centralValueContainerStyle}>
               <TextInput
-                value={regWeight > 0 ? formatWorkoutLoadFromKg(regWeight, resolvedUnits) : ''}
+                value={weightText}
                 placeholder={previousLoadKg != null ? formatWorkoutLoadFromKg(previousLoadKg, resolvedUnits) : '—'}
                 placeholderTextColor={theme.colors.textFaint}
                 keyboardType="decimal-pad"
-                onChangeText={(t) => {
+                onFocus={() => {
+                  weightInputFocusedRef.current = true;
+                }}
+                onBlur={() => {
+                  weightInputFocusedRef.current = false;
+                  setWeightText(formatWeightDraft(regWeight));
+                }}
+                onChangeText={(text) => {
                   setHasUnregisteredInput(true);
-                  const v = t.replace(',', '.').replace(/[^0-9.]/g, '');
-                  setRegWeight(v === '' ? 0 : workoutLoadToKg(parseFloat(v) || 0, resolvedUnits));
+                  const normalized = normalizeDecimalInput(text, 2);
+                  setWeightText(normalized);
+                  const displayedWeight = parseDecimalInput(normalized);
+                  setRegWeight(Number.isFinite(displayedWeight)
+                    ? workoutLoadToKg(displayedWeight, resolvedUnits)
+                    : 0);
                 }}
                 style={centralValueTextStyle}
               />
@@ -4026,7 +4080,9 @@ function RestOverlay({
             <Pressable
               onPress={() => {
                 setHasUnregisteredInput(true);
-                setRegWeight((kg: number) => adjustWorkoutLoadKg(kg, 1, resolvedUnits));
+                const next = adjustWorkoutLoadKg(regWeight, 1, resolvedUnits);
+                setRegWeight(next);
+                setWeightText(formatWeightDraft(next));
               }}
               style={registerButtonStyle}
             >

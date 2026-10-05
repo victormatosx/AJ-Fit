@@ -24,7 +24,7 @@ import type { WorkoutSharePosterProps } from './types';
  * layout degrades to a clean name+metrics card (still intentional, never a
  * broken/empty silhouette).
  */
-export function PosterBodyMap({ data, photo, width, height, posterRef }: WorkoutSharePosterProps) {
+export function PosterBodyMap({ sex, data, photo, width, height, posterRef }: WorkoutSharePosterProps) {
   const { theme } = useTheme();
   const { t } = useTranslation('workout');
   const logoSource = useAjLogoSource();
@@ -95,6 +95,7 @@ export function PosterBodyMap({ data, photo, width, height, posterRef }: Workout
             }}
           >
             <BodyMuscleMap
+              sex={sex}
               primaryMuscles={data.bodyMap.primary}
               secondaryMuscles={data.bodyMap.secondary}
               size={62 * scale}

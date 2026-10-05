@@ -57,12 +57,15 @@ describe('WorkoutScreen source — session state machine invariants', () => {
     // `elapsed` used to be `setElapsed((e) => e + 1)` — a tick counter that
     // silently stopped advancing whenever RN suspended JS in
     // background/locked-screen, undercounting real session duration. It is
-    // now derived from `computeWorkoutElapsedSeconds(workoutStartedAtMs,
-    // sessionNow)` — the interval only forces a re-render.
+    // now derived from wall-clock endpoints — the interval only forces a
+    // re-render. A recovered terminal execution uses its persisted
+    // `finishedAt`, so reopening its summary cannot inflate the duration.
     expect(WORKOUT_SRC).not.toMatch(/setElapsed\(/);
     expect(WORKOUT_SRC).toContain('const t = setInterval(() => setSessionNow(Date.now()), 1000);');
+    expect(WORKOUT_SRC).toContain('const sessionEndMs = finished && execution?.finishedAt');
+    expect(WORKOUT_SRC).toContain('execution.finishedAt.toMillis()');
     expect(WORKOUT_SRC).toContain(
-      'const elapsed = computeWorkoutElapsedSeconds(workoutStartedAtMs ?? sessionNow, sessionNow);',
+      'const elapsed = computeWorkoutElapsedSeconds(workoutStartedAtMs ?? sessionEndMs, sessionEndMs);',
     );
     expect(WORKOUT_SRC).toContain('const tick = () => setRestNow(Date.now())');
     expect(WORKOUT_SRC).toContain('computeRemainingSeconds(rest, restNow)');

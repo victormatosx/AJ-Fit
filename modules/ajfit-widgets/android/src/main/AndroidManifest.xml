@@ -17,6 +17,10 @@
       <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
       <meta-data android:name="android.appwidget.provider" android:resource="@xml/ajfit_frequency_widget_info" />
     </receiver>
+    <receiver android:name=".AJFitWorkoutWidgetReceiver" android:exported="true">
+      <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+      <meta-data android:name="android.appwidget.provider" android:resource="@xml/ajfit_workout_widget_info" />
+    </receiver>
     <receiver android:name=".AJFitWidgetAlarmReceiver" android:exported="false" />
     <receiver android:name=".AJFitWidgetBootReceiver" android:exported="false">
       <intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /></intent-filter>

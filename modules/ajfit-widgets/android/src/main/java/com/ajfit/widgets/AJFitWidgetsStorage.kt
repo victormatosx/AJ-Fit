@@ -19,7 +19,7 @@ object AJFitWidgetsStorage {
   // Mirrors `isSupportedWidgetSnapshotVersion` in
   // `src/widgets/widgetSnapshot.ts` — hand-kept in sync today (single
   // integer, changes rarely).
-  private val SUPPORTED_SCHEMA_VERSIONS = setOf(1)
+  private val SUPPORTED_SCHEMA_VERSIONS = setOf(1, 2)
 
   private fun preferences(context: Context): SharedPreferences =
     context.getSharedPreferences(PREFERENCES_FILE, Context.MODE_PRIVATE)

@@ -15,7 +15,7 @@ const model = read('src/main/java/com/ajfit/widgets/AJFitWidgetSnapshot.kt');
 const gradle = read('build.gradle');
 const widgetInfoXml = (name) => read(`src/main/res/xml/ajfit_${name}_widget_info.xml`);
 
-for (const receiver of ['AJFitMonthlyWidgetReceiver', 'AJFitWeeklyWidgetReceiver', 'AJFitCompactWidgetReceiver', 'AJFitFrequencyWidgetReceiver']) {
+for (const receiver of ['AJFitMonthlyWidgetReceiver', 'AJFitWeeklyWidgetReceiver', 'AJFitCompactWidgetReceiver', 'AJFitFrequencyWidgetReceiver', 'AJFitWorkoutWidgetReceiver']) {
   assert(manifest.includes(receiver), `${receiver} is not registered`);
 }
 assert(manifest.includes('android.intent.action.BOOT_COMPLETED'), 'boot rescheduling receiver is missing');
@@ -26,7 +26,7 @@ assert((storage.match(/AJFitWidgetCoordinator\.snapshotChanged/g) || []).length 
 assert(moduleSource.includes('AJFitWidgetCoordinator::snapshotChanged'), 'requestReload is not real');
 assert(coordinator.includes('setAndAllowWhileIdle') && !coordinator.includes('setExact'), 'future refresh must use one inexact alarm');
 assert(coordinator.includes('filter { it > nowMs }.minOrNull()'), 'scheduler must select only the next future entry');
-assert(model.includes('optInt("schemaVersion", -1) != 1'), 'defensive schema check is missing');
+assert(model.includes('optInt("schemaVersion", -1) !in setOf(1, 2)'), 'defensive schema check is missing');
 assert(model.includes('private static') === false, 'Kotlin source contains invalid copied Swift structure');
 assert(widgets.includes('SizeMode.Responsive'), 'Glance responsive sizing is missing');
 assert(widgets.includes('widthDp >= 250f && heightDp < 190f') || model.includes('widthDp >= 250f && heightDp < 190f'),
@@ -60,7 +60,7 @@ for (const call of colorProviderCalls) {
 // that launcher entirely, which falls straight back to `previewImage` — so
 // `previewImage` must ALSO be a representative rendered bitmap, not just
 // the app logo, for the preview to be useful in practice.
-for (const name of ['monthly', 'weekly', 'compact', 'frequency']) {
+for (const name of ['monthly', 'weekly', 'compact', 'frequency', 'workout']) {
   const xml = widgetInfoXml(name);
   assert(!/previewLayout="@layout\/glance_default_loading_layout"/.test(xml),
     `${name} widget info must not reuse the generic Glance loading layout (initialLayout) as its picker preview`);
@@ -74,4 +74,27 @@ for (const name of ['monthly', 'weekly', 'compact', 'frequency']) {
     `ajfit_preview_${name}.png preview bitmap resource is missing`);
 }
 
-console.log('validateAndroidWidgets: PASS — 4 receivers, snapshot/update/CNG/preview/ColorProvider contracts');
+assert(widgets.includes('WorkoutWidget(workout, nowMs)'), 'responsive workout content is missing');
+assert(model.includes('AJFitWorkoutResolver'), 'workout staleness resolver is missing');
+const workoutStart = widgets.indexOf('@Composable private fun WorkoutWidget');
+const emptyStart = widgets.indexOf('@Composable private fun EmptyWidget', workoutStart);
+assert(workoutStart >= 0 && emptyStart > workoutStart, 'workout layout block is missing');
+const workoutBlock = widgets.slice(workoutStart, emptyStart);
+const smallBranchStart = workoutBlock.indexOf('} else {');
+assert(smallBranchStart >= 0, 'small workout branch is missing');
+const smallWorkout = workoutBlock.slice(smallBranchStart);
+const smallLayoutOrder = [
+  'Text(workout.workoutName.uppercase()',
+  'WorkoutBodyMap(it)',
+  'Text(workout.exercisesLabel',
+  'Text(workout.setsLabel',
+].map((token) => smallWorkout.indexOf(token));
+assert(smallLayoutOrder.every((position) => position >= 0), 'small workout vertical content is incomplete');
+assert(smallLayoutOrder.every((position, index) => index === 0 || position > smallLayoutOrder[index - 1]),
+  'small workout must keep name, BodyMap, exercises and sets in vertical order');
+assert(!smallWorkout.includes('dateLabel?.let') && !smallWorkout.includes('metricsLabel'),
+  'small workout must not insert date or combined metrics into the requested hierarchy');
+assert(model.includes('primaryMuscles') && model.includes('secondaryMuscles'),
+  'BodyMap muscle projection is missing from the native contract');
+
+console.log('validateAndroidWidgets: PASS — 5 receivers, snapshot/update/CNG/preview/ColorProvider contracts');

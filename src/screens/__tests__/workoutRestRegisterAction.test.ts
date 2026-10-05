@@ -17,6 +17,16 @@ describe('RestOverlay — presentation-only input registration action', () => {
     expect(body).toContain('if (regReps != null) setHasUnregisteredInput(true)');
   });
 
+  it('keeps the load text draft editable while comma decimals update the canonical numeric value', () => {
+    expect(body).toContain('const [weightText, setWeightText] = useState');
+    expect(body).toContain('value={weightText}');
+    expect(body).toContain('normalizeDecimalInput(text, 2)');
+    expect(body).toContain('parseDecimalInput(normalized)');
+    expect(body).toContain('weightInputFocusedRef.current = true');
+    expect(body).toContain('setWeightText(formatWeightDraft(regWeight))');
+    expect(body).not.toContain("t.replace(',', '.').replace(/[^0-9.]/g, '')");
+  });
+
   it('temporarily replaces the timer actions with one REGISTRAR action', () => {
     expect(body).toContain('{hasUnregisteredInput ? (');
     expect(body).toContain("accessibilityLabel={t('rest.registerAccessibility')}");

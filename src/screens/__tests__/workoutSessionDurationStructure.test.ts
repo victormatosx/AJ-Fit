@@ -23,10 +23,12 @@ describe('workout session duration — wall-clock, not a tick counter', () => {
     expect(source).not.toMatch(/setElapsed\s*\(\s*\(?e\)?\s*=>\s*e\s*\+\s*1/);
   });
 
-  it('derives elapsed from computeWorkoutElapsedSeconds(workoutStartedAtMs, sessionNow)', () => {
+  it('derives elapsed from the authoritative finish time for terminal recovered executions', () => {
     expect(source).toContain("import { computeWorkoutElapsedSeconds } from '../lib/workoutSessionTimer';");
-    expect(source).toMatch(
-      /const elapsed = computeWorkoutElapsedSeconds\(\s*workoutStartedAtMs\s*\?\?\s*sessionNow,\s*sessionNow\s*\)/,
+    expect(source).toContain('const sessionEndMs = finished && execution?.finishedAt');
+    expect(source).toContain('execution.finishedAt.toMillis()');
+    expect(source).toContain(
+      'const elapsed = computeWorkoutElapsedSeconds(workoutStartedAtMs ?? sessionEndMs, sessionEndMs);',
     );
   });
 

@@ -31,12 +31,14 @@ object AJFitWidgetCoordinator {
     AJFitWeeklyWidget().updateAll(context)
     AJFitCompactWidget().updateAll(context)
     AJFitFrequencyWidget().updateAll(context)
+    AJFitWorkoutWidget().updateAll(context)
   }
 
   internal fun nextEffectiveAtMs(context: Context, nowMs: Long = System.currentTimeMillis()): Long? {
     val snapshot = AJFitWidgetSnapshotDecoder.decode(AJFitWidgetsStorage.readRaw(context)) ?: return null
-    return (listOfNotNull(snapshot.current) + snapshot.future)
-      .map { it.effectiveAtMs }.filter { it > nowMs }.minOrNull()
+    val activityTransitions = (listOfNotNull(snapshot.current) + snapshot.future).map { it.effectiveAtMs }
+    val workoutTransitions = listOfNotNull(snapshot.workout?.dateBecomesTodayAtMs, snapshot.workout?.staleAtMs)
+    return (activityTransitions + workoutTransitions).filter { it > nowMs }.minOrNull()
   }
 
   private fun scheduleNext(context: Context) {

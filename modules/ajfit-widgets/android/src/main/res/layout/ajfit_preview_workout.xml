@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_width="match_parent" android:layout_height="match_parent"
+  android:orientation="vertical" android:padding="6dp" android:background="#020010">
+  <LinearLayout android:layout_width="match_parent" android:layout_height="18dp"
+    android:gravity="center_vertical" android:orientation="horizontal">
+    <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+      android:text="PRÓXIMO TREINO" android:textColor="#4DA3FF" android:textSize="10sp" android:textStyle="bold" />
+    <ImageView android:layout_width="18dp" android:layout_height="18dp"
+      android:contentDescription="AJ Fit" android:scaleType="fitCenter" android:src="@drawable/ajfit_widget_logo" />
+  </LinearLayout>
+  <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:layout_marginTop="3dp" android:maxLines="2" android:text="LOWER 1 — QUADRÍCEPS"
+    android:textColor="#FFFFFF" android:textSize="13sp" android:textStyle="bold" />
+  <FrameLayout android:layout_width="80dp" android:layout_height="0dp" android:layout_weight="1"
+    android:layout_gravity="center_horizontal">
+    <ImageView android:layout_width="match_parent" android:layout_height="match_parent"
+      android:scaleType="fitCenter" android:src="@drawable/ajfit_widget_bodymap_f_base" />
+    <ImageView android:layout_width="match_parent" android:layout_height="match_parent"
+      android:scaleType="fitCenter" android:src="@drawable/ajfit_widget_bodymap_f_quads" android:tint="#4DA3FF" />
+  </FrameLayout>
+  <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+    android:text="5 EXERCÍCIOS" android:textColor="#A0FFFFFF" android:textSize="8sp" android:textStyle="bold" />
+  <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+    android:text="18 SÉRIES" android:textColor="#A0FFFFFF" android:textSize="8sp" android:textStyle="bold" />
+</LinearLayout>

@@ -38,6 +38,43 @@ struct AJFitWidgetProvider: TimelineProvider {
   }
 }
 
+struct AJFitWorkoutWidgetEntry: TimelineEntry {
+  let date: Date
+  let content: AJFitWorkoutWidgetContent
+}
+
+struct AJFitWorkoutWidgetProvider: TimelineProvider {
+  func placeholder(in context: Context) -> AJFitWorkoutWidgetEntry {
+    AJFitWorkoutWidgetEntry(date: Date(), content: .empty(.unavailable))
+  }
+
+  func getSnapshot(in context: Context, completion: @escaping (AJFitWorkoutWidgetEntry) -> Void) {
+    completion(entry(now: Date()))
+  }
+
+  func getTimeline(in context: Context, completion: @escaping (Timeline<AJFitWorkoutWidgetEntry>) -> Void) {
+    let now = Date()
+    let snapshot = AJFitSnapshotDecoder.decode(AJFitWidgetsStorage.readRaw())
+    var entries = [AJFitWorkoutWidgetEntry(date: now, content: AJFitWorkoutResolver.resolve(snapshot: snapshot, now: now))]
+    if let workout = snapshot?.workout {
+      let transitionDates = [workout.dateBecomesTodayAtMs, workout.staleAtMs]
+        .compactMap { $0 }
+        .map { Date(timeIntervalSince1970: $0 / 1000) }
+        .filter { $0 > now }
+        .sorted()
+      entries.append(contentsOf: transitionDates.map {
+        AJFitWorkoutWidgetEntry(date: $0, content: AJFitWorkoutResolver.resolve(snapshot: snapshot, now: $0))
+      })
+    }
+    completion(Timeline(entries: entries, policy: .never))
+  }
+
+  private func entry(now: Date) -> AJFitWorkoutWidgetEntry {
+    let snapshot = AJFitSnapshotDecoder.decode(AJFitWidgetsStorage.readRaw())
+    return AJFitWorkoutWidgetEntry(date: now, content: AJFitWorkoutResolver.resolve(snapshot: snapshot, now: now))
+  }
+}
+
 private struct AJFitCanvas<Content: View>: View {
   @ViewBuilder let content: Content
   var body: some View {
@@ -97,6 +134,119 @@ private struct WidgetContentView<Ready: View>: View {
     AJFitCanvas {
       switch content { case .ready(let fields): ready(fields); case .empty(let reason): EmptyWidgetView(reason: reason) }
     }
+  }
+}
+
+private struct WorkoutBodyMapView: View {
+  let bodyMap: AJFitWorkoutBodyMap
+
+  var body: some View {
+    ZStack {
+      Image("AJFitBodyMap_\(bodyMap.sex)_base")
+        .resizable().interpolation(.high).scaledToFit()
+      ForEach(bodyMap.secondaryMuscles, id: \.self) { muscle in
+        layer(muscle, opacity: 0.35)
+      }
+      ForEach(bodyMap.primaryMuscles, id: \.self) { muscle in
+        layer(muscle, opacity: 1)
+      }
+    }
+    .aspectRatio(2112 / 1536, contentMode: .fit)
+    .accessibilityHidden(true)
+  }
+
+  private func layer(_ muscle: String, opacity: Double) -> some View {
+    Image("AJFitBodyMap_\(bodyMap.sex)_\(muscle)")
+      .resizable().interpolation(.high).renderingMode(.template).scaledToFit()
+      .foregroundColor(AJFitColors.primaryEmphasis.opacity(opacity))
+  }
+}
+
+private struct WorkoutWidgetView: View {
+  let content: AJFitWorkoutWidgetContent
+  let date: Date
+  @Environment(\.widgetFamily) private var family
+
+  var body: some View {
+    AJFitCanvas {
+      switch content {
+      case .ready(let workout): workoutBody(workout)
+      case .empty(let reason): EmptyWidgetView(reason: reason)
+      }
+    }
+  }
+
+  @ViewBuilder
+  private func workoutBody(_ workout: AJFitWorkout) -> some View {
+    if family == .systemMedium {
+      medium(workout)
+    } else {
+      small(workout)
+    }
+  }
+
+  private func header(_ workout: AJFitWorkout, logoSize: CGFloat) -> some View {
+    HStack(spacing: 7) {
+      if workout.state == "IN_PROGRESS" {
+        Circle().fill(AJFitColors.primary).frame(width: 7, height: 7)
+      }
+      Text(workout.eyebrow)
+        .font(.custom("Archivo-SemiBold", size: 9)).tracking(0.8)
+        .foregroundColor(AJFitColors.primaryEmphasis).lineLimit(1)
+      Spacer(minLength: 5)
+      Image("AJFitLogo").resizable().scaledToFit().frame(width: logoSize, height: logoSize)
+        .accessibilityHidden(true)
+    }
+  }
+
+  private func small(_ workout: AJFitWorkout) -> some View {
+    VStack(alignment: .leading, spacing: 3) {
+      header(workout, logoSize: 18)
+      Text(workout.workoutName.uppercased())
+        .font(.custom("Archivo-Bold", size: 15)).foregroundColor(.white)
+        .lineLimit(2).minimumScaleFactor(0.68)
+      ZStack {
+        if let bodyMap = workout.bodyMap {
+          WorkoutBodyMapView(bodyMap: bodyMap)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+      }
+      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+      VStack(alignment: .leading, spacing: 0) {
+        Text(workout.exercisesLabel)
+        Text(workout.setsLabel)
+      }
+      .font(.custom("Archivo-SemiBold", size: 8.5))
+      .foregroundColor(.white.opacity(0.64))
+      .lineLimit(1).minimumScaleFactor(0.7)
+    }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+  }
+
+  private func metric(label: String) -> some View {
+    Text(label).font(.custom("Archivo-Bold", size: 11)).foregroundColor(.white.opacity(0.72))
+      .lineLimit(2).minimumScaleFactor(0.7)
+  }
+
+  private func medium(_ workout: AJFitWorkout) -> some View {
+    VStack(alignment: .leading, spacing: 8) {
+      header(workout, logoSize: 22)
+      HStack(alignment: .bottom, spacing: 16) {
+        VStack(alignment: .leading, spacing: 5) {
+          if let dateLabel = workout.displayedDateLabel(at: date) {
+            Text(dateLabel).font(.custom("JetBrainsMono-Regular", size: 10))
+              .foregroundColor(.white.opacity(0.68)).lineLimit(1)
+          }
+          Text(workout.workoutName.uppercased())
+            .font(.custom("Archivo-Bold", size: 19)).foregroundColor(.white)
+            .lineLimit(2).minimumScaleFactor(0.75)
+        }.frame(maxWidth: .infinity, alignment: .leading)
+        HStack(alignment: .bottom, spacing: 14) {
+          metric(label: workout.exercisesLabel)
+          Rectangle().fill(AJFitColors.border).frame(width: 1, height: 38)
+          metric(label: workout.setsLabel)
+        }.fixedSize(horizontal: true, vertical: false)
+      }
+    }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
   }
 }
 
@@ -173,7 +323,7 @@ private struct AJDecorativeMark: View {
   var body: some View {
     AJOutlineGlyphs(text: "AJ", fontName: "Anton-Regular", fontSize: 98)
       .stroke(
-        Color.white.opacity(0.09),
+        Color.white.opacity(0.035),
         style: StrokeStyle(lineWidth: 1.25, lineJoin: .round)
       )
       .frame(width: 122, height: 112)
@@ -465,6 +615,7 @@ private struct MonthlyEntryView: View { let entry: AJFitWidgetEntry; var body: s
 private struct WeeklyEntryView: View { let entry: AJFitWidgetEntry; var body: some View { WidgetContentView(content: entry.content) { WeeklyStreakView(fields: $0) } } }
 private struct CompactEntryView: View { let entry: AJFitWidgetEntry; var body: some View { WidgetContentView(content: entry.content) { CompactStreakView(fields: $0) } } }
 private struct FrequencyEntryView: View { let entry: AJFitWidgetEntry; var body: some View { WidgetContentView(content: entry.content) { FrequencyView(window: $0.frequencyWindow) } } }
+private struct WorkoutEntryView: View { let entry: AJFitWorkoutWidgetEntry; var body: some View { WorkoutWidgetView(content: entry.content, date: entry.date) } }
 
 struct AJFitMonthlyWidget: Widget {
   let kind = "AJFitMonthlyCalendar"
@@ -514,6 +665,19 @@ struct AJFitFrequencyWidget: Widget {
     .configurationDisplayName("Frequência AJ Fit")
     .description("Atividade dos últimos 30 dias.")
     .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+    .contentMarginsDisabled()
+  }
+}
+
+struct AJFitWorkoutWidget: Widget {
+  let kind = "AJFitNextWorkout"
+  var body: some WidgetConfiguration {
+    StaticConfiguration(kind: kind, provider: AJFitWorkoutWidgetProvider()) { entry in
+      AJFitWidgetRoot { WorkoutEntryView(entry: entry) }
+    }
+    .configurationDisplayName("Próximo Treino AJ Fit")
+    .description("Seu próximo treino ou a sessão em andamento.")
+    .supportedFamilies([.systemSmall, .systemMedium])
     .contentMarginsDisabled()
   }
 }

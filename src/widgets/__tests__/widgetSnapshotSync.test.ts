@@ -64,7 +64,7 @@ describe('widgetSnapshotSync — write/read/clear roundtrip', () => {
     expect(nativeModule.writeSnapshot).toHaveBeenCalledTimes(1);
     const written = JSON.parse(nativeModule.writeSnapshot.mock.calls[0][0] as string);
     expect(written.status).toBe('READY');
-    expect(written.schemaVersion).toBe(1);
+    expect(written.schemaVersion).toBe(2);
   });
 
   it('syncWidgetSnapshot also requests a reload after a successful write', async () => {

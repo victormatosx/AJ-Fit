@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  Keyboard,
+  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -253,6 +255,21 @@ export function PaywallScreen({
   // commercial route.
   const { state: promoState, applyCode } = usePromoCode();
   const [promoInput, setPromoInput] = useState('');
+  const contentScrollRef = useRef<ScrollView>(null);
+  const promoInputFocusedRef = useRef(false);
+
+  const revealPromoInput = useCallback(() => {
+    requestAnimationFrame(() => {
+      contentScrollRef.current?.scrollToEnd({ animated: true });
+    });
+  }, []);
+
+  useEffect(() => {
+    const subscription = Keyboard.addListener('keyboardDidShow', () => {
+      if (promoInputFocusedRef.current) revealPromoInput();
+    });
+    return () => subscription.remove();
+  }, [revealPromoInput]);
 
   // Fase 4C.3 §4/§6: the single source of truth for "is a promo code
   // currently authorized" — derived fresh on every render (see
@@ -929,6 +946,10 @@ export function PaywallScreen({
   return (
     <ScreenBg>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
         {/* Dev/QA only — temporarily hidden from the Paywall UI per request
             while the paywall UI/UX is redesigned. The underlying
             DevSubscriptionOverrideContext logic (Settings > Developer) is
@@ -962,12 +983,18 @@ export function PaywallScreen({
           </View>
         ) : (
           <ScrollView
+            ref={contentScrollRef}
             contentContainerStyle={{
               paddingHorizontal: 22,
               paddingTop: 6,
               paddingBottom: 22,
               flexGrow: 1,
             }}
+            onLayout={() => {
+              if (promoInputFocusedRef.current) revealPromoInput();
+            }}
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+            keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
             <PaywallHeroVisual
@@ -1050,6 +1077,13 @@ export function PaywallScreen({
                   value={promoInput}
                   onChangeValue={setPromoInput}
                   onApply={handleApplyPromoCode}
+                  onInputFocus={() => {
+                    promoInputFocusedRef.current = true;
+                    revealPromoInput();
+                  }}
+                  onInputBlur={() => {
+                    promoInputFocusedRef.current = false;
+                  }}
                   promoState={promoState}
                   purchaseRoute={effectiveRoute}
                   iosPromoNotice={
@@ -1118,6 +1152,7 @@ export function PaywallScreen({
             </View>
           </ScrollView>
         )}
+        </KeyboardAvoidingView>
       </SafeAreaView>
       {devOverrideAllowed && !HIDE_DEV_OVERRIDE_ROW ? (
         <DevSubscriptionOverridePickerSheet
@@ -1580,6 +1615,8 @@ function PromoCodeCard({
   value,
   onChangeValue,
   onApply,
+  onInputFocus,
+  onInputBlur,
   promoState,
   purchaseRoute,
   iosPromoNotice,
@@ -1588,6 +1625,8 @@ function PromoCodeCard({
   value: string;
   onChangeValue: (next: string) => void;
   onApply: () => void;
+  onInputFocus: () => void;
+  onInputBlur: () => void;
   promoState: PromoCodeState;
   purchaseRoute: EffectivePurchaseRoute | null;
   iosPromoNotice: { tone: 'error' | 'neutral'; message: string; badge?: string | null } | null;
@@ -1628,6 +1667,8 @@ function PromoCodeCard({
         <TextInput
           value={value}
           onChangeText={onChangeValue}
+          onFocus={onInputFocus}
+          onBlur={onInputBlur}
           editable={!disabled && !validating}
           placeholder={t('paywall.promo.placeholder')}
           placeholderTextColor={theme.colors.inputPlaceholder}

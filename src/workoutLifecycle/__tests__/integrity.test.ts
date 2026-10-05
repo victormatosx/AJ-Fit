@@ -2,11 +2,73 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   completeWorkoutSessionFlow,
+  recoveryFinalizationMode,
   runWorkoutCompletionAttempt,
   runWorkoutCompletionFollowUp,
   workoutCompletionAllowsHome,
 } from '../finishFlow';
 import { WorkoutMutationQueue } from '../mutationQueue';
+import type { PersistedWorkoutExecution } from '../../services/workoutExecutions';
+
+function recoveredExecution(
+  setStatuses: ('PENDING' | 'COMPLETED' | 'SKIPPED')[],
+  cardio: PersistedWorkoutExecution['cardio'] = null,
+): PersistedWorkoutExecution {
+  return {
+    exercises: [{
+      exerciseIndex: 0,
+      exerciseId: 'squat',
+      sets: setStatuses.map((status, setIndex) => ({
+        setIndex,
+        status,
+        weightKg: status === 'COMPLETED' ? 40 : null,
+        actualReps: status === 'COMPLETED' ? 10 : null,
+        actualDurationSeconds: null,
+      })),
+    }],
+    cardio,
+  } as PersistedWorkoutExecution;
+}
+
+describe('recovery finalization mode', () => {
+  it('uses the live WorkoutScreen early-finish semantics when strength work remains', () => {
+    expect(recoveryFinalizationMode(
+      recoveredExecution(['COMPLETED', 'PENDING']),
+      false,
+    )).toBe('EARLY');
+  });
+
+  it('uses NORMAL when every strength set is settled and there is no cardio finisher', () => {
+    expect(recoveryFinalizationMode(
+      recoveredExecution(['COMPLETED', 'SKIPPED']),
+      false,
+    )).toBe('NORMAL');
+  });
+
+  it('uses EARLY to skip an unsettled cardio finisher and NORMAL once cardio is durable', () => {
+    const strengthDone = recoveredExecution(['COMPLETED']);
+    const cardioDone = recoveredExecution(['COMPLETED'], {
+      status: 'COMPLETED',
+      actualDurationSeconds: 600,
+      completedAt: null,
+    });
+    expect(recoveryFinalizationMode(strengthDone, true)).toBe('EARLY');
+    expect(recoveryFinalizationMode(cardioDone, true)).toBe('NORMAL');
+  });
+
+  it('preserves the original terminal mode when retrying after a lost response', () => {
+    const terminal = {
+      ...recoveredExecution(['COMPLETED', 'SKIPPED'], {
+        status: 'SKIPPED',
+        reason: 'EARLY_FINISH',
+        skippedAt: null,
+      }),
+      status: 'PARTIALLY_COMPLETED',
+      finalizationMode: 'EARLY',
+    } as PersistedWorkoutExecution;
+    expect(recoveryFinalizationMode(terminal, true)).toBe('EARLY');
+  });
+});
 
 describe('Execution → Schedule integrity', () => {
   it('does not advance Schedule when finish fails', async () => {

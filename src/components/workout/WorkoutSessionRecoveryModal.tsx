@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, Text } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import { darkTheme } from '../../theme';
@@ -26,20 +26,22 @@ import {
  * `start()` call, so `startedAt`/progress/logged loads are all preserved
  * exactly as persisted.
  *
- * Three distinct actions, never conflated:
+ * Three explicit actions, never conflated:
  * - `onResume` — only ever wired live for `status === 'pending'` with a
  *   matching program; hydrates and never writes to Firestore itself.
+ * - `onFinish` — finalizes the recovered execution through the same
+ *   authoritative callable used by WorkoutScreen, then exposes the normal
+ *   completion experience only after durable success.
  * - `onDiscard` — the real destructive action (`abandonWorkoutExecution`);
  *   only offered when a real execution doc exists to abandon (`pending` or
  *   `inconsistent`/`EXECUTION_TERMINAL` — the latter is a safe no-op
  *   self-heal of a dangling pointer, never touches the terminal record).
- * - `onDismiss` — always available, non-destructive: just stops showing the
- *   modal for this app session. Never deletes anything, so it's safe even
- *   for `EXECUTION_MISSING` (Rules cannot authorize deleting a pointer to a
- *   nonexistent execution client-side at all — see the hook's doc comment).
- *   If the user later taps "Iniciar treino" with the mutex still held
- *   server-side, the pre-existing `WorkoutExecutionPendingModal` safety net
- *   still catches it via the normal `start()` conflict path.
+ *
+ * There is deliberately no dismiss action for a real execution. Backdrop
+ * taps and Android Back are inert while recovery is unresolved: a pending
+ * execution must be continued, finalized, or explicitly discarded. The
+ * separate `onAcknowledgeMissing` escape exists only for the defensive
+ * EXECUTION_MISSING state, where there is no workout document to act on.
  *
  * Long-session alert: `execution.startedAt` (Firestore) is the ONLY source
  * of truth for how long a session has been open — never a second, locally
@@ -57,28 +59,38 @@ import {
 export function WorkoutSessionRecoveryModal({
   state,
   canResume,
+  canFinalize,
   resuming,
+  finishing,
   discarding,
+  finishError,
   discardError,
   onResume,
+  onFinish,
   onDiscard,
-  onDismiss,
+  onAcknowledgeMissing,
 }: {
   state: WorkoutSessionRecoveryState;
-  /** False when the pending execution's program no longer matches the account's active program — resume would render the wrong session, so only "Descartar"/"Agora não" are offered. */
+  /** False when the pending execution's program no longer matches the account's active program — resume would render the wrong session. */
   canResume: boolean;
+  /** Requires a real, finishable execution whose program still matches the active account program. */
+  canFinalize: boolean;
   resuming: boolean;
+  finishing: boolean;
   discarding: boolean;
+  finishError: boolean;
   discardError: boolean;
   onResume: () => void;
+  onFinish: () => void;
   onDiscard: () => void;
-  onDismiss: () => void;
+  /** Defensive escape only for an orphan pointer whose execution document does not exist; never rendered for a pending execution. */
+  onAcknowledgeMissing: () => void;
 }) {
   const theme = darkTheme;
   const { t } = useTranslation('workout');
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
   const visible = state.status === 'pending' || state.status === 'inconsistent';
-  const busy = resuming || discarding;
+  const busy = resuming || finishing || discarding;
 
   // Reset the confirm sub-step whenever the modal closes (e.g. resumed
   // successfully) so it never reopens already mid-confirmation.
@@ -104,11 +116,6 @@ export function WorkoutSessionRecoveryModal({
   const isLongSession = elapsedSeconds !== null && isLongWorkoutSession(elapsedSeconds);
   const durationLabel = elapsedSeconds !== null ? formatWorkoutSessionDuration(elapsedSeconds) : null;
 
-  const dismiss = () => {
-    if (busy) return;
-    setConfirmingDiscard(false);
-    onDismiss();
-  };
   const requestDiscard = () => {
     if (busy) return;
     setConfirmingDiscard(true);
@@ -140,15 +147,11 @@ export function WorkoutSessionRecoveryModal({
             : t('sessionRecovery.body');
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={busy ? undefined : dismiss} statusBarTranslucent>
-      <Pressable
-        accessibilityRole="button"
-        onPress={busy ? undefined : dismiss}
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={() => undefined} statusBarTranslucent>
+      <View
         style={{ flex: 1, backgroundColor: theme.colors.overlayStrong, justifyContent: 'center', paddingHorizontal: 34 }}
       >
-        <Pressable
-          accessibilityRole="none"
-          onPress={(event) => event.stopPropagation()}
+        <View
           style={{
             width: '100%',
             maxWidth: 340,
@@ -183,6 +186,11 @@ export function WorkoutSessionRecoveryModal({
             <Text style={{ color: theme.colors.textSecondaryStrong, fontFamily: theme.fonts.ui, fontSize: 13, lineHeight: 19, marginTop: 8 }}>
               {body}
             </Text>
+            {finishError && (
+              <Text accessibilityRole="alert" style={{ color: theme.colors.warning, fontFamily: theme.fonts.ui, fontSize: 12, lineHeight: 17, marginTop: 8 }}>
+                {t('sessionRecovery.finishError')}
+              </Text>
+            )}
             {discardError && (
               <Text style={{ color: theme.colors.warning, fontFamily: theme.fonts.ui, fontSize: 12, lineHeight: 17, marginTop: 8 }}>
                 {t('sessionRecovery.discardError')}
@@ -223,6 +231,44 @@ export function WorkoutSessionRecoveryModal({
                   }}
                 >
                   {resuming ? t('sessionRecovery.resuming') : t('sessionRecovery.resume')}
+                </Text>
+              </Pressable>
+            )}
+
+            {!confirmingDiscard && canFinalize && execution && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ disabled: busy }}
+                disabled={busy}
+                onPress={onFinish}
+                style={{
+                  marginTop: 10,
+                  paddingVertical: 12,
+                  paddingHorizontal: 14,
+                  borderRadius: 10,
+                  borderBottomRightRadius: 0,
+                  backgroundColor: theme.colors.inverseSurface,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 10,
+                  opacity: busy ? 0.6 : 1,
+                }}
+              >
+                {finishing ? (
+                  <ActivityIndicator color={theme.colors.inverseForeground} />
+                ) : (
+                  <Icon name="check" size={12} color={theme.colors.inverseForeground} />
+                )}
+                <Text
+                  style={{
+                    color: theme.colors.inverseForeground,
+                    fontFamily: theme.fonts.display,
+                    fontSize: 14,
+                    letterSpacing: 1.2,
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {finishing ? t('sessionRecovery.finishing') : t('sessionRecovery.finishNow')}
                 </Text>
               </Pressable>
             )}
@@ -305,7 +351,7 @@ export function WorkoutSessionRecoveryModal({
             {executionMissing && (
               <Pressable
                 accessibilityRole="button"
-                onPress={dismiss}
+                onPress={onAcknowledgeMissing}
                 style={{
                   marginTop: 18,
                   paddingVertical: 12,
@@ -330,22 +376,9 @@ export function WorkoutSessionRecoveryModal({
               </Pressable>
             )}
 
-            {!confirmingDiscard && !executionMissing && (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ disabled: busy }}
-                disabled={busy}
-                onPress={dismiss}
-                style={{ marginTop: 10, paddingVertical: 10, alignItems: 'center' }}
-              >
-                <Text style={{ color: theme.colors.textMuted, fontFamily: theme.fonts.ui, fontSize: 13 }}>
-                  {t('sessionRecovery.later')}
-                </Text>
-              </Pressable>
-            )}
           </LinearGradient>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }

@@ -63,6 +63,9 @@
     "inconsistentTerminalBody": "Essa sessão já havia sido finalizada em outro dispositivo. Você pode descartá-la com segurança.",
     "resume": "Continuar treino",
     "resuming": "Retomando…",
+    "finishNow": "Finalizar treino agora",
+    "finishing": "Finalizando…",
+    "finishError": "Não foi possível finalizar. Verifique sua conexão e tente novamente.",
     "discard": "Descartar treino",
     "discardConfirmTitle": "Descartar este treino?",
     "discardConfirmBody": "As séries já registradas permanecem no seu histórico, mas esse treino não contará como concluído.",
@@ -70,8 +73,7 @@
     "discardConfirmBack": "Voltar",
     "discarding": "Descartando…",
     "discardError": "Não foi possível descartar. Tente novamente.",
-    "dismiss": "Entendi",
-    "later": "Agora não"
+    "dismiss": "Entendi"
   },
   "actions": {
     "viewExecution": "Ver execução",
@@ -509,6 +511,15 @@
     "recovery": "Recuperação",
     "activeRecovery": "Recuperação ativa",
     "balanceCardio": "Cardio + Equilíbrio"
+  },
+  "widget": {
+    "nextWorkout": "PRÓXIMO TREINO",
+    "inProgress": "TREINO EM ANDAMENTO",
+    "today": "HOJE",
+    "exercises_one": "{{count}} EXERCÍCIO",
+    "exercises_other": "{{count}} EXERCÍCIOS",
+    "sets_one": "{{count}} SÉRIE",
+    "sets_other": "{{count}} SÉRIES"
   },
   "prescription": {
     "reps": "repetições",

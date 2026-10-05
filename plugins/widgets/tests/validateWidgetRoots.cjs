@@ -13,6 +13,7 @@ const expectedConfigurations = [
   ['AJFitWeeklyWidget', 'AJFitWeeklyStreak', 'WeeklyEntryView', '[.systemMedium]'],
   ['AJFitCompactWidget', 'AJFitCompactStreak', 'CompactEntryView', '[.systemSmall]'],
   ['AJFitFrequencyWidget', 'AJFitFrequency', 'FrequencyEntryView', '[.systemSmall, .systemMedium, .systemLarge]'],
+  ['AJFitWorkoutWidget', 'AJFitNextWorkout', 'WorkoutEntryView', '[.systemSmall, .systemMedium]'],
 ];
 
 for (let index = 0; index < expectedConfigurations.length; index += 1) {
@@ -107,8 +108,8 @@ const weeklyStartForDecoration = source.indexOf('private struct WeeklyStreakView
 const decorative = source.slice(decorativeStart, weeklyStartForDecoration);
 assert(decorative.includes('AJOutlineGlyphs') && decorative.includes('.stroke('),
   'CompactStreak AJ must be a stroked glyph outline');
-assert(decorative.includes('Color.white.opacity(0.09)'),
-  'CompactStreak AJ outline must remain subtly translucent white');
+assert(decorative.includes('Color.white.opacity(0.035)'),
+  'CompactStreak AJ outline must remain nearly transparent white');
 assert(!decorative.includes('Text("AJ").foregroundColor(AJFitColors.background)'),
   'CompactStreak AJ interior must stay transparent, not be background-painted');
 assert(source.includes('Weekly — statuses + complete:false'), 'Weekly representative preview is missing');
@@ -118,4 +119,23 @@ assert(source.includes('Frequency Medium — many'), 'Frequency medium/many prev
 assert(source.includes('Frequency Large — many'), 'Frequency large/many preview is missing');
 assert(source.includes('Frequency — empty state'), 'Frequency empty-state preview is missing');
 
-console.log('validateWidgetRoots: PASS — 4 configurations, 7 supported family paths');
+assert(source.includes('AJFitWorkoutResolver.resolve'), 'Workout provider must use the app-resolved snapshot');
+assert(source.includes('workout.state == "IN_PROGRESS"'), 'Workout in-progress treatment is missing');
+const workoutSmallStart = source.indexOf('private func small(_ workout: AJFitWorkout)');
+const workoutMetricStart = source.indexOf('private func metric(label: String)', workoutSmallStart);
+assert(workoutSmallStart >= 0 && workoutMetricStart > workoutSmallStart, 'Workout small layout is missing');
+const workoutSmall = source.slice(workoutSmallStart, workoutMetricStart);
+const smallLayoutOrder = [
+  'header(workout',
+  'Text(workout.workoutName.uppercased())',
+  'WorkoutBodyMapView(bodyMap: bodyMap)',
+  'Text(workout.exercisesLabel)',
+  'Text(workout.setsLabel)',
+].map((token) => workoutSmall.indexOf(token));
+assert(smallLayoutOrder.every((position) => position >= 0), 'Workout small vertical content is incomplete');
+assert(smallLayoutOrder.every((position, index) => index === 0 || position > smallLayoutOrder[index - 1]),
+  'Workout small must keep header, name, BodyMap, exercises and sets in vertical order');
+assert(!workoutSmall.includes('displayedDateLabel') && !workoutSmall.includes('metricsLabel'),
+  'Workout small must not insert date or combined metrics into the requested hierarchy');
+
+console.log('validateWidgetRoots: PASS — 5 configurations, 9 supported family paths');

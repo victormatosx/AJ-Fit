@@ -38,7 +38,7 @@ import type { WorkoutSharePosterProps } from './types';
  * stand-in for "when this was posted") — never a stored/invented workout
  * time.
  */
-export function PosterCreative({ data, posterRef, width, height }: WorkoutSharePosterProps) {
+export function PosterCreative({ sex, data, posterRef, width, height }: WorkoutSharePosterProps) {
   const { theme } = useTheme();
   const { t, i18n } = useTranslation(['workout', 'profile']);
   const { user, profile } = useAuth();
@@ -179,6 +179,7 @@ export function PosterCreative({ data, posterRef, width, height }: WorkoutShareP
             </Text>
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
               <BodyMuscleMap
+                sex={sex}
                 primaryMuscles={data.bodyMap.primary}
                 secondaryMuscles={data.bodyMap.secondary}
                 size={Math.max(70, (bodyMapHeight - 18 * scale - 10 * scale - 28 * scale - 38 * scale) / 1.85)}

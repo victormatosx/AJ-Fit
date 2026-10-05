@@ -4,4 +4,5 @@
   <string name="ajfit_widget_weekly_description">Semana AJ Fit</string>
   <string name="ajfit_widget_compact_description">Sequência AJ Fit</string>
   <string name="ajfit_widget_frequency_description">Frequência AJ Fit</string>
+  <string name="ajfit_widget_workout_description">Próximo Treino AJ Fit</string>
 </resources>

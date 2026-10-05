@@ -1,6 +1,6 @@
 import { logWarn } from '../lib/logger';
 import { getAJFitWidgetsNativeModule } from '../../modules/ajfit-widgets';
-import type { WidgetSnapshotV1 } from './widgetSnapshot';
+import type { WidgetSnapshot } from './widgetSnapshot';
 
 /**
  * Thinnest possible layer over the native module: serialize/deserialize
@@ -23,7 +23,7 @@ async function callNative<T>(operation: string, run: () => T | Promise<T>): Prom
 }
 
 /** Overwrites the one stored snapshot. No-op (logged) if the native module is unavailable. */
-export async function writeWidgetSnapshotNative(snapshot: WidgetSnapshotV1): Promise<void> {
+export async function writeWidgetSnapshotNative(snapshot: WidgetSnapshot): Promise<void> {
   await callNative('writeSnapshot', () => {
     const nativeModule = getAJFitWidgetsNativeModule();
     return nativeModule?.writeSnapshot(JSON.stringify(snapshot));

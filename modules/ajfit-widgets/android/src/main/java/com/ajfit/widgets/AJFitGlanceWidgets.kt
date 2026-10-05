@@ -7,6 +7,7 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceModifier
+import androidx.glance.ColorFilter
 import androidx.glance.Image
 import androidx.glance.ImageProvider
 import androidx.glance.LocalSize
@@ -58,6 +59,7 @@ private object AJFitWidgetColors {
   val background = ColorProvider(ComposeColor(2, 0, 16))
   val primary = ColorProvider(ComposeColor(11, 112, 249))
   val emphasis = ColorProvider(ComposeColor(77, 163, 255))
+  val bodyMapSecondary = ColorProvider(ComposeColor(77, 163, 255, 90))
   val text = ColorProvider(ComposeColor.White)
   val muted = ColorProvider(ComposeColor(255, 255, 255, 160))
   val faint = ColorProvider(ComposeColor(255, 255, 255, 90))
@@ -71,14 +73,14 @@ private val responsiveSizes = setOf(
 abstract class AJFitGlanceWidget : GlanceAppWidget() {
   override val sizeMode: SizeMode = SizeMode.Responsive(responsiveSizes)
   protected abstract val kind: Kind
-  enum class Kind { MONTHLY, WEEKLY, COMPACT, FREQUENCY }
+  enum class Kind { MONTHLY, WEEKLY, COMPACT, FREQUENCY, WORKOUT }
 
   override suspend fun provideGlance(context: Context, id: androidx.glance.GlanceId) {
-    val content = AJFitWidgetEntryResolver.resolve(
-      AJFitWidgetSnapshotDecoder.decode(AJFitWidgetsStorage.readRaw(context)),
-      System.currentTimeMillis(),
-    )
-    provideContent { WidgetRoot(content, kind) }
+    val snapshot = AJFitWidgetSnapshotDecoder.decode(AJFitWidgetsStorage.readRaw(context))
+    val nowMs = System.currentTimeMillis()
+    val content = AJFitWidgetEntryResolver.resolve(snapshot, nowMs)
+    val workout = AJFitWorkoutResolver.resolve(snapshot, nowMs)
+    provideContent { WidgetRoot(content, workout, kind, nowMs) }
   }
 }
 
@@ -86,25 +88,138 @@ class AJFitMonthlyWidget : AJFitGlanceWidget() { override val kind = Kind.MONTHL
 class AJFitWeeklyWidget : AJFitGlanceWidget() { override val kind = Kind.WEEKLY }
 class AJFitCompactWidget : AJFitGlanceWidget() { override val kind = Kind.COMPACT }
 class AJFitFrequencyWidget : AJFitGlanceWidget() { override val kind = Kind.FREQUENCY }
+class AJFitWorkoutWidget : AJFitGlanceWidget() { override val kind = Kind.WORKOUT }
 
 class AJFitMonthlyWidgetReceiver : GlanceAppWidgetReceiver() { override val glanceAppWidget = AJFitMonthlyWidget() }
 class AJFitWeeklyWidgetReceiver : GlanceAppWidgetReceiver() { override val glanceAppWidget = AJFitWeeklyWidget() }
 class AJFitCompactWidgetReceiver : GlanceAppWidgetReceiver() { override val glanceAppWidget = AJFitCompactWidget() }
 class AJFitFrequencyWidgetReceiver : GlanceAppWidgetReceiver() { override val glanceAppWidget = AJFitFrequencyWidget() }
+class AJFitWorkoutWidgetReceiver : GlanceAppWidgetReceiver() { override val glanceAppWidget = AJFitWorkoutWidget() }
 
 private val rootPadding = 14.dp
 
 @Composable
-private fun WidgetRoot(content: AJFitWidgetContent, kind: AJFitGlanceWidget.Kind) {
-  Box(GlanceModifier.fillMaxSize().background(AJFitWidgetColors.background).padding(rootPadding)) {
-    when (content) {
+private fun WidgetRoot(content: AJFitWidgetContent, workout: AJFitWorkout?, kind: AJFitGlanceWidget.Kind, nowMs: Long) {
+  val isSmallWorkout = kind == AJFitGlanceWidget.Kind.WORKOUT && LocalSize.current.width.value < 220f
+  val padding = if (isSmallWorkout) 6.dp else rootPadding
+  Box(GlanceModifier.fillMaxSize().background(AJFitWidgetColors.background).padding(padding)) {
+    if (kind == AJFitGlanceWidget.Kind.WORKOUT) {
+      if (workout != null) WorkoutWidget(workout, nowMs)
+      else EmptyWidget((content as? AJFitWidgetContent.Empty)?.reason ?: AJFitWidgetContent.Reason.UNAVAILABLE)
+    } else when (content) {
       is AJFitWidgetContent.Empty -> EmptyWidget(content.reason)
       is AJFitWidgetContent.Ready -> when (kind) {
         AJFitGlanceWidget.Kind.MONTHLY -> MonthlyWidget(content.fields)
         AJFitGlanceWidget.Kind.WEEKLY -> WeeklyWidget(content.fields)
         AJFitGlanceWidget.Kind.COMPACT -> CompactWidget(content.fields)
         AJFitGlanceWidget.Kind.FREQUENCY -> FrequencyWidget(content.fields.frequencyWindow)
+        AJFitGlanceWidget.Kind.WORKOUT -> Unit
       }
+    }
+  }
+}
+
+// ---- Próximo treino ---------------------------------------------------------
+
+@Composable private fun WorkoutHeader(workout: AJFitWorkout, logoSize: Int) {
+  Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.Vertical.CenterVertically) {
+    if (workout.state == "IN_PROGRESS") {
+      Box(GlanceModifier.size(7.dp).background(AJFitWidgetColors.primary).cornerRadius(7.dp)) {}
+      Spacer(GlanceModifier.width(6.dp))
+    }
+    Text(
+      workout.eyebrow,
+      GlanceModifier.defaultWeight(),
+      TextStyle(AJFitWidgetColors.emphasis, fontSize = 10.sp, fontWeight = FontWeight.Bold),
+      maxLines = 1,
+    )
+    Image(ImageProvider(R.drawable.ajfit_widget_logo), "AJ Fit", GlanceModifier.size(logoSize.dp))
+  }
+}
+
+@Composable private fun WorkoutMetric(label: String) {
+  Text(label, style = TextStyle(AJFitWidgetColors.muted, fontSize = 11.sp, fontWeight = FontWeight.Bold), maxLines = 2)
+}
+
+private fun bodyMapResource(sex: String, muscle: String?): Int? {
+  val pair = when (muscle) {
+    null -> R.drawable.ajfit_widget_bodymap_m_base to R.drawable.ajfit_widget_bodymap_f_base
+    "chest" -> R.drawable.ajfit_widget_bodymap_m_chest to R.drawable.ajfit_widget_bodymap_f_chest
+    "lats" -> R.drawable.ajfit_widget_bodymap_m_lats to R.drawable.ajfit_widget_bodymap_f_lats
+    "upper_back" -> R.drawable.ajfit_widget_bodymap_m_upper_back to R.drawable.ajfit_widget_bodymap_f_upper_back
+    "traps" -> R.drawable.ajfit_widget_bodymap_m_traps to R.drawable.ajfit_widget_bodymap_f_traps
+    "lower_back" -> R.drawable.ajfit_widget_bodymap_m_lower_back to R.drawable.ajfit_widget_bodymap_f_lower_back
+    "front_deltoid" -> R.drawable.ajfit_widget_bodymap_m_front_deltoid to R.drawable.ajfit_widget_bodymap_f_front_deltoid
+    "side_deltoid" -> R.drawable.ajfit_widget_bodymap_m_side_deltoid to R.drawable.ajfit_widget_bodymap_f_side_deltoid
+    "rear_deltoid" -> R.drawable.ajfit_widget_bodymap_m_rear_deltoid to R.drawable.ajfit_widget_bodymap_f_rear_deltoid
+    "biceps" -> R.drawable.ajfit_widget_bodymap_m_biceps to R.drawable.ajfit_widget_bodymap_f_biceps
+    "triceps" -> R.drawable.ajfit_widget_bodymap_m_triceps to R.drawable.ajfit_widget_bodymap_f_triceps
+    "forearms" -> R.drawable.ajfit_widget_bodymap_m_forearms to R.drawable.ajfit_widget_bodymap_f_forearms
+    "quads" -> R.drawable.ajfit_widget_bodymap_m_quads to R.drawable.ajfit_widget_bodymap_f_quads
+    "hamstrings" -> R.drawable.ajfit_widget_bodymap_m_hamstrings to R.drawable.ajfit_widget_bodymap_f_hamstrings
+    "glutes" -> R.drawable.ajfit_widget_bodymap_m_glutes to R.drawable.ajfit_widget_bodymap_f_glutes
+    "adductors" -> R.drawable.ajfit_widget_bodymap_m_adductors to R.drawable.ajfit_widget_bodymap_f_adductors
+    "abductors" -> R.drawable.ajfit_widget_bodymap_m_abductors to R.drawable.ajfit_widget_bodymap_f_abductors
+    "calves" -> R.drawable.ajfit_widget_bodymap_m_calves to R.drawable.ajfit_widget_bodymap_f_calves
+    "abs" -> R.drawable.ajfit_widget_bodymap_m_abs to R.drawable.ajfit_widget_bodymap_f_abs
+    else -> return null
+  }
+  return if (sex == "f") pair.second else pair.first
+}
+
+@Composable private fun WorkoutBodyMap(bodyMap: AJFitWorkoutBodyMap) {
+  Box(GlanceModifier.fillMaxSize()) {
+    bodyMapResource(bodyMap.sex, null)?.let {
+      Image(ImageProvider(it), null, GlanceModifier.fillMaxSize(), contentScale = ContentScale.Fit)
+    }
+    bodyMap.secondaryMuscles.forEach { muscle ->
+      bodyMapResource(bodyMap.sex, muscle)?.let {
+        Image(
+          ImageProvider(it), null, GlanceModifier.fillMaxSize(), contentScale = ContentScale.Fit,
+          colorFilter = ColorFilter.tint(AJFitWidgetColors.bodyMapSecondary),
+        )
+      }
+    }
+    bodyMap.primaryMuscles.forEach { muscle ->
+      bodyMapResource(bodyMap.sex, muscle)?.let {
+        Image(
+          ImageProvider(it), null, GlanceModifier.fillMaxSize(), contentScale = ContentScale.Fit,
+          colorFilter = ColorFilter.tint(AJFitWidgetColors.emphasis),
+        )
+      }
+    }
+  }
+}
+
+@Composable private fun WorkoutWidget(workout: AJFitWorkout, nowMs: Long) {
+  val medium = LocalSize.current.width.value >= 220f
+  val dateLabel = workout.displayedDateLabel(nowMs)
+  Column(GlanceModifier.fillMaxSize()) {
+    WorkoutHeader(workout, if (medium) 22 else 20)
+    Spacer(GlanceModifier.height(if (medium) 7.dp else 3.dp))
+    if (medium) {
+      Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.Vertical.Bottom) {
+        Column(GlanceModifier.defaultWeight()) {
+          dateLabel?.let {
+            Text(it, style = TextStyle(AJFitWidgetColors.muted, fontSize = 10.sp, fontFamily = androidx.glance.text.FontFamily.Monospace), maxLines = 1)
+            Spacer(GlanceModifier.height(5.dp))
+          }
+          Text(workout.workoutName.uppercase(), style = TextStyle(AJFitWidgetColors.text, fontSize = 18.sp, fontWeight = FontWeight.Bold), maxLines = 2)
+        }
+        Spacer(GlanceModifier.width(15.dp))
+        WorkoutMetric(workout.exercisesLabel)
+        Spacer(GlanceModifier.width(15.dp))
+        WorkoutMetric(workout.setsLabel)
+      }
+    } else {
+      Text(workout.workoutName.uppercase(), style = TextStyle(AJFitWidgetColors.text, fontSize = 13.sp, fontWeight = FontWeight.Bold), maxLines = 2)
+      Box(GlanceModifier.fillMaxWidth().defaultWeight(), contentAlignment = Alignment.Center) {
+        workout.bodyMap?.let {
+          WorkoutBodyMap(it)
+        }
+      }
+      Text(workout.exercisesLabel, style = TextStyle(AJFitWidgetColors.muted, fontSize = 8.sp, fontWeight = FontWeight.Medium), maxLines = 1)
+      Text(workout.setsLabel, style = TextStyle(AJFitWidgetColors.muted, fontSize = 8.sp, fontWeight = FontWeight.Medium), maxLines = 1)
     }
   }
 }

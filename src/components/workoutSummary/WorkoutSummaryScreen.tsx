@@ -11,6 +11,7 @@ import { useUnits } from '../../state/UnitsContext';
 import { formatWorkoutLoadFromKg, workoutLoadUnit } from '../../units/workoutLoadConversions';
 import { formatWorkoutShareDuration } from '../../workoutShare/data';
 import type { WorkoutSummaryData } from '../../workoutSummary/buildWorkoutSummaryData';
+import type { Sex } from '../../state/AppState';
 import { AssessmentMetricCard } from '../fitness/AssessmentMetricCard';
 import { MusclesWorkedSection } from './MusclesWorkedSection';
 import { PersonalRecordsSection } from './PersonalRecordsSection';
@@ -156,10 +157,12 @@ function localDateLabel(localDate: string, locale: string): string {
 }
 
 export function WorkoutSummaryScreen({
+  sex,
   data,
   onClose,
   onShare,
 }: {
+  sex: Sex;
   data: WorkoutSummaryData;
   onClose: () => void;
   onShare: () => void;
@@ -216,7 +219,7 @@ export function WorkoutSummaryScreen({
               performedAnyLoadBasedExercise={data.hasLoadBasedData}
             />
 
-            <MusclesWorkedSection bodyMap={data.bodyMap} />
+            <MusclesWorkedSection sex={sex} bodyMap={data.bodyMap} />
 
             <WorkoutHighlightsSection highlights={data.highlights} />
           </ScrollView>

@@ -5,6 +5,7 @@ import { monthBounds } from '../home/calendarMonth';
 import { buildFrequencyWindow } from '../home/frequencyHeatmap';
 import { computeStreak, type Streak } from '../home/streak';
 import { buildWeekOverview, classifyDayStatus, type WeekDayStatus, type WeekDayViewModel } from '../home/weekOverview';
+import type { WorkoutWidgetData } from './workoutWidgetProjection';
 
 /**
  * Home Screen Widgets — Phase 1/2.5 contract + pure TypeScript snapshot
@@ -25,9 +26,10 @@ import { buildWeekOverview, classifyDayStatus, type WeekDayStatus, type WeekDayV
  * enum-to-localized-string mapping.
  */
 
-export const WIDGET_SNAPSHOT_SCHEMA_VERSION = 1 as const;
+export const WIDGET_SNAPSHOT_SCHEMA_VERSION = 2 as const;
 
 const SUPPORTED_WIDGET_SNAPSHOT_SCHEMA_VERSIONS: ReadonlySet<number> = new Set([
+  1,
   WIDGET_SNAPSHOT_SCHEMA_VERSION,
 ]);
 
@@ -149,8 +151,22 @@ export type WidgetSnapshotV1 =
       futureEntries: WidgetTimelineEntry[];
     } & WidgetReadyEntryFields);
 
-/** Today's "latest" alias. A future `WidgetSnapshotV2` adds a new union member here; it must never change `WidgetSnapshotV1`'s existing shape in place. */
-export type WidgetSnapshot = WidgetSnapshotV1;
+/** V2 adds the app-resolved Próximo Treino projection without changing V1. */
+export type WidgetSnapshotV2 =
+  | { schemaVersion: 2; status: 'UNAUTHENTICATED' }
+  | { schemaVersion: 2; status: 'NO_PROGRAM'; localDate: LocalDate; generatedAtMs: number }
+  | ({
+      schemaVersion: 2;
+      status: 'READY';
+      localDate: LocalDate;
+      generatedAtMs: number;
+      effectiveAtMs: number;
+      futureEntries: WidgetTimelineEntry[];
+      /** Null means the schedule/program is in transition and no honest workout can be shown. */
+      workout: WorkoutWidgetData | null;
+    } & WidgetReadyEntryFields);
+
+export type WidgetSnapshot = WidgetSnapshotV1 | WidgetSnapshotV2;
 
 export interface WidgetSnapshotBuilderInput {
   isAuthenticated: boolean;
@@ -196,6 +212,8 @@ export interface WidgetSnapshotBuilderInput {
    * reflects reality instead of silently defaulting to "exact."
    */
   historyAvailableFromLocalDate?: LocalDate | null;
+  /** Fully resolved by the app domain; native widgets only render it. */
+  workout?: WorkoutWidgetData | null;
 }
 
 const SETTLED_DAY_STATUSES: ReadonlySet<WeekDayStatus> = new Set([
@@ -324,7 +342,7 @@ function buildReadyEntryFields(
  * `effectiveAtMs` values — never to decide what day anything is. Calling
  * this twice with identical input always produces deeply-equal output.
  */
-export function buildWidgetSnapshot(input: WidgetSnapshotBuilderInput): WidgetSnapshotV1 {
+export function buildWidgetSnapshot(input: WidgetSnapshotBuilderInput): WidgetSnapshotV2 {
   if (!input.isAuthenticated) {
     return { schemaVersion: WIDGET_SNAPSHOT_SCHEMA_VERSION, status: 'UNAUTHENTICATED' };
   }
@@ -367,6 +385,7 @@ export function buildWidgetSnapshot(input: WidgetSnapshotBuilderInput): WidgetSn
     generatedAtMs: input.generatedAtMs,
     effectiveAtMs: localDateStartOfDayMs(input.todayLocalDate, input.timezone),
     futureEntries,
+    workout: input.workout ?? null,
     ...buildReadyEntryFields(input, scheduleMode, input.todayLocalDate),
   };
 }
