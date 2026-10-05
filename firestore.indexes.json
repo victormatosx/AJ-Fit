@@ -121,6 +121,12 @@
       "indexes": []
     },
     {
+      "collectionGroup": "workoutFinalizationAttempts",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
       "collectionGroup": "pushInstallations",
       "fieldPath": "expireAt",
       "ttl": true,

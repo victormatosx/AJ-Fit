@@ -127,19 +127,12 @@
     "finishConfirmAfterGoal": "You reached your {{target}} goal. Time done: {{done}}.",
     "continueCardio": "Keep going",
     "confirmFinish": "Finish",
-    "finishSavingTitle": "Saving cardio…",
-    "finishSavingBody": "Hang on a moment — we're confirming your cardio before finishing the workout.",
-    "finishErrorTitle": "Couldn't save cardio",
-    "finishErrorBody": "Check your connection and try again. Your workout stays open until this is confirmed — nothing is lost.",
-    "finishRetry": "Try again",
     "exitConfirmTitle": "Leave cardio?",
     "exitConfirmBody": "Your strength work is already complete. Leaving now finishes the workout with {{done}} of cardio logged.",
     "exitConfirmAction": "Finish and leave",
     "earlyConfirmTitle": "Finish without cardio?",
     "earlyConfirmBody": "Cardio will be skipped and the workout will be saved with the sets you completed.",
     "earlyConfirmAction": "Skip cardio and finish",
-    "earlyFinishErrorTitle": "Couldn't finish workout",
-    "earlyFinishErrorBody": "Check your connection and try again. Cardio was not recorded as completed.",
     "accessibility": {
       "close": "Exit cardio",
       "timer": "Cardio timer"
@@ -282,7 +275,6 @@
         "social": "Social"
       }
     },
-    "finishing": "Finishing workout…",
     "finishFailed": "We couldn't finish the workout.",
     "retry": "Try again",
     "metrics": {
@@ -301,10 +293,19 @@
     "summary": {
       "closeAccessibility": "Close and go back to home",
       "shareCta": "Share workout",
-      "personalRecordsCount_one": "personal record",
-      "personalRecordsCount_other": "personal records",
-      "noRecordsTitle": "No records today",
-      "noRecordsSubtitle": "Stay consistent — the next one could be here.",
+      "loadingMetrics": "Loading final metrics",
+      "recordsUnavailable": "We couldn't update your records and highlights right now. Confirmed workout metrics are still available.",
+      "retryRecords": "Try updating",
+      "finalization": {
+        "processing": "Finishing",
+        "interrupted": "Interrupted",
+        "committed": "Complete",
+        "messages": {
+          "summingLoads": "Adding up your loads…",
+          "calculatingRecords": "Calculating your records…",
+          "preparingSummary": "Preparing your summary…"
+        }
+      },
       "metrics": {
         "records": "Records",
         "volume": "Volume",
@@ -312,7 +313,6 @@
         "reps": "Reps"
       },
       "completion": {
-        "label": "complete",
         "sets": "{{completed}} of {{planned}} sets",
         "earlyBadge": "Finished early",
         "cardioSkippedBadge": "Cardio skipped"

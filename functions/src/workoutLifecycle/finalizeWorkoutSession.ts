@@ -24,6 +24,8 @@ export interface WorkoutCompletionResult {
 
 export interface FinalizeWorkoutSessionRequest {
   executionId: string;
+  /** Non-authoritative correlation id for the best-effort progress sidecar. */
+  attemptId?: string;
   /** Omitted requests retain the pre-existing NORMAL behavior. */
   mode?: WorkoutFinalizationMode;
   cardio?: { actualDurationSeconds: number };
@@ -76,15 +78,39 @@ function parseRequest(value: unknown): ParsedFinalizeWorkoutSessionRequest {
   if (value.mode === 'EARLY' && value.cardio !== undefined) {
     throw new HttpsError('invalid-argument', 'early_finish_cannot_complete_cardio');
   }
-  const allowed = new Set(['executionId', 'mode', 'cardio']);
+  if (value.attemptId !== undefined && !boundedId(value.attemptId)) {
+    throw new HttpsError('invalid-argument', 'invalid_finalize_workout_session_attempt_id');
+  }
+  const allowed = new Set(['executionId', 'attemptId', 'mode', 'cardio']);
   if (Object.keys(value).some((key) => !allowed.has(key))) {
     throw new HttpsError('invalid-argument', 'invalid_finalize_workout_session_request');
   }
   return {
     executionId: value.executionId,
+    ...(value.attemptId === undefined ? {} : { attemptId: value.attemptId as string }),
     mode: value.mode === 'EARLY' ? 'EARLY' : 'NORMAL',
     ...(value.cardio === undefined ? {} : { cardio: value.cardio as { actualDurationSeconds: number } }),
   };
+}
+
+type FinalizationProgressCheckpoint = 'SERVER_ACCEPTED' | 'PREFLIGHT_VALIDATED' | 'COMMITTED';
+
+export async function writeFinalizationProgressBestEffort(
+  write: () => Promise<unknown>,
+  onFailure: (error: unknown) => void = () => undefined,
+): Promise<void> {
+  try {
+    await write();
+  } catch (error) {
+    // A sidecar is observability/UI assistance only. It must never change the
+    // callable's authoritative result or transaction behavior.
+    try {
+      onFailure(error);
+    } catch {
+      // Diagnostics are part of the sidecar too. Even a failing reporter must
+      // not create an unhandled rejection beside the authoritative callable.
+    }
+  }
 }
 
 function executionShape(execution: DocumentData): string {
@@ -237,6 +263,30 @@ async function finalizeWorkoutSessionCore(
 
   try {
     const root = firestore.collection('users').doc(uid);
+    const progressRef = data.attemptId
+      ? root.collection('workoutFinalizationAttempts').doc(data.attemptId)
+      : null;
+    const reportProgress = (checkpoint: FinalizationProgressCheckpoint): void => {
+      if (!progressRef) return;
+      // Deliberately not awaited: sidecar latency/failure must never enter the
+      // critical path of preflight or the authoritative transaction. Each
+      // write records an independent checkpoint field, so out-of-order
+      // completion is harmless and clients select the furthest one present.
+      void writeFinalizationProgressBestEffort(
+        () => progressRef.set({
+          executionId: data.executionId,
+          attemptId: data.attemptId,
+          checkpoints: { [checkpoint]: FieldValue.serverTimestamp() },
+          updatedAt: FieldValue.serverTimestamp(),
+          expiresAt: Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        }, { merge: true }),
+        (error) => logWarn('workout.finalize', 'progress_sidecar_write_failed', {
+          checkpoint,
+          reasonCode: safeReasonCode(error),
+        }),
+      );
+    };
+    reportProgress('SERVER_ACCEPTED');
     const executionRef = root.collection('workoutExecutions').doc(data.executionId);
     const preflight = await executionRef.get();
     if (!preflight.exists) throw new HttpsError('not-found', 'execution_not_found');
@@ -299,6 +349,7 @@ async function finalizeWorkoutSessionCore(
     throw new HttpsError('failed-precondition', 'terminal_execution_missing_cardio');
   }
   mark(startedAt, 'cardio_validation_end');
+  reportProgress('PREFLIGHT_VALIDATED');
 
   const scheduleConfigRef = root.collection('workoutProgramState').doc('scheduleConfig');
   const activeProgramRef = root.collection('workoutProgramState').doc('active');
@@ -559,6 +610,7 @@ async function finalizeWorkoutSessionCore(
     throw error;
   }
   mark(startedAt, 'transaction_end', { success: true });
+  reportProgress('COMMITTED');
   // Diagnostic-only: mirrors the failure-path `finalize_correlation` below so
   // a retry that fails and then succeeds can be joined on `executionId` alone
   // — previously only failures carried this id, so a success immediately

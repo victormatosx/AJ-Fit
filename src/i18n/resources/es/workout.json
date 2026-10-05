@@ -127,19 +127,12 @@
     "finishConfirmAfterGoal": "Completaste tu meta de {{target}}. Tiempo realizado: {{done}}.",
     "continueCardio": "Continuar cardio",
     "confirmFinish": "Finalizar",
-    "finishSavingTitle": "Guardando cardio…",
-    "finishSavingBody": "Un momento — estamos confirmando tu cardio antes de finalizar el entreno.",
-    "finishErrorTitle": "No se pudo guardar",
-    "finishErrorBody": "Verifica tu conexión e intenta de nuevo. Tu entreno sigue abierto hasta que esto se confirme — no se pierde nada.",
-    "finishRetry": "Intentar de nuevo",
     "exitConfirmTitle": "¿Salir del cardio?",
     "exitConfirmBody": "Tu fuerza ya está completa. Si sales ahora finalizamos el entreno con {{done}} de cardio registrados.",
     "exitConfirmAction": "Finalizar y salir",
     "earlyConfirmTitle": "¿Finalizar sin cardio?",
     "earlyConfirmBody": "El cardio se omitirá y el entreno se guardará con las series que completaste.",
     "earlyConfirmAction": "Omitir cardio y finalizar",
-    "earlyFinishErrorTitle": "No se pudo finalizar",
-    "earlyFinishErrorBody": "Comprueba tu conexión e inténtalo de nuevo. El cardio no se registró como completado.",
     "accessibility": {
       "close": "Salir del cardio",
       "timer": "Cronómetro del cardio"
@@ -282,7 +275,6 @@
         "social": "Social"
       }
     },
-    "finishing": "Finalizando entreno…",
     "finishFailed": "No se pudo finalizar el entreno.",
     "retry": "Intentar de nuevo",
     "metrics": {
@@ -301,10 +293,19 @@
     "summary": {
       "closeAccessibility": "Cerrar y volver al inicio",
       "shareCta": "Compartir entreno",
-      "personalRecordsCount_one": "récord personal",
-      "personalRecordsCount_other": "récords personales",
-      "noRecordsTitle": "Sin récords hoy",
-      "noRecordsSubtitle": "Sigue siendo constante — el próximo puede ser aquí.",
+      "loadingMetrics": "Cargando métricas finales",
+      "recordsUnavailable": "No pudimos actualizar tus récords y destacados ahora. Las métricas confirmadas del entreno siguen disponibles.",
+      "retryRecords": "Intentar actualizar",
+      "finalization": {
+        "processing": "Finalizando",
+        "interrupted": "Interrumpido",
+        "committed": "Completado",
+        "messages": {
+          "summingLoads": "Sumando tus cargas…",
+          "calculatingRecords": "Calculando tus récords…",
+          "preparingSummary": "Preparando tu resumen…"
+        }
+      },
       "metrics": {
         "records": "Récords",
         "volume": "Volumen",
@@ -312,7 +313,6 @@
         "reps": "Repeticiones"
       },
       "completion": {
-        "label": "completado",
         "sets": "{{completed}} de {{planned}} series",
         "earlyBadge": "Finalizado antes",
         "cardioSkippedBadge": "Cardio omitido"

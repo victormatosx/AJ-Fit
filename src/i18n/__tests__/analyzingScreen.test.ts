@@ -46,8 +46,8 @@ describe('Analyzing screen i18n', () => {
     expect(screen).toContain('return p + 1');
     expect(screen).toContain('}, 52)');
     expect(screen).toContain('setTimeout(onDone, 700)');
-    expect(screen).toContain('new Animated.Value(0.75)');
-    expect(screen).toContain('duration: 1100');
+    expect(screen).toContain('<CircularProgressRing');
+    expect(screen).toContain('pulseGlow');
     expect(screen).toContain('duration: 900');
     expect(screen).toContain('useNativeDriver: true');
   });

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, View, Text, Pressable, Modal } from 'react-native';
+import { AppState, StyleSheet, View, Text, Pressable, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import { randomUUID } from 'expo-crypto';
 import { useTranslation } from 'react-i18next';
 import { Icon, IconName } from '../components/ui/Icon';
 import { Card, HudCorners } from '../components/ui/Card';
@@ -86,6 +87,7 @@ import {
   runWorkoutCompletionAttempt,
   runWorkoutCompletionSingleFlight,
   runWorkoutDiscardFlow,
+  shouldRetryWorkoutCompletionOnForeground,
   type WorkoutCompletionResult,
 } from '../workoutLifecycle/finishFlow';
 import {
@@ -94,6 +96,19 @@ import {
   type FinalizeWorkoutSessionResult,
   type WorkoutFinalizationMode,
 } from '../services/finalizeWorkoutSession';
+import { subscribeToWorkoutFinalizationProgress } from '../services/workoutFinalizationProgress';
+import { hasScheduledSessionCompletion } from '../services/workoutSchedule';
+import {
+  furthestWorkoutFinalizationStage,
+  type WorkoutFinalizationProgressStage,
+} from '../workoutLifecycle/finalizationProgress';
+import {
+  createWorkoutFinalizationProgressAttempt,
+  runWorkoutFinalizationWithBestEffortProgress,
+  type WorkoutFinalizationProgressAttempt,
+} from '../workoutLifecycle/finalizationRuntime';
+import { loadAuthoritativelyCommittedFinalization } from '../workoutLifecycle/finalizationRecovery';
+import { clearCardioSession } from '../services/cardioSessionStorage';
 import { useWorkoutEvolution } from '../workoutEvolution/useWorkoutEvolution';
 import { useWorkoutActivitySnapshot } from '../home/useWorkoutActivitySnapshot';
 import { useFrequencyWindow } from '../home/useFrequencyWindow';
@@ -396,7 +411,14 @@ function AppShellContent({
   // finishes. Keep that chain available to the Done CTA so Profile can never
   // open with the previous IN_PROGRESS evaluation still cached.
   const workoutCompletionRef = useRef<Promise<WorkoutCompletionResult> | null>(null);
-  const workoutFinalizationModeRef = useRef<WorkoutFinalizationMode>('NORMAL');
+  const workoutFinalizationInputRef = useRef<{
+    actualCardioDurationSeconds?: number;
+    mode: WorkoutFinalizationMode;
+  }>({ mode: 'NORMAL' });
+  const workoutFinalizationProgressAttemptRef = useRef<WorkoutFinalizationProgressAttempt | null>(null);
+  const appShellMountedRef = useRef(true);
+  const [workoutFinalizationProgress, setWorkoutFinalizationProgress] =
+    useState<WorkoutFinalizationProgressStage>('WAITING');
   const workoutCompletionFollowUpRef = useRef<Promise<unknown> | null>(null);
   const workoutHomeSyncRef = useRef<Promise<unknown> | null>(null);
   // True from the instant `onSessionCompleted` fires until the durable
@@ -409,6 +431,19 @@ function AppShellContent({
   const [finishingSession, setFinishingSession] = useState(false);
   const [workoutCompletionResult, setWorkoutCompletionResult] = useState<WorkoutCompletionResult | null>(null);
   const [durableCompletionReachedAtMs, setDurableCompletionReachedAtMs] = useState<number | null>(null);
+
+  const advanceWorkoutFinalizationProgress = useCallback((stage: WorkoutFinalizationProgressStage) => {
+    setWorkoutFinalizationProgress((current) => furthestWorkoutFinalizationStage(current, stage));
+  }, []);
+
+  useEffect(() => {
+    appShellMountedRef.current = true;
+    return () => {
+      appShellMountedRef.current = false;
+      workoutFinalizationProgressAttemptRef.current?.dispose();
+      workoutFinalizationProgressAttemptRef.current = null;
+    };
+  }, []);
   // Re-entrancy guard for `finishWorkoutSession` — the composer's "Back to
   // home" CTA is already disabled while `finishingSession`/awaiting, but this closes the
   // same-tick gap between a tap and that state committing.
@@ -1122,7 +1157,11 @@ function AppShellContent({
     if (workoutCompletionRef.current) {
       return workoutCompletionRef.current;
     }
-    workoutFinalizationModeRef.current = mode;
+    workoutFinalizationInputRef.current = {
+      ...(actualCardioDurationSeconds === undefined ? {} : { actualCardioDurationSeconds }),
+      mode,
+    };
+    setWorkoutFinalizationProgress('WAITING');
     setWorkoutCompletionResult(null);
     setDurableCompletionReachedAtMs(null);
     setFinishingSession(true);
@@ -1153,17 +1192,58 @@ function AppShellContent({
       sessionIndex: targetSessionIndex,
     });
 
-    return runWorkoutCompletionAttempt(workoutCompletionRef, async (): Promise<WorkoutCompletionResult> => {
-      const finishFlowStartedAtMs = Date.now();
-      logInfo('workout_performance', 'finalize_request_start', { timestampMs: finishFlowStartedAtMs });
-      try {
+    return runWorkoutCompletionAttempt(workoutCompletionRef, () => runWorkoutFinalizationWithBestEffortProgress({
+      createProgressAttempt: () => {
+        workoutFinalizationProgressAttemptRef.current?.dispose();
+        workoutFinalizationProgressAttemptRef.current = null;
+        if (!appShellMountedRef.current) {
+          return { attemptId: null, reportCheckpoint: () => undefined, dispose: () => undefined };
+        }
+        return createWorkoutFinalizationProgressAttempt({
+          createAttemptId: randomUUID,
+          subscribe: user
+            ? (attemptId, onStage, onError) => subscribeToWorkoutFinalizationProgress(
+                user.uid,
+                attemptId,
+                onStage,
+                onError,
+              )
+            : undefined,
+          onStage: (stage) => {
+            if (appShellMountedRef.current) advanceWorkoutFinalizationProgress(stage);
+          },
+          onInfrastructureError: (phase, error) => {
+            logWarn('workout', 'finalization_progress_infrastructure_failed', { phase, error });
+          },
+        });
+      },
+      onAttemptStarted: (attempt) => {
+        if (appShellMountedRef.current) workoutFinalizationProgressAttemptRef.current = attempt;
+        else attempt.dispose();
+      },
+      onAttemptFinished: (attempt) => {
+        if (workoutFinalizationProgressAttemptRef.current === attempt) {
+          workoutFinalizationProgressAttemptRef.current = null;
+        }
+      },
+      onInfrastructureError: (phase, error) => {
+        logWarn('workout', 'finalization_progress_runtime_failed', { phase, error });
+      },
+      isAuthoritativelyCommitted: (result) => result === 'COMPLETED'
+        || result === 'LIFECYCLE_FOLLOW_UP_FAILED',
+      runAuthoritative: async (attemptId, reportCheckpoint): Promise<WorkoutCompletionResult> => {
+        const finishFlowStartedAtMs = Date.now();
+        logInfo('workout_performance', 'finalize_request_start', { timestampMs: finishFlowStartedAtMs });
+        try {
         let finalized: { ok: true; result: FinalizeWorkoutSessionResult } | { ok: false; error: unknown };
         if (recoveredExecution) {
           try {
+            reportCheckpoint('CLIENT_READY');
             finalized = {
               ok: true,
               result: await finalizeWorkoutSession({
                 executionId: recoveredExecution.executionId,
+                ...(attemptId ? { attemptId } : {}),
                 ...(mode === 'NORMAL' ? {} : { mode }),
                 ...(actualCardioDurationSeconds === undefined ? {} : {
                   cardio: { actualDurationSeconds: actualCardioDurationSeconds },
@@ -1174,12 +1254,62 @@ function AppShellContent({
             finalized = { ok: false, error };
           }
         } else {
-          finalized = await execution.finalize(actualCardioDurationSeconds, mode);
+          finalized = await execution.finalize(actualCardioDurationSeconds, mode, {
+            ...(attemptId ? { attemptId } : {}),
+            onCheckpoint: reportCheckpoint,
+          });
+        }
+        // A timeout/disconnect can lose the successful callable response
+        // after the transaction committed. Before surfacing an error, verify
+        // both durable authorities (terminal execution + deterministic
+        // schedule event). This read-only reconciliation makes retries and
+        // foreground recovery converge without inventing success.
+        if (!finalized.ok && user && targetExecution) {
+          try {
+            const terminal = await loadAuthoritativelyCommittedFinalization({
+              executionId: targetExecution.executionId,
+              loadExecution: (targetExecutionId) => loadWorkoutExecution(user.uid, targetExecutionId),
+              hasCompletionEvent: (candidate) => hasScheduledSessionCompletion({
+                uid: user.uid,
+                programId: candidate.programId,
+                programInstanceId: candidate.programInstanceId,
+                sessionIndex: candidate.sessionIndex,
+                scheduledLocalDate: candidate.scheduledLocalDate,
+                occurrence: candidate.occurrence,
+              }),
+            });
+            if (terminal) {
+              if (appShellMountedRef.current) execution.adoptExecution(terminal);
+              finalized = {
+                ok: true,
+                result: {
+                  status: 'COMPLETED',
+                  executionStatus: terminal.status,
+                  cardioStatus: terminal.cardio?.status === 'COMPLETED'
+                    ? 'COMPLETED'
+                    : terminal.cardio?.status === 'SKIPPED' ? 'SKIPPED' : 'NOT_APPLICABLE',
+                  scheduleStatus: 'COMPLETED',
+                  completion: terminal.completion,
+                },
+              };
+              logInfo('workout', 'finalization_response_reconciled_from_authority', {
+                executionId: terminal.executionId,
+              });
+            }
+          } catch (reconciliationError) {
+            logWarn('workout', 'finalization_response_reconciliation_failed', { reconciliationError });
+          }
         }
         const result: WorkoutCompletionResult = finalized.ok
           ? 'COMPLETED'
           : workoutFinalizationFailureStage(finalized.error) === 'SCHEDULE'
             ? 'SCHEDULE_FAILED' : 'EXECUTION_FAILED';
+        // Recovery storage cleanup is a durable-success side effect, not a UI
+        // setter. It remains safe even if AppShell unmounted while the callable
+        // was in flight; clearCardioSession already serializes and logs storage
+        // failures internally.
+        if (result === 'COMPLETED' && hasCardioFinisher) void clearCardioSession();
+        if (!appShellMountedRef.current) return result;
         if (result === 'COMPLETED') {
           const durableReachedAtMs = Date.now();
           setDurableCompletionReachedAtMs(durableReachedAtMs);
@@ -1284,10 +1414,11 @@ function AppShellContent({
           });
         }
         return result;
-      } finally {
-        setFinishingSession(false);
-      }
-    });
+        } finally {
+          if (appShellMountedRef.current) setFinishingSession(false);
+        }
+      },
+    }));
   };
 
   const handleFinishRecovery = () => {
@@ -1400,7 +1531,12 @@ function AppShellContent({
       durationMs: Date.now() - retryStartedAtMs,
     });
     try {
-      const result = await runWorkoutCompletion(true, undefined, workoutFinalizationModeRef.current);
+      const retryInput = workoutFinalizationInputRef.current;
+      const result = await runWorkoutCompletion(
+        true,
+        retryInput.actualCardioDurationSeconds,
+        retryInput.mode,
+      );
       logInfo('workout_retry', 'retry_result', {
         timestamp: Date.now(),
         executionId,
@@ -1419,6 +1555,24 @@ function AppShellContent({
       });
     }
   };
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (!shouldRetryWorkoutCompletionOnForeground({
+        appState: state,
+        workoutInProgress,
+        finishing: finishingSession,
+        result: workoutCompletionResult,
+      })) return;
+      // Retrying the same immutable execution is idempotent. A new sidecar
+      // attempt is created, while execution/event identities remain stable.
+      void retryWorkoutCompletion();
+    });
+    return () => subscription.remove();
+    // retryWorkoutCompletion intentionally captures the latest execution and
+    // exact cardio/mode input; the listener is renewed when those states move.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [finishingSession, workoutCompletionResult, workoutInProgress]);
 
   const finishWorkoutSession = async () => {
     await runWorkoutCompletionSingleFlight(finishSessionInFlightRef, async () => {
@@ -1458,7 +1612,10 @@ function AppShellContent({
       });
       if (navigated) {
         workoutCompletionRef.current = null;
-        workoutFinalizationModeRef.current = 'NORMAL';
+        workoutFinalizationInputRef.current = { mode: 'NORMAL' };
+        workoutFinalizationProgressAttemptRef.current?.dispose();
+        workoutFinalizationProgressAttemptRef.current = null;
+        setWorkoutFinalizationProgress('WAITING');
         workoutHomeSyncRef.current = null;
         setWorkoutCompletionResult(null);
         setDurableCompletionReachedAtMs(null);
@@ -1489,7 +1646,10 @@ function AppShellContent({
     setWorkoutInProgress(false);
     setWorkoutStartAttempt(null);
     workoutCompletionRef.current = null;
-    workoutFinalizationModeRef.current = 'NORMAL';
+    workoutFinalizationInputRef.current = { mode: 'NORMAL' };
+    workoutFinalizationProgressAttemptRef.current?.dispose();
+    workoutFinalizationProgressAttemptRef.current = null;
+    setWorkoutFinalizationProgress('WAITING');
     workoutHomeSyncRef.current = null;
     setWorkoutCompletionResult(null);
     setDurableCompletionReachedAtMs(null);
@@ -1665,6 +1825,7 @@ function AppShellContent({
                 }
               }}
               finishing={finishingSession}
+              finalizationProgress={workoutFinalizationProgress}
               completionConfirmed={workoutCompletionResult === 'COMPLETED'
                 || workoutCompletionResult === 'LIFECYCLE_FOLLOW_UP_FAILED'}
               durableCompletionReachedAtMs={durableCompletionReachedAtMs}

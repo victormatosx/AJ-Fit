@@ -5,6 +5,8 @@ export type WorkoutFinalizationMode = 'NORMAL' | 'EARLY';
 
 export interface FinalizeWorkoutSessionInput {
   executionId: string;
+  /** Correlates best-effort progress only; never participates in authority or idempotency. */
+  attemptId?: string;
   /** Omitted callers retain the pre-existing NORMAL behavior. */
   mode?: WorkoutFinalizationMode;
   cardio?: { actualDurationSeconds: number };

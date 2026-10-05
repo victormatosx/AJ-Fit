@@ -120,6 +120,33 @@ describe.skipIf(!enabled)('finalizeWorkoutSession — real Firestore Emulator in
     expect(state.data()).toMatchObject({ nextSessionIndex: 0, lastCompletedAt: today });
   });
 
+  it('publishes all real sidecar checkpoints without changing the authoritative result', async () => {
+    const attemptId = 'attempt_progress_1';
+    await expect(finalize({ attemptId })).resolves.toMatchObject({
+      status: 'COMPLETED',
+      scheduleStatus: 'COMPLETED',
+    });
+    const ref = root.collection('workoutFinalizationAttempts').doc(attemptId);
+    let data: FirebaseFirestore.DocumentData | undefined;
+    for (let index = 0; index < 40; index += 1) {
+      data = (await ref.get()).data();
+      if (data?.checkpoints?.SERVER_ACCEPTED
+        && data.checkpoints.PREFLIGHT_VALIDATED
+        && data.checkpoints.COMMITTED) break;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    expect(data).toMatchObject({
+      executionId: EXECUTION_ID,
+      attemptId,
+      checkpoints: {
+        SERVER_ACCEPTED: expect.anything(),
+        PREFLIGHT_VALIDATED: expect.anything(),
+        COMMITTED: expect.anything(),
+      },
+    });
+    expect(data?.expiresAt).toBeInstanceOf(Timestamp);
+  });
+
   it.each([
     [4, 10, 4000],
     [7, 10, 7000],

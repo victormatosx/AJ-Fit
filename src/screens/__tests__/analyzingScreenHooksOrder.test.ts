@@ -50,9 +50,10 @@ describe('AnalyzingScreen — Rules of Hooks regression guard', () => {
   it('calls hooks before the error-state early return (sanity: the guard below is not vacuous)', () => {
     const beforeReturn = body.slice(0, earlyReturnIndex);
     const hookCallsBefore = beforeReturn.match(/\buse[A-Z]\w*\s*\(/g) ?? [];
-    // useState ×3, useEffect ×3, useRef ×1, useEffect ×1 (pulse) — at least
-    // that many; an exact count would make this test brittle to unrelated edits.
-    expect(hookCallsBefore.length).toBeGreaterThanOrEqual(7);
+    // The reusable ring owns no animation hooks. An exact count would make
+    // this test brittle to unrelated edits, but the screen still owns its
+    // state and effects before the conditional return.
+    expect(hookCallsBefore.length).toBeGreaterThanOrEqual(6);
   });
 
   it('never calls a hook after the error-state early return', () => {
@@ -64,10 +65,9 @@ describe('AnalyzingScreen — Rules of Hooks regression guard', () => {
     expect(hookCallsAfter).toEqual([]);
   });
 
-  it('specifically keeps the pulse animation hooks (useRef + useEffect) before the early return', () => {
-    const pulseRefIndex = body.indexOf('useRef(new Animated.Value(0.75))');
-    expect(pulseRefIndex).toBeGreaterThan(-1);
-    expect(pulseRefIndex).toBeLessThan(earlyReturnIndex);
+  it('renders the shared circular progress component without reintroducing local pulse hooks', () => {
+    expect(body).toContain('<CircularProgressRing');
+    expect(body).not.toContain('useRef(new Animated.Value(0.75))');
   });
 
   it('preserves domain outcomes and sends non-retryable safety results back to answer review', () => {

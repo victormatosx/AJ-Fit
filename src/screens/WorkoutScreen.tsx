@@ -60,7 +60,6 @@ import {
   sanitizeActualReps,
   type Exercise,
   type ManualSubstitutionContextStatus,
-  type SetData,
   type SubOption,
 } from './workoutScreenPlan';
 import { computeRemainingSeconds, computeRestProgress } from '../lib/restTimer';
@@ -119,6 +118,7 @@ import {
   replayQueuedPersonalRecordChecks,
 } from '../workoutExecution/personalRecord';
 import { normalizeDecimalInput, parseDecimalInput } from '../lib/decimalInput';
+import type { WorkoutFinalizationProgressStage } from '../workoutLifecycle/finalizationProgress';
 
 type Props = {
   sex: Sex;
@@ -177,6 +177,7 @@ type Props = {
    * Completion Recovery hardening).
    */
   finishing?: boolean;
+  finalizationProgress: WorkoutFinalizationProgressStage;
   /** True only after Execution terminal + Schedule completion are both durable. */
   completionConfirmed?: boolean;
   /** Timestamp captured at the durable boundary, used only for DEV performance telemetry. */
@@ -202,14 +203,14 @@ type Props = {
    */
   onAbandon?: () => Promise<{ ok: true } | { ok: false; error: unknown }>;
   /**
-   * Persists the cardio finisher's completion on the Firestore execution —
-   * `useWorkoutExecution().completeCardio` — BEFORE the local UI treats
-   * cardio as done (docs — Cardio Finisher Completion Recovery hardening).
+   * Runs the same authoritative finalizer with the frozen actual cardio
+   * duration. The summary can open immediately, but local cardio recovery is
+   * cleared only once this resolves `{ ok: true }`.
    * Returns a typed result, never throws: a network/transaction failure must
-   * never be read as "cardio is confirmed done". `CardioSessionContent`
-   * only advances to `finished` once this resolves `{ ok: true }`.
+   * never be read as "cardio is confirmed done". The server response, not a
+   * local FINISHED projection, is the completion authority.
    */
-  onCardioCompleted?: (actualDurationSeconds: number) => Promise<{ ok: true } | { ok: false; error: unknown }>;
+  onCardioCompleted: (actualDurationSeconds: number) => Promise<{ ok: true } | { ok: false; error: unknown }>;
   /** Uses the same official finalizer, explicitly marking the user's intent to stop before every prescribed item is complete. */
   onEarlyFinish: () => Promise<{ ok: true } | { ok: false; error: unknown }>;
   /**
@@ -254,8 +255,6 @@ type Props = {
 type LooseT = (key: string, opts?: Record<string, unknown>) => string;
 
 const warnedMissingMuscleGroups = new Set<string>();
-const FINAL_COMPLETION_ANIMATION_MS = 2000;
-
 function translateMuscleGroup(tLoose: LooseT, target: string): string {
   const key = `muscleGroups.${target}`;
   const value = tLoose(key, { defaultValue: '' });
@@ -267,7 +266,7 @@ function translateMuscleGroup(tLoose: LooseT, target: string): string {
   return target;
 }
 
-export function WorkoutScreen({ sex, plan, onDone, onRetryCompletion, onDiscarded, onMinimize, sessionIndex = 0, execution, workoutStartedAtMs, hasUnreconciledMutations, onSessionCompleted, finishing, completionConfirmed, durableCompletionReachedAtMs, completionFailed, onSetLogged, onCompletedSetEdited, onAbandon, onCardioCompleted, onEarlyFinish, manualSubstitutionContext, manualSubstitutionContextStatus, onRetryManualSubstitutionContext, onApplySubstitution }: Props) {
+export function WorkoutScreen({ sex, plan, onDone, onRetryCompletion, onDiscarded, onMinimize, sessionIndex = 0, execution, workoutStartedAtMs, hasUnreconciledMutations, onSessionCompleted, finishing, finalizationProgress, completionConfirmed, durableCompletionReachedAtMs, completionFailed, onSetLogged, onCompletedSetEdited, onAbandon, onCardioCompleted, onEarlyFinish, manualSubstitutionContext, manualSubstitutionContextStatus, onRetryManualSubstitutionContext, onApplySubstitution }: Props) {
   useEffect(() => {
     if (typeof __DEV__ === 'undefined' || !__DEV__) return undefined;
     logInfo('workout_performance', 'workout_screen_mount', {
@@ -501,7 +500,6 @@ export function WorkoutScreen({ sex, plan, onDone, onRetryCompletion, onDiscarde
   // `showCardioFinisher`.
   const cardioAlreadySettled = !!hydration?.cardioSettled;
   const [finished, setFinished] = useState(() => !!hydration?.allDone && (!cardioFinisher || cardioAlreadySettled));
-  const [finalCompletionAnimationElapsed, setFinalCompletionAnimationElapsed] = useState(false);
   // The post-workout summary is the terminal screen's first page; the share
   // composer (unchanged) only mounts once the user taps "Compartilhar
   // treino" on it — never shown first anymore.
@@ -597,7 +595,6 @@ export function WorkoutScreen({ sex, plan, onDone, onRetryCompletion, onDiscarde
     name: string;
     nextName: string;
     continuesToCardio?: boolean;
-    finalizesWorkout?: boolean;
   } | null>(null);
 
   // Session duration is wall-clock endpoint minus `workoutStartedAtMs`, never
@@ -719,11 +716,6 @@ export function WorkoutScreen({ sex, plan, onDone, onRetryCompletion, onDiscarde
     earlyFinishRequestedRef.current = true;
     completionModeRef.current = 'EARLY';
     setExitSheet(null);
-    setExComplete({
-      name: ex.name,
-      nextName: t('done.finishing'),
-      finalizesWorkout: true,
-    });
     // This callback already enters AppShell's single-flight
     // runWorkoutCompletion path. Mark the generic finished effect handled
     // before the render flips so it cannot issue a second NORMAL request.
@@ -943,11 +935,6 @@ export function WorkoutScreen({ sex, plan, onDone, onRetryCompletion, onDiscarde
             setShowCardioFinisher(true);
           }, 2000);
         } else {
-          setExComplete({
-            name: completedName,
-            nextName: t('done.finishing'),
-            finalizesWorkout: true,
-          });
           setFinished(true);
         }
         return;
@@ -1184,24 +1171,9 @@ export function WorkoutScreen({ sex, plan, onDone, onRetryCompletion, onDiscarde
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finished]);
 
-  // The final exercise transition is also the workout-finalization progress
-  // surface. Keep it visible for a complete visual beat even when the server
-  // responds immediately; after that, it remains mounted for as long as the
-  // durable completion is still pending. Cardio already owns the same minimum
-  // inside CardioScreen and marks this elapsed before setting `finished`.
-  useEffect(() => {
-    if (!finished || finalCompletionAnimationElapsed) return undefined;
-    const timer = setTimeout(
-      () => setFinalCompletionAnimationElapsed(true),
-      FINAL_COMPLETION_ANIMATION_MS,
-    );
-    return () => clearTimeout(timer);
-  }, [finalCompletionAnimationElapsed, finished]);
-
   const successVisibleRef = useRef(false);
   useEffect(() => {
     const visible = finished
-      && finalCompletionAnimationElapsed
       && !!completionConfirmed
       && !completionFailed;
     if (visible && !successVisibleRef.current) {
@@ -1214,7 +1186,7 @@ export function WorkoutScreen({ sex, plan, onDone, onRetryCompletion, onDiscarde
       });
     }
     successVisibleRef.current = visible;
-  }, [completionConfirmed, completionFailed, durableCompletionReachedAtMs, finalCompletionAnimationElapsed, finished]);
+  }, [completionConfirmed, completionFailed, durableCompletionReachedAtMs, finished]);
 
   const workoutDisplayName = currentSession
     ? resolveSessionDisplayName(tLoose, currentSession.name, currentSession.type, currentSession.displayName)
@@ -1223,38 +1195,18 @@ export function WorkoutScreen({ sex, plan, onDone, onRetryCompletion, onDiscarde
   // only ever shown once `finished` — gating `execution`/`durationSeconds`
   // to `null`/0 until then keeps this from recomputing every second off the
   // live `elapsed` ticker while the workout is still in progress.
-  const workoutSummaryData = useWorkoutSummaryData({
+  const {
+    data: workoutSummaryData,
+    loadProgressStatus: workoutSummaryLoadProgressStatus,
+    retryLoadProgress: retryWorkoutSummaryLoadProgress,
+  } = useWorkoutSummaryData({
     workoutName: workoutDisplayName,
     execution: finished ? execution : null,
     durationSeconds: finished ? elapsed : 0,
+    completionConfirmed: finished && !!completionConfirmed,
   });
 
   if (finished) {
-    if (completionFailed && !finishing) {
-      return <WorkoutCompletionError onRetry={onRetryCompletion} />;
-    }
-    // The last completion animation is the loading/progress surface. It stays
-    // visible until BOTH its minimum duration and the durable Execution +
-    // Schedule boundary are complete; only then may sharing become visible.
-    if (!completionConfirmed || !finalCompletionAnimationElapsed || finishing) {
-      const finalizingName = exComplete?.finalizesWorkout
-        ? exComplete.name
-        : (workoutDisplayName || t('done.kicker'));
-      return (
-        <ScreenBg>
-          <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-            <ExerciseDoneOverlay
-              name={finalizingName}
-              nextName={t('done.finishing')}
-              finalizingWorkout
-              completedLabel={exComplete?.finalizesWorkout
-                ? t('exerciseDone.completed')
-                : t('done.kicker')}
-            />
-          </SafeAreaView>
-        </ScreenBg>
-      );
-    }
     const finishAndGoHome = () => {
       // Diagnostic instrumentation (Phase 2, Part F) — only the true
       // post-completion navigation (this branch only renders once
@@ -1271,16 +1223,22 @@ export function WorkoutScreen({ sex, plan, onDone, onRetryCompletion, onDiscarde
 
     // The summary is the terminal screen's first page; tapping "Compartilhar
     // treino" on it swaps to the exact same share composer/flow that used
-    // to be shown first, unchanged. A `null` summary (execution not adopted
-    // yet) falls back straight to the composer rather than blocking on data
-    // that should already exist by the time `finished` is true.
-    if (!showShareComposer && workoutSummaryData) {
+    // to be shown first, unchanged. Until the authoritative response and a
+    // reliable summary both exist, this page stays locked in processing.
+    if (!showShareComposer || !completionConfirmed || !workoutSummaryData) {
       return (
         <WorkoutSummaryScreen
           sex={sex}
           data={workoutSummaryData}
+          workoutName={workoutDisplayName}
+          finalizationStage={completionConfirmed ? 'COMMITTED' : finalizationProgress}
+          completionConfirmed={!!completionConfirmed}
+          completionFailed={!!completionFailed && !finishing}
+          loadProgressStatus={workoutSummaryLoadProgressStatus}
+          onRetry={onRetryCompletion}
+          onRetryLoadProgress={retryWorkoutSummaryLoadProgress}
           onClose={finishAndGoHome}
-          onShare={() => setShowShareComposer(true)}
+          onShare={() => { if (completionConfirmed) setShowShareComposer(true); }}
         />
       );
     }
@@ -1317,36 +1275,29 @@ export function WorkoutScreen({ sex, plan, onDone, onRetryCompletion, onDiscarde
       <CardioScreen
         cardioFinisher={cardioFinisher}
         ownerKey={String(workoutStartedAtMs ?? `${plan.templateId}-${sessionIndex}`)}
-        onCardioCompleted={onCardioCompleted ? async (actualDurationSeconds) => {
-          const result = await onCardioCompleted(actualDurationSeconds);
-          // Cardio now crosses the complete durable boundary itself. Prevent
-          // the generic `finished` effect from issuing a second request.
-          if (result.ok) completionSignaledRef.current = true;
-          return result;
-        } : undefined}
-        onEarlyFinish={async () => {
-          const result = await onEarlyFinish();
-          if (result.ok) completionSignaledRef.current = true;
-          return result;
-        }}
-        onFinish={(actualDurationSeconds) => {
-          logInfo('workout', 'cardio_finished', {
-            templateId: plan.templateId,
-            sessionIndex,
-            plannedDurationSeconds: parsePrescribedCardioDurationSeconds(cardioFinisher.duration),
-            actualDurationSeconds,
-          });
-          setFinalCompletionAnimationElapsed(true);
+        onFinalizationStarted={(mode, actualDurationSeconds) => {
+          // Cardio starts the authoritative request itself. Mark this before
+          // revealing the summary so the generic `finished` effect cannot
+          // issue a duplicate request on the next render.
+          completionSignaledRef.current = true;
+          completionModeRef.current = mode;
+          if (mode === 'EARLY') {
+            logInfo('workout', 'cardio_skipped_by_early_finish', {
+              templateId: plan.templateId,
+              sessionIndex,
+            });
+          } else {
+            logInfo('workout', 'cardio_finished', {
+              templateId: plan.templateId,
+              sessionIndex,
+              plannedDurationSeconds: parsePrescribedCardioDurationSeconds(cardioFinisher.duration),
+              actualDurationSeconds,
+            });
+          }
           setFinished(true);
-        }}
-        onEarlyFinished={() => {
-          logInfo('workout', 'cardio_skipped_by_early_finish', {
-            templateId: plan.templateId,
-            sessionIndex,
-          });
-          completionModeRef.current = 'EARLY';
-          setFinalCompletionAnimationElapsed(true);
-          setFinished(true);
+          return mode === 'EARLY'
+            ? onEarlyFinish()
+            : onCardioCompleted(actualDurationSeconds ?? 0);
         }}
       />
     );
@@ -2961,19 +2912,15 @@ function Badge({
 function CardioScreen({
   cardioFinisher,
   ownerKey,
-  onCardioCompleted,
-  onEarlyFinish,
-  onFinish,
-  onEarlyFinished,
+  onFinalizationStarted,
 }: {
   cardioFinisher: FinalCardioFinisher;
   /** Identifies this workout attempt — from `workoutStartedAtMs`, so a stale persisted session from a previous attempt is never mistakenly restored. */
   ownerKey: string;
-  /** See `Props.onCardioCompleted`'s doc comment above. */
-  onCardioCompleted?: (actualDurationSeconds: number) => Promise<{ ok: true } | { ok: false; error: unknown }>;
-  onEarlyFinish: () => Promise<{ ok: true } | { ok: false; error: unknown }>;
-  onFinish: (actualDurationSeconds: number) => void;
-  onEarlyFinished: () => void;
+  onFinalizationStarted: (
+    mode: 'NORMAL' | 'EARLY',
+    actualDurationSeconds?: number,
+  ) => Promise<{ ok: true } | { ok: false; error: unknown }>;
 }) {
   const { theme } = useTheme();
   const { t } = useTranslation('workout');
@@ -3115,30 +3062,19 @@ function CardioScreen({
   // durable write). The visual celebration begins with the user's explicit
   // confirmation and remains the only progress surface; the local session
   // cannot become FINISHED until that server-authoritative operation succeeds.
-  // `idle -> finalizing -> success` or `-> error` (retryable, never silently
-  // swallowed).
-  const [finishState, setFinishState] = useState<'idle' | 'finalizing' | 'error'>('idle');
   const finishingRef = useRef(false);
 
   const finalizeNow = async () => {
-    // Re-entrancy guard via ref (not just `finishState`, which lags a render
-    // behind) — a double tap (footer "Pular cardio" + accidental second tap,
-    // or the modal's "Tentar novamente" pressed twice) can never fire two
-    // concurrent `completeCardioExecution` calls.
+    // Ref-based same-tick guard: an accidental double confirmation cannot
+    // start two concurrent authoritative finalization calls.
     if (finishingRef.current) return;
     const finalizationMode = confirmSheet === 'early' ? 'EARLY' : 'NORMAL';
     finishingRef.current = true;
-    setFinishState('finalizing');
     logInfo('workout_performance', 'finish_ui_transition_started', { timestampMs: Date.now(), source: 'cardio' });
-    const completionAnimation = new Promise<void>((resolve) => {
-      setTimeout(resolve, FINAL_COMPLETION_ANIMATION_MS);
-    });
     logInfo('workout', 'cardio_finish_requested', {});
-    // Frozen once at the confirmation tap — a retry after a failure
-    // recomputes fresh (the user was still legitimately doing cardio while
-    // stuck on the error state), but a single attempt always persists and
-    // locally freezes the exact same duration, never two different values
-    // for one confirmed tap.
+    // Frozen once at the confirmation tap. AppShell retains this exact value
+    // for every same-process retry/background reconciliation; no retry
+    // recomputes duration from a clock that continued running meanwhile.
     const finishedSession = finalizationMode === 'NORMAL'
       ? finishCardio(session, Date.now())
       : null;
@@ -3146,13 +3082,13 @@ function CardioScreen({
 
     const cardioPersistStartedAtMs = Date.now();
     logInfo('workout_performance', 'cardio_persist_start', { timestampMs: cardioPersistStartedAtMs });
-    // The callback owns the durable workout-finalization boundary and runs in
-    // parallel with the animation. `Promise.all` keeps that same animated
-    // surface mounted until both the visual beat and the server work finish.
-    const persistence = finalizationMode === 'EARLY'
-      ? onEarlyFinish()
-      : (onCardioCompleted?.(actualDurationSeconds) ?? Promise.resolve({ ok: true } as const));
-    const [result] = await Promise.all([persistence, completionAnimation]);
+    // This callback also reveals WorkoutSummaryScreen synchronously. The
+    // promise continues owning cardio recovery cleanup after this component
+    // unmounts; no React state is touched after the await.
+    const result = await onFinalizationStarted(
+      finalizationMode,
+      finalizationMode === 'NORMAL' ? actualDurationSeconds : undefined,
+    );
     logInfo('workout_performance', 'cardio_persist_end', {
       timestampMs: Date.now(),
       durationMs: Date.now() - cardioPersistStartedAtMs,
@@ -3161,26 +3097,22 @@ function CardioScreen({
     finishingRef.current = false;
     if (!result.ok) {
       logWarn('workout', 'cardio_finish_ui_failed', {});
-      setFinishState('error');
       return;
     }
-    // The durable boundary succeeded. Only now may local cardio state become
-    // FINISHED and its recovery record be removed.
+    // The durable boundary succeeded. AppShell owns recovery-storage cleanup;
+    // this component only publishes the terminal Live Activity projection and
+    // never marks its local/persisted CardioSession FINISHED optimistically.
     if (finishedSession) {
-      publish(finishedSession);
       publishLiveActivity(
         finishedSession,
         session.status === 'READY' ? 'start' : 'update',
         finishedSession.cardioFinishedAt ?? Date.now(),
       );
     }
-    void clearCardioSession();
-    if (finalizationMode === 'EARLY') onEarlyFinished();
-    else onFinish(actualDurationSeconds);
   };
 
   const [confirmSheet, setConfirmSheet] = useState<'finish' | 'early' | null>(null);
-  const finishModalVisible = confirmSheet !== null || finishState !== 'idle';
+  const finishModalVisible = confirmSheet !== null;
 
   const handleHeaderClose = () => {
     setConfirmSheet('early');
@@ -3188,21 +3120,6 @@ function CardioScreen({
 
   const doneClock = formatCardioClock(elapsed);
   const targetClock = formatCardioClock(session.targetDurationSeconds);
-
-  if (finishState === 'finalizing') {
-    return (
-      <ScreenBg>
-        <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-          <ExerciseDoneOverlay
-            name={t('cardioFinisher.title')}
-            nextName={t('done.finishing')}
-            completedLabel={t(confirmSheet === 'early' ? 'cardioSession.skipped' : 'cardioSession.completed')}
-            finalizingWorkout
-          />
-        </SafeAreaView>
-      </ScreenBg>
-    );
-  }
 
   return (
     <ScreenBg>
@@ -3252,7 +3169,6 @@ function CardioScreen({
         statusBarTranslucent
         onRequestClose={() => {
           setConfirmSheet(null);
-          setFinishState('idle');
         }}
       >
         <Pressable
@@ -3260,7 +3176,6 @@ function CardioScreen({
           accessibilityLabel={t('cardioSession.continueCardio')}
           onPress={() => {
             setConfirmSheet(null);
-            setFinishState('idle');
           }}
           style={{
             flex: 1,
@@ -3301,55 +3216,7 @@ function CardioScreen({
                 {t('cardioFinisher.title').toUpperCase()}
               </Slash>
 
-              {finishState === 'error' ? (
-                <>
-                  <Display size={26} color={theme.colors.textPrimary} style={{ marginTop: 9 }}>
-                    {t(confirmSheet === 'early'
-                      ? 'cardioSession.earlyFinishErrorTitle'
-                      : 'cardioSession.finishErrorTitle').toUpperCase()}
-                  </Display>
-                  <Text style={{ marginTop: 8, fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textSecondaryStrong, lineHeight: 19 }}>
-                    {t(confirmSheet === 'early'
-                      ? 'cardioSession.earlyFinishErrorBody'
-                      : 'cardioSession.finishErrorBody')}
-                  </Text>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={t('cardioSession.finishRetry')}
-                    onPress={() => void finalizeNow()}
-                    style={{
-                      height: 48,
-                      marginTop: 18,
-                      borderRadius: 10,
-                      borderBottomRightRadius: 0,
-                      backgroundColor: theme.colors.inverseSurface,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 9,
-                    }}
-                  >
-                    <Icon name="swap" size={12} color={theme.colors.inverseForeground} />
-                    <Text style={{ color: theme.colors.inverseForeground, fontFamily: theme.fonts.display, fontSize: 15, letterSpacing: 1.4, textTransform: 'uppercase' }}>
-                      {t('cardioSession.finishRetry')}
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={t('cardioSession.continueCardio')}
-                    onPress={() => {
-                      setConfirmSheet(null);
-                      setFinishState('idle');
-                    }}
-                    style={{ alignSelf: 'center', marginTop: 10, paddingVertical: 10, paddingHorizontal: 18 }}
-                  >
-                    <Text style={{ color: theme.colors.textMuted, fontFamily: theme.fonts.ui, fontSize: 13 }}>
-                      {t('cardioSession.continueCardio')}
-                    </Text>
-                  </Pressable>
-                </>
-              ) : (
-                <>
+              <>
                   <Display size={26} color={theme.colors.textPrimary} style={{ marginTop: 9 }}>
                     {t(confirmSheet === 'early'
                       ? 'cardioSession.earlyConfirmTitle'
@@ -3398,8 +3265,7 @@ function CardioScreen({
                       {t('cardioSession.continueCardio')}
                     </Text>
                   </Pressable>
-                </>
-              )}
+              </>
             </LinearGradient>
           </Pressable>
         </Pressable>
@@ -4402,12 +4268,10 @@ function ExerciseDoneOverlay({
   name,
   nextName,
   completedLabel,
-  finalizingWorkout = false,
 }: {
   name: string;
   nextName: string;
   completedLabel?: string;
-  finalizingWorkout?: boolean;
 }) {
   const { theme } = useTheme();
   const { t } = useTranslation('workout');
@@ -4447,8 +4311,6 @@ function ExerciseDoneOverlay({
         {name}
       </Display>
       <View
-        accessibilityLiveRegion={finalizingWorkout ? 'polite' : 'none'}
-        accessibilityLabel={finalizingWorkout ? nextName : undefined}
         style={{
           marginTop: 26,
           flexDirection: 'row',
@@ -4462,43 +4324,12 @@ function ExerciseDoneOverlay({
           borderColor: theme.colors.primaryBorderSubtle,
         }}
       >
-        {finalizingWorkout ? (
-          <ActivityIndicator size="small" color={theme.colors.primaryEmphasis} />
-        ) : (
-          <>
-            <MonoLabel color={theme.colors.primaryEmphasis}>
-              {t('exerciseDone.nextLabel').toUpperCase()}
-            </MonoLabel>
-            <Icon name="arrow-right" size={15} color={theme.colors.primaryEmphasis} />
-          </>
-        )}
+        <MonoLabel color={theme.colors.primaryEmphasis}>
+          {t('exerciseDone.nextLabel').toUpperCase()}
+        </MonoLabel>
+        <Icon name="arrow-right" size={15} color={theme.colors.primaryEmphasis} />
         <Text style={{ fontSize: 15, fontFamily: theme.fonts.uiBold, color: theme.colors.textPrimary }}>{nextName}</Text>
       </View>
     </View>
-  );
-}
-
-function WorkoutCompletionError({ onRetry }: { onRetry: () => void }) {
-  const { theme } = useTheme();
-  const { t } = useTranslation('workout');
-  return (
-    <ScreenBg>
-      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-        <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 26, gap: 20 }}>
-          <Text
-            accessibilityRole="alert"
-            style={{ color: theme.colors.textPrimary, fontFamily: theme.fonts.uiBold, fontSize: 18, textAlign: 'center' }}
-          >
-            {t('done.finishFailed')}
-          </Text>
-          <CtaButton onPress={onRetry} accessibilityLabel={t('done.retry')}>
-            <Text style={{ color: theme.colors.primaryForeground, fontFamily: theme.fonts.display, fontSize: 17, letterSpacing: 1.5, textTransform: 'uppercase' }}>
-              {t('done.retry')}
-            </Text>
-            <Icon name="swap" size={18} color={theme.colors.primaryForeground} />
-          </CtaButton>
-        </View>
-      </SafeAreaView>
-    </ScreenBg>
   );
 }

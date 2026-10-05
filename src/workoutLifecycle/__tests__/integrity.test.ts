@@ -5,6 +5,7 @@ import {
   recoveryFinalizationMode,
   runWorkoutCompletionAttempt,
   runWorkoutCompletionFollowUp,
+  shouldRetryWorkoutCompletionOnForeground,
   workoutCompletionAllowsHome,
 } from '../finishFlow';
 import { WorkoutMutationQueue } from '../mutationQueue';
@@ -67,6 +68,26 @@ describe('recovery finalization mode', () => {
       finalizationMode: 'EARLY',
     } as PersistedWorkoutExecution;
     expect(recoveryFinalizationMode(terminal, true)).toBe('EARLY');
+  });
+});
+
+describe('foreground completion retry', () => {
+  it('retries only a settled recoverable failure when the app becomes active', () => {
+    expect(shouldRetryWorkoutCompletionOnForeground({
+      appState: 'active', workoutInProgress: true, finishing: false, result: 'EXECUTION_FAILED',
+    })).toBe(true);
+    expect(shouldRetryWorkoutCompletionOnForeground({
+      appState: 'active', workoutInProgress: true, finishing: false, result: 'SCHEDULE_FAILED',
+    })).toBe(true);
+    expect(shouldRetryWorkoutCompletionOnForeground({
+      appState: 'background', workoutInProgress: true, finishing: false, result: 'EXECUTION_FAILED',
+    })).toBe(false);
+    expect(shouldRetryWorkoutCompletionOnForeground({
+      appState: 'active', workoutInProgress: true, finishing: true, result: 'EXECUTION_FAILED',
+    })).toBe(false);
+    expect(shouldRetryWorkoutCompletionOnForeground({
+      appState: 'active', workoutInProgress: true, finishing: false, result: 'COMPLETED',
+    })).toBe(false);
   });
 });
 

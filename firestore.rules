@@ -2266,6 +2266,14 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      // Best-effort progress emitted by the Admin-SDK callable. It is never
+      // authoritative for workout completion: owners may observe their own
+      // attempt, but no client can create, advance, forge, or delete it.
+      match /workoutFinalizationAttempts/{attemptId} {
+        allow read: if isOwner(userId) && accountActive(userId);
+        allow write: if false;
+      }
+
       // Exercise-substitution architecture audit: "todos os próximos
       // treinos" preferences. Written EXCLUSIVELY by `applyExerciseSubstitution`
       // (Admin SDK, bypasses these Rules entirely) — the client only ever

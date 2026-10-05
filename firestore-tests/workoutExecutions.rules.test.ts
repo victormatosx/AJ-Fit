@@ -292,6 +292,24 @@ describe('users/{uid}/workoutExecutions — create', () => {
   });
 });
 
+describe('users/{uid}/workoutFinalizationAttempts — server-owned sidecar', () => {
+  it('allows only the owner to read and denies every client write', async () => {
+    const path = ['users', UID, 'workoutFinalizationAttempts', 'attempt_1'] as const;
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), ...path), {
+        executionId: EXECUTION_ID,
+        checkpoints: { SERVER_ACCEPTED: new Date() },
+      });
+    });
+
+    await assertSucceeds(getDoc(doc(dbFor(UID), ...path)));
+    await assertFails(getDoc(doc(dbFor(OTHER_UID), ...path)));
+    await assertFails(setDoc(doc(dbFor(UID), ...path), { checkpoints: { COMMITTED: new Date() } }));
+    await assertFails(updateDoc(doc(dbFor(UID), ...path), { checkpoints: { COMMITTED: new Date() } }));
+    await assertFails(deleteDoc(doc(dbFor(UID), ...path)));
+  });
+});
+
 // `updateDoc` merges with the stored document, so fields not mentioned in
 // the patch (programId, sessionIndex, startedAt, createdAt, ...) keep their
 // exact original values — the correct way to exercise "must stay unchanged"

@@ -82,13 +82,16 @@ export async function hasScheduledSessionCompletion(input: {
   programInstanceId?: string;
   sessionIndex: number;
   scheduledLocalDate: string;
+  occurrence?: number;
 }): Promise<boolean> {
+  const baseId = scheduleEventId(
+    { type: 'COMPLETED', sessionIndex: input.sessionIndex, scheduledDate: input.scheduledLocalDate },
+    input.programInstanceId,
+  );
+  const eventId = (input.occurrence ?? 1) > 1 ? `${baseId}_o${input.occurrence}` : baseId;
   const snapshot = await getDoc(doc(
     scheduleEventsCollection(input.uid, input.programId),
-    scheduleEventId(
-      { type: 'COMPLETED', sessionIndex: input.sessionIndex, scheduledDate: input.scheduledLocalDate },
-      input.programInstanceId,
-    ),
+    eventId,
   ));
   return snapshot.exists();
 }

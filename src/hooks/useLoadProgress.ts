@@ -8,10 +8,16 @@ import {
   subscribeToWorkoutLoadRefresh,
 } from '../loadProgress/workoutLoadRefreshBus';
 import {
+  executeWorkoutSummaryRefresh,
+  INITIAL_WORKOUT_SUMMARY_REFRESH_STATE,
+  type WorkoutSummaryRefreshState,
+} from '../loadProgress/workoutSummaryRefresh';
+import {
   listWorkoutExecutionsForLoadProgress,
   loadWorkoutExecution,
   type PersistedWorkoutExecution,
 } from '../services/workoutExecutions';
+import { logWarn } from '../lib/logger';
 
 function deviceLocalDate(): string {
   const now = new Date();
@@ -28,8 +34,12 @@ export function useLoadProgress(uid: string | null) {
   const [resolvedUid, setResolvedUid] = useState<string | null>(null);
   const resolvedUidRef = useRef<string | null>(null);
   const fullFetchSeq = useRef(0);
-  const incrementalFetchSeq = useRef(0);
+  const incrementalFetchSeq = useRef(new Map<string, number>());
   const incrementalVersion = useRef(0);
+  const summaryRefreshGeneration = useRef(0);
+  const [summaryRefresh, setSummaryRefresh] = useState<WorkoutSummaryRefreshState>(
+    INITIAL_WORKOUT_SUMMARY_REFRESH_STATE,
+  );
 
   const refresh = useCallback(async () => {
     const seq = ++fullFetchSeq.current;
@@ -71,30 +81,84 @@ export function useLoadProgress(uid: string | null) {
     }
   }, [uid]);
 
+  const nextIncrementalSequence = useCallback((executionId: string): number => {
+    const sequence = (incrementalFetchSeq.current.get(executionId) ?? 0) + 1;
+    incrementalFetchSeq.current.set(executionId, sequence);
+    return sequence;
+  }, []);
+
+  const applyFreshExecution = useCallback((fresh: PersistedWorkoutExecution) => {
+    setExecutions((current) => {
+      const index = current.findIndex((item) => item.executionId === fresh.executionId);
+      if (index < 0) return [...current, fresh];
+      const next = current.slice();
+      next[index] = fresh;
+      return next;
+    });
+  }, []);
+
   const refreshExecution = useCallback(async (executionId: string) => {
     if (!uid) return;
-    const seq = ++incrementalFetchSeq.current;
+    const seq = nextIncrementalSequence(executionId);
     incrementalVersion.current += 1;
     try {
       const fresh = await loadWorkoutExecution(uid, executionId);
-      if (seq !== incrementalFetchSeq.current || !fresh) return;
-      setExecutions((current) => {
-        const index = current.findIndex((item) => item.executionId === executionId);
-        if (index < 0) return [...current, fresh];
-        const next = current.slice();
-        next[index] = fresh;
-        return next;
-      });
+      if (seq !== incrementalFetchSeq.current.get(executionId) || !fresh) return;
+      applyFreshExecution(fresh);
       setError(null);
     } catch {
       // A background incremental refresh must not blank already-valid data.
       // Focus/retry still performs the authoritative full query.
     }
-  }, [uid]);
+  }, [applyFreshExecution, nextIncrementalSequence, uid]);
+
+  const refreshExecutionForWorkoutSummary = useCallback(async (executionId: string) => {
+    if (!uid) {
+      setSummaryRefresh({ executionId, status: 'error' });
+      return 'ERROR' as const;
+    }
+    const generation = ++summaryRefreshGeneration.current;
+    nextIncrementalSequence(executionId);
+    incrementalVersion.current += 1;
+    setSummaryRefresh({ executionId, status: 'refreshing' });
+    let freshProjection: PersistedWorkoutExecution[] = [];
+
+    return executeWorkoutSummaryRefresh({
+      executionId,
+      loadExecution: async (targetExecutionId) => {
+        freshProjection = await listWorkoutExecutionsForLoadProgress(uid);
+        return freshProjection.find((item) => item.executionId === targetExecutionId) ?? null;
+      },
+      isCurrent: () => generation === summaryRefreshGeneration.current,
+      onFreshExecution: () => {
+        setExecutions(freshProjection);
+        setError(null);
+      },
+      onReady: () => {
+        setSummaryRefresh({ executionId, status: 'ready' });
+      },
+      onError: (cause) => {
+        logWarn('workout', 'workout_summary_load_progress_refresh_failed', {
+          executionId,
+          cause,
+        });
+        setSummaryRefresh({ executionId, status: 'error' });
+      },
+    });
+  }, [nextIncrementalSequence, uid]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    summaryRefreshGeneration.current += 1;
+    incrementalFetchSeq.current.clear();
+    setSummaryRefresh(INITIAL_WORKOUT_SUMMARY_REFRESH_STATE);
+    return () => {
+      summaryRefreshGeneration.current += 1;
+    };
+  }, [uid]);
 
   useEffect(() => {
     if (!uid) return undefined;
@@ -126,5 +190,7 @@ export function useLoadProgress(uid: string | null) {
     loading: !hasResolvedCurrentUid || loading,
     error: hasResolvedCurrentUid ? error : null,
     refresh,
+    summaryRefresh,
+    refreshExecutionForWorkoutSummary,
   };
 }

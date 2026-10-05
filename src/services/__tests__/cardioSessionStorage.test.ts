@@ -13,6 +13,7 @@ vi.mock('../../lib/logger', () => ({
 }));
 
 import { createCardioSession, startCardio } from '../../lib/cardioTimer';
+import { logError } from '../../lib/logger';
 import {
   CARDIO_SESSION_STORAGE_KEY,
   clearCardioSession,
@@ -65,5 +66,13 @@ describe('cardioSessionStorage', () => {
   it('clears the persisted session explicitly', async () => {
     await clearCardioSession();
     expect(storage.removeItem).toHaveBeenCalledWith(CARDIO_SESSION_STORAGE_KEY);
+  });
+
+  it('observes a clear failure without rejecting the durable completion task', async () => {
+    const failure = new Error('storage unavailable');
+    storage.removeItem.mockRejectedValueOnce(failure);
+
+    await expect(clearCardioSession()).resolves.toBeUndefined();
+    expect(logError).toHaveBeenCalledWith('cardioSessionStorage:clear', failure);
   });
 });

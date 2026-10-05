@@ -30,6 +30,7 @@ import {
   type WorkoutFinalizationMode,
 } from '../services/finalizeWorkoutSession';
 import type { WorkoutProgramSnapshot } from '../services/workoutPrograms';
+import type { WorkoutFinalizationProgressStage } from '../workoutLifecycle/finalizationProgress';
 import { WorkoutMutationQueue } from '../workoutLifecycle/mutationQueue';
 import {
   beginWorkoutStartFlight,
@@ -133,7 +134,11 @@ export interface WorkoutExecutionController {
    * next either way.
    */
   /** Flushes queued set writes, then atomically finalizes cardio (if supplied), Execution and Schedule server-side. */
-  finalize: (actualCardioDurationSeconds?: number, mode?: WorkoutFinalizationMode) => Promise<
+  finalize: (
+    actualCardioDurationSeconds?: number,
+    mode?: WorkoutFinalizationMode,
+    progress?: { attemptId?: string; onCheckpoint: (stage: WorkoutFinalizationProgressStage) => void },
+  ) => Promise<
     { ok: true; result: FinalizeWorkoutSessionResult } | { ok: false; error: unknown }
   >;
   /**
@@ -571,6 +576,7 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
   const finalize = useCallback(async (
     actualCardioDurationSeconds?: number,
     mode: WorkoutFinalizationMode = 'NORMAL',
+    progress?: { attemptId?: string; onCheckpoint: (stage: WorkoutFinalizationProgressStage) => void },
   ): Promise<
     { ok: true; result: FinalizeWorkoutSessionResult } | { ok: false; error: unknown }
   > => {
@@ -587,6 +593,11 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
       try {
         await mutationQueueRef.current.flush();
         setHasUnreconciledMutations(false);
+        try {
+          progress?.onCheckpoint('CLIENT_READY');
+        } catch (error) {
+          logWarn('workout_execution', 'finalization_visual_checkpoint_failed', { error });
+        }
         logInfo('workout_performance', 'finish_mutation_flush_end', {
           timestampMs: Date.now(),
           durationMs: Date.now() - flushStartedAtMs,
@@ -602,6 +613,7 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
       }
       const result = await finalizeWorkoutSession({
         executionId: execution.executionId,
+        ...(progress?.attemptId ? { attemptId: progress.attemptId } : {}),
         ...(mode === 'NORMAL' ? {} : { mode }),
         ...(actualCardioDurationSeconds === undefined ? {} : {
           cardio: { actualDurationSeconds: actualCardioDurationSeconds },

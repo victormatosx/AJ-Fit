@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { completionFromCounts } from '../finalizeWorkoutSession';
+import { completionFromCounts, writeFinalizationProgressBestEffort } from '../finalizeWorkoutSession';
 
 describe('finalizeWorkoutSession completion facts', () => {
   it.each([
@@ -15,5 +15,24 @@ describe('finalizeWorkoutSession completion facts', () => {
       completedSets: completed,
       percentageBasisPoints: expected,
     });
+  });
+});
+
+describe('finalization progress sidecar', () => {
+  it('never rejects the authoritative flow when a sidecar write fails', async () => {
+    const failure = new Error('sidecar unavailable');
+    const observed: unknown[] = [];
+    await expect(writeFinalizationProgressBestEffort(
+      async () => { throw failure; },
+      (error) => observed.push(error),
+    )).resolves.toBeUndefined();
+    expect(observed).toEqual([failure]);
+  });
+
+  it('also absorbs a diagnostic callback failure', async () => {
+    await expect(writeFinalizationProgressBestEffort(
+      async () => { throw new Error('sidecar unavailable'); },
+      () => { throw new Error('logger unavailable'); },
+    )).resolves.toBeUndefined();
   });
 });

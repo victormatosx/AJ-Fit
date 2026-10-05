@@ -40,7 +40,8 @@ describe('workout early-finish structure', () => {
 
   it('routes EARLY through the existing AppShell and mutation-flushed finalizer', () => {
     expect(shell).toContain("runWorkoutCompletion(false, undefined, 'EARLY')");
-    expect(shell).toContain('execution.finalize(actualCardioDurationSeconds, mode)');
+    expect(shell).toContain('execution.finalize(actualCardioDurationSeconds, mode, {');
+    expect(shell).toContain('onCheckpoint: reportCheckpoint');
     expect(executionHook).toContain('await mutationQueueRef.current.flush()');
     expect(executionHook).toContain("...(mode === 'NORMAL' ? {} : { mode })");
   });
@@ -54,8 +55,8 @@ describe('workout early-finish structure', () => {
   });
 
   it('never persists skipped cardio through the normal duration payload', () => {
-    expect(workout).toContain("finalizationMode === 'EARLY'");
+    expect(workout).toContain("mode === 'EARLY'");
     expect(workout).toContain('onEarlyFinish()');
-    expect(workout).toContain('onCardioCompleted?.(actualDurationSeconds)');
+    expect(workout).toContain('onCardioCompleted(actualDurationSeconds ?? 0)');
   });
 });

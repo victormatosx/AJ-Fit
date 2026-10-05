@@ -21,7 +21,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { deleteApp, initializeApp, type App } from 'firebase-admin/app';
-import { getFirestore, type Firestore } from 'firebase-admin/firestore';
+import { getFirestore, Timestamp, type Firestore } from 'firebase-admin/firestore';
 
 import { runFirestoreCleanup } from '../engine';
 
@@ -57,6 +57,7 @@ describe.skipIf(!enabled)('Firestore Cleanup Engine — real Emulator integratio
       wipeCollectionGroup('scheduleEvents'),
       wipeCollectionGroup('workoutProgramState'),
       wipeCollectionGroup('workoutExecutions'),
+      wipeCollectionGroup('workoutFinalizationAttempts'),
       wipeCollectionGroup('workoutExecutionOccurrenceCounters'),
       wipeCollectionGroup('workoutLifecycleState'),
       wipeCollectionGroup('trainingCycles'),
@@ -121,6 +122,9 @@ describe.skipIf(!enabled)('Firestore Cleanup Engine — real Emulator integratio
     await programRef.collection('scheduleEvents').doc('se1').set({ type: 'COMPLETED' });
     await db.collection('users').doc(uid).collection('workoutProgramState').doc('active').set({ programId: 'wpg1' });
     await db.collection('users').doc(uid).collection('workoutExecutions').doc('exec1').set({ status: 'COMPLETED' });
+    await db.collection('users').doc(uid).collection('workoutFinalizationAttempts').doc('attempt1').set({
+      checkpoints: { COMMITTED: Timestamp.now() },
+    });
     await db.collection('users').doc(uid).collection('workoutExecutionOccurrenceCounters')
       .doc('exec_wpg1_0_2026-10-03').set({ nextOccurrence: 3 });
     await db.collection('users').doc(uid).collection('workoutLifecycleState').doc('current').set({ currentCycleId: 'cycle1' });
@@ -267,6 +271,7 @@ describe.skipIf(!enabled)('Firestore Cleanup Engine — real Emulator integratio
         .toBe(false);
       for (const collectionName of [
         'workoutExecutions',
+        'workoutFinalizationAttempts',
         'workoutExecutionOccurrenceCounters',
         'workoutLifecycleState',
         'trainingCycles',

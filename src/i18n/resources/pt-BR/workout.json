@@ -127,19 +127,12 @@
     "finishConfirmAfterGoal": "Você concluiu sua meta de {{target}}. Tempo realizado: {{done}}.",
     "continueCardio": "Continuar cardio",
     "confirmFinish": "Finalizar",
-    "finishSavingTitle": "Salvando cardio…",
-    "finishSavingBody": "Só um instante — estamos confirmando seu cardio antes de finalizar o treino.",
-    "finishErrorTitle": "Não foi possível salvar",
-    "finishErrorBody": "Verifique sua conexão e tente novamente. Seu treino continua aberto até isso ser confirmado — nada é perdido.",
-    "finishRetry": "Tentar novamente",
     "exitConfirmTitle": "Sair do cardio?",
     "exitConfirmBody": "Sua musculação já está completa. Ao sair agora finalizamos o treino com {{done}} de cardio registrados.",
     "exitConfirmAction": "Finalizar e sair",
     "earlyConfirmTitle": "Finalizar sem cardio?",
     "earlyConfirmBody": "O cardio será ignorado e o treino será salvo com as séries que você concluiu.",
     "earlyConfirmAction": "Ignorar cardio e finalizar",
-    "earlyFinishErrorTitle": "Não foi possível finalizar",
-    "earlyFinishErrorBody": "Verifique sua conexão e tente novamente. O cardio não foi registrado como concluído.",
     "accessibility": {
       "close": "Sair do cardio",
       "timer": "Cronômetro do cardio"
@@ -282,7 +275,6 @@
         "social": "Social"
       }
     },
-    "finishing": "Finalizando treino…",
     "finishFailed": "Não foi possível finalizar o treino.",
     "retry": "Tentar novamente",
     "metrics": {
@@ -301,10 +293,19 @@
     "summary": {
       "closeAccessibility": "Fechar e voltar para o início",
       "shareCta": "Compartilhar treino",
-      "personalRecordsCount_one": "recorde pessoal",
-      "personalRecordsCount_other": "recordes pessoais",
-      "noRecordsTitle": "Sem recordes hoje",
-      "noRecordsSubtitle": "Continue consistente — o próximo pode ser aqui.",
+      "loadingMetrics": "Carregando métricas finais",
+      "recordsUnavailable": "Não foi possível atualizar seus recordes e destaques agora. As métricas confirmadas do treino continuam disponíveis.",
+      "retryRecords": "Tentar atualizar",
+      "finalization": {
+        "processing": "Finalizando",
+        "interrupted": "Interrompido",
+        "committed": "Concluído",
+        "messages": {
+          "summingLoads": "Somando suas cargas…",
+          "calculatingRecords": "Calculando seus recordes…",
+          "preparingSummary": "Preparando seu resumo…"
+        }
+      },
       "metrics": {
         "records": "Recordes",
         "volume": "Volume",
@@ -312,7 +313,6 @@
         "reps": "Repetições"
       },
       "completion": {
-        "label": "concluído",
         "sets": "{{completed}} de {{planned}} séries",
         "earlyBadge": "Finalizado antecipadamente",
         "cardioSkippedBadge": "Cardio ignorado"

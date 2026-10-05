@@ -115,7 +115,9 @@ describe('explicit recovery resolution — continue, finish, or discard', () => 
     expect(finishBody).toContain('runWorkoutCompletion(true, undefined, mode, fresh)');
     expect(runBody).toContain('finalizeWorkoutSession({');
     expect(runBody).toContain('executionId: recoveredExecution.executionId');
-    expect(runBody).toContain('execution.finalize(actualCardioDurationSeconds, mode)');
+    expect(runBody).toContain('execution.finalize(actualCardioDurationSeconds, mode, {');
+    expect(runBody).toContain('attemptId,');
+    expect(runBody).toContain('onCheckpoint: reportCheckpoint');
   });
 
   it('resolves recovery only after durable success and prepares the normal completion UI from a terminal Firestore reload', () => {

@@ -25,17 +25,17 @@ describe('WorkoutScreen cardio finisher structure', () => {
     expect(transitionRender).toBeLessThan(cardioRender);
   });
 
-  it('keeps the cardio completion animation mounted while workout finalization runs', () => {
+  it('opens the summary immediately and leaves authoritative completion running without an artificial delay', () => {
     const finalizeStart = source.indexOf('const finalizeNow = async () => {');
     const finalizeBody = source.slice(finalizeStart, source.indexOf('const [confirmSheet', finalizeStart));
-    const finalizingRender = source.indexOf("if (finishState === 'finalizing')");
 
-    expect(finalizeBody).toContain("setFinishState('finalizing')");
-    expect(finalizeBody).toContain('Promise.all([persistence, completionAnimation])');
-    expect(finalizeBody).not.toContain("setFinishState('persisting')");
-    expect(finalizingRender).toBeGreaterThan(-1);
-    expect(source).toContain("completedLabel={t('cardioSession.completed')}");
-    expect(source).toContain("nextName={t('done.finishing')}");
+    expect(finalizeBody).toContain('await onFinalizationStarted(');
+    expect(finalizeBody).not.toContain('setTimeout');
+    expect(finalizeBody).not.toContain('Animated.delay');
+    expect(finalizeBody).not.toContain('completionAnimation');
+    expect(source).not.toContain("if (finishState === 'finalizing')");
+    expect(source).toContain('setFinished(true);');
+    expect(source).toContain('<WorkoutSummaryScreen');
   });
 
   it('does not add pace, distance, heart-rate or calorie tracking', () => {
@@ -44,7 +44,7 @@ describe('WorkoutScreen cardio finisher structure', () => {
     expect(source).not.toContain('cardioCalories');
   });
 
-  it('treats the cardio X like every other workout exercise', () => {
+  it('routes the cardio X through the explicit early-finish confirmation', () => {
     const cardioBranch = source.slice(
       source.indexOf('if (showCardioFinisher && cardioFinisher)'),
       source.indexOf('// Only computed once', source.indexOf('if (showCardioFinisher && cardioFinisher)')),
@@ -55,11 +55,11 @@ describe('WorkoutScreen cardio finisher structure', () => {
     );
 
     expect(cardioBranch).toContain('<CardioScreen');
-    expect(cardioBranch).toContain('onFinish=');
-    expect(source).toContain("setConfirmSheet('exit')");
-    expect(source).toContain("cardioSession.exitConfirmTitle");
+    expect(cardioBranch).toContain('onFinalizationStarted=');
+    expect(source).toContain("setConfirmSheet('early')");
+    expect(source).toContain("cardioSession.earlyConfirmTitle");
     expect(closeHandler).not.toContain('finalizeNow();');
-    expect(source).toContain('onSkip={() => void finalizeNow()}');
+    expect(source).toContain("onSkip={() => setConfirmSheet('early')}");
     expect(cardioContent).toContain('onPress={ready ? onSkip : onExtend}');
   });
 

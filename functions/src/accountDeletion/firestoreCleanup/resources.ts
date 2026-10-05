@@ -52,6 +52,7 @@ const PROGRESS_PHOTOS_COLLECTION = 'progressPhotos';
 const WORKOUT_PROGRAMS_COLLECTION = 'workoutPrograms';
 const WORKOUT_PROGRAM_STATE_COLLECTION = 'workoutProgramState';
 const WORKOUT_EXECUTIONS_COLLECTION = 'workoutExecutions';
+const WORKOUT_FINALIZATION_ATTEMPTS_COLLECTION = 'workoutFinalizationAttempts';
 const WORKOUT_EXECUTION_STATE_COLLECTION = 'workoutExecutionState';
 const WORKOUT_EXECUTION_OCCURRENCE_COUNTERS_COLLECTION = 'workoutExecutionOccurrenceCounters';
 const EXERCISE_SUBSTITUTION_PREFERENCES_COLLECTION = 'exerciseSubstitutionPreferences';
@@ -386,6 +387,15 @@ export async function deleteUserWorkoutExecutions(
     userDocRef(db, uid).collection(WORKOUT_EXECUTIONS_COLLECTION),
   );
   return { resource: 'workoutExecutions', deletedCount, alreadyAbsent: deletedCount === 0 };
+}
+
+export function deleteUserWorkoutFinalizationAttempts(uid: string, db: Firestore = defaultDb) {
+  return deleteWorkoutLifecycleCollection(
+    uid,
+    WORKOUT_FINALIZATION_ATTEMPTS_COLLECTION,
+    'workoutFinalizationAttempts',
+    db,
+  );
 }
 
 export function deleteUserWorkoutExecutionState(uid: string, db: Firestore = defaultDb) {

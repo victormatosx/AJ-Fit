@@ -15,6 +15,18 @@ export interface WorkoutCompletionAttemptRef {
   current: Promise<WorkoutCompletionResult> | null;
 }
 
+export function shouldRetryWorkoutCompletionOnForeground(input: {
+  appState: string;
+  workoutInProgress: boolean;
+  finishing: boolean;
+  result: WorkoutCompletionResult | null;
+}): boolean {
+  return input.appState === 'active'
+    && input.workoutInProgress
+    && !input.finishing
+    && (input.result === 'EXECUTION_FAILED' || input.result === 'SCHEDULE_FAILED');
+}
+
 /**
  * Mirrors WorkoutScreen's existing completion semantics for a persisted
  * cold-start recovery snapshot. An execution with pending strength work, or

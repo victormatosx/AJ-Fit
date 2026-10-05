@@ -18,6 +18,7 @@ function seedFullUser(harness: ReturnType<typeof createFakeFirestore>, uid: stri
   harness.seed(`users/${uid}/workoutPrograms/wpg1`);
   harness.seed(`users/${uid}/workoutProgramState/active`);
   harness.seed(`users/${uid}/workoutExecutions/exec1`);
+  harness.seed(`users/${uid}/workoutFinalizationAttempts/attempt1`);
   harness.seed(`users/${uid}/workoutExecutionState/current`);
   harness.seed(`users/${uid}/workoutExecutionOccurrenceCounters/exec_wpg1_0_2026-10-03`);
   harness.seed(`users/${uid}/exerciseSubstitutionPreferences/bench_press`);
@@ -78,6 +79,7 @@ describe('runFirestoreCleanup — happy path', () => {
     expect(harness.listUnder('users/uid-1/workoutPrograms/')).toHaveLength(0);
     expect(harness.listUnder('users/uid-1/workoutProgramState/')).toHaveLength(0);
     expect(harness.listUnder('users/uid-1/workoutExecutions/')).toHaveLength(0);
+    expect(harness.listUnder('users/uid-1/workoutFinalizationAttempts/')).toHaveLength(0);
     expect(harness.listUnder('users/uid-1/workoutExecutionState/')).toHaveLength(0);
     expect(harness.listUnder('users/uid-1/workoutExecutionOccurrenceCounters/')).toHaveLength(0);
     expect(harness.listUnder('users/uid-1/exerciseSubstitutionPreferences/')).toHaveLength(0);
@@ -196,7 +198,7 @@ describe('runFirestoreCleanup — ordering (Fase 6 §10)', () => {
       'notificationProductWindows', 'notificationAchievementMilestones', 'dailyNotificationRegistration', 'entitlementSignal',
       'workoutProgramDescendants',
       'workoutLifecycleEvents', 'workoutLifecycleAuthorityGrants', 'workoutLifecycleTrustedTelemetryReceipts', 'pendingEvolutions', 'programInstances', 'trainingCycles', 'workoutLifecycleState',
-      'workoutPrograms', 'workoutProgramState', 'exerciseSubstitutionPreferences', 'workoutExecutionState', 'workoutExecutionOccurrenceCounters', 'workoutExecutions', 'userProfile',
+      'workoutPrograms', 'workoutProgramState', 'exerciseSubstitutionPreferences', 'workoutExecutionState', 'workoutExecutionOccurrenceCounters', 'workoutFinalizationAttempts', 'workoutExecutions', 'userProfile',
     ]);
   });
 });
