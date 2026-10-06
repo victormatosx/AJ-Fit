@@ -21,7 +21,10 @@ import esQuiz from '../resources/es/quiz.json';
  *   - sex:      'm' | 'f'
  *   - current goal: 'gain_muscle' | 'lose_fat' | 'strength' | 'conditioning' | 'health'
  *   - legacy goal aliases: 'hyper' | 'cut' | 'perf' | 'def' | 'recon'
- *   - current level: 'beginner' | 'intermediate' | 'advanced'
+ *   - current level: 'beginner' | 'intermediate' | 'intermediate_experienced' | 'advanced'
+ *     (`intermediate_experienced` is a questionnaire-only refinement of
+ *     `intermediate` for user self-identification; prescription logic
+ *     normalizes it to `intermediate` and never branches on it directly)
  *   - deprecated/legacy level aliases: 'never_or_starting' | 'beg' | 'int' | 'adv' | 'elite'
  *   - duration: '30' | '45' | '60' | '90'
  *   - place:    'gym' | 'home'
@@ -111,11 +114,11 @@ describe('quiz IDs — goal', () => {
 });
 
 describe('quiz IDs — level', () => {
-  const CURRENT_IDS = ['beginner', 'intermediate', 'advanced'] as const;
+  const CURRENT_IDS = ['beginner', 'intermediate', 'intermediate_experienced', 'advanced'] as const;
   const READABLE_LEGACY_IDS = ['never_or_starting', 'beg', 'int', 'adv', 'elite'] as const;
-  it('ExperienceLevel contains the three values new questionnaires may write', () => {
+  it('ExperienceLevel contains the four values new questionnaires may write', () => {
     const levels: ExperienceLevel[] = [...CURRENT_IDS];
-    expect(levels).toHaveLength(3);
+    expect(levels).toHaveLength(4);
   });
   it.each([
     ['pt-BR', ptBRQuiz],

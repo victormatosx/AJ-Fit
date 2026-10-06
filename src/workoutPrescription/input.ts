@@ -23,6 +23,9 @@ export function normalizeGoal(goal: QuestionnaireAnswers['goal']): Questionnaire
 
 export function normalizeExperience(level: QuestionnaireAnswers['level']): QuestionnaireAnswers['level'] {
   if (!level) return null;
+  // `intermediate_experienced` is only a questionnaire self-identification
+  // refinement of `intermediate` — prescription logic treats them identically.
+  if (level === 'intermediate_experienced') return 'intermediate';
   return LEGACY_LEVEL_MAP[level as LegacyExperienceLevel] ?? level;
 }
 

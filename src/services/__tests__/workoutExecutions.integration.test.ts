@@ -29,6 +29,38 @@ import {
   updateDoc,
   where,
 } from 'firebase/firestore';
+import { createRequire } from 'node:module';
+
+// Deliberately resolved (at runtime, via `require`) from
+// `functions/node_modules`, NOT this project's own root `firebase-admin`
+// install: two separate physical copies of the same package version produce
+// two distinct `Timestamp`/`Firestore` classes, and
+// `finalizeWorkoutSession.ts`'s own `instance.activatedAt instanceof Timestamp`
+// check (`finalizationAuthority.ts`) fails across that boundary even for
+// semantically identical data. `createRequire` is anchored at a real file
+// inside `functions/` so the bare `firebase-admin/...` specifiers below go
+// through Node's normal package + "exports" map resolution rooted at
+// `functions/node_modules` (a literal path straight into the package would
+// skip that "exports" map and fail to resolve its subpaths at all).
+// `require` (not a static import) also sidesteps TypeScript's own module
+// resolution, which cannot target a `node_modules`-internal specifier; the
+// type-only `import()` queries below still resolve cleanly against this
+// project's own (identical-version) root install, since only the TYPES need
+// to match, not the runtime value.
+const requireFromFunctionsPackage = createRequire(resolve(__dirname, '../../../functions/package.json'));
+const { initializeApp, deleteApp } = requireFromFunctionsPackage('firebase-admin/app') as typeof import('firebase-admin/app');
+const { getFirestore: getAdminFirestore } = requireFromFunctionsPackage('firebase-admin/firestore') as typeof import('firebase-admin/firestore');
+type App = import('firebase-admin/app').App;
+type AdminFirestore = import('firebase-admin/firestore').Firestore;
+// Authoritative completion path (replaces the removed legacy
+// `completeScheduledSession` — see its call sites below): the real,
+// unmodified Cloud Function handler, invoked directly against the same
+// Firestore Emulator instance via the Admin SDK, exactly like
+// `functions/src/workoutLifecycle/__tests__/finalizeWorkoutSession.integration.test.ts`
+// does. TypeScript/Node resolve `firebase-admin`/`firebase-functions` for
+// this file relative to where it physically lives (`functions/src/...`),
+// not relative to this test file, so no new dependency is needed here.
+import { finalizeWorkoutSessionHandler } from '../../../functions/src/workoutLifecycle/finalizeWorkoutSession';
 import { toPersistedAnswers } from '../../lib/questionnaireAnswers';
 import { defaultQuiz } from '../../state/AppState';
 
@@ -59,7 +91,6 @@ import {
   isLongWorkoutSession,
   safeStartedAtMs,
 } from '../../lib/workoutSessionTimer';
-import { completeScheduledSession } from '../workoutSchedule';
 import { resolveWorkoutSchedule } from '../../scheduleEngine/resolver';
 import type { WorkoutProgramSnapshot } from '../workoutPrograms';
 import { installCompleteCardioFixture, resetCompleteCardioFixture } from './completeCardioFixture';
@@ -143,6 +174,86 @@ function scheduleStateDoc(overrides: Record<string, unknown> = {}) {
   };
 }
 
+const PROGRAM_INSTANCE_ID = 'wpi_test1';
+let adminApp: App;
+let adminDb: AdminFirestore;
+
+/** `program()` plus the `programInstanceId` the V2/authoritative path requires. */
+function v2Program(overrides: Partial<WorkoutProgramSnapshot> = {}): WorkoutProgramSnapshot {
+  return program({ programInstanceId: PROGRAM_INSTANCE_ID, ...overrides });
+}
+
+/**
+ * Seeds the full V2 lifecycle scaffold `finalizeWorkoutSessionHandler`
+ * authority-checks against (`buildScheduleAuthorityContext`,
+ * `execution_program_not_active`): the ProgramInstance, the active-program
+ * pointer, the lifecycle pointer, and `weeklySchedule` on the program itself
+ * (the highest-precedence trainingDays source — see
+ * `finalizationAuthority.ts`'s `buildScheduleAuthorityContext`, preferred
+ * over `scheduleConfig`). `trainingDays[i]` is session `i`'s own prescribed
+ * weekday.
+ */
+async function seedV2Lifecycle(input: {
+  trainingDays: readonly string[];
+  activatedAtLocalDate: string;
+  sessionCount?: number;
+  program?: WorkoutProgramSnapshot;
+}) {
+  const sessionCount = input.sessionCount ?? input.trainingDays.length;
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const rawDb = ctx.firestore();
+    await Promise.all([
+      setDoc(doc(rawDb, 'users', UID, 'workoutPrograms', 'wpg_test1'), {
+        ...(input.program ?? program()),
+        prescribedTrainingFrequency: sessionCount,
+        weeklySchedule: input.trainingDays.map((weekday, sessionIndex) => ({ weekday, state: 'TRAINING', sessionIndex })),
+      }),
+      setDoc(doc(rawDb, 'users', UID, 'programInstances', PROGRAM_INSTANCE_ID), {
+        programInstanceId: PROGRAM_INSTANCE_ID,
+        contentIdentity: 'wpg_test1',
+        supersededAt: null,
+        activatedAt: Timestamp.fromDate(new Date(`${input.activatedAtLocalDate}T00:00:00Z`)),
+      }),
+      setDoc(doc(rawDb, 'users', UID, 'workoutProgramState', 'active'), { programId: 'wpg_test1' }),
+      setDoc(doc(rawDb, 'users', UID, 'workoutLifecycleState', 'current'), { activeProgramInstanceId: PROGRAM_INSTANCE_ID }),
+      setDoc(doc(rawDb, 'users', UID, 'workoutProgramState', 'scheduleConfig'), {
+        trainingDays: input.trainingDays, timezone: 'UTC',
+      }),
+    ]);
+  });
+}
+
+/**
+ * `finalizeWorkoutSession.ts` cross-checks `performedLocalDate` against the
+ * execution's own `createdAt` (always "real now" — `startOrResumeWorkoutExecution`
+ * sets it via `serverTimestamp()`). To exercise the authoritative path against
+ * a deliberately chosen historical `scheduledLocalDate` (so these regression
+ * scenarios stay deterministic regardless of which real weekday the suite
+ * runs on, exactly as they were before this file depended on wall-clock
+ * "today"), this overwrites `createdAt`/`startedAt` to the same local date,
+ * simulating "the session was genuinely started/performed on that day".
+ */
+async function patchExecutionCreatedAt(executionId: string, localDate: string) {
+  const instant = Timestamp.fromDate(new Date(`${localDate}T12:00:00Z`));
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await updateDoc(doc(ctx.firestore(), 'users', UID, 'workoutExecutions', executionId), {
+      createdAt: instant, startedAt: instant,
+    });
+  });
+}
+
+/**
+ * Invokes the real, unmodified Cloud Function handler — the current
+ * authoritative completion path — against the same Emulator data the client
+ * SDK (`mocks.db`) just wrote, via the Admin SDK.
+ */
+async function finalizeViaAuthoritativePath(executionId: string) {
+  return finalizeWorkoutSessionHandler(
+    { auth: { uid: UID }, data: { executionId } } as never,
+    adminDb,
+  );
+}
+
 describe.skipIf(!enabled)('Workout Execution & History — real Firestore Emulator integration', () => {
   beforeAll(async () => {
     testEnv = await initializeTestEnvironment({
@@ -157,10 +268,13 @@ describe.skipIf(!enabled)('Workout Execution & History — real Firestore Emulat
     // idempotent output, exactly the way `installWorkoutLifecycleAuthorityFixture`
     // already impersonates `authorizeWorkoutLifecycleMutation` elsewhere.
     installCompleteCardioFixture(testEnv, UID);
+    adminApp = initializeApp({ projectId: PROJECT_ID }, 'workout-executions-integration-admin');
+    adminDb = getAdminFirestore(adminApp);
   });
 
   afterAll(async () => {
     resetCompleteCardioFixture();
+    await deleteApp(adminApp);
     await testEnv.cleanup();
   });
 
@@ -546,35 +660,36 @@ describe.skipIf(!enabled)('Workout Execution & History — real Firestore Emulat
   });
 
   it('§85 fully completed session finishes COMPLETED, and the Schedule Engine advances by exactly one session', async () => {
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleState', 'current'), scheduleStateDoc());
-    });
-    const started = await startOrResumeWorkoutExecution({ uid: UID, program: program(), sessionIndex: 0, scheduledLocalDate: '2026-08-25' });
+    await seedV2Lifecycle({ trainingDays: ['TUE'], activatedAtLocalDate: '2026-08-25', sessionCount: 2 });
+    const started = await startOrResumeWorkoutExecution({ uid: UID, program: v2Program(), sessionIndex: 0, scheduledLocalDate: '2026-08-25' });
+    await patchExecutionCreatedAt(started.executionId, '2026-08-25');
     for (let exerciseIndex = 0; exerciseIndex < 2; exerciseIndex++) {
       const setCount = exerciseIndex === 0 ? 3 : 1;
       for (let setIndex = 0; setIndex < setCount; setIndex++) {
         await recordSetExecution({ uid: UID, executionId: started.executionId, exerciseIndex, setIndex, actualReps: 10, weightKg: 30 });
       }
     }
-    const finish = await finishWorkoutExecution(UID, started.executionId);
-    expect(finish.status).toBe('COMPLETED');
-    await completeScheduledSession({ uid: UID, programId: 'wpg_test1', sessionIndex: 0, sessionCount: 2, scheduledLocalDate: '2026-08-25', trainingDays: ['MON', 'TUE'], activatedAtLocalDate: '2026-08-24' });
-    const state = await getDoc(doc(mocks.db as never, 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleState', 'current'));
+    // A single atomic call now both terminalizes the execution AND advances
+    // the Schedule — the old two-step `finishWorkoutExecution` +
+    // `completeScheduledSession` dance this test used to drive is exactly
+    // what `finalizeWorkoutSession` replaced (docs — audit of the legacy
+    // pipeline's removal).
+    const result = await finalizeViaAuthoritativePath(started.executionId);
+    expect(result.executionStatus).toBe('COMPLETED');
+    const state = await getDoc(doc(mocks.db as never, 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleState', PROGRAM_INSTANCE_ID));
     expect(state.data()?.nextSessionIndex).toBe(1);
   });
 
   it('§86 an early-finished, incomplete session is PARTIALLY_COMPLETED, and still advances the Schedule by one session', async () => {
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleState', 'current'), scheduleStateDoc());
-    });
-    const started = await startOrResumeWorkoutExecution({ uid: UID, program: program(), sessionIndex: 0, scheduledLocalDate: '2026-08-25' });
+    await seedV2Lifecycle({ trainingDays: ['TUE'], activatedAtLocalDate: '2026-08-25', sessionCount: 2 });
+    const started = await startOrResumeWorkoutExecution({ uid: UID, program: v2Program(), sessionIndex: 0, scheduledLocalDate: '2026-08-25' });
+    await patchExecutionCreatedAt(started.executionId, '2026-08-25');
     await recordSetExecution({ uid: UID, executionId: started.executionId, exerciseIndex: 0, setIndex: 0, actualReps: 10, weightKg: 30 });
-    const finish = await finishWorkoutExecution(UID, started.executionId);
-    expect(finish.status).toBe('PARTIALLY_COMPLETED');
+    const result = await finalizeViaAuthoritativePath(started.executionId);
+    expect(result.executionStatus).toBe('PARTIALLY_COMPLETED');
     const loaded = await loadWorkoutExecution(UID, started.executionId);
     expect(loaded?.exercises[0].sets[1].status).toBe('SKIPPED'); // swept
-    await completeScheduledSession({ uid: UID, programId: 'wpg_test1', sessionIndex: 0, sessionCount: 2, scheduledLocalDate: '2026-08-25', trainingDays: ['MON', 'TUE'], activatedAtLocalDate: '2026-08-24' });
-    const state = await getDoc(doc(mocks.db as never, 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleState', 'current'));
+    const state = await getDoc(doc(mocks.db as never, 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleState', PROGRAM_INSTANCE_ID));
     expect(state.data()?.nextSessionIndex).toBe(1);
   });
 
@@ -717,10 +832,9 @@ describe.skipIf(!enabled)('Workout Execution & History — real Firestore Emulat
     });
 
     it('completing cardio then finishing normally leaves both facts intact — finish never touches the cardio record', async () => {
-      await testEnv.withSecurityRulesDisabled(async (ctx) => {
-        await setDoc(doc(ctx.firestore(), 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleState', 'current'), scheduleStateDoc());
-      });
-      const started = await startOrResumeWorkoutExecution({ uid: UID, program: program(), sessionIndex: 0, scheduledLocalDate: '2026-08-25' });
+      await seedV2Lifecycle({ trainingDays: ['TUE'], activatedAtLocalDate: '2026-08-25', sessionCount: 2 });
+      const started = await startOrResumeWorkoutExecution({ uid: UID, program: v2Program(), sessionIndex: 0, scheduledLocalDate: '2026-08-25' });
+      await patchExecutionCreatedAt(started.executionId, '2026-08-25');
       await completeCardioExecution(UID, started.executionId, 900);
       for (let exerciseIndex = 0; exerciseIndex < 2; exerciseIndex++) {
         const setCount = exerciseIndex === 0 ? 3 : 1;
@@ -728,9 +842,12 @@ describe.skipIf(!enabled)('Workout Execution & History — real Firestore Emulat
           await recordSetExecution({ uid: UID, executionId: started.executionId, exerciseIndex, setIndex, actualReps: 10, weightKg: 30 });
         }
       }
-      const finish = await finishWorkoutExecution(UID, started.executionId);
-      expect(finish.status).toBe('COMPLETED');
-      await completeScheduledSession({ uid: UID, programId: 'wpg_test1', sessionIndex: 0, sessionCount: 2, scheduledLocalDate: '2026-08-25', trainingDays: ['MON', 'TUE'], activatedAtLocalDate: '2026-08-24' });
+      // The session itself has no `cardioFinisher` prescribed, so the
+      // authoritative finalizer never touches `cardio` at all — proving the
+      // same "finish never overwrites an already-recorded cardio fact" as
+      // the removed two-step legacy path.
+      const result = await finalizeViaAuthoritativePath(started.executionId);
+      expect(result.executionStatus).toBe('COMPLETED');
       const loaded = await loadWorkoutExecution(UID, started.executionId);
       expect(loaded?.status).toBe('COMPLETED');
       expect(loaded?.cardio).toMatchObject({ status: 'COMPLETED', actualDurationSeconds: 900 });
@@ -905,22 +1022,30 @@ describe.skipIf(!enabled)('Workout Execution & History — real Firestore Emulat
     });
   });
 
-  it('§88 double finish is idempotent — the second call is a no-op, and a doubled completion call never double-advances the Schedule', async () => {
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleState', 'current'), scheduleStateDoc());
-    });
-    const started = await startOrResumeWorkoutExecution({ uid: UID, program: program(), sessionIndex: 0, scheduledLocalDate: '2026-08-25' });
-    const first = await finishWorkoutExecution(UID, started.executionId);
-    const second = await finishWorkoutExecution(UID, started.executionId); // double tap
-    expect(first.status).toBe(second.status);
+  // The old two-step design (`finishWorkoutExecution` then a separately
+  // single-flighted `completeScheduledSession`) no longer exists —
+  // `finalizeWorkoutSession` is one atomic call, so there is no longer a
+  // client-side in-flight Map to assert identity against. The property that
+  // actually mattered (a doubled/overlapping/retried completion call never
+  // double-advances the Schedule) is preserved here against the real
+  // authoritative path, and is additionally stress-tested with 5 genuinely
+  // concurrent callers in `functions/src/workoutLifecycle/__tests__/
+  // finalizeWorkoutSession.integration.test.ts`.
+  it('§88 double finish is idempotent — a doubled/overlapping completion call never double-advances the Schedule', async () => {
+    await seedV2Lifecycle({ trainingDays: ['TUE'], activatedAtLocalDate: '2026-08-25', sessionCount: 2 });
+    const started = await startOrResumeWorkoutExecution({ uid: UID, program: v2Program(), sessionIndex: 0, scheduledLocalDate: '2026-08-25' });
+    await patchExecutionCreatedAt(started.executionId, '2026-08-25');
 
-    const scheduleInput = { uid: UID, programId: 'wpg_test1', sessionIndex: 0, sessionCount: 2, scheduledLocalDate: '2026-08-25', trainingDays: ['MON', 'TUE'] as const, activatedAtLocalDate: '2026-08-24' };
-    const firstSchedule = completeScheduledSession(scheduleInput);
-    const overlappingRecovery = completeScheduledSession(scheduleInput);
-    expect(overlappingRecovery).toBe(firstSchedule); // foreground recovery + retry share only the active attempt
-    await Promise.all([firstSchedule, overlappingRecovery]);
-    await completeScheduledSession(scheduleInput); // settled response-loss retry reads the immutable event
-    const state = await getDoc(doc(mocks.db as never, 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleState', 'current'));
+    const [first, second] = await Promise.all([
+      finalizeViaAuthoritativePath(started.executionId),
+      finalizeViaAuthoritativePath(started.executionId),
+    ]);
+    expect(first.executionStatus).toBe(second.executionStatus);
+    // Settled retry (response-loss simulation): reads the already-committed
+    // immutable event/state instead of re-deriving or re-advancing anything.
+    await finalizeViaAuthoritativePath(started.executionId);
+
+    const state = await getDoc(doc(mocks.db as never, 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleState', PROGRAM_INSTANCE_ID));
     expect(state.data()?.nextSessionIndex).toBe(1); // advanced exactly once, not twice
   });
 
@@ -932,19 +1057,35 @@ describe.skipIf(!enabled)('Workout Execution & History — real Firestore Emulat
     // legitimate first completion of session 3 as out-of-sequence — the
     // Schedule Engine's own anchor (`anchorSessionIndex`/
     // `initialSessionIndexFor`) must be consulted instead of a hardcoded 0.
+    // Migrated onto the authoritative path: `finalizeWorkoutSession.ts` uses
+    // the exact same anchor derivation inside its own `resolveWorkoutSchedule`
+    // call (no ScheduleState -> `state` is null), so the regression is
+    // equally real there — this just proves it end-to-end over the current
+    // completion mechanism instead of the removed legacy one.
     const FOUR_DAY_TRAINING_DAYS = ['MON', 'TUE', 'WED', 'THU'] as const;
 
-    it('accepts the real first session (Thursday activation, sessionIndex 3) that the old fallback rejected', async () => {
-      await completeScheduledSession({
-        uid: UID, programId: 'wpg_test1', sessionIndex: 3, sessionCount: 4,
-        scheduledLocalDate: '2026-09-03', // Thursday
-        trainingDays: FOUR_DAY_TRAINING_DAYS, activatedAtLocalDate: '2026-09-03',
+    function fourSessionProgram(overrides: Partial<WorkoutProgramSnapshot> = {}): WorkoutProgramSnapshot {
+      return v2Program({
+        sessions: ['A', 'B', 'C', 'D'].map((name) => ({
+          name, type: 'strength', exercises: [{ exerciseId: 'squat', sourceExerciseId: 'squat', sets: 1, reps: '8-12' }],
+        })),
+        ...overrides,
       });
+    }
+
+    it('accepts the real first session (Thursday activation, sessionIndex 3) that the old fallback rejected', async () => {
+      await seedV2Lifecycle({ trainingDays: FOUR_DAY_TRAINING_DAYS, activatedAtLocalDate: '2026-09-03', program: fourSessionProgram() });
+      const started = await startOrResumeWorkoutExecution({ uid: UID, program: fourSessionProgram(), sessionIndex: 3, scheduledLocalDate: '2026-09-03' });
+      await patchExecutionCreatedAt(started.executionId, '2026-09-03');
+      await recordSetExecution({ uid: UID, executionId: started.executionId, exerciseIndex: 0, setIndex: 0, actualReps: 10, weightKg: 30 });
+      const result = await finalizeViaAuthoritativePath(started.executionId);
+      expect(result.executionStatus).toBe('COMPLETED');
+
       const event = await getDoc(doc(
-        mocks.db as never, 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleEvents', 'completed_3_2026-09-03',
+        mocks.db as never, 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleEvents', `${PROGRAM_INSTANCE_ID}_completed_3_2026-09-03`,
       ));
       expect(event.exists()).toBe(true);
-      const state = await getDoc(doc(mocks.db as never, 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleState', 'current'));
+      const state = await getDoc(doc(mocks.db as never, 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleState', PROGRAM_INSTANCE_ID));
       expect(state.data()).toMatchObject({ nextSessionIndex: 0, cursorDate: '2026-09-03', lastCompletedAt: '2026-09-03' }); // wraps 3 -> 0
 
       // The resolver must never re-offer session 3 for that same date again.
@@ -971,42 +1112,61 @@ describe.skipIf(!enabled)('Workout Execution & History — real Firestore Emulat
         MON: '2026-08-31', TUE: '2026-09-01', WED: '2026-09-02', THU: '2026-09-03',
       };
       const scheduledLocalDate = dateByWeekday[weekdayLabel];
-      await completeScheduledSession({
-        uid: UID, programId: 'wpg_test1', sessionIndex: expectedIndex, sessionCount: 4,
-        scheduledLocalDate, trainingDays: FOUR_DAY_TRAINING_DAYS, activatedAtLocalDate: scheduledLocalDate,
-      });
-      const state = await getDoc(doc(mocks.db as never, 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleState', 'current'));
+      await seedV2Lifecycle({ trainingDays: FOUR_DAY_TRAINING_DAYS, activatedAtLocalDate: scheduledLocalDate, program: fourSessionProgram() });
+      const started = await startOrResumeWorkoutExecution({ uid: UID, program: fourSessionProgram(), sessionIndex: expectedIndex, scheduledLocalDate });
+      await patchExecutionCreatedAt(started.executionId, scheduledLocalDate);
+      await recordSetExecution({ uid: UID, executionId: started.executionId, exerciseIndex: 0, setIndex: 0, actualReps: 10, weightKg: 30 });
+      const result = await finalizeViaAuthoritativePath(started.executionId);
+      expect(result.executionStatus).toBe('COMPLETED');
+      const state = await getDoc(doc(mocks.db as never, 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleState', PROGRAM_INSTANCE_ID));
       expect(state.data()?.nextSessionIndex).toBe((expectedIndex + 1) % 4);
     });
 
     it('still rejects a genuinely wrong first sessionIndex (0 sent when the anchor requires 3)', async () => {
-      await expect(completeScheduledSession({
-        uid: UID, programId: 'wpg_test1', sessionIndex: 0, sessionCount: 4,
-        scheduledLocalDate: '2026-09-03', // Thursday — anchors to 3, not 0
-        trainingDays: FOUR_DAY_TRAINING_DAYS, activatedAtLocalDate: '2026-09-03',
-      })).rejects.toThrow('SESSION_INDEX_OUT_OF_SEQUENCE');
+      await seedV2Lifecycle({ trainingDays: FOUR_DAY_TRAINING_DAYS, activatedAtLocalDate: '2026-09-03', program: fourSessionProgram() });
+      // Thursday anchors to session 3 — claiming session 0 instead is the
+      // out-of-sequence attempt.
+      const started = await startOrResumeWorkoutExecution({ uid: UID, program: fourSessionProgram(), sessionIndex: 0, scheduledLocalDate: '2026-09-03' });
+      await patchExecutionCreatedAt(started.executionId, '2026-09-03');
+      await recordSetExecution({ uid: UID, executionId: started.executionId, exerciseIndex: 0, setIndex: 0, actualReps: 10, weightKg: 30 });
+      await expect(finalizeViaAuthoritativePath(started.executionId)).rejects.toMatchObject({
+        message: 'schedule_completion_session_not_expected',
+      });
       const event = await getDoc(doc(
-        mocks.db as never, 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleEvents', 'completed_0_2026-09-03',
+        mocks.db as never, 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleEvents', `${PROGRAM_INSTANCE_ID}_completed_0_2026-09-03`,
       ));
       expect(event.exists()).toBe(false);
+      // Rejected before any durable write — the execution never terminalizes either.
+      const loaded = await loadWorkoutExecution(UID, started.executionId);
+      expect(loaded?.status).toBe('IN_PROGRESS');
     });
 
-    it('once ScheduleState exists, current.nextSessionIndex is authoritative again — the anchor is never recomputed', async () => {
+    it('once ScheduleState exists, its nextSessionIndex is authoritative again — the anchor is never recomputed', async () => {
+      await seedV2Lifecycle({ trainingDays: FOUR_DAY_TRAINING_DAYS, activatedAtLocalDate: '2026-09-03', program: fourSessionProgram() });
       await testEnv.withSecurityRulesDisabled(async (ctx) => {
-        await setDoc(doc(ctx.firestore(), 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleState', 'current'), {
-          programId: 'wpg_test1', nextSessionIndex: 1, cursorDate: '2026-09-03', lastCompletedAt: '2026-09-03', pendingMissDecision: null, updatedAt: Timestamp.now(),
+        await setDoc(doc(ctx.firestore(), 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleState', PROGRAM_INSTANCE_ID), {
+          programId: 'wpg_test1', programInstanceId: PROGRAM_INSTANCE_ID, nextSessionIndex: 1,
+          cursorDate: '2026-09-03', lastCompletedAt: '2026-09-03', pendingMissDecision: null, updatedAt: Timestamp.now(),
         });
       });
-      // Anchor for Thursday would be 3 — but state says 1 is next, and that must win.
-      await expect(completeScheduledSession({
-        uid: UID, programId: 'wpg_test1', sessionIndex: 3, sessionCount: 4,
-        scheduledLocalDate: '2026-09-10', trainingDays: FOUR_DAY_TRAINING_DAYS, activatedAtLocalDate: '2026-09-03',
-      })).rejects.toThrow('SESSION_INDEX_OUT_OF_SEQUENCE');
-      await completeScheduledSession({
-        uid: UID, programId: 'wpg_test1', sessionIndex: 1, sessionCount: 4,
-        scheduledLocalDate: '2026-09-10', trainingDays: FOUR_DAY_TRAINING_DAYS, activatedAtLocalDate: '2026-09-03',
+      // The anchor for Thursday would be 3 — but the persisted state says 1 is
+      // next, and that must win. Single trainingDay occurrence since the
+      // cursor (Monday 2026-09-07), so this never trips the (correct, real)
+      // missed-session gap detection the authoritative path also enforces.
+      const wrongAttempt = await startOrResumeWorkoutExecution({ uid: UID, program: fourSessionProgram(), sessionIndex: 3, scheduledLocalDate: '2026-09-07' });
+      await patchExecutionCreatedAt(wrongAttempt.executionId, '2026-09-07');
+      await recordSetExecution({ uid: UID, executionId: wrongAttempt.executionId, exerciseIndex: 0, setIndex: 0, actualReps: 10, weightKg: 30 });
+      await expect(finalizeViaAuthoritativePath(wrongAttempt.executionId)).rejects.toMatchObject({
+        message: 'schedule_completion_session_not_expected',
       });
-      const state = await getDoc(doc(mocks.db as never, 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleState', 'current'));
+      await abandonWorkoutExecution(UID, wrongAttempt.executionId); // release the mutex before starting the correct session
+
+      const correctAttempt = await startOrResumeWorkoutExecution({ uid: UID, program: fourSessionProgram(), sessionIndex: 1, scheduledLocalDate: '2026-09-07' });
+      await patchExecutionCreatedAt(correctAttempt.executionId, '2026-09-07');
+      await recordSetExecution({ uid: UID, executionId: correctAttempt.executionId, exerciseIndex: 0, setIndex: 0, actualReps: 10, weightKg: 30 });
+      const result = await finalizeViaAuthoritativePath(correctAttempt.executionId);
+      expect(result.executionStatus).toBe('COMPLETED');
+      const state = await getDoc(doc(mocks.db as never, 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleState', PROGRAM_INSTANCE_ID));
       expect(state.data()?.nextSessionIndex).toBe(2);
     });
   });

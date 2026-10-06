@@ -190,6 +190,14 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
             ...(programInstanceId ? { programInstanceId } : {}),
             sessionIndex: candidate.sessionIndex,
             scheduledLocalDate: candidate.scheduledLocalDate,
+            // A `flexible` schedule's same-day repeat (occurrence 2+) has its
+            // own distinct COMPLETED event id (`_oN` suffix) — omitting this
+            // made every recovery check fall back to occurrence 1's id, so a
+            // terminal occurrence 2+ execution whose Schedule write never
+            // landed (process death) was wrongly read as "already recorded"
+            // whenever an earlier occurrence that same day really had
+            // completed, and recovery silently skipped it.
+            ...(candidate.occurrence ? { occurrence: candidate.occurrence } : {}),
           }))) {
             logInfo('workout_schedule', 'terminal_execution_schedule_recovery_started', {});
             await finalizeWorkoutSession({ executionId: candidate.executionId });

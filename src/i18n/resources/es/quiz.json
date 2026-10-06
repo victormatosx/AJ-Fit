@@ -68,7 +68,8 @@
     "options": {
       "never_or_starting": { "label": "Principiante", "description": "Estoy empezando o todavía tengo poca experiencia" },
       "beginner": { "label": "Principiante", "description": "Estoy empezando o todavía tengo poca experiencia" },
-      "intermediate": { "label": "Intermedio", "description": "Entreno regularmente y conozco los principales ejercicios" },
+      "intermediate": { "label": "Intermedio", "description": "Entreno hace tiempo y conozco bien los principales ejercicios y equipos." },
+      "intermediate_experienced": { "label": "Intermedio con experiencia", "description": "Entreno hace bastante tiempo y tengo buena experiencia, pero todavía no me considero avanzado." },
       "advanced": { "label": "Avanzado", "description": "Tengo bastante experiencia y dominio de los principales ejercicios" },
       "beg": { "label": "Principiante", "description": "Menos de 6 meses" },
       "int": { "label": "Intermedio", "description": "6 meses a 2 años" },

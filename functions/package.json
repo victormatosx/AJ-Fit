@@ -9,6 +9,7 @@
   "main": "lib/index.js",
   "scripts": {
     "sync:scheduleEngine": "node ../scripts/syncScheduleEngineToFunctions.cjs",
+    "verify:scheduleEngineSync": "node ../scripts/syncScheduleEngineToFunctions.cjs --check",
     "sync:prescriptionEngine": "node ../scripts/syncPrescriptionEngineToFunctions.cjs",
     "prebuild": "npm run sync:scheduleEngine && npm run sync:prescriptionEngine",
     "pretypecheck": "npm run sync:scheduleEngine && npm run sync:prescriptionEngine",

@@ -25,6 +25,7 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
     options: [
       { v: 'beginner' },
       { v: 'intermediate' },
+      { v: 'intermediate_experienced' },
       { v: 'advanced' },
     ],
   },

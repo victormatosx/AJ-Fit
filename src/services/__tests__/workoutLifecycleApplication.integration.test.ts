@@ -4,6 +4,35 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
 import { collection, deleteDoc, doc, getDoc, getDocs, setDoc, Timestamp } from 'firebase/firestore';
+import { createRequire } from 'node:module';
+
+// Deliberately resolved (at runtime, via `require`) from
+// `functions/node_modules`, NOT this project's own root `firebase-admin`
+// install: two separate physical copies of the same package version produce
+// two distinct `Timestamp`/`Firestore` classes, and
+// `finalizeWorkoutSession.ts`'s own `instance.activatedAt instanceof Timestamp`
+// check (`finalizationAuthority.ts`) fails across that boundary even for
+// semantically identical data. `createRequire` is anchored at a real file
+// inside `functions/` so the bare `firebase-admin/...` specifiers below go
+// through Node's normal package + "exports" map resolution rooted at
+// `functions/node_modules` (a literal path straight into the package would
+// skip that "exports" map and fail to resolve its subpaths at all).
+// `require` (not a static import) also sidesteps TypeScript's own module
+// resolution, which cannot target a `node_modules`-internal specifier; the
+// type-only `import()` queries below still resolve cleanly against this
+// project's own (identical-version) root install, since only the TYPES need
+// to match, not the runtime value.
+const requireFromFunctionsPackage = createRequire(resolve(__dirname, '../../../functions/package.json'));
+const { initializeApp, deleteApp } = requireFromFunctionsPackage('firebase-admin/app') as typeof import('firebase-admin/app');
+const { getFirestore: getAdminFirestore } = requireFromFunctionsPackage('firebase-admin/firestore') as typeof import('firebase-admin/firestore');
+type App = import('firebase-admin/app').App;
+type AdminFirestore = import('firebase-admin/firestore').Firestore;
+// Authoritative completion path (replaces the removed legacy
+// `completeScheduledSession` — see `finalizeViaAuthoritativePath` and
+// `seedSingleOccurrenceTodayForSession` below): the real, unmodified Cloud
+// Function handler, invoked directly against the same Firestore Emulator
+// instance via the Admin SDK.
+import { finalizeWorkoutSessionHandler } from '../../../functions/src/workoutLifecycle/finalizeWorkoutSession';
 
 import { buildSeedDocuments } from '../../../scripts/seedWorkoutTemplates';
 import { completeAnswers } from '../../workoutPrescription/__tests__/fixtures';
@@ -16,7 +45,6 @@ import {
 import { EXERCISES_SEED } from '../../data/exercisesSeedData';
 import { isLimitationSafe } from '../../prescriptionEvolution/equivalence';
 import { countEarnedIntermediateCycles } from '../../progressionEngineV2/earnedCycles';
-import { completeWorkoutSessionFlow } from '../../workoutLifecycle/finishFlow';
 import { programInstanceIdForOperation } from '../../workoutLifecycle/domain';
 
 const PROJECT_ID = 'ajfit-rules-test';
@@ -40,8 +68,7 @@ import { contentIdentityFor, generateAndPersistWorkoutProgram, loadActiveWorkout
 import { loadWorkoutLifecycle, listTrainingCycles, listProgramInstances, loadPendingEvolution, recoverWorkoutLifecyclePartialState } from '../workoutLifecycle';
 import { evolvePrescription } from '../prescriptionEvolution';
 import { evaluateProgressionV2ForUser } from '../workoutProgressionV2';
-import { finishWorkoutExecution, startOrResumeWorkoutExecution } from '../workoutExecutions';
-import { completeScheduledSession } from '../workoutSchedule';
+import { startOrResumeWorkoutExecution } from '../workoutExecutions';
 import {
   activatePendingEvolution,
   adaptWorkoutProgram,
@@ -207,6 +234,84 @@ async function backdateCycleWithQualifyingHistory(uid: string, activeDaysAgo: nu
   });
 }
 
+const TODAY = new Date().toISOString().slice(0, 10);
+const YESTERDAY = new Date(Date.now() - MS_PER_DAY).toISOString().slice(0, 10);
+const TODAY_WEEKDAY = (['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'] as const)[new Date(`${TODAY}T12:00:00Z`).getUTCDay()];
+
+let adminApp: App;
+let adminDb: AdminFirestore;
+
+/**
+ * `TRAINING_DAYS` with TODAY's real weekday swapped in for whichever slot it
+ * does not already occupy (a no-op swap if today already happens to be one
+ * of `TRAINING_DAYS`). Keeps the SAME total weekly opportunity count (4) —
+ * unlike simply unioning today in as a 5th day — so `authoritativeEarnedFact`'s
+ * independent adherence recount (backend, `authorizeMutation.ts`) stays
+ * close to `backdateCycleWithQualifyingHistory`'s intended ~100% history:
+ * 3 of the 4 day-slots keep their full 30-day completion history; only the
+ * (replaced) TODAY slot has zero history before the fresh completion these
+ * tests add — comfortably above the 70% earned-adherence threshold
+ * regardless of which real weekday the suite runs on.
+ */
+const TRAINING_DAYS_WITH_TODAY: readonly string[] = (TRAINING_DAYS as readonly string[]).includes(TODAY_WEEKDAY)
+  ? TRAINING_DAYS
+  : [TODAY_WEEKDAY, ...TRAINING_DAYS.slice(1)];
+/** Session index TODAY's weekday occupies in `TRAINING_DAYS_WITH_TODAY` (== `weeklySchedule`'s own index assignment, `trainingDays.map((weekday, sessionIndex) => ...)`). */
+const SESSION_INDEX_FOR_TODAY = TRAINING_DAYS_WITH_TODAY.indexOf(TODAY_WEEKDAY);
+
+/**
+ * `backdateCycleWithQualifyingHistory` only ever writes to
+ * `workoutExecutions`/`scheduleEvents` (for Fase 2's independent
+ * active-days/adherence counting) — it never creates a `scheduleState` doc.
+ * Without one, the authoritative path's resolver would see a null state and
+ * walk the ENTIRE 30-day backdated window as one giant missed-session gap
+ * (`MISSED_SESSION_DECISION_REQUIRED`) instead of the single, gap-free
+ * "today is due" completion these tests actually want to exercise — the
+ * removed legacy `completeScheduledSession` never ran this gap check at all,
+ * so this fixture gap never had to matter before. Seeds a `scheduleState`
+ * whose cursor is "yesterday" (so TODAY is the only occurrence to walk) and
+ * overrides the instance's/program's trainingDays sources to
+ * `TRAINING_DAYS_WITH_TODAY` (same technique already used in
+ * `functions/.../authorizeMutation.integration.test.ts`'s COMPLETE_SCHEDULE
+ * suite) so this is deterministic regardless of which real weekday the
+ * suite runs on. The caller must target `SESSION_INDEX_FOR_TODAY`, not an
+ * arbitrary session, since that is the index this trainingDays override
+ * anchors TODAY to.
+ */
+async function seedSingleOccurrenceTodayForSession(input: {
+  programId: string;
+  programInstanceId: string;
+}) {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const rawDb = ctx.firestore();
+    await Promise.all([
+      setDoc(doc(rawDb, 'users', UID, 'programInstances', input.programInstanceId), {
+        prescriptionInputSnapshot: { inputs: { trainingDays: TRAINING_DAYS_WITH_TODAY } },
+      }, { merge: true }),
+      setDoc(doc(rawDb, 'users', UID, 'workoutPrograms', input.programId), {
+        weeklySchedule: TRAINING_DAYS_WITH_TODAY.map((weekday, sessionIndex) => ({ weekday, state: 'TRAINING', sessionIndex })),
+      }, { merge: true }),
+      setDoc(doc(rawDb, 'users', UID, 'workoutPrograms', input.programId, 'scheduleState', input.programInstanceId), {
+        programId: input.programId, programInstanceId: input.programInstanceId,
+        nextSessionIndex: SESSION_INDEX_FOR_TODAY, cursorDate: YESTERDAY, lastCompletedAt: YESTERDAY,
+        pendingMissDecision: null, updatedAt: Timestamp.now(),
+      }),
+      // Defensive: `backdateCycleWithQualifyingHistory`'s synthetic
+      // same-shape execution ids only ever coincide with the real
+      // deterministic one on the very first day of its walk (it keys by a
+      // raw running counter, not the wrapped sessionIndex) — never for
+      // this index reached 30 days in, but cleared unconditionally so this
+      // helper never depends on that coincidence not happening.
+      deleteDoc(doc(rawDb, 'users', UID, 'workoutExecutions', `exec_${input.programInstanceId}_${SESSION_INDEX_FOR_TODAY}_${TODAY}`)).catch(() => {}),
+    ]);
+  });
+}
+
+/** Invokes the real, unmodified Cloud Function handler — the current authoritative completion path — via the Admin SDK against the same Emulator data. */
+async function finalizeViaAuthoritativePath(executionId: string) {
+  return finalizeWorkoutSessionHandler({ auth: { uid: UID }, data: { executionId } } as never, adminDb);
+}
+
 describe.skipIf(!enabled)('Fase 4 Lifecycle Orchestrator — real Firestore Emulator integration', () => {
   beforeAll(async () => {
     testEnv = await initializeTestEnvironment({
@@ -215,9 +320,12 @@ describe.skipIf(!enabled)('Fase 4 Lifecycle Orchestrator — real Firestore Emul
     });
     mocks.db = testEnv.authenticatedContext(UID, { email: 'frank@example.com', email_verified: true }).firestore();
     installWorkoutLifecycleAuthorityFixture(testEnv, UID);
+    adminApp = initializeApp({ projectId: PROJECT_ID }, 'workout-lifecycle-application-integration-admin');
+    adminDb = getAdminFirestore(adminApp);
   });
   afterAll(async () => {
     resetWorkoutLifecycleAuthorityFixture();
+    await deleteApp(adminApp);
     await testEnv.cleanup();
   });
   beforeEach(async () => {
@@ -234,24 +342,21 @@ describe.skipIf(!enabled)('Fase 4 Lifecycle Orchestrator — real Firestore Emul
     });
     if (generated.status !== 'SUCCESS') throw new Error('setup failed');
     await backdateCycleWithQualifyingHistory(UID, 30, generated.program.programInstanceId!, generated.program.programId);
+    await seedSingleOccurrenceTodayForSession({
+      programId: generated.program.programId, programInstanceId: generated.program.programInstanceId!,
+    });
     const execution = await startOrResumeWorkoutExecution({
-      uid: UID, program: generated.program, sessionIndex: 0, scheduledLocalDate: '2026-08-29',
+      uid: UID, program: generated.program, sessionIndex: SESSION_INDEX_FOR_TODAY, scheduledLocalDate: TODAY,
     });
 
-    const flow = await completeWorkoutSessionFlow({
-      finishExecution: async () => (await finishWorkoutExecution(UID, execution.executionId)).status,
-      completeSchedule: async () => {
-        await completeScheduledSession({
-          uid: UID, programId: generated.program.programId,
-          programInstanceId: generated.program.programInstanceId,
-          sessionIndex: 0, sessionCount: generated.program.sessions.length,
-          scheduledLocalDate: '2026-08-29', trainingDays: TRAINING_DAYS, activatedAtLocalDate: '2026-08-29',
-        });
-        return true;
-      },
-    });
-
-    expect(flow).toBe('COMPLETED');
+    const result = await finalizeViaAuthoritativePath(execution.executionId);
+    // Mirrors the original assertion's intent (the old `completeWorkoutSessionFlow`
+    // returned the literal string 'COMPLETED' for ANY successful orchestration,
+    // regardless of whether the execution itself landed COMPLETED or
+    // PARTIALLY_COMPLETED — no sets are recorded here, so it is legitimately
+    // the latter). `scheduleStatus` is the authoritative path's equivalent
+    // "the whole durable completion succeeded" signal.
+    expect(result.scheduleStatus).toBe('COMPLETED');
     await processWorkoutLifecycleAfterSession({ uid: UID });
     expect((await loadPendingEvolution(UID))?.type).toBe('LEVEL_PROMOTION');
     const v1Events = await getDocs(collection(
@@ -401,21 +506,20 @@ describe.skipIf(!enabled)('Fase 4 Lifecycle Orchestrator — real Firestore Emul
     const active = await loadActiveWorkoutProgram(UID);
     if (!active) throw new Error('migrated active program missing');
     await backdateCycleWithQualifyingHistory(UID, 30, active.programInstanceId!, active.programId);
+    await seedSingleOccurrenceTodayForSession({
+      programId: active.programId, programInstanceId: active.programInstanceId!,
+    });
     const execution = await startOrResumeWorkoutExecution({
-      uid: UID, program: active, sessionIndex: 0, scheduledLocalDate: '2026-08-29',
+      uid: UID, program: active, sessionIndex: SESSION_INDEX_FOR_TODAY, scheduledLocalDate: TODAY,
     });
-    const flow = await completeWorkoutSessionFlow({
-      finishExecution: async () => (await finishWorkoutExecution(UID, execution.executionId)).status,
-      completeSchedule: async () => {
-        await completeScheduledSession({
-          uid: UID, programId: active.programId, programInstanceId: active.programInstanceId,
-          sessionIndex: 0, sessionCount: active.sessions.length, scheduledLocalDate: '2026-08-29',
-          trainingDays: TRAINING_DAYS, activatedAtLocalDate: '2026-08-29',
-        });
-        return true;
-      },
-    });
-    expect(flow).toBe('COMPLETED');
+    const result = await finalizeViaAuthoritativePath(execution.executionId);
+    // Mirrors the original assertion's intent (the old `completeWorkoutSessionFlow`
+    // returned the literal string 'COMPLETED' for ANY successful orchestration,
+    // regardless of whether the execution itself landed COMPLETED or
+    // PARTIALLY_COMPLETED — no sets are recorded here, so it is legitimately
+    // the latter). `scheduleStatus` is the authoritative path's equivalent
+    // "the whole durable completion succeeded" signal.
+    expect(result.scheduleStatus).toBe('COMPLETED');
     await processWorkoutLifecycleAfterSession({ uid: UID });
     expect((await loadPendingEvolution(UID))?.type).toBe('LEVEL_PROMOTION');
     const v1Events = await getDocs(collection(

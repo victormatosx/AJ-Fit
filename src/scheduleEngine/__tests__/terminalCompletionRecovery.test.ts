@@ -45,4 +45,15 @@ describe('terminal Execution -> pending Schedule process-death recovery', () => 
     const recovery = hook.slice(hook.indexOf('// Process-death recovery, case B:'), hook.indexOf('const timezone ='));
     expect(recovery.indexOf('hasScheduledSessionCompletion')).toBeLessThan(recovery.indexOf('finalizeWorkoutSession'));
   });
+
+  it('checks the candidate\'s own occurrence, never implicitly occurrence 1 (audit regression)', () => {
+    // A `flexible` schedule's same-day occurrence 2+ has its own distinct
+    // COMPLETED event id. Omitting `occurrence` here made every recovery
+    // check fall back to occurrence 1's id, silently skipping recovery for a
+    // terminal occurrence 2+ execution whenever an earlier occurrence that
+    // same day had already completed.
+    const recovery = hook.slice(hook.indexOf('// Process-death recovery, case B:'), hook.indexOf('const timezone ='));
+    expect(recovery).toContain('candidate.occurrence');
+    expect(recovery.indexOf('candidate.occurrence')).toBeLessThan(recovery.indexOf('finalizeWorkoutSession'));
+  });
 });

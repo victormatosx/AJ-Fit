@@ -15,7 +15,13 @@ export type PrimaryGoal =
 /** Former canonical values kept read-only so existing questionnaires remain usable and presentable. */
 export type DeprecatedGoal = 'body_composition' | 'return_to_training';
 export type LegacyGoal = 'hyper' | 'cut' | 'perf' | 'def' | 'recon';
-export type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced';
+/**
+ * `intermediate_experienced` is a UI-only refinement of `intermediate` for
+ * better self-identification in the questionnaire; prescription logic always
+ * normalizes it back to `intermediate` via `normalizeExperience` and must
+ * never branch on it directly.
+ */
+export type ExperienceLevel = 'beginner' | 'intermediate' | 'intermediate_experienced' | 'advanced';
 /** Former canonical value kept read-only so existing questionnaires remain usable and presentable. */
 export type DeprecatedExperienceLevel = 'never_or_starting';
 export type LegacyExperienceLevel = 'beg' | 'int' | 'adv' | 'elite';

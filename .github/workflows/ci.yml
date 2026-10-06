@@ -107,6 +107,7 @@ jobs:
       - run: cd functions && npm ci
       - run: npx --no-install firebase --version | grep -Fx '15.26.0'
       - run: npm run test:integration:lifecycleAuthority
+      - run: npm run test:integration:finalizeWorkoutSession
       - run: npm run test:integration:firestoreCleanup
       - run: npm run test:integration:storageCleanup
       - run: npm run test:integration:retainedData

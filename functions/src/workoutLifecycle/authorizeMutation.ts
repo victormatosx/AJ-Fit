@@ -699,7 +699,9 @@ async function generateCanonicalCycleEvolution(
 function levelFromAnswers(answers: Record<string, unknown>): string {
   const level = answers.level;
   if (level === 'never_or_starting' || level === 'beginner' || level === 'beg') return 'BEGINNER';
-  if (level === 'intermediate' || level === 'int') return 'INTERMEDIATE';
+  // `intermediate_experienced` is a questionnaire-only refinement of
+  // `intermediate` for user self-identification; treated identically here.
+  if (level === 'intermediate' || level === 'intermediate_experienced' || level === 'int') return 'INTERMEDIATE';
   if (level === 'advanced' || level === 'adv' || level === 'elite') return 'ADVANCED';
   throw new HttpsError('invalid-argument', 'questionnaire_level_invalid');
 }

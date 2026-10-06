@@ -536,6 +536,130 @@ describe.skipIf(!enabled)('finalizeWorkoutSession — real Firestore Emulator in
     expect(events.docs.filter((doc) => doc.data().type === 'COMPLETED')).toHaveLength(1);
   }, 10_000);
 
+  // Audit hardening (concurrency §1): stress variant of the test above —
+  // five simultaneous "devices" finalizing the exact same execution. Every
+  // call must resolve COMPLETED (idempotent convergence, never a stray
+  // error for the losers) and the durable facts must advance exactly once,
+  // regardless of how many racing attempts there were.
+  it('five concurrent finalize requests for the same execution: every call resolves COMPLETED, nextSessionIndex advances exactly once', async () => {
+    const results = await Promise.all([finalize(), finalize(), finalize(), finalize(), finalize()]);
+    for (const result of results) expect(result.status).toBe('COMPLETED');
+    const [events, state] = await Promise.all([
+      root.collection('workoutPrograms').doc(PROGRAM_ID).collection('scheduleEvents').get(),
+      root.collection('workoutPrograms').doc(PROGRAM_ID).collection('scheduleState').doc(INSTANCE_ID).get(),
+    ]);
+    expect(events.docs.filter((doc) => doc.data().type === 'COMPLETED')).toHaveLength(1);
+    expect(state.data()).toMatchObject({ nextSessionIndex: 0, lastCompletedAt: today });
+  }, 10_000);
+
+  // Audit hardening (concurrency §1 — "duas tentativas simultâneas de
+  // avançar a mesma sessão"): the advanced/early-finish path
+  // (`performedLocalDate` earlier than `scheduledLocalDate`) runs extra
+  // Schedule validation (`performedResolution` above) before the normal
+  // SESSION_READY check — confirms that extra branch is exactly as race-safe
+  // as the plain path already proven above.
+  it('two concurrent finalize requests for the SAME advanced (early-finished) execution: exactly one advance, no double-skip', async () => {
+    const thursday = '2026-09-17';
+    const friday = '2026-09-18';
+    const fixedDays = ['MON', 'TUE', 'WED', 'FRI'];
+    await Promise.all([
+      root.collection('workoutPrograms').doc(PROGRAM_ID).set({
+        ...program(),
+        scheduleMode: 'fixed',
+        prescribedTrainingFrequency: 4,
+        weeklySchedule: fixedDays.map((day, sessionIndex) => ({ weekday: day, state: 'TRAINING', sessionIndex })),
+        sessions: [0, 1, 2, 3].map((index) => ({
+          name: String.fromCharCode(65 + index), exercises: [{ exerciseId: 'squat', sets: 3 }],
+        })),
+      }),
+      root.collection('programInstances').doc(INSTANCE_ID).update({
+        activatedAt: Timestamp.fromDate(new Date('2026-09-14T00:00:00Z')),
+        prescriptionInputSnapshot: { inputs: { scheduleMode: 'fixed', trainingDays: fixedDays } },
+      }),
+      root.collection('workoutProgramState').doc('scheduleConfig').set({ trainingDays: fixedDays, timezone: 'UTC' }),
+      root.collection('workoutPrograms').doc(PROGRAM_ID).collection('scheduleState').doc(INSTANCE_ID).set({
+        programId: PROGRAM_ID, programInstanceId: INSTANCE_ID, nextSessionIndex: 3,
+        cursorDate: '2026-09-16', lastCompletedAt: '2026-09-16', pendingMissDecision: null,
+      }),
+      root.collection('workoutExecutions').doc(EXECUTION_ID).set(execution({
+        sessionIndex: 3,
+        scheduledLocalDate: friday,
+        performedLocalDate: thursday,
+        createdAt: Timestamp.fromDate(new Date('2026-09-17T12:00:00Z')),
+        startedAt: Timestamp.fromDate(new Date('2026-09-17T12:00:00Z')),
+      })),
+    ]);
+
+    const [first, second] = await Promise.all([finalize(), finalize()]);
+    expect(first.status).toBe('COMPLETED');
+    expect(second.status).toBe('COMPLETED');
+    const [state, completedEvents] = await Promise.all([
+      root.collection('workoutPrograms').doc(PROGRAM_ID).collection('scheduleState').doc(INSTANCE_ID).get(),
+      root.collection('workoutPrograms').doc(PROGRAM_ID).collection('scheduleEvents').get(),
+    ]);
+    // Advances exactly once: 3 -> 0 (wraps), never 3 -> 1 (which a
+    // double-apply of "+1 twice" would produce).
+    expect(state.data()).toMatchObject({ nextSessionIndex: 0, cursorDate: friday, lastCompletedAt: friday });
+    expect(completedEvents.docs.filter((doc) => doc.data().type === 'COMPLETED')).toHaveLength(1);
+  }, 10_000);
+
+  // Audit hardening (timezone §2 — "treino iniciado antes da meia-noite e
+  // finalizado depois"): a non-UTC, DST-free zone (America/Sao_Paulo,
+  // UTC-3) where the execution's `createdAt` instant is already the NEXT
+  // UTC calendar day while still being 23:50 of the PREVIOUS day in the
+  // configured schedule timezone. `performedLocalDate` must be derived from
+  // the configured timezone (`localDateInTimezone`), never from a naive UTC
+  // slice of `createdAt` — this is the exact invariant
+  // `finalizeWorkoutSession.ts` enforces via
+  // `localDateInTimezone(execution.createdAt.toDate(), context.config.timezone)
+  // !== performedLocalDate`.
+  it('midnight crossing in a non-UTC configured timezone: performedLocalDate is derived from the configured zone, not a naive UTC slice', async () => {
+    const fridayLocal = '2026-09-18'; // America/Sao_Paulo calendar date — also the UTC-naive-wrong Saturday's eve
+    const fixedDays = ['MON', 'TUE', 'WED', 'FRI'];
+    // 2026-09-18 23:50 America/Sao_Paulo (UTC-3) == 2026-09-19 02:50 UTC —
+    // already the next UTC calendar day. A naive `toISOString().slice(0, 10)`
+    // read of this instant would wrongly compute '2026-09-19' (Saturday),
+    // not the real local date '2026-09-18' (Friday) the session was both
+    // scheduled for and actually performed on.
+    const createdAtInstant = new Date('2026-09-19T02:50:00.000Z');
+    await Promise.all([
+      root.collection('workoutPrograms').doc(PROGRAM_ID).set({
+        ...program(),
+        scheduleMode: 'fixed',
+        prescribedTrainingFrequency: 4,
+        weeklySchedule: fixedDays.map((day, sessionIndex) => ({ weekday: day, state: 'TRAINING', sessionIndex })),
+        sessions: [0, 1, 2, 3].map((index) => ({
+          name: String.fromCharCode(65 + index), exercises: [{ exerciseId: 'squat', sets: 3 }],
+        })),
+      }),
+      root.collection('programInstances').doc(INSTANCE_ID).update({
+        activatedAt: Timestamp.fromDate(new Date('2026-09-14T00:00:00Z')),
+        prescriptionInputSnapshot: { inputs: { scheduleMode: 'fixed', trainingDays: fixedDays } },
+      }),
+      root.collection('workoutProgramState').doc('scheduleConfig').set({ trainingDays: fixedDays, timezone: 'America/Sao_Paulo' }),
+      root.collection('workoutPrograms').doc(PROGRAM_ID).collection('scheduleState').doc(INSTANCE_ID).set({
+        programId: PROGRAM_ID, programInstanceId: INSTANCE_ID, nextSessionIndex: 3,
+        cursorDate: '2026-09-16', lastCompletedAt: '2026-09-16', pendingMissDecision: null,
+      }),
+      root.collection('workoutExecutions').doc(EXECUTION_ID).set(execution({
+        sessionIndex: 3,
+        scheduledLocalDate: fridayLocal, // scheduled AND performed on the local Friday — not the advanced path
+        performedLocalDate: fridayLocal,
+        createdAt: createdAtInstant,
+        startedAt: createdAtInstant,
+      })),
+    ]);
+
+    await expect(finalize()).resolves.toMatchObject({ status: 'COMPLETED', scheduleStatus: 'COMPLETED' });
+    const [state, event] = await Promise.all([
+      root.collection('workoutPrograms').doc(PROGRAM_ID).collection('scheduleState').doc(INSTANCE_ID).get(),
+      root.collection('workoutPrograms').doc(PROGRAM_ID).collection('scheduleEvents')
+        .doc(`${INSTANCE_ID}_completed_3_${fridayLocal}`).get(),
+    ]);
+    expect(state.data()).toMatchObject({ nextSessionIndex: 0, cursorDate: fridayLocal, lastCompletedAt: fridayLocal });
+    expect(event.exists).toBe(true);
+  });
+
   it('converges from a terminal Execution with Schedule pending', async () => {
     await root.collection('workoutExecutions').doc(EXECUTION_ID).update({ status: 'PARTIALLY_COMPLETED' });
     await expect(finalize()).resolves.toMatchObject({ executionStatus: 'PARTIALLY_COMPLETED' });

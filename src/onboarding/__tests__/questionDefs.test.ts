@@ -17,13 +17,14 @@ describe('goal question options', () => {
 });
 
 describe('level question options', () => {
-  it('offers exactly the three current experience levels in product order', () => {
+  it('offers exactly the four current experience levels in product order', () => {
     const level = FUNNEL_QUESTIONS.level;
     expect(level?.kind).toBe('choice-large');
     if (!level || !('options' in level)) throw new Error('Level question must expose options');
     expect(level.options.map((option) => option.v)).toEqual([
       'beginner',
       'intermediate',
+      'intermediate_experienced',
       'advanced',
     ]);
   });

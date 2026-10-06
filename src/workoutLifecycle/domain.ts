@@ -56,7 +56,9 @@ export function startingLevelFromQuestionnaire(
   level: ExperienceLevel | DeprecatedExperienceLevel | LegacyExperienceLevel | null | undefined,
 ): StartingLevel | null {
   if (level === 'never_or_starting' || level === 'beginner' || level === 'beg') return 'BEGINNER';
-  if (level === 'intermediate' || level === 'int') return 'INTERMEDIATE';
+  // `intermediate_experienced` is a questionnaire-only refinement of
+  // `intermediate` (see ExperienceLevel doc comment) — treated identically here.
+  if (level === 'intermediate' || level === 'intermediate_experienced' || level === 'int') return 'INTERMEDIATE';
   if (level === 'advanced' || level === 'adv' || level === 'elite') return 'ADVANCED';
   return null;
 }
