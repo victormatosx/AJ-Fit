@@ -47,12 +47,12 @@ export const T_OUT =
 /** Timeline point where the fade-out finishes and `onDone` fires. */
 export const T_END = T_OUT + WM.out;
 
-/** Visible glyph height, and the AJ mark's bounding box inside the source PNG (normalized 0–1). */
+/** Visible glyph height, and the mark's bounding box inside the source PNG (normalized 0–1). */
 export const GLYPH_H = 60;
-export const BOX = { l: 0.088, r: 0.913, t: 0.247, b: 0.774 } as const;
+export const BOX = { l: 0.138, r: 0.863, t: 0.241, b: 0.755 } as const;
 /** Rendered size of the (untrimmed) source Image so the visible glyph is exactly GLYPH_H tall. */
 export const LOGO_PX = GLYPH_H / (BOX.b - BOX.t);
-/** Width of the cropped "AJ" bounding box at that render size. */
+/** Width of the cropped mark's bounding box at that render size. */
 export const AJ_W = LOGO_PX * (BOX.r - BOX.l);
 
 export function clamp01(x: number): number {

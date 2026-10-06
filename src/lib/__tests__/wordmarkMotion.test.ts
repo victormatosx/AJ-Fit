@@ -28,8 +28,8 @@ describe('timing constants', () => {
 
 describe('logo crop geometry', () => {
   it('matches the spec\'s stated LOGO_PX/AJ_W values', () => {
-    expect(LOGO_PX).toBeCloseTo(113.9, 1);
-    expect(AJ_W).toBeCloseTo(93.9, 1);
+    expect(LOGO_PX).toBeCloseTo(116.7, 1);
+    expect(AJ_W).toBeCloseTo(84.6, 1);
   });
 });
 

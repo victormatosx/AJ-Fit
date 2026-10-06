@@ -28,7 +28,7 @@ import {
   type WordmarkMetrics,
 } from '../../lib/wordmarkMotion';
 
-const LOGO = require('../../../assets/aj-logo-branco.png');
+const LOGO = require('../../../assets/ajfit-newlogo.png');
 const BG = '#020010';
 const LETTERS = ['F', 'i', 't'];
 

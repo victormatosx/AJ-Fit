@@ -124,7 +124,7 @@ describe('native splash → WordmarkSplash handoff', () => {
 
 describe('WordmarkSplash itself: no glow, no spinner, matches the #020010 background everywhere', () => {
   it('uses the provided white logo asset and the app-wide #020010 background — not the old #000000', () => {
-    expect(wordmarkSource).toContain("require('../../../assets/aj-logo-branco.png')");
+    expect(wordmarkSource).toContain("require('../../../assets/ajfit-newlogo.png')");
     expect(wordmarkSource).toContain("const BG = '#020010'");
   });
 
