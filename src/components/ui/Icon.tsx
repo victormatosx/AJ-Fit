@@ -10,7 +10,7 @@ export type IconName =
   | 'crown' | 'chevron-right' | 'chevron-down' | 'x' | 'swap' | 'list' | 'shield'
   | 'trophy' | 'camera' | 'google' | 'instagram' | 'share'
   | 'bell' | 'moon' | 'globe' | 'ruler' | 'download' | 'trash' | 'help-circle'
-  | 'message' | 'alert-triangle' | 'info' | 'file-text' | 'key' | 'star' | 'search';
+  | 'message' | 'alert-triangle' | 'info' | 'file-text' | 'key' | 'star' | 'search' | 'copy';
 
 type Props = {
   name: IconName;
@@ -170,6 +170,8 @@ export function Icon({ name, size = 22, color: colorProp, stroke = 1.7, filled =
       return <Svg {...common}><Path d="M12 2.5l2.9 6.2 6.6.7-4.9 4.6 1.3 6.6L12 17.9l-5.9 3.3L7.4 14 2.5 9.4l6.6-.7L12 2.5z" fill={color} stroke={color} strokeWidth={stroke} strokeLinejoin="round" /></Svg>;
     case 'search':
       return <Svg {...common}><Circle {...p} cx="10.5" cy="10.5" r="6.5" /><Path {...p} d="M15.5 15.5L21 21" /></Svg>;
+    case 'copy':
+      return <Svg {...common}><Rect {...p} x="9" y="9" width="12" height="12" rx="2" /><Path {...p} d="M5 15H4a1 1 0 01-1-1V4a1 1 0 011-1h10a1 1 0 011 1v1" /></Svg>;
     default:
       return null;
   }

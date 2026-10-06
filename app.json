@@ -92,6 +92,14 @@
       "@react-native-community/datetimepicker",
       "expo-localization",
       "expo-sharing",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "O AJ Fit acessa suas fotos para você salvar as artes de treino geradas.",
+          "savePhotosPermission": "O AJ Fit salva as artes de treino geradas na sua galeria.",
+          "isAccessMediaLocationEnabled": false
+        }
+      ],
       "expo-video",
       [
         "expo-notifications",

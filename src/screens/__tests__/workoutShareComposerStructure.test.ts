@@ -33,6 +33,23 @@ const posterSources = Object.fromEntries(
   ]),
 );
 
+const ART_POSTER_FILES = ['ArtPosterMinimal', 'ArtPosterPerformance', 'ArtPosterPr', 'ArtPosterStats'] as const;
+const artPosterSources = Object.fromEntries(
+  ART_POSTER_FILES.map((name) => [
+    name,
+    readFileSync(new URL(`../../components/workoutShare/artPosters/${name}.tsx`, import.meta.url), 'utf8'),
+  ]),
+);
+const artRegistry = readFileSync(
+  new URL('../../components/workoutShare/artPosters/registry.tsx', import.meta.url),
+  'utf8',
+);
+const checkerboard = readFileSync(
+  new URL('../../components/workoutShare/ArtPreviewCheckerboard.tsx', import.meta.url),
+  'utf8',
+);
+
+
 // The exact logo size the original single-poster Classic design shipped
 // with (`31 * scale`) — every design must now ship a strictly larger value.
 const ORIGINAL_LOGO_SCALE_FACTOR = 31;
@@ -81,7 +98,11 @@ describe('post-workout share architecture', () => {
   it('there is no separate model-preview strip — the carousel lives directly on the poster', () => {
     expect(composer).not.toContain('ModelSelector');
     expect(composer).not.toContain('workout-share-model-selector');
-    expect(composer).not.toContain('pointerEvents="none"');
+    // `pointerEvents="none"` does legitimately appear once now — on the
+    // hidden off-screen HD export stage, which is not a preview strip at
+    // all (see the dedicated HD-stage tests below).
+    const withoutHdStage = composer.slice(0, composer.indexOf('{hdMountedPosterId ? (() => {'));
+    expect(withoutHdStage).not.toContain('pointerEvents="none"');
   });
 
   it('swiping the poster itself switches designs (a paging carousel wraps the poster pages)', () => {
@@ -241,10 +262,17 @@ describe('post-workout share architecture', () => {
     const shareToRowIndex = scrollableContent.indexOf('<ShareToRow');
     expect(photoActionsIndex).toBeGreaterThan(-1);
     expect(photoActionsIndex).toBeLessThan(shareToRowIndex);
-    // Nothing renders after the ScrollView closes but before the modal ends
-    // — no separate footer sibling, and no destination-picker modal anymore.
+    // Nothing *visible* renders after the ScrollView closes but before the
+    // modal ends — no separate footer sibling, no destination-picker modal.
+    // The one exception is the hidden HD export stage: `position: absolute`
+    // and off-screen, so it can never visually sit on top of the photo
+    // actions or any other content — it just has to live outside the
+    // scrollable area so swiping the carousel can't unmount it mid-capture.
     const afterScroll = composer.slice(scrollEnd, composer.indexOf('</SafeAreaView>')).trim();
-    expect(afterScroll).toBe('');
+    expect(afterScroll).toContain('{hdMountedPosterId ? (() => {');
+    const withoutHdStageComment = afterScroll.replace(/\{\/\*[\s\S]*?\*\/\}\s*/, '').trim();
+    expect(withoutHdStageComment.startsWith('{hdMountedPosterId ? (() => {')).toBe(true);
+    expect(withoutHdStageComment.endsWith('})() : null}')).toBe(true);
     expect(composer).not.toContain('<Modal\n        visible={shareModalVisible}');
   });
 
@@ -483,5 +511,173 @@ describe('post-workout share architecture', () => {
       nativeIos.indexOf('openStoriesURL(urlScheme)'),
     );
     expect(nativeIos).toContain('expirationDate: Date().addingTimeInterval');
+  });
+
+  it('exposes a FOTO/ARTE segmented control that drives which carousel renders, and never regresses the FOTO JSX', () => {
+    expect(composer).toContain('function ModeSegmentedControl');
+    expect(composer).toContain("mode === 'photo'");
+    expect(composer).toContain("const [mode, setMode] = useState<ShareMode>('photo')");
+    // The FOTO branch keeps every pre-existing invariant: carousel, photo
+    // actions, and the inline ShareToRow destinations.
+    expect(composer).toContain('<ShareToRow');
+    expect(composer).toContain("resolvePhotoActionsMode(photo?.uri) === 'change'");
+  });
+
+  it('renders 4 ARTE designs from one registry, mapped without scattered conditionals', () => {
+    expect(artRegistry).toContain('ArtPosterMinimal');
+    expect(artRegistry).toContain('ArtPosterPerformance');
+    expect(artRegistry).toContain('ArtPosterPr');
+    expect(artRegistry).toContain('ArtPosterStats');
+    expect(artRegistry).not.toMatch(/if\s*\(.*id\s*===/);
+  });
+
+  it('filters the ARTE carousel to only the layouts available for this workout (artPr gated on a personal record)', () => {
+    expect(composer).toContain('const availableArtPosters = useMemo(');
+    expect(composer).toContain('isWorkoutShareArtLayoutAvailable(poster.id, summaryData)');
+  });
+
+  it('every ARTE poster leaves its root (ref\'d) View fully transparent — no backgroundColor on that exact tag', () => {
+    // Decorative accent elements further down the tree (e.g. a thin
+    // primaryEmphasis rule) legitimately use `backgroundColor` — only the
+    // one `View` carrying `ref={posterRef}` (what view-shot actually
+    // captures) must never set it.
+    for (const [name, source] of Object.entries(artPosterSources)) {
+      const rootTagMatch = source.match(/<View[^>]*ref=\{posterRef\}[^>]*>/s);
+      expect(rootTagMatch, `${name} must render a View with ref={posterRef}`).not.toBeNull();
+      expect(rootTagMatch![0], name).not.toContain('backgroundColor');
+      expect(source, name).toContain('testID="workout-share-art-poster"');
+    }
+  });
+
+  it('captures the HD export from a dedicated off-screen stage — never the small on-screen preview instance', () => {
+    const captureBody = composer.slice(
+      composer.indexOf('const captureSelectedArt = useCallback('),
+      composer.indexOf('const copyArt = useCallback'),
+    );
+    expect(captureBody).toContain('captureWorkoutShareArt(hdPosterRef,');
+    expect(captureBody).toContain('width: poster.exportWidth');
+    expect(captureBody).toContain('height: poster.exportHeight');
+    // Never captures `artPosterRefs` (the small, swipeable on-screen
+    // preview) — that ref only ever backs the visible carousel now.
+    expect(captureBody).not.toContain('artPosterRefs[');
+  });
+
+  it('lays the hidden HD stage out at workoutShareArtRenderSize, not the on-screen preview size, before capturing it', () => {
+    expect(composer).toContain("import { captureWorkoutShareArt, workoutShareArtRenderSize } from '../../workoutShare/exportArt'");
+    const hdStage = composer.slice(composer.indexOf('{hdMountedPosterId ? (() => {'), composer.indexOf('})() : null}'));
+    expect(hdStage).toContain('workoutShareArtRenderSize(hdPoster.exportWidth, hdPoster.exportHeight)');
+    expect(hdStage).toContain('width={hdSize.width}');
+    expect(hdStage).toContain('height={hdSize.height}');
+    expect(hdStage).toContain('posterRef={hdPosterRef}');
+    // Never visually hidden via opacity — some native capture paths render
+    // the view's current presentation state, so an opacity:0 view would
+    // capture blank. It's hidden by position only.
+    expect(hdStage).not.toMatch(/opacity:\s*0\b/);
+    expect(hdStage).toContain("position: 'absolute'");
+  });
+
+  it('waits for the hidden HD stage\'s first layout before capturing it — never captures a not-yet-laid-out view', () => {
+    const captureBody = composer.slice(
+      composer.indexOf('const captureSelectedArt = useCallback('),
+      composer.indexOf('const copyArt = useCallback'),
+    );
+    expect(captureBody).toContain('const layoutPromise = new Promise<void>((resolve) => {');
+    expect(captureBody).toContain('hdLayoutResolveRef.current = resolve;');
+    expect(captureBody).toContain('setHdMountedPosterId(poster.id);');
+    expect(captureBody).toContain('await layoutPromise;');
+    // Unmounted again once captured — the stage never stays mounted between actions.
+    expect(captureBody).toContain('setHdMountedPosterId(null);');
+  });
+
+  it('caches the generated HD PNG by template + data, so copy/save on the same art reuse one file instead of re-rendering', () => {
+    const captureBody = composer.slice(
+      composer.indexOf('const captureSelectedArt = useCallback('),
+      composer.indexOf('const copyArt = useCallback'),
+    );
+    expect(captureBody).toContain('cached.posterId === poster.id && cached.shareData === data && cached.summaryData === summaryData');
+    expect(captureBody).toContain("hdCacheRef.current = { posterId: poster.id, shareData: data, summaryData, uri };");
+    // Every action calls through captureSelectedArt — neither of them capture directly.
+    const copyBody = composer.slice(composer.indexOf('const copyArt = useCallback'), composer.indexOf('const saveArt = useCallback'));
+    const saveBody = composer.slice(composer.indexOf('const saveArt = useCallback'), composer.indexOf('const onPreviewLayout'));
+    for (const body of [copyBody, saveBody]) {
+      expect(body).toContain('await captureSelectedArt();');
+      // Neither action discards the file itself anymore — it's a shared
+      // cache entry, only ever discarded on invalidation/unmount.
+      expect(body).not.toContain('discardWorkoutShareFile(uri)');
+    }
+  });
+
+  it('invalidates the cached HD export when the template changes, and cleans it up when the composer unmounts', () => {
+    expect(composer).toMatch(/useEffect\(\(\) => \{\s*const cached = hdCacheRef\.current;\s*if \(cached && cached\.posterId !== selectedArtPoster\?\.id\) \{\s*discardWorkoutShareFile\(cached\.uri\);\s*hdCacheRef\.current = null;\s*\}\s*\}, \[selectedArtPoster\?\.id\]\);/);
+    expect(composer).toMatch(/useEffect\(\(\) => \(\) => \{\s*if \(hdCacheRef\.current\) discardWorkoutShareFile\(hdCacheRef\.current\.uri\);\s*\}, \[\]\);/);
+  });
+
+  it('logs workout_share_art_generated with the real export dimensions, pixel ratio and file size — not just the layout id', () => {
+    const captureBody = composer.slice(
+      composer.indexOf('const captureSelectedArt = useCallback('),
+      composer.indexOf('const copyArt = useCallback'),
+    );
+    expect(captureBody).toContain("logInfo('workout_share', 'workout_share_art_generated', {");
+    expect(captureBody).toContain('width: poster.exportWidth,');
+    expect(captureBody).toContain('height: poster.exportHeight,');
+    expect(captureBody).toContain('pixelRatio,');
+    expect(captureBody).toContain('fileSize,');
+    expect(captureBody).toContain("new File(uri).size");
+  });
+
+  it('offers only Copiar arte / Salvar PNG as the ARTE actions — no separate "Compartilhar" button', () => {
+    expect(composer).toContain("t('done.shareComposer.artActions.copy')");
+    expect(composer).toContain("t('done.shareComposer.artActions.save')");
+    expect(composer).toContain('icon="copy"');
+    expect(composer).toContain('onPress={() => { void copyArt(); }}');
+    expect(composer).toContain('onPress={() => { void saveArt(); }}');
+    expect(composer).not.toContain('artActions.share');
+    expect(composer).not.toContain('shareArt');
+  });
+
+  it('renders the preview-only checkerboard as a plain sibling of the ARTE poster component — it never takes/forwards a ref, so it can never become part of what view-shot captures', () => {
+    expect(checkerboard).not.toMatch(/\bref=\{/);
+    // The checkerboard call site in the composer sits before the poster
+    // component in the same page wrapper — a preceding sibling, not a parent.
+    const pageWrapperStart = composer.indexOf('<ArtPreviewCheckerboard');
+    const posterComponentStart = composer.indexOf('<ArtPosterComponent');
+    expect(pageWrapperStart).toBeGreaterThan(-1);
+    expect(pageWrapperStart).toBeLessThan(posterComponentStart);
+  });
+
+  it('windows ARTE poster rendering to the selected page and its neighbors, so swiping stays cheap', () => {
+    expect(composer).toContain('Math.abs(index - selectedArtIndex) <= 1');
+  });
+
+  it('every ARTE poster uses the already-computed shareData/summaryData — no second data pipeline', () => {
+    for (const [name, source] of Object.entries(artPosterSources)) {
+      expect(source, name).toMatch(/shareData|summaryData/);
+    }
+    expect(artPosterSources.ArtPosterPr).toContain('summaryData.personalRecords');
+    expect(artPosterSources.ArtPosterPerformance).toContain('summaryData.volumeKg');
+  });
+
+  it('auto-dismisses the "Arte copiada"/"PNG salvo" confirmation after 3s, without a stray timer wiping a later, unrelated message', () => {
+    expect(composer).toContain('const MESSAGE_AUTO_DISMISS_MS = 3_000;');
+    expect(composer).toContain('const showAutoDismissingMessage = useCallback(');
+    // Only the two terminal success toasts auto-dismiss — loading/error
+    // states still use the plain, non-expiring `setMessage`.
+    expect(composer).toContain("showAutoDismissingMessage(t('done.shareComposer.artCopied'))");
+    expect(composer).toContain("showAutoDismissingMessage(t('done.shareComposer.artSaved'))");
+    expect(composer).not.toContain("showAutoDismissingMessage(t('done.shareComposer.generating'))");
+    expect(composer).not.toContain("showAutoDismissingMessage(t('done.shareComposer.artCopyFailed'))");
+    expect(composer).not.toContain("showAutoDismissingMessage(t('done.shareComposer.artSaveFailed'))");
+    // `setMessage` itself is the one choke point that cancels any pending
+    // dismiss timer — every other call site (FOTO or ARTE, success or
+    // error) goes through it and is therefore automatically protected.
+    const setMessageBody = composer.slice(
+      composer.indexOf('const setMessage = useCallback('),
+      composer.indexOf('const showAutoDismissingMessage = useCallback('),
+    );
+    expect(setMessageBody).toContain('clearTimeout(messageDismissTimeoutRef.current)');
+    expect(setMessageBody).toContain('setMessageState(text)');
+    // The pending timer is also cleared on unmount, never left running
+    // against an unmounted component.
+    expect(composer).toMatch(/useEffect\(\(\) => \(\) => \{\s*if \(messageDismissTimeoutRef\.current\) clearTimeout\(messageDismissTimeoutRef\.current\);\s*\}, \[\]\);/);
   });
 });

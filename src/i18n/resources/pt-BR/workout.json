@@ -274,7 +274,29 @@
         "bodymap": "Mapa Muscular",
         "creative": "Criativo",
         "social": "Social"
-      }
+      },
+      "modeSelector": {
+        "photo": "Foto",
+        "art": "Arte"
+      },
+      "artActions": {
+        "copy": "Copiar arte",
+        "save": "Salvar PNG"
+      },
+      "artCopied": "Arte copiada",
+      "artCopyUnsupported": "Copiar imagens não é compatível com este aparelho",
+      "artCopyFailed": "Não foi possível copiar a arte",
+      "artSaved": "PNG salvo",
+      "artSaveFailed": "Não foi possível salvar o PNG",
+      "artLayouts": {
+        "artMinimal": "Minimalista",
+        "artPerformance": "Performance",
+        "artPr": "Recorde",
+        "artStats": "Estatísticas"
+      },
+      "artPrNewRecord": "Novo recorde",
+      "artPerformanceVolume": "Volume",
+      "artPerformanceReps": "reps"
     },
     "finishFailed": "Não foi possível finalizar o treino.",
     "retry": "Tentar novamente",

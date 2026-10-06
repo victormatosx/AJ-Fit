@@ -23,8 +23,8 @@ export async function stageWorkoutSharePhoto(uri: string): Promise<string> {
   return target.uri;
 }
 
-export function createWorkoutShareExportUri(): string {
-  return new File(directory(EXPORT), `${randomUUID()}.jpg`).uri;
+export function createWorkoutShareExportUri(extension: 'jpg' | 'png' = 'jpg'): string {
+  return new File(directory(EXPORT), `${randomUUID()}.${extension}`).uri;
 }
 
 export function discardWorkoutShareFile(uri: string | null | undefined): void {

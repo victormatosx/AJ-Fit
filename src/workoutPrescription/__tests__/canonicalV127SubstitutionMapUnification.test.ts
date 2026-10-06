@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import canonical from '../../../docs/workouts/AJ_Fit_T001_T102_workouts_canonical_v1_27_goal_routing_fixed.json';
 import matrix from '../../../docs/workouts/AJ_Fit_v1_27_exercise_identity_matrix.json';
+import { EXERCISES_SEED } from '../../data/exercisesSeedData';
+import { CANONICAL_ACTIVITIES } from '../canonicalActivities';
 import { parseCanonicalV127Template } from '../canonicalCatalog';
 import { resolveCanonicalExerciseId, unresolvedCanonicalExerciseIds } from '../canonicalExerciseIdentity';
 
@@ -50,9 +52,9 @@ const ALL_LOSING_IDS = new Set<string>(UNIFIED_GROUPS.flatMap((g) => g.losingIds
 const ALL_LOSING_NAMES = new Set<string>(UNIFIED_GROUPS.flatMap((g) => g.losingNames));
 
 const substitutionMap = canonical.design_notes.exercise_substitution_map.map as Record<string, {
-  A_close_equivalent?: { name: string; exercise_id: string }[];
-  B_acceptable?: { name: string; exercise_id: string }[];
-  C_last_resort_target_preservation?: { name: string; exercise_id: string }[];
+  A_close_equivalent?: { name: string; exercise_id: string; catalog_status?: string }[];
+  B_acceptable?: { name: string; exercise_id: string; catalog_status?: string }[];
+  C_last_resort_target_preservation?: { name: string; exercise_id: string; catalog_status?: string }[];
   notes?: string;
 }>;
 
@@ -74,6 +76,30 @@ function resolveRuntimeId(id: string): string {
 }
 
 describe('v1.27 exercise_substitution_map — closed identity unifications (no allowlist)', () => {
+  it('every substitution candidate marked existing_library resolves to a real runtime exercise', () => {
+    const runtimeItemIds = new Set([
+      ...EXERCISES_SEED.map((exercise) => exercise.id),
+      ...CANONICAL_ACTIVITIES.map((activity) => activity.id),
+    ]);
+    const unresolved: string[] = [];
+
+    for (const [sourceName, entry] of Object.entries(substitutionMap)) {
+      for (const tier of TIERS) {
+        for (const candidate of tierEntries(entry, tier)) {
+          if (candidate.catalog_status !== 'existing_library') continue;
+          const runtimeId = resolveCanonicalExerciseId(candidate.exercise_id);
+          if (!runtimeId || !runtimeItemIds.has(runtimeId)) {
+            unresolved.push(`${sourceName}/${tier}: ${candidate.exercise_id} -> ${runtimeId ?? 'UNRESOLVED'}`);
+          }
+        }
+      }
+    }
+
+    expect(unresolved).toEqual([]);
+    expect(resolveCanonicalExerciseId('pec-deck-machine-fly')).toBe('pec-deck-machine-fly');
+    expect(runtimeItemIds.has('pec-deck-machine-fly')).toBe(true);
+  });
+
   it('none of the unified-away ids/names appear as a map key, or as a candidate name/exercise_id, anywhere', () => {
     expect(Object.keys(substitutionMap).some((key) => ALL_LOSING_NAMES.has(key))).toBe(false);
     for (const [key, entry] of Object.entries(substitutionMap)) {

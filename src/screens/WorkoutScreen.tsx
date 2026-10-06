@@ -1293,6 +1293,7 @@ export function WorkoutScreen({ sex, plan, onDone, onRetryCompletion, onDiscarde
           execution,
           durationSeconds: elapsed,
         })}
+        summaryData={workoutSummaryData}
         onDone={finishAndGoHome}
       />
     );
@@ -3761,6 +3762,9 @@ function RestOverlay({
     color: theme.colors.textFaint,
     marginLeft: 2,
   };
+  // Keep the primary rest action from changing size when its content switches
+  // from the one-line "next set" label to the two-line next-exercise preview.
+  const restActionButtonHeight = 46;
   return (
     // Tapping anywhere in the overlay dismisses the keyboard — RN's touch
     // responder system only lets this `onPress` fire when the touch didn't
@@ -4019,7 +4023,7 @@ function RestOverlay({
                 accessibilityLabel={t('rest.addSecondsAccessibility', { seconds: 15 })}
                 onPress={onAdd15}
                 style={{
-                  paddingVertical: nextExerciseAfterRest ? 10 : 14,
+                  height: restActionButtonHeight,
                   paddingHorizontal: nextExerciseAfterRest ? 12 : 22,
                   borderRadius: 12,
                   backgroundColor: theme.colors.surfacePressed,
@@ -4042,7 +4046,7 @@ function RestOverlay({
               onPress={onSkip}
               style={{
                 flex: 1,
-                paddingVertical: 14,
+                height: restActionButtonHeight,
                 paddingHorizontal: nextExerciseAfterRest ? 10 : 28,
                 minWidth: finalSetLoadEntry ? 220 : undefined,
                 borderRadius: 12,
@@ -4057,11 +4061,13 @@ function RestOverlay({
               }}
             >
               {nextExerciseAfterRest && nextExerciseName ? (
-                <View style={{ alignItems: 'center' }}>
+                <View style={{ width: '100%', alignItems: 'center', justifyContent: 'center' }}>
                   <Text
+                    numberOfLines={1}
                     style={{
                       fontFamily: theme.fonts.display,
-                      fontSize: 16,
+                      fontSize: 14,
+                      lineHeight: displayLineHeight(14),
                       letterSpacing: 1.5,
                       color: theme.colors.primaryForeground,
                       textTransform: 'uppercase',
@@ -4069,22 +4075,23 @@ function RestOverlay({
                   >
                     {t('rest.nextExercise')}
                   </Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 1, maxWidth: '100%' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, maxWidth: '100%' }}>
                     <Text
                       numberOfLines={1}
                       adjustsFontSizeToFit
-                      minimumFontScale={0.75}
+                      minimumFontScale={0.8}
                       style={{
                         flexShrink: 1,
                         fontFamily: theme.fonts.uiBold,
-                        fontSize: 12,
+                        fontSize: 10,
+                        lineHeight: 12,
                         color: theme.colors.primaryForeground,
                         opacity: 0.85,
                       }}
                     >
                       {nextExerciseName}
                     </Text>
-                    <Icon name="arrow-right" size={12} color={theme.colors.primaryForeground} />
+                    <Icon name="arrow-right" size={10} color={theme.colors.primaryForeground} />
                   </View>
                 </View>
               ) : (

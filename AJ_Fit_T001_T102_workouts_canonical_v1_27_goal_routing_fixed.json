@@ -2010,8 +2010,8 @@
           "C_last_resort_target_preservation": [
             {
               "name": "Crucifixo na Máquina (Peck Deck)",
-              "exercise_id": "crucifixo-na-maquina-peck-deck",
-              "catalog_status": "proposed_catalog_addition",
+              "exercise_id": "pec-deck-machine-fly",
+              "catalog_status": "existing_library",
               "environments": [
                 "gym"
               ]
@@ -2320,8 +2320,8 @@
             },
             {
               "name": "Crucifixo na Máquina (Peck Deck)",
-              "exercise_id": "crucifixo-na-maquina-peck-deck",
-              "catalog_status": "proposed_catalog_addition",
+              "exercise_id": "pec-deck-machine-fly",
+              "catalog_status": "existing_library",
               "environments": [
                 "gym"
               ]
@@ -2560,8 +2560,8 @@
           "C_last_resort_target_preservation": [
             {
               "name": "Crucifixo na Máquina (Peck Deck)",
-              "exercise_id": "crucifixo-na-maquina-peck-deck",
-              "catalog_status": "proposed_catalog_addition",
+              "exercise_id": "pec-deck-machine-fly",
+              "catalog_status": "existing_library",
               "environments": [
                 "gym"
               ]
@@ -5203,16 +5203,6 @@
         {
           "exercise_id": "crucifixo-inverso-na-polia",
           "name": "Crucifixo Inverso na Polia",
-          "environments": [
-            "gym"
-          ],
-          "catalog_status": "proposed_catalog_addition",
-          "usage": "substitution_candidate",
-          "runtime_blocker": "must be added to canonical exercise catalog and classified against musculoskeletal limitations before production use"
-        },
-        {
-          "exercise_id": "crucifixo-na-maquina-peck-deck",
-          "name": "Crucifixo na Máquina (Peck Deck)",
           "environments": [
             "gym"
           ],

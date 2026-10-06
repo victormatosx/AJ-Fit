@@ -274,7 +274,29 @@
         "bodymap": "Body Map",
         "creative": "Creative",
         "social": "Social"
-      }
+      },
+      "modeSelector": {
+        "photo": "Photo",
+        "art": "Art"
+      },
+      "artActions": {
+        "copy": "Copy art",
+        "save": "Save PNG"
+      },
+      "artCopied": "Art copied",
+      "artCopyUnsupported": "Copying images isn't supported on this device",
+      "artCopyFailed": "Couldn't copy the art",
+      "artSaved": "PNG saved",
+      "artSaveFailed": "Couldn't save the PNG",
+      "artLayouts": {
+        "artMinimal": "Minimal",
+        "artPerformance": "Performance",
+        "artPr": "PR",
+        "artStats": "Stats"
+      },
+      "artPrNewRecord": "New record",
+      "artPerformanceVolume": "Volume",
+      "artPerformanceReps": "reps"
     },
     "finishFailed": "We couldn't finish the workout.",
     "retry": "Try again",

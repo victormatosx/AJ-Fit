@@ -76,7 +76,7 @@ describe('Body Map sex propagation architecture', () => {
 
   it('propagates sex through the common poster contract and both Body Map posters', () => {
     expect(workout).toContain('<WorkoutShareComposer\n        sex={sex}');
-    expect(composer).toContain('<PosterComponent\n                              sex={sex}');
+    expect(composer).toContain('<PosterComponent\n                                  sex={sex}');
     expect(posterTypes).toContain('sex: Sex;');
     expect(posterBodyMap).toContain('<BodyMuscleMap\n              sex={sex}');
     expect(posterCreative).toContain('<BodyMuscleMap\n                sex={sex}');
