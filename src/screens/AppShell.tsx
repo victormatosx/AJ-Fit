@@ -53,7 +53,7 @@ import {
 import { useWorkoutPrescription } from '../workoutPrescription/useWorkoutPrescription';
 import type { FinalWorkoutPlan, PrescriptionResult } from '../workoutPrescription/types';
 import { canRetryGeneration, prescriptionOutcomeKey } from '../workoutPrescription/uiOutcome';
-import type { WorkoutProgramSnapshot } from '../services/workoutPrograms';
+import { loadWorkoutProgramSnapshot, type WorkoutProgramSnapshot } from '../services/workoutPrograms';
 import {
   localDateInTimezone,
   advancedWorkoutTarget,
@@ -91,6 +91,10 @@ import {
   type WorkoutCompletionResult,
 } from '../workoutLifecycle/finishFlow';
 import {
+  classifyWorkoutFinalizationError,
+  type WorkoutFinalizationErrorCategory,
+} from '../workoutLifecycle/finalizationErrorClassification';
+import {
   finalizeWorkoutSession,
   workoutFinalizationFailureStage,
   type FinalizeWorkoutSessionResult,
@@ -107,7 +111,10 @@ import {
   runWorkoutFinalizationWithBestEffortProgress,
   type WorkoutFinalizationProgressAttempt,
 } from '../workoutLifecycle/finalizationRuntime';
-import { loadAuthoritativelyCommittedFinalization } from '../workoutLifecycle/finalizationRecovery';
+import {
+  loadAuthoritativelyCommittedFinalization,
+  resolveAuthoritativeCardioFinisherPresence,
+} from '../workoutLifecycle/finalizationRecovery';
 import { clearCardioSession } from '../services/cardioSessionStorage';
 import { useWorkoutEvolution } from '../workoutEvolution/useWorkoutEvolution';
 import { useWorkoutActivitySnapshot } from '../home/useWorkoutActivitySnapshot';
@@ -124,7 +131,7 @@ import {
 import type { ManualSubstitutionUserContext } from '../services/exerciseSubstitutionCandidates';
 import { workoutExercisesFromPlan, type ManualSubstitutionContextStatus } from './workoutScreenPlan';
 import { EvolutionUnlockScreen } from './EvolutionUnlockScreen';
-import { errorCode, logInfo, logWarn } from '../lib/logger';
+import { errorClass, errorCode, logError, logInfo, logWarn } from '../lib/logger';
 import { resolveSessionDisplayName, type LooseTranslate } from '../workoutPrescription/sessionPresentation';
 import { useReducedMotionPreference } from '../lib/reducedMotion';
 import { useDeepLinkIntent } from '../state/DeepLinkContext';
@@ -436,6 +443,12 @@ function AppShellContent({
   // ref, not observable by React) even though they're set/cleared together.
   const [finishingSession, setFinishingSession] = useState(false);
   const [workoutCompletionResult, setWorkoutCompletionResult] = useState<WorkoutCompletionResult | null>(null);
+  // Deliberately NOT cleared when a new attempt starts (only when its outcome
+  // is known) — while `finishingSession` is true, a still-set category from
+  // the previous attempt is exactly what tells the UI "this is a retry, not
+  // the first try" without any extra plumbing.
+  const [workoutCompletionFailureCategory, setWorkoutCompletionFailureCategory] =
+    useState<WorkoutFinalizationErrorCategory | null>(null);
   const [durableCompletionReachedAtMs, setDurableCompletionReachedAtMs] = useState<number | null>(null);
 
   const advanceWorkoutFinalizationProgress = useCallback((stage: WorkoutFinalizationProgressStage) => {
@@ -929,6 +942,7 @@ function AppShellContent({
     workoutCompletionRef.current = null;
     workoutHomeSyncRef.current = null;
     setWorkoutCompletionResult(null);
+    setWorkoutCompletionFailureCategory(null);
     setDurableCompletionReachedAtMs(null);
     setFinishingSession(false);
     setStartWorkoutFlow('idle');
@@ -1014,6 +1028,7 @@ function AppShellContent({
     workoutCompletionRef.current = null;
     workoutHomeSyncRef.current = null;
     setWorkoutCompletionResult(null);
+    setWorkoutCompletionFailureCategory(null);
     setDurableCompletionReachedAtMs(null);
     setFinishingSession(false);
     setShowAdvanceWorkoutConfirmation(false);
@@ -1107,6 +1122,7 @@ function AppShellContent({
       workoutCompletionRef.current = null;
       workoutHomeSyncRef.current = null;
       setWorkoutCompletionResult(null);
+      setWorkoutCompletionFailureCategory(null);
       setDurableCompletionReachedAtMs(null);
       setFinishingSession(false);
       setActiveSessionIndex(fresh.sessionIndex);
@@ -1265,6 +1281,22 @@ function AppShellContent({
             onCheckpoint: reportCheckpoint,
           });
         }
+        if (!finalized.ok) {
+          // The one place the raw callable failure itself is recorded, with
+          // enough to correlate across attempts (executionId, retry vs first
+          // try, which boundary rejected it, how long it took) — everything
+          // downstream only sees the coarser EXECUTION_FAILED/SCHEDULE_FAILED
+          // result. Always-on (logError), unlike the dev-only perf timers
+          // above: a production retry that fails silently is exactly the gap
+          // this closes.
+          logError('workout_finalize_callable', finalized.error, {
+            executionId,
+            isRetry: recovery,
+            stage: workoutFinalizationFailureStage(finalized.error),
+            errorClass: errorClass(finalized.error),
+            durationMs: Date.now() - finishFlowStartedAtMs,
+          });
+        }
         // A timeout/disconnect can lose the successful callable response
         // after the transaction committed. Before surfacing an error, verify
         // both durable authorities (terminal execution + deterministic
@@ -1298,13 +1330,25 @@ function AppShellContent({
                   completion: terminal.completion,
                 },
               };
-              logInfo('workout', 'finalization_response_reconciled_from_authority', {
+              // Always-on: this means the callable's response was lost even
+              // though the backend actually committed — worth seeing in
+              // production, not just __DEV__.
+              logWarn('workout', 'finalization_response_reconciled_from_authority', {
                 executionId: terminal.executionId,
+              });
+            } else {
+              logWarn('workout', 'finalization_response_reconciliation_not_found', {
+                executionId: targetExecution.executionId,
               });
             }
           } catch (reconciliationError) {
             logWarn('workout', 'finalization_response_reconciliation_failed', { reconciliationError });
           }
+        }
+        if (appShellMountedRef.current) {
+          setWorkoutCompletionFailureCategory(
+            finalized.ok ? null : classifyWorkoutFinalizationError(finalized.error),
+          );
         }
         const result: WorkoutCompletionResult = finalized.ok
           ? 'COMPLETED'
@@ -1455,10 +1499,50 @@ function AppShellContent({
           return;
         }
 
-        const mode = recoveryFinalizationMode(
-          fresh,
-          !!activeProgram.sessions[fresh.sessionIndex]?.cardioFinisher,
-        );
+        // `recoveryFinalizationMode`'s own short-circuit order
+        // (finalizationMode -> hasPendingSet -> cardioSettled) means an
+        // authoritative cardio-finisher lookup only ever changes the
+        // outcome in the one remaining case: every strength set already
+        // settled AND cardio not yet durably COMPLETED/SKIPPED. Mirroring
+        // that same order here — rather than always reading the program —
+        // means a routine recovery (no cardio finisher, or cardio already
+        // settled) never pays for an extra Firestore read it doesn't need.
+        const hasPendingSet = fresh.exercises.some((exercise) =>
+          exercise.sets.some((set) => set.status === 'PENDING'));
+        const cardioSettled = fresh.cardio?.status === 'COMPLETED' || fresh.cardio?.status === 'SKIPPED';
+        let hasCardioFinisher = false;
+        if (!fresh.finalizationMode && !hasPendingSet && !cardioSettled) {
+          // Root-cause fix (2026-10 audit): this used to read
+          // `activeProgram.sessions[fresh.sessionIndex]?.cardioFinisher` —
+          // AppShell's in-memory cache, which can diverge from the
+          // `workoutPrograms/{programId}` document the backend's own
+          // preflight re-reads. That divergence is exactly what let the
+          // client send `mode=NORMAL` with no cardio payload while the
+          // backend still required one, producing `CARDIO_COMPLETION_REQUIRED`
+          // on every identical retry. Reading the same authoritative source
+          // the backend uses removes the divergence at its source.
+          const presence = await resolveAuthoritativeCardioFinisherPresence({
+            programId: fresh.programId,
+            sessionIndex: fresh.sessionIndex,
+            loadProgram: (programId) => loadWorkoutProgramSnapshot(user.uid, programId),
+          });
+          if (presence === null) {
+            // Never guess NORMAL on a failed/ambiguous read — that is the
+            // exact divergence this fix removes. Forcing EARLY instead
+            // mirrors the already-safe "cardio genuinely pending" branch:
+            // idempotent, and — because EARLY only ever writes a cardio
+            // field when the session's own fresh read found one — harmless
+            // even if this session turns out to have no cardio finisher at
+            // all once the next successful read confirms it.
+            logWarn('workout_execution', 'recovery_cardio_finisher_lookup_failed', {
+              executionId: fresh.executionId,
+            });
+            hasCardioFinisher = true;
+          } else {
+            hasCardioFinisher = presence;
+          }
+        }
+        const mode = recoveryFinalizationMode(fresh, hasCardioFinisher);
         const result = await runWorkoutCompletion(true, undefined, mode, fresh);
         if (result !== 'COMPLETED' && result !== 'LIFECYCLE_FOLLOW_UP_FAILED') {
           setRecoveryFinishError(true);
@@ -1552,12 +1636,14 @@ function AppShellContent({
         errorCode: result === 'COMPLETED' ? undefined : result,
       });
     } catch (error) {
-      logInfo('workout_retry', 'retry_error', {
-        timestamp: Date.now(),
+      // Unlike a normal EXECUTION_FAILED/SCHEDULE_FAILED result (already
+      // logWarn'd inside runWorkoutCompletion itself), reaching this catch
+      // means the retry attempt threw before even producing a result —
+      // exactly the kind of failure that used to vanish behind a dev-only
+      // logInfo with no trace in production.
+      logError('workout_retry', error, {
         executionId,
-        etapa: 'COMPLETE',
         durationMs: Date.now() - retryStartedAtMs,
-        errorCode: errorCode(error),
       });
     }
   };
@@ -1624,6 +1710,7 @@ function AppShellContent({
         setWorkoutFinalizationProgress('WAITING');
         workoutHomeSyncRef.current = null;
         setWorkoutCompletionResult(null);
+        setWorkoutCompletionFailureCategory(null);
         setDurableCompletionReachedAtMs(null);
       }
     });
@@ -1658,6 +1745,7 @@ function AppShellContent({
     setWorkoutFinalizationProgress('WAITING');
     workoutHomeSyncRef.current = null;
     setWorkoutCompletionResult(null);
+    setWorkoutCompletionFailureCategory(null);
     setDurableCompletionReachedAtMs(null);
     setFinishingSession(false);
     setTab('home');
@@ -1837,6 +1925,7 @@ function AppShellContent({
               durableCompletionReachedAtMs={durableCompletionReachedAtMs}
               completionFailed={workoutCompletionResult === 'EXECUTION_FAILED'
                 || workoutCompletionResult === 'SCHEDULE_FAILED'}
+              completionFailureCategory={workoutCompletionFailureCategory}
               onSessionCompleted={({ recovery, mode }) => {
                 void runWorkoutCompletion(recovery, undefined, mode);
               }}

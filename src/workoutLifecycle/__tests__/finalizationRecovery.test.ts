@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { PersistedWorkoutExecution } from '../../services/workoutExecutions';
-import { loadAuthoritativelyCommittedFinalization } from '../finalizationRecovery';
+import {
+  loadAuthoritativelyCommittedFinalization,
+  resolveAuthoritativeCardioFinisherPresence,
+} from '../finalizationRecovery';
 
 function execution(status: PersistedWorkoutExecution['status'], withCompletion = true): PersistedWorkoutExecution {
   return {
@@ -48,6 +51,46 @@ describe('ambiguous finalization response recovery', () => {
       executionId: candidate.executionId,
       loadExecution: async () => candidate,
       hasCompletionEvent: async () => eventExists,
+    })).resolves.toBeNull();
+  });
+});
+
+describe('resolveAuthoritativeCardioFinisherPresence', () => {
+  it('returns true when the authoritative session has a cardio finisher', async () => {
+    const loadProgram = vi.fn(async () => ({
+      sessions: [{ cardioFinisher: undefined }, { cardioFinisher: { duration: '10min' } }],
+    }));
+    await expect(resolveAuthoritativeCardioFinisherPresence({
+      programId: 'program_1', sessionIndex: 1, loadProgram,
+    })).resolves.toBe(true);
+    expect(loadProgram).toHaveBeenCalledWith('program_1');
+  });
+
+  it('returns false when the authoritative session genuinely has no cardio finisher', async () => {
+    const loadProgram = vi.fn(async () => ({ sessions: [{ cardioFinisher: undefined }] }));
+    await expect(resolveAuthoritativeCardioFinisherPresence({
+      programId: 'program_1', sessionIndex: 0, loadProgram,
+    })).resolves.toBe(false);
+  });
+
+  it('returns null (unknown), never false, when the program document is missing', async () => {
+    await expect(resolveAuthoritativeCardioFinisherPresence({
+      programId: 'program_missing', sessionIndex: 0, loadProgram: async () => null,
+    })).resolves.toBeNull();
+  });
+
+  it('returns null (unknown), never false, when sessionIndex is out of range', async () => {
+    const loadProgram = async () => ({ sessions: [{ cardioFinisher: undefined }] });
+    await expect(resolveAuthoritativeCardioFinisherPresence({
+      programId: 'program_1', sessionIndex: 5, loadProgram,
+    })).resolves.toBeNull();
+  });
+
+  it('returns null (unknown), never false, when the read throws', async () => {
+    await expect(resolveAuthoritativeCardioFinisherPresence({
+      programId: 'program_1',
+      sessionIndex: 0,
+      loadProgram: async () => { throw new Error('offline'); },
     })).resolves.toBeNull();
   });
 });

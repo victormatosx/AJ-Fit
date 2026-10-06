@@ -299,6 +299,10 @@
       "artPerformanceReps": "reps"
     },
     "finishFailed": "Não foi possível finalizar o treino.",
+    "finishFailedOffline": "Sem conexão com a internet. Verifique sua conexão e tente novamente.",
+    "finishFailedTimeout": "Não conseguimos confirmar a finalização a tempo. Pode tentar novamente com segurança.",
+    "finishFailedCardioRequired": "Finalize o cardio antes de concluir o treino.",
+    "completeCardioCta": "Concluir cardio",
     "retry": "Tentar novamente",
     "metrics": {
       "time": "Tempo",
@@ -321,6 +325,7 @@
       "retryRecords": "Tentar atualizar",
       "finalization": {
         "processing": "Finalizando",
+        "retrying": "Tentando novamente",
         "interrupted": "Interrompido",
         "committed": "Concluído",
         "messages": {

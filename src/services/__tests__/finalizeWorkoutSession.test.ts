@@ -39,6 +39,17 @@ describe('finalizeWorkoutSession client boundary', () => {
     expect(transport).toHaveBeenNthCalledWith(2, input);
   });
 
+  it('surfaces a second consecutive failure distinctly instead of masking it as the first', async () => {
+    const input = { executionId: 'exec_1' };
+    const transport = vi.fn()
+      .mockRejectedValueOnce(Object.assign(new Error('offline'), { code: 'functions/unavailable' }))
+      .mockRejectedValueOnce(Object.assign(new Error('still offline'), { code: 'functions/unavailable' }));
+    setFinalizeWorkoutSessionTransportForTests(transport);
+    await expect(finalizeWorkoutSession(input)).rejects.toMatchObject({ code: 'functions/unavailable' });
+    await expect(finalizeWorkoutSession(input)).rejects.toMatchObject({ code: 'functions/unavailable' });
+    expect(transport).toHaveBeenCalledTimes(2);
+  });
+
   it('passes EARLY as explicit intent without inventing a cardio duration', async () => {
     const transport = vi.fn(async () => ({
       status: 'COMPLETED' as const,

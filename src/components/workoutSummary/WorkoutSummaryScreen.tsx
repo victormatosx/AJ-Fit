@@ -11,7 +11,7 @@ import { RiseIn } from '../ui/RiseIn';
 import { useTheme } from '../../theme';
 import { sizes, spacing } from '../../theme/tokens';
 import { useUnits } from '../../state/UnitsContext';
-import { formatWorkoutLoadFromKg, workoutLoadUnit } from '../../units/workoutLoadConversions';
+import { formatWorkoutVolumeFromKg, workoutVolumeUnit } from '../../units/workoutLoadConversions';
 import { formatWorkoutShareDuration } from '../../workoutShare/data';
 import type { WorkoutSummaryData } from '../../workoutSummary/buildWorkoutSummaryData';
 import type { Sex } from '../../state/AppState';
@@ -24,8 +24,30 @@ import { FinalizationProgressRing, type FinalizationRingPhase } from './Finaliza
 import type { WorkoutFinalizationProgressStage } from '../../workoutLifecycle/finalizationProgress';
 import { useFinalizationMessageKey } from '../../workoutSummary/useFinalizationMessageKey';
 import type { WorkoutSummaryLoadProgressStatus } from '../../loadProgress/workoutSummaryRefresh';
+import type { WorkoutFinalizationErrorCategory } from '../../workoutLifecycle/finalizationErrorClassification';
 
 const FOOTER_HEIGHT = sizes.controlLg;
+
+/**
+ * OFFLINE/TIMEOUT/CARDIO_COMPLETION_REQUIRED each get distinct copy — the
+ * first two tell the user something concrete and actionable ("check your
+ * connection" / "this can take a bit, it's safe to retry"); the cardio one
+ * names the actual blocker instead of a generic failure, since a plain retry
+ * can never resolve it on its own. VALIDATION and UNKNOWN both fall back to
+ * the original generic message: a business-rule rejection is never explained
+ * in Firebase terms to the user, and an unclassified error has nothing
+ * honest to add beyond "didn't work, retry".
+ */
+function finishFailedMessageKey(
+  category: WorkoutFinalizationErrorCategory | null,
+): 'done.finishFailedOffline' | 'done.finishFailedTimeout' | 'done.finishFailedCardioRequired' | 'done.finishFailed' {
+  switch (category) {
+    case 'OFFLINE': return 'done.finishFailedOffline';
+    case 'TIMEOUT': return 'done.finishFailedTimeout';
+    case 'CARDIO_COMPLETION_REQUIRED': return 'done.finishFailedCardioRequired';
+    default: return 'done.finishFailed';
+  }
+}
 
 /** Crossfades in whenever `text` changes — snaps to invisible first, then
  * eases in, so a message swap never flashes the old and new copy together. */
@@ -65,10 +87,13 @@ function CompletionHero({
   data,
   committed,
   failed,
+  retrying,
 }: {
   data: WorkoutSummaryData | null;
   committed: boolean;
   failed: boolean;
+  /** A new attempt is in flight after a previous one failed — same ring animation as the first try, distinct label only, so the user can tell the tap registered. */
+  retrying: boolean;
 }) {
   const { theme } = useTheme();
   const { t } = useTranslation('workout');
@@ -80,7 +105,8 @@ function CompletionHero({
   const phase: FinalizationRingPhase = failed ? 'failed' : committed ? 'completing' : 'ramping';
   const label = t(committed
     ? 'done.summary.finalization.committed'
-    : failed ? 'done.summary.finalization.interrupted' : 'done.summary.finalization.processing');
+    : failed ? 'done.summary.finalization.interrupted'
+      : retrying ? 'done.summary.finalization.retrying' : 'done.summary.finalization.processing');
 
   return (
     <View style={{ marginTop: spacing[5], paddingVertical: spacing[2], alignItems: 'center' }}>
@@ -180,10 +206,14 @@ function SummaryMetricsGrid({
 }) {
   const { t } = useTranslation('workout');
   const { resolvedUnits } = useUnits();
-  const unit = workoutLoadUnit(resolvedUnits);
 
   const directItems: { label: string; value: string; unit?: string; icon: IconName }[] = [
-    { label: t('done.summary.metrics.volume'), value: formatWorkoutLoadFromKg(data.volumeKg, resolvedUnits), unit, icon: 'dumbbell' },
+    {
+      label: t('done.summary.metrics.volume'),
+      value: formatWorkoutVolumeFromKg(data.volumeKg, resolvedUnits),
+      unit: workoutVolumeUnit(data.volumeKg, resolvedUnits),
+      icon: 'dumbbell',
+    },
     { label: t('done.summary.metrics.sets'), value: String(data.completedSetCount), icon: 'list' },
     { label: t('done.summary.metrics.reps'), value: String(data.totalReps), icon: 'target' },
   ];
@@ -242,6 +272,9 @@ export function WorkoutSummaryScreen({
   workoutName,
   completionConfirmed,
   completionFailed,
+  retrying,
+  failureCategory,
+  onResumeCardioCompletion,
   loadProgressStatus,
   onRetry,
   onRetryLoadProgress,
@@ -257,6 +290,18 @@ export function WorkoutSummaryScreen({
   finalizationStage: WorkoutFinalizationProgressStage;
   completionConfirmed: boolean;
   completionFailed: boolean;
+  /** True only while a NEW attempt (after a prior failure) is still in flight. */
+  retrying: boolean;
+  /** User-facing bucket for the failure text; `null` while `!completionFailed`. Never a raw Firebase code. */
+  failureCategory: WorkoutFinalizationErrorCategory | null;
+  /**
+   * Sends the user back into the existing cardio-finisher screen instead of
+   * a plain retry — the only action that can actually resolve
+   * `CARDIO_COMPLETION_REQUIRED`. `undefined` when the caller has no cardio
+   * finisher to send the user back to; the CTA falls back to the generic
+   * retry in that case rather than rendering a dead end.
+   */
+  onResumeCardioCompletion?: () => void;
   loadProgressStatus: WorkoutSummaryLoadProgressStatus;
   onRetry: () => void;
   onRetryLoadProgress: () => void;
@@ -362,12 +407,22 @@ export function WorkoutSummaryScreen({
               data={data}
               committed={committed}
               failed={completionFailed}
+              retrying={retrying}
             />
 
             {completionFailed && !committed ? (
               <View style={{ alignItems: 'center', paddingVertical: spacing[6], gap: spacing[3] }}>
-                <Display size={22} style={{ textAlign: 'center' }}>{t('done.finishFailed').toUpperCase()}</Display>
-                <CtaButton onPress={onRetry}>{t('done.retry')}</CtaButton>
+                <Display size={22} style={{ textAlign: 'center' }}>
+                  {t(finishFailedMessageKey(failureCategory)).toUpperCase()}
+                </Display>
+                {/* A plain retry would resend the same payload the server
+                    just rejected for this exact reason and fail again —
+                    the only useful action here is finishing the cardio. */}
+                {failureCategory === 'CARDIO_COMPLETION_REQUIRED' && onResumeCardioCompletion ? (
+                  <CtaButton onPress={onResumeCardioCompletion}>{t('done.completeCardioCta')}</CtaButton>
+                ) : (
+                  <CtaButton onPress={onRetry}>{t('done.retry')}</CtaButton>
+                )}
               </View>
             ) : !hasLocalData ? (
               <SummarySkeleton />

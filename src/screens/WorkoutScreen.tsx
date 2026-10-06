@@ -31,6 +31,7 @@ import { useExerciseExecutionMedia } from '../workoutExecution/useExerciseExecut
 import { displayLineHeight, radii, sizes, spacing } from '../theme/tokens';
 import { darkTheme, useTheme } from '../theme';
 import { logInfo, logWarn } from '../lib/logger';
+import type { WorkoutFinalizationErrorCategory } from '../workoutLifecycle/finalizationErrorClassification';
 import type { FinalCardioFinisher, FinalWorkoutPlan } from '../workoutPrescription/types';
 import { useUnits } from '../state/UnitsContext';
 import { usePremiumCapabilities } from '../hooks/usePremiumCapabilities';
@@ -184,6 +185,8 @@ type Props = {
   durableCompletionReachedAtMs?: number | null;
   /** Durable finish or schedule completion failed; keep this screen mounted and turn the CTA into an explicit retry. */
   completionFailed?: boolean;
+  /** Classifies the most recent failure for user-facing copy only — never a raw Firebase code/message. */
+  completionFailureCategory?: WorkoutFinalizationErrorCategory | null;
   /** Fires once a set's weight (and, optionally, actually-performed reps) is logged (docs/workout-lifecycle/09_WORKOUT_EXECUTION_AND_HISTORY.md) — `exerciseIndex` matches this exercise's position in `plan.sessions[sessionIndex].exercises`, the same identity the Execution record uses. `actualReps` is `null` when not informed or when the exercise isn't reps-doseKind — never the prescribed range. */
   onSetLogged?: (exerciseIndex: number, setIndex: number, weightKg: number, actualReps?: number | null) => void | Promise<void>;
   /** Edits only actual reps/load on a persisted COMPLETED set in the active execution. */
@@ -266,7 +269,7 @@ function translateMuscleGroup(tLoose: LooseT, target: string): string {
   return target;
 }
 
-export function WorkoutScreen({ sex, plan, onDone, onRetryCompletion, onDiscarded, onMinimize, sessionIndex = 0, execution, workoutStartedAtMs, hasUnreconciledMutations, onSessionCompleted, finishing, finalizationProgress, completionConfirmed, durableCompletionReachedAtMs, completionFailed, onSetLogged, onCompletedSetEdited, onAbandon, onCardioCompleted, onEarlyFinish, manualSubstitutionContext, manualSubstitutionContextStatus, onRetryManualSubstitutionContext, onApplySubstitution }: Props) {
+export function WorkoutScreen({ sex, plan, onDone, onRetryCompletion, onDiscarded, onMinimize, sessionIndex = 0, execution, workoutStartedAtMs, hasUnreconciledMutations, onSessionCompleted, finishing, finalizationProgress, completionConfirmed, durableCompletionReachedAtMs, completionFailed, completionFailureCategory, onSetLogged, onCompletedSetEdited, onAbandon, onCardioCompleted, onEarlyFinish, manualSubstitutionContext, manualSubstitutionContextStatus, onRetryManualSubstitutionContext, onApplySubstitution }: Props) {
   useEffect(() => {
     if (typeof __DEV__ === 'undefined' || !__DEV__) return undefined;
     logInfo('workout_performance', 'workout_screen_mount', {
@@ -462,10 +465,11 @@ export function WorkoutScreen({ sex, plan, onDone, onRetryCompletion, onDiscarde
     if (!rest || restingExerciseIndex < 0) return 0;
     return exercises[restingExerciseIndex]?.sets[rest.setIndex]?.w ?? 0;
   });
-  // Actual reps performed, entered fresh for each set — never prefilled from
-  // the prescription or a previous set (docs: never confuse actual with
-  // prescribed). `null` means "not informed", which is a valid, final answer,
-  // not a state to resolve — the field is optional end to end.
+  // Actual reps performed. Prefilled from another already-logged set of the
+  // same exercise (see `lastEnteredForExercise`) so the user only retypes it
+  // when it changes between sets — never from the prescription itself.
+  // `null` means "not informed", which is a valid, final answer, not a state
+  // to resolve — the field is optional end to end.
   const [regReps, setRegReps] = useState<number | null>(null);
 
   const [queueOpen, setQueueOpen] = useState(false);
@@ -790,7 +794,34 @@ export function WorkoutScreen({ sex, plan, onDone, onRetryCompletion, onDiscarde
   const lastWeight = (e: Exercise, i: number) => {
     const executionSet = executionSetAt(exIdx, i);
     if (executionSet?.status === 'COMPLETED') return executionSet.weightKg ?? 0;
-    return logged[`${e.id}-${i}`] ?? e.sets[i].w;
+    const key = `${e.id}-${i}`;
+    if (key in logged) return logged[key];
+    return lastEnteredForExercise(e, i).weight ?? e.sets[i].w;
+  };
+
+  // Once the user has entered reps/load for one set of an exercise, the
+  // other not-yet-logged sets of that same exercise should default to the
+  // same values instead of 0/blank — carries the nearest already-logged
+  // set's data forward (or backward) so the user only has to adjust it when
+  // it actually changes between sets.
+  const lastEnteredForExercise = (e: Exercise, excludeSetIdx: number): {
+    weight: number | null;
+    reps: number | null;
+  } => {
+    let weight: number | null = null;
+    let reps: number | null = null;
+    let bestDistance = Infinity;
+    for (let i = 0; i < e.sets.length; i += 1) {
+      if (i === excludeSetIdx) continue;
+      const key = `${e.id}-${i}`;
+      if (!(key in logged) && !(key in loggedReps)) continue;
+      const distance = Math.abs(i - excludeSetIdx);
+      if (distance >= bestDistance) continue;
+      bestDistance = distance;
+      weight = key in logged ? logged[key] : null;
+      reps = key in loggedReps ? loggedReps[key] : null;
+    }
+    return { weight, reps };
   };
 
   const openCompletedSetEditor = (exerciseIndex: number, setIndex: number, exerciseName: string, repsEnabled: boolean) => {
@@ -973,9 +1004,12 @@ export function WorkoutScreen({ sex, plan, onDone, onRetryCompletion, onDiscarde
   const completeSet = () => {
     const completedSet = { exId: ex.id, exIdx, setIdx };
     const completedWeight = lastWeight(ex, setIdx);
+    const prefilledReps = loggedReps[`${ex.id}-${setIdx}`]
+      ?? lastEnteredForExercise(ex, setIdx).reps
+      ?? null;
     setPending(completedSet);
     setRegWeight(completedWeight);
-    setRegReps(null);
+    setRegReps(prefilledReps);
 
     // The last set has no recovery countdown, but it still needs the same
     // load-entry step as every other set. Keep progress pending until the
@@ -986,7 +1020,7 @@ export function WorkoutScreen({ sex, plan, onDone, onRetryCompletion, onDiscarde
     // `0` is a deliberate no-rest prescription. Preserve the new engine's
     // semantics and advance synchronously without creating a fake timer.
     if (ex.rest <= 0) {
-      advanceAfterRest(completedSet, completedWeight);
+      advanceAfterRest(completedSet, completedWeight, prefilledReps);
       return;
     }
 
@@ -1262,6 +1296,23 @@ export function WorkoutScreen({ sex, plan, onDone, onRetryCompletion, onDiscarde
       onDone();
     };
 
+    // `CARDIO_COMPLETION_REQUIRED` means the server rejected the finalize
+    // call specifically because this session's cardio finisher was never
+    // completed — a plain retry would resend the exact same incomplete
+    // payload and fail again. This sends the user back into the SAME cardio
+    // screen/flow a normal finish already uses (`onFinalizationStarted`
+    // below), so completing it re-triggers the one authoritative finalize
+    // path with the now-present cardio duration — no second flow invented.
+    const resumeCardioCompletion = cardioFinisher
+      ? () => {
+          logInfo('workout_retry', 'resume_cardio_completion_pressed', {
+            executionId: execution?.executionId,
+          });
+          setFinished(false);
+          setShowCardioFinisher(true);
+        }
+      : undefined;
+
     // The summary is the terminal screen's first page; tapping "Compartilhar
     // treino" on it swaps to the exact same share composer/flow that used
     // to be shown first, unchanged. Until the authoritative response and a
@@ -1275,6 +1326,14 @@ export function WorkoutScreen({ sex, plan, onDone, onRetryCompletion, onDiscarde
           finalizationStage={completionConfirmed ? 'COMMITTED' : finalizationProgress}
           completionConfirmed={!!completionConfirmed}
           completionFailed={!!completionFailed && !finishing}
+          // A category still set while `finishing` is true can only be a
+          // leftover from the attempt that just failed — the category is
+          // never cleared when a new attempt starts, only once its outcome
+          // is known (see AppShell). That's what distinguishes "retrying
+          // after a failure" from the first, ordinary finalization.
+          retrying={!!finishing && completionFailureCategory != null}
+          failureCategory={!finishing ? (completionFailureCategory ?? null) : null}
+          onResumeCardioCompletion={resumeCardioCompletion}
           loadProgressStatus={workoutSummaryLoadProgressStatus}
           onRetry={onRetryCompletion}
           onRetryLoadProgress={retryWorkoutSummaryLoadProgress}

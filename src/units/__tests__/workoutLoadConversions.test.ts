@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   adjustWorkoutLoadKg,
   formatWorkoutLoadFromKg,
+  formatWorkoutVolumeFromKg,
   workoutLoadFromKg,
   workoutLoadStep,
   workoutLoadToKg,
   workoutLoadUnit,
+  workoutVolumeUnit,
 } from '../workoutLoadConversions';
 
 describe('workout load conversions', () => {
@@ -32,5 +34,25 @@ describe('workout load conversions', () => {
     expect(formatWorkoutLoadFromKg(internalKg, 'metric')).toBe('60');
     expect(formatWorkoutLoadFromKg(internalKg, 'imperial')).toBe('132.3');
     expect(internalKg).toBe(60);
+  });
+
+  it('shows volume below 1000 kg in kg', () => {
+    expect(formatWorkoutVolumeFromKg(999, 'metric')).toBe('999');
+    expect(workoutVolumeUnit(999, 'metric')).toBe('kg');
+  });
+
+  it('switches volume to tonnes at 1000 kg and above', () => {
+    expect(formatWorkoutVolumeFromKg(1000, 'metric')).toBe('1');
+    expect(workoutVolumeUnit(1000, 'metric')).toBe('ton');
+    expect(formatWorkoutVolumeFromKg(1250, 'metric')).toBe('1.3');
+    expect(workoutVolumeUnit(1250, 'metric')).toBe('ton');
+  });
+
+  it('applies the equivalent 2000 lb threshold for imperial volume', () => {
+    const justUnderKg = workoutLoadToKg(1999, 'imperial');
+    expect(workoutVolumeUnit(justUnderKg, 'imperial')).toBe('lb');
+    const atThresholdKg = workoutLoadToKg(2000, 'imperial');
+    expect(workoutVolumeUnit(atThresholdKg, 'imperial')).toBe('ton');
+    expect(formatWorkoutVolumeFromKg(atThresholdKg, 'imperial')).toBe('1');
   });
 });

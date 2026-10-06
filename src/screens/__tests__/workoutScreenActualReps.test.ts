@@ -20,11 +20,12 @@ function block(startMarker: string, endMarker: string): string {
 }
 
 describe('WorkoutScreen — actual reps capture', () => {
-  it('resets regReps fresh on every completeSet — never prefilled from the prescription or a previous set', () => {
+  it('prefills regReps from another already-logged set of the same exercise, mirroring regWeight', () => {
     const completeSetBlock = block('const completeSet = () => {', 'const skipRest = () => {');
-    expect(completeSetBlock).toContain('setRegReps(null);');
-    // Unlike regWeight (prefilled with lastWeight), regReps has no equivalent prefill call.
-    expect(completeSetBlock).not.toMatch(/setRegReps\([^n]/);
+    expect(completeSetBlock).toContain('lastEnteredForExercise(ex, setIdx).reps');
+    expect(completeSetBlock).toContain('setRegReps(prefilledReps);');
+    // Never pulled from the prescription itself — only from logged data.
+    expect(completeSetBlock).not.toContain('ex.sets[setIdx].r');
   });
 
   it('sanitizes and gates reps by doseKind before persisting, never overwriting the prescription', () => {
