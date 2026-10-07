@@ -1,5 +1,11 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Linking } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { onAuthStateChanged } from 'firebase/auth';
+import { httpsCallable } from 'firebase/functions';
+import { auth } from '../lib/firebase';
+import { functions } from '../lib/firebaseFunctions';
+import { createCampaignOpenQueue } from '../services/campaignOpenQueue';
 import {
   consumeDeepLinkIntent as consumePendingIntent,
   enqueueDeepLinkIntent,
@@ -21,6 +27,7 @@ type DeepLinkContextValue = {
 };
 
 const DeepLinkContext = createContext<DeepLinkContextValue | null>(null);
+const campaignOpenQueue = createCampaignOpenQueue(AsyncStorage);
 
 /**
  * Owns the single native URL subscription for the app process. This provider
@@ -79,16 +86,35 @@ export function DeepLinkProvider({ children }: { children: React.ReactNode }) {
   }, [handleUrl]);
 
   useEffect(() => {
+    const recordOpen = httpsCallable(functions, 'recordCampaignOpen');
+    const flushOpens = () => {
+      const uid = auth.currentUser?.uid;
+      if (!uid) return;
+      void campaignOpenQueue.flush(uid, async (open) => {
+        if (auth.currentUser?.uid !== open.uid) throw new Error('campaign_open_user_changed');
+        await recordOpen({ campaignId: open.campaignId, campaignRunId: open.campaignRunId });
+      }).catch(() => logWarn('deepLinks', 'campaign_open_record_failed'));
+    };
+    const unsubscribeAuth = onAuthStateChanged(auth, flushOpens);
     const handleNotification = (event: NotificationOpenEvent) => {
       const { payload } = event;
       if ((payload?.type === 'SUPPORT_SINGLE_REPLY' || payload?.type === 'SUPPORT_CHAT_MESSAGE') && payload.caseId) {
         enqueueIntent({ type: 'support-case', caseId: payload.caseId }, 'notification');
       }
+      if (payload?.type === 'CAMPAIGN' && payload.destination && payload.campaignId && payload.campaignRunId) {
+        enqueueIntent({ type: 'campaign-tab', tab: payload.destination }, 'notification');
+        if (!payload.campaignRunId.startsWith('test.') && payload.recipientUid) {
+          void campaignOpenQueue.enqueue(payload.recipientUid, payload.campaignId, payload.campaignRunId)
+            .then(flushOpens)
+            .catch(() => logWarn('deepLinks', 'campaign_open_persist_failed'));
+        }
+      }
     };
     const unsubscribe = subscribeToNotificationOpens(handleNotification);
     const initial = getLastNotificationOpenEvent();
     if (initial) handleNotification(initial);
-    return unsubscribe;
+    const retryTimer = setInterval(flushOpens, 30000);
+    return () => { unsubscribe(); unsubscribeAuth(); clearInterval(retryTimer); };
   }, [enqueueIntent]);
 
   const consumeIntent = useCallback((intent: DeepLinkIntent) => {

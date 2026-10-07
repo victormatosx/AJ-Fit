@@ -327,6 +327,12 @@ function copies<T extends Record<NotificationLocale, NotificationCopy>>(localize
 }
 
 const TYPE_POLICIES: Readonly<Record<NotificationType, TypePolicy>> = {
+  CAMPAIGN: {
+    category: 'WORKOUTS_AND_REMINDERS',
+    allowedDataKeys: ['campaignId', 'campaignRunId', 'destination', 'recipientUid'],
+    allowedIntents: ['campaign'],
+    allowedCopies: [],
+  },
   EVOLUTION_APPROACHING: {
     category: 'EVOLUTION_AND_ACHIEVEMENTS',
     allowedDataKeys: [],
@@ -515,7 +521,7 @@ export function assertValidDispatchRequest(
 
   assertDisplayString(request.title, 'title', MAX_TITLE_LENGTH);
   assertDisplayString(request.body, 'body', MAX_BODY_LENGTH);
-  if (!policy.allowedCopies.some(
+  if (request.type !== 'CAMPAIGN' && !policy.allowedCopies.some(
     (copy) => copy.title === request.title && copy.body === request.body,
   )) {
     fail('copy_not_allowed');
@@ -525,6 +531,16 @@ export function assertValidDispatchRequest(
     fail('intent_not_allowed');
   }
   assertAllowedData(request.data, policy.allowedDataKeys);
+  if (request.type === 'CAMPAIGN') {
+    if (request.intent !== 'campaign' || !request.data
+      || !['home', 'workout', 'progress', 'profile'].includes(String(request.data.destination))
+      || typeof request.data.campaignId !== 'string'
+      || typeof request.data.campaignRunId !== 'string'
+      || (request.data.recipientUid !== undefined && request.data.recipientUid !== request.uid)) fail('campaign_payload_invalid');
+    assertSafeId(request.data.campaignId, 'campaignId');
+    assertSafeId(request.data.campaignRunId, 'campaignRunId');
+    if (request.imageUrl !== undefined && (!/^https:\/\//.test(request.imageUrl) || request.imageUrl.length > 500)) fail('image_url_invalid');
+  } else if (request.imageUrl !== undefined) fail('image_not_allowed');
 }
 
 export function buildQaTestNotification(params: {

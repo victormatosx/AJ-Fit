@@ -1,4 +1,4 @@
-import { Timestamp, type Firestore } from 'firebase-admin/firestore';
+import { FieldPath, Timestamp, type Firestore } from 'firebase-admin/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 
 import { logFunctionError, logInfo, logWarn } from '../lib/logger';
@@ -39,27 +39,55 @@ export async function runDispatchRetries(
   batchSize = DISPATCH_RETRY_BATCH_SIZE,
 ): Promise<DispatchRetryResult> {
   const now = dependencies.now();
-  const snapshot = await dependencies.db.collection(NOTIFICATION_DISPATCHES_COLLECTION)
-    .where('status', '==', 'RETRY_SCHEDULED')
-    .where('nextAttemptAt', '<=', now)
-    .orderBy('nextAttemptAt')
-    .limit(batchSize)
-    .get();
+  const cursorRef = dependencies.db.collection('notificationSchedulerState').doc('retryCursor');
+  const cursor = await cursorRef.get();
+  let lastAt = cursor.get('nextAttemptAt') as Timestamp | null;
+  let lastId = cursor.get('id') as string | null;
+  let wrapped = false;
 
   const result: DispatchRetryResult = {
-    candidateCount: snapshot.size,
+    candidateCount: 0,
     processed: 0,
     malformed: 0,
     failed: 0,
   };
 
-  for (const document of snapshot.docs) {
+  // A paused campaign must not monopolize the first retry page. The durable
+  // cursor gives later due dispatches a turn and wraps after the final page.
+  for (let page = 0; page < 20 && result.processed + result.failed + result.malformed < batchSize; page++) {
+    const base = dependencies.db.collection(NOTIFICATION_DISPATCHES_COLLECTION)
+      .where('status', '==', 'RETRY_SCHEDULED').where('nextAttemptAt', '<=', now)
+      .orderBy('nextAttemptAt').orderBy(FieldPath.documentId());
+    const snapshot = lastAt && lastId
+      ? await base.startAfter(lastAt, lastId).limit(batchSize).get()
+      : await base.limit(batchSize).get();
+    if (snapshot.empty) {
+      await cursorRef.set({ nextAttemptAt: null, id: null });
+      if (lastAt && lastId && !wrapped) {
+        lastAt = null;
+        lastId = null;
+        wrapped = true;
+        continue;
+      }
+      break;
+    }
+    result.candidateCount += snapshot.size;
+    for (const document of snapshot.docs) {
+      lastAt = document.get('nextAttemptAt');
+      lastId = document.id;
     const persisted = persistedDispatchRequest(document.data(), document.id);
     if (!persisted) {
       result.malformed += 1;
       await markMalformed(dependencies.db, document.ref, now);
       logWarn(SCOPE, 'retry_contract_rejected', { dispatchId: document.id });
       continue;
+    }
+    if (persisted.request.type === 'CAMPAIGN' && persisted.dispatchMode === 'PRODUCT') {
+      const campaignId = persisted.request.data?.campaignId;
+      if (typeof campaignId === 'string') {
+        const campaign = await dependencies.db.collection('notificationCampaigns').doc(campaignId).get();
+        if (campaign.get('status') === 'paused') continue;
+      }
     }
     try {
       await dispatchNotification(persisted.request, dependencies, persisted.dispatchMode);
@@ -68,6 +96,9 @@ export async function runDispatchRetries(
       result.failed += 1;
       logFunctionError(SCOPE, error, { operation: 'retry', dispatchId: document.id });
     }
+    }
+    await cursorRef.set({ nextAttemptAt: lastAt, id: lastId });
+    if (snapshot.size < batchSize && wrapped) break;
   }
 
   return result;

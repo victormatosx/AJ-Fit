@@ -23,6 +23,7 @@ export const NOTIFICATION_TYPES = [
   'WEEK_STREAK',
   'SUPPORT_SINGLE_REPLY',
   'SUPPORT_CHAT_MESSAGE',
+  'CAMPAIGN',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -85,6 +86,7 @@ export interface NotificationDispatchRequest {
   body: string;
   intent?: string;
   data?: Record<string, string | number | boolean>;
+  imageUrl?: string;
   idempotencyKey: string;
 }
 

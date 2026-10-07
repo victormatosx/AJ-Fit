@@ -83,13 +83,19 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       .sort();
 
     expect(exported).toEqual([
+      'adminCampaignAction',
       'adminClaimSupportCase',
       'adminCloseSupportChat',
       'adminCreatePromoCode',
+      'adminDuplicateCampaign',
+      'adminEstimateCampaign',
+      'adminGetCampaign',
+      'adminGetCampaignRun',
       'adminGetCoupon',
       'adminGetSupportAttachmentAccess',
       'adminGetUser',
       'adminGrantFreeAccess',
+      'adminListCampaigns',
       'adminListCoupons',
       'adminListPromoCodes',
       'adminListSupportAgents',
@@ -98,10 +104,13 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       'adminReleaseSupportCase',
       'adminReplyAndCloseSupportCase',
       'adminRevokeFreeAccess',
+      'adminSaveCampaign',
+      'adminScheduleCampaign',
       'adminSendSupportChatMessage',
       'adminSetAccountClass',
       'adminSetPromoCodeActive',
       'adminStartSupportChat',
+      'adminTestCampaign',
       'adminTransferSupportCase',
       'adminUpdatePromoCode',
       'applyExerciseSubstitution',
@@ -127,7 +136,9 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       'onTrustedWorkoutLifecycleEventCreated',
       'onUserProvisioned',
       'prepareSupportAttachmentUpload',
+      'processNotificationCampaigns',
       'reconcileNotificationReceipts',
+      'recordCampaignOpen',
       'recordWorkoutLifecycleTelemetry',
       'recoverVaultKey',
       'releasePushDevice',
@@ -280,7 +291,7 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       'src/accountDeletion/reconciliation/scheduler.ts',
     ].map(readCode).join('\n');
 
-    expect(allEndpointSources.match(/enforceAppCheck\s*:\s*true/g)).toHaveLength(21);
+    expect(allEndpointSources.match(/enforceAppCheck\s*:\s*true/g)).toHaveLength(22);
     expect(allEndpointSources).not.toMatch(/consumeAppCheckToken\s*:\s*true/);
   });
 

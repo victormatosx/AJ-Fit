@@ -2860,6 +2860,23 @@ service cloud.firestore {
       }
     }
 
+    match /notificationCampaigns/{campaignId} {
+      allow read, write: if false;
+      match /runs/{runId} {
+        allow read, write: if false;
+        match /recipients/{uid} {
+          allow read, write: if false;
+        }
+      }
+    }
+
+    match /notificationCampaignScheduler/{documentId} {
+      allow read, write: if false;
+    }
+    match /notificationSchedulerState/{documentId} {
+      allow read, write: if false;
+    }
+
     // ── Deny all undocumented collections ─────────────────────────────────
     // Everything not documented above remains denied by default.
     match /{document=**} {

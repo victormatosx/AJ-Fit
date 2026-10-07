@@ -18,7 +18,7 @@ import type { NotificationDispatchRequest } from './schema';
 
 export type NotificationPreflightResult =
   | { allowed: true }
-  | { allowed: false; reason: string };
+  | { allowed: false; reason: string; defer?: boolean };
 
 const TERMINAL_EVOLUTION_EVENTS = new Set([
   'EVOLUTION_EARNED',
@@ -68,6 +68,18 @@ export async function runNotificationPreflight(
   request: NotificationDispatchRequest,
   now: Timestamp,
 ): Promise<NotificationPreflightResult> {
+  if (request.type === 'CAMPAIGN') {
+    const campaignId = request.data?.campaignId;
+    const campaignRunId = request.data?.campaignRunId;
+    if (typeof campaignId !== 'string' || typeof campaignRunId !== 'string') return { allowed: false, reason: 'CAMPAIGN_INVALID' };
+    const [campaign, run] = await Promise.all([
+      db.collection('notificationCampaigns').doc(campaignId).get(),
+      db.collection('notificationCampaigns').doc(campaignId).collection('runs').doc(campaignRunId).get(),
+    ]);
+    if (!campaign.exists || campaign.get('status') === 'canceled' || !run.exists || run.get('status') === 'canceled') return { allowed: false, reason: 'CAMPAIGN_CANCELED' };
+    if (campaign.get('status') === 'paused') return { allowed: false, reason: 'CAMPAIGN_PAUSED', defer: true };
+    return { allowed: true };
+  }
   if (
     request.type === 'WORKOUT_DAY'
     || request.type === 'RECOVERY_DAY'

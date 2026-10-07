@@ -10,6 +10,7 @@ export interface ExpoOutboundMessage {
   title: string;
   body: string;
   data: Record<string, unknown>;
+  richContent?: { image: string };
 }
 export type ExpoTicketResult =
   | { ok: true; ticketId: string }
@@ -167,6 +168,7 @@ export function createExpoPushClient(
             title: message.title,
             body: message.body,
             data: message.data,
+            ...(message.richContent ? { richContent: message.richContent } : {}),
             priority: 'default',
           })),
         );

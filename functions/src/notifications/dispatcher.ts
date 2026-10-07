@@ -13,6 +13,7 @@ import {
 import { createExpoPushClient, type ExpoPushClient, type ExpoTicketResult } from './expoPushClient';
 import {
   claimDispatch,
+  deferCampaignClaim,
   markDispatchOutcome,
   NotificationIdempotencyConflictError,
 } from './idempotency';
@@ -218,6 +219,7 @@ async function persistAttempt(
       (typeof parentData.deliveryRevision === 'number' ? parentData.deliveryRevision : 0) + 1;
     tx.update(parentRef, {
       ...aggregate,
+      ...(request.type === 'CAMPAIGN' ? { everAccepted: parentData.everAccepted === true || tickets.some((ticket) => ticket.ok) } : {}),
       claimToken: null,
       deliveryRevision,
       aggregateSourceRevision: deliveryRevision,
@@ -306,6 +308,10 @@ export async function dispatchNotification(
       ? { allowed: true as const }
       : await dependencies.preflight?.(request, now) ?? { allowed: true as const };
     if (!preflight.allowed) {
+      if (request.type === 'CAMPAIGN' && preflight.defer) {
+        await deferCampaignClaim(dependencies.db, claim.dispatchId, claim.claimToken, now);
+        return { status: 'DUPLICATE', dispatchId: claim.dispatchId };
+      }
       const written = await markDispatchOutcome(
         dependencies.db,
         claim.dispatchId,
@@ -377,11 +383,23 @@ export async function dispatchNotification(
       deviceCount: targets.length,
       attemptCount: claim.attemptCount,
     });
+    // Campaign controls can change while devices/preferences are being read.
+    // This is the final check before the non-transactional Expo request.
+    if (request.type === 'CAMPAIGN' && dispatchMode === 'PRODUCT') {
+      const latest = await dependencies.preflight?.(request, now) ?? { allowed: true as const };
+      if (!latest.allowed) {
+        if (latest.defer) await deferCampaignClaim(dependencies.db, claim.dispatchId, claim.claimToken, now);
+        else await markDispatchOutcome(dependencies.db, claim.dispatchId, claim.claimToken,
+          { status: 'SUPPRESSED_BY_POLICY', terminalReason: latest.reason }, now);
+        return { status: latest.defer ? 'DUPLICATE' : 'SUPPRESSED_BY_POLICY', dispatchId: claim.dispatchId };
+      }
+    }
     const tickets = targets.length > 0
       ? await dependencies.expoClient.send(targets.map((device) => ({
           to: device.expoPushToken,
           title: request.title,
           body: request.body,
+          ...(request.imageUrl ? { richContent: { image: request.imageUrl } } : {}),
           data: {
             type: request.type,
             notificationId: request.notificationId,

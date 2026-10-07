@@ -41,6 +41,12 @@ import { reconcileNotificationReceipts } from './notifications/receiptsReconcile
 import { retryNotificationDispatches } from './notifications/retryScheduler';
 import { evaluateDailyWorkoutNotifications } from './notifications/dailyScheduler';
 import {
+  adminSaveCampaignHandler, adminEstimateCampaignHandler, adminScheduleCampaignHandler,
+  adminCampaignActionHandler, adminDuplicateCampaignHandler, adminListCampaignsHandler,
+  adminGetCampaignHandler, adminGetCampaignRunHandler, adminTestCampaignHandler,
+  recordCampaignOpenHandler, processNotificationCampaigns,
+} from './notifications/campaigns';
+import {
   adminCloseSupportChatHandler,
   adminGetSupportAttachmentAccessHandler,
   adminPrepareSupportAttachmentUploadHandler,
@@ -345,6 +351,17 @@ export const dispatchTestNotification = onCall(
   { enforceAppCheck: true },
   dispatchTestNotificationHandler,
 );
+export const adminSaveCampaign = onCall(adminSaveCampaignHandler);
+export const adminEstimateCampaign = onCall(adminEstimateCampaignHandler);
+export const adminScheduleCampaign = onCall(adminScheduleCampaignHandler);
+export const adminCampaignAction = onCall(adminCampaignActionHandler);
+export const adminDuplicateCampaign = onCall(adminDuplicateCampaignHandler);
+export const adminListCampaigns = onCall(adminListCampaignsHandler);
+export const adminGetCampaign = onCall(adminGetCampaignHandler);
+export const adminGetCampaignRun = onCall(adminGetCampaignRunHandler);
+export const adminTestCampaign = onCall(adminTestCampaignHandler);
+export const recordCampaignOpen = onCall({ enforceAppCheck: true }, recordCampaignOpenHandler);
+export { processNotificationCampaigns };
 
 /** Support V2: client mutations are authenticated, attested and backend-authoritative. */
 export const prepareSupportAttachmentUpload = onCall(

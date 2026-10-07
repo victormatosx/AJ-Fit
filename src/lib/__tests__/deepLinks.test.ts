@@ -40,6 +40,13 @@ describe('parseDeepLink', () => {
 });
 
 describe('pending deep-link intent state', () => {
+  it('keeps campaign tabs allowlisted and leaves support/workout intents intact', () => {
+    const campaign: DeepLinkIntent = { type: 'campaign-tab', tab: 'progress' };
+    expect(enqueueDeepLinkIntent(null, campaign)).toEqual(campaign);
+    expect(consumeDeepLinkIntent(campaign, campaign)).toBeNull();
+    expect(enqueueDeepLinkIntent(campaign, ACTIVE_WORKOUT)).toEqual(ACTIVE_WORKOUT);
+    expect(parseDeepLink('ajfit://workout/active')).toEqual(ACTIVE_WORKOUT);
+  });
   it('coalesces repeated pending intents and consumes the handled intent once', () => {
     const pending = enqueueDeepLinkIntent(null, ACTIVE_WORKOUT);
     const duplicate = enqueueDeepLinkIntent(pending, { type: 'active-workout' });

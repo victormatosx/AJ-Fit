@@ -885,6 +885,9 @@ function AppShellContent({
     } else if (pendingIntent.type === 'support-case') {
       setSupportRoute({ name: 'case', caseId: pendingIntent.caseId, casesOrigin: 'home' });
       consumeIntent(pendingIntent);
+    } else if (pendingIntent.type === 'campaign-tab') {
+      setTab(pendingIntent.tab);
+      consumeIntent(pendingIntent);
     }
   }, [
     consumeIntent,
