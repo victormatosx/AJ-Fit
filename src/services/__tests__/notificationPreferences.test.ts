@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => {
   const storage = new Map<string, string>();
   return {
     storage,
-    updateDoc: vi.fn(async (): Promise<void> => {}),
+    updateDoc: vi.fn(async (_reference: unknown, _data: unknown): Promise<void> => {}),
   };
 });
 
@@ -27,6 +27,7 @@ vi.mock('../../lib/logger', () => ({ logError: vi.fn() }));
 
 import {
   changeNotificationPreferenceForUser,
+  changeNotificationPreferencesForUser,
   clearNotificationPreferenceState,
   readStoredNotificationPreferences,
   reconcilePendingNotificationPreferences,
@@ -59,6 +60,28 @@ describe('notification preference client state', () => {
     await expect(readStoredNotificationPreferences('uid-A')).resolves.toMatchObject({
       workoutsAndReminders: false,
       progress: false,
+    });
+  });
+
+  it('persists all five categories in one Firestore update', async () => {
+    const result = await changeNotificationPreferencesForUser({
+      uid: 'uid-A', current: {}, changes: {
+        workoutsAndReminders: false, evolutionAndAchievements: false,
+        progress: false, subscription: false, support: false,
+      },
+    });
+    await result.remote;
+    expect(mocks.updateDoc).toHaveBeenCalledTimes(1);
+    expect(mocks.updateDoc.mock.calls[0]?.[1]).toMatchObject({
+      'preferences.notificationPreferences.workoutsAndReminders': false,
+      'preferences.notificationPreferences.evolutionAndAchievements': false,
+      'preferences.notificationPreferences.progress': false,
+      'preferences.notificationPreferences.subscription': false,
+      'preferences.notificationPreferences.support': false,
+    });
+    expect(await readStoredNotificationPreferences('uid-A')).toEqual({
+      workoutsAndReminders: false, evolutionAndAchievements: false,
+      progress: false, subscription: false, support: false,
     });
   });
 
@@ -120,13 +143,32 @@ describe('notification preference client state', () => {
       key: 'progress',
       next: true,
     });
-    await second.remote;
     resolveFirst();
-
-    await expect(first.remote).resolves.toEqual({ status: 'synced' });
+    await expect(first.remote).resolves.toEqual({ status: 'superseded' });
+    await expect(second.remote).resolves.toEqual({ status: 'synced' });
     await expect(readStoredNotificationPreferences('uid-A')).resolves.toMatchObject({
       progress: true,
     });
+  });
+
+  it('serializes rapid same-key writes so a delayed older write cannot win', async () => {
+    let resolveFirst!: () => void;
+    mocks.updateDoc.mockImplementationOnce(() =>
+      new Promise<void>((resolve) => { resolveFirst = resolve; }));
+    const first = await changeNotificationPreferenceForUser({
+      uid: 'uid-A', current: {}, key: 'support', next: false,
+    });
+    const second = await changeNotificationPreferenceForUser({
+      uid: 'uid-A', current: { support: false }, key: 'support', next: true,
+    });
+    expect(mocks.updateDoc).toHaveBeenCalledTimes(1);
+    resolveFirst();
+    await Promise.all([first.remote, second.remote]);
+    expect(mocks.updateDoc).toHaveBeenCalledTimes(2);
+    expect(mocks.updateDoc.mock.calls[1]?.[1]).toMatchObject({
+      'preferences.notificationPreferences.support': true,
+    });
+    expect(await readStoredNotificationPreferences('uid-A')).toMatchObject({ support: true });
   });
 
   it('keeps cache isolated per UID and clears it on logout/account switch', async () => {
@@ -149,6 +191,19 @@ describe('notification preference client state', () => {
     await expect(readStoredNotificationPreferences('uid-B')).resolves.toMatchObject({
       progress: true,
     });
+  });
+
+  it('does not restore a cleared account cache when an old request finishes late', async () => {
+    let resolveOld!: () => void;
+    mocks.updateDoc.mockImplementationOnce(() =>
+      new Promise<void>((resolve) => { resolveOld = resolve; }));
+    const old = await changeNotificationPreferenceForUser({
+      uid: 'uid-A', current: {}, key: 'subscription', next: false,
+    });
+    await clearNotificationPreferenceState('uid-A');
+    resolveOld();
+    await old.remote;
+    expect(await readStoredNotificationPreferences('uid-A')).toEqual({});
   });
 
   it('retries each offline field independently', async () => {

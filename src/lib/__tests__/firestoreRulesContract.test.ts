@@ -6,6 +6,7 @@ import {
   DEFAULT_UNITS_PREFERENCE,
   UNITS_PREFERENCES,
 } from '../../types/units';
+import { NOTIFICATION_PREFERENCE_KEYS } from '../../types/notificationPreferences';
 
 /**
  * Structural contract between TS and firestore.rules.
@@ -28,6 +29,12 @@ const INDEXES = JSON.parse(
 };
 
 describe('firestore.rules — structural contract', () => {
+  it('accepts exactly the five notification preference keys', () => {
+    const match = RULES.match(/function notificationPreferencesValid\(data\)\s*\{[\s\S]*?data\.keys\(\)\.hasOnly\(\[([^\]]+)\]\)/);
+    expect(match).not.toBeNull();
+    const keys = [...match![1].matchAll(/'([^']+)'/g)].map((item) => item[1]);
+    expect(keys.sort()).toEqual([...NOTIFICATION_PREFERENCE_KEYS].sort());
+  });
   it('accepts exactly the languages listed in SUPPORTED_LANGUAGES', () => {
     // The rules line looks like: && data.language in ['pt-BR', 'en', 'es']
     const match = RULES.match(/data\.language in \[([^\]]+)\]/);

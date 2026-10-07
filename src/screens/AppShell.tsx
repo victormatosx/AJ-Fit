@@ -2276,11 +2276,23 @@ function AppShellContent({
           }}
         />
       </PersistentScreen>
-      {showNotificationSettings ? (
-        <View style={FULL_BLEED.overlayZ50}>
-          <NotificationSettingsScreen onBack={() => setShowNotificationSettings(false)} />
-        </View>
-      ) : null}
+      {/* NotificationSettingsScreen (docs/23_navegacao_e_lifecycle.md §6):
+          migrated from the bare conditional above to PersistentScreen —
+          it was added after that doc's migration round and had simply never
+          been audited into the pattern, the exact class of entry-flicker
+          the doc describes (mount always pays real native layout/paint cost
+          synchronously with the tap that reveals it). `key={uid}` stays on
+          the screen itself, not the wrapper: it still forces a full remount
+          on account switch (unrelated to, and unaffected by, this wrapper's
+          own permanent-once-mounted tracking). */}
+      <PersistentScreen
+        active={showNotificationSettings}
+        prewarm={prewarmed.NOTIFICATION_SETTINGS}
+        activeStyle={FULL_BLEED.overlayZ50}
+        inactiveMode="materialized"
+      >
+        <NotificationSettingsScreen key={user?.uid ?? 'signed-out'} onBack={() => setShowNotificationSettings(false)} />
+      </PersistentScreen>
       {showAccountSettings ? (
         <View style={FULL_BLEED.overlayZ50}>
           <AccountSettingsScreen

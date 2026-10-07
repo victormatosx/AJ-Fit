@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { AppState, Pressable, ScrollView, Switch, Text, View } from 'react-native';
+import { Animated, AppState, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
+import { doc, onSnapshot } from 'firebase/firestore';
 
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { MonoLabel } from '../components/ui/Display';
@@ -10,7 +11,10 @@ import { SettingsDivider, SettingsHeader } from '../components/ui/SettingsSectio
 import { spacing } from '../theme/tokens';
 import { useTheme } from '../theme';
 import { useAuth } from '../state/AuthContext';
+import { useScreenFocusEffect } from '../state/ScreenActivity';
+import { db } from '../lib/firebase';
 import {
+  getLastKnownNotificationPermissionStatus,
   getNotificationPermissionStatus,
   openSystemNotificationSettings,
   requestNotificationPermission,
@@ -18,13 +22,17 @@ import {
 } from '../services/pushNotifications';
 import { updatePushPermissionState } from '../services/pushDeviceRegistration';
 import {
-  changeNotificationPreferenceForUser,
-  readStoredNotificationPreferences,
+  changeNotificationPreferencesForUser,
+  getLastKnownNotificationPreferences,
+  readPendingNotificationPreferences,
+  recordLastKnownNotificationPreferences,
   reconcilePendingNotificationPreferences,
 } from '../services/notificationPreferences';
 import {
   NOTIFICATION_PREFERENCE_KEYS,
+  allNotificationPreferencesEnabled,
   resolveNotificationPreference,
+  setAllNotificationPreferences,
   type NotificationPreferenceKey,
   type NotificationPreferences,
 } from '../types/notificationPreferences';
@@ -130,18 +138,105 @@ function PermissionBanner({
   );
 }
 
+// Custom switch, local to this screen only (the RN built-in `Switch` was the
+// only other user of this visual role in the app — see the audit before this
+// change — so swapping it here carries no risk of touching another screen).
+// Track and thumb use deliberately different token families in BOTH states
+// so the two never read as the same color: an always-white thumb
+// (`primaryForeground`, true white/near-white in both themes) against a
+// tonal neutral track off (`controlHighlight`) or the brand accent on
+// (`primaryEmphasis`) — the same pairing iOS/Android system switches use,
+// which is why it reads as legible at a glance.
+const SWITCH_TRACK_WIDTH = 50;
+const SWITCH_TRACK_HEIGHT = 30;
+const SWITCH_THUMB_SIZE = 24;
+const SWITCH_THUMB_INSET = 3;
+const SWITCH_THUMB_TRAVEL = SWITCH_TRACK_WIDTH - SWITCH_THUMB_SIZE - SWITCH_THUMB_INSET * 2;
+
+function PremiumSwitch({
+  value,
+  disabled,
+  accessibilityLabel,
+  onValueChange,
+}: {
+  value: boolean;
+  disabled?: boolean;
+  accessibilityLabel: string;
+  onValueChange: (next: boolean) => void;
+}) {
+  const { theme } = useTheme();
+  const progress = useRef(new Animated.Value(value ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.timing(progress, {
+      toValue: value ? 1 : 0,
+      duration: theme.motion.duration.normal,
+      useNativeDriver: false,
+    }).start();
+  }, [value, progress, theme.motion.duration.normal]);
+
+  const trackColor = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [theme.colors.controlHighlight, theme.colors.primaryEmphasis],
+  });
+  const thumbTranslateX = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [SWITCH_THUMB_INSET, SWITCH_THUMB_INSET + SWITCH_THUMB_TRAVEL],
+  });
+
+  return (
+    <Pressable
+      onPress={() => onValueChange(!value)}
+      disabled={disabled}
+      accessibilityRole="switch"
+      accessibilityState={{ checked: value, disabled: !!disabled }}
+      accessibilityLabel={accessibilityLabel}
+      hitSlop={8}
+    >
+      <Animated.View
+        style={{
+          width: SWITCH_TRACK_WIDTH,
+          height: SWITCH_TRACK_HEIGHT,
+          borderRadius: SWITCH_TRACK_HEIGHT / 2,
+          backgroundColor: trackColor,
+        }}
+      >
+        <Animated.View
+          style={{
+            position: 'absolute',
+            top: SWITCH_THUMB_INSET,
+            width: SWITCH_THUMB_SIZE,
+            height: SWITCH_THUMB_SIZE,
+            borderRadius: SWITCH_THUMB_SIZE / 2,
+            backgroundColor: theme.colors.primaryForeground,
+            transform: [{ translateX: thumbTranslateX }],
+            shadowColor: theme.colors.floatingShadow,
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.25,
+            shadowRadius: 2,
+            elevation: 2,
+          }}
+        />
+      </Animated.View>
+    </Pressable>
+  );
+}
+
 function NotificationToggleRow({
   title,
   description,
   value,
   disabled,
   onValueChange,
+  emphasized = false,
 }: {
   title: string;
   description: string;
   value: boolean;
   disabled: boolean;
   onValueChange: (next: boolean) => void;
+  /** The single master row: slightly larger type, no dimming when disabled-by-signed-out (the card around it already communicates that). */
+  emphasized?: boolean;
 }) {
   const { theme } = useTheme();
 
@@ -151,8 +246,8 @@ function NotificationToggleRow({
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing[3.5],
-        minHeight: 48,
-        paddingVertical: spacing[3.5],
+        minHeight: emphasized ? 56 : 48,
+        paddingVertical: emphasized ? spacing[4] : spacing[3.5],
         paddingHorizontal: spacing[4],
         opacity: disabled ? 0.6 : 1,
       }}
@@ -160,8 +255,8 @@ function NotificationToggleRow({
       <View style={{ flex: 1 }}>
         <Text
           style={{
-            fontFamily: theme.fonts.uiSemi,
-            fontSize: 14,
+            fontFamily: emphasized ? theme.fonts.uiBold : theme.fonts.uiSemi,
+            fontSize: emphasized ? 15.5 : 14,
             color: theme.colors.textPrimary,
           }}
         >
@@ -176,13 +271,11 @@ function NotificationToggleRow({
           {description}
         </Text>
       </View>
-      <Switch
+      <PremiumSwitch
         value={value}
         onValueChange={onValueChange}
         disabled={disabled}
         accessibilityLabel={title}
-        trackColor={{ false: theme.colors.controlBorder, true: theme.colors.primaryEmphasis }}
-        thumbColor={theme.colors.controlBackground}
       />
     </View>
   );
@@ -190,15 +283,33 @@ function NotificationToggleRow({
 
 export function NotificationSettingsScreen({ onBack }: { onBack?: () => void }) {
   const { theme } = useTheme();
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const uid = user?.uid ?? null;
   const { t } = useTranslation(['common', 'notifications']);
 
-  const [permission, setPermission] = useState<PushPermissionStatus | null>(null);
-  const [busyKeys, setBusyKeys] = useState<Set<NotificationPreferenceKey>>(new Set());
-  const [errorKey, setErrorKey] = useState<NotificationPreferenceKey | null>(null);
+  // Seeded synchronously from the in-memory hints below instead of
+  // null/undefined — both are warmed at app boot (well before this screen
+  // can be reached) and kept fresh on every real update, so the very first
+  // render already shows the permission banner (or its absence) and every
+  // toggle's real state instead of a guessed default that then visibly
+  // flips. See `getLastKnownNotificationPermissionStatus` and
+  // `getLastKnownNotificationPreferences` for why this is safe: neither is
+  // a source of truth, both are corrected the moment the real async read
+  // resolves (same as before this screen read them), and absent a warm
+  // hint these fall back to exactly the previous null/undefined behavior.
+  const [permission, setPermission] = useState<PushPermissionStatus | null>(
+    () => getLastKnownNotificationPermissionStatus(),
+  );
+  const [errorKey, setErrorKey] = useState<NotificationPreferenceKey | 'all' | null>(null);
   const [overrides, setOverrides] = useState<Partial<Record<NotificationPreferenceKey, boolean>>>({});
+  const [remoteState, setRemoteState] = useState<{
+    uid: string;
+    preferences: NotificationPreferences | undefined;
+  } | null>(() => (uid ? { uid, preferences: getLastKnownNotificationPreferences(uid) } : null));
   const activeUid = useRef<string | null>(uid);
+  const latestValues = useRef<NotificationPreferences>({});
+  const optimisticKeys = useRef<Set<NotificationPreferenceKey>>(new Set());
+  const mutationVersions = useRef<Partial<Record<NotificationPreferenceKey, number>>>({});
 
   useLayoutEffect(() => {
     activeUid.current = uid;
@@ -208,23 +319,81 @@ export function NotificationSettingsScreen({ onBack }: { onBack?: () => void }) 
     setPermission(await getNotificationPermissionStatus());
   }, []);
 
-  useEffect(() => {
+  const syncPending = useCallback(async (targetUid: string) => {
+    try {
+      await reconcilePendingNotificationPreferences(targetUid);
+      const pending = await readPendingNotificationPreferences(targetUid);
+      if (activeUid.current !== targetUid) return;
+      setOverrides((current) => {
+        const next = { ...current };
+        for (const key of NOTIFICATION_PREFERENCE_KEYS) {
+          if (mutationVersions.current[key]) continue;
+          if (pending[key] === undefined) {
+            delete next[key];
+            optimisticKeys.current.delete(key);
+          } else {
+            next[key] = pending[key];
+            optimisticKeys.current.add(key);
+          }
+        }
+        return next;
+      });
+    } catch (error) {
+      logError('notificationSettings:reconcile', error, { uid: targetUid });
+    }
+  }, []);
+
+  // docs/23_navegacao_e_lifecycle.md §5: this screen now stays mounted
+  // (PersistentScreen, AppShell.tsx) while hidden, so `useEffect(fn, [])`
+  // would only ever run once per app session — the permission status and
+  // any pending preference mutation must instead be refreshed every time
+  // the user actually (re)enters this screen, not just the first time it's
+  // created. `useScreenFocusEffect` fires on first activation too, so this
+  // fully replaces the old mount-only effect without a behavior gap.
+  useScreenFocusEffect(() => {
+    setErrorKey(null);
     void refreshPermission();
-  }, [refreshPermission]);
+    if (uid) void syncPending(uid);
+  });
 
   useEffect(() => {
     let active = true;
     setOverrides({});
+    // Re-seed from the hint rather than hard-resetting to null/undefined —
+    // relevant if `uid` ever changes while this instance stays mounted
+    // (the `key={uid}` remount in AppShell makes that the common case, but
+    // this effect still needs to behave correctly standalone).
+    setRemoteState(uid ? { uid, preferences: getLastKnownNotificationPreferences(uid) } : null);
     setErrorKey(null);
-    setBusyKeys(new Set());
+    latestValues.current = {};
+    optimisticKeys.current.clear();
+    mutationVersions.current = {};
     if (!uid) return () => { active = false; };
 
-    void readStoredNotificationPreferences(uid).then((cached) => {
-      if (active) setOverrides(cached);
-    });
-    void reconcilePendingNotificationPreferences(uid);
-    return () => { active = false; };
-  }, [uid]);
+    void (async () => {
+      const pending = await readPendingNotificationPreferences(uid);
+      if (!active || activeUid.current !== uid) return;
+      latestValues.current = { ...latestValues.current, ...pending };
+      Object.keys(pending).forEach((key) =>
+        optimisticKeys.current.add(key as NotificationPreferenceKey));
+      setOverrides((current) => ({ ...pending, ...current }));
+      await syncPending(uid);
+    })().catch((error) => logError('notificationSettings:pending', error, { uid }));
+    const unsubscribe = onSnapshot(doc(db, 'users', uid), (snapshot) => {
+      if (!active || activeUid.current !== uid) return;
+      const preferences = snapshot.data()?.preferences?.notificationPreferences as
+        NotificationPreferences | undefined;
+      recordLastKnownNotificationPreferences(uid, preferences ?? {});
+      setRemoteState({ uid, preferences });
+      latestValues.current = Object.fromEntries(NOTIFICATION_PREFERENCE_KEYS.map((key) => [
+        key,
+        optimisticKeys.current.has(key)
+          ? resolveNotificationPreference(latestValues.current, key)
+          : resolveNotificationPreference(preferences, key),
+      ]));
+    }, (error) => logError('notificationSettings:snapshot', error, { uid }));
+    return () => { active = false; unsubscribe(); };
+  }, [uid, syncPending]);
 
   // Fase 4 §16: resuming from the system Settings app is the only moment the
   // OS permission can change while this screen is alive — no polling, just
@@ -235,64 +404,90 @@ export function NotificationSettingsScreen({ onBack }: { onBack?: () => void }) 
     const subscription = AppState.addEventListener('change', (state) => {
       if (state !== 'active') return;
       void refreshPermission();
-      if (uid) void updatePushPermissionState(uid);
+      if (uid) {
+        void updatePushPermissionState(uid);
+        void syncPending(uid);
+      }
     });
     return () => subscription.remove();
-  }, [refreshPermission, uid]);
+  }, [refreshPermission, syncPending, uid]);
 
   const storedPreferences: NotificationPreferences | undefined =
-    profile?.preferences.notificationPreferences;
+    remoteState?.uid === uid
+      ? remoteState.preferences
+      : undefined;
 
   const valueFor = (key: NotificationPreferenceKey): boolean =>
     overrides[key] ?? resolveNotificationPreference(storedPreferences, key);
 
-  const handleToggle = async (key: NotificationPreferenceKey, next: boolean) => {
+  const handleChanges = async (
+    changes: NotificationPreferences,
+    errorTarget: NotificationPreferenceKey | 'all',
+  ) => {
     const mutationUid = uid;
     if (!mutationUid) return;
-    setErrorKey((current) => (current === key ? null : current));
-    setOverrides((current) => ({ ...current, [key]: next }));
-    setBusyKeys((current) => new Set(current).add(key));
+    const keys = Object.keys(changes) as NotificationPreferenceKey[];
+    const versions = Object.fromEntries(keys.map((key) => {
+      const version = (mutationVersions.current[key] ?? 0) + 1;
+      mutationVersions.current[key] = version;
+      return [key, version];
+    })) as Partial<Record<NotificationPreferenceKey, number>>;
+    const current = { ...storedPreferences, ...overrides, ...latestValues.current };
+    latestValues.current = { ...current, ...changes };
+    keys.forEach((key) => optimisticKeys.current.add(key));
+    setErrorKey(null);
+    setOverrides((value) => ({ ...value, ...changes }));
 
     try {
-      const { preferences, remote } = await changeNotificationPreferenceForUser({
+      const { remote } = await changeNotificationPreferencesForUser({
         uid: mutationUid,
-        current: { ...storedPreferences, ...overrides },
-        key,
-        next,
+        current,
+        changes,
       });
-      if (activeUid.current !== mutationUid) return;
-      setOverrides(preferences);
       void remote
-        .then((outcome) => {
-          if (
-            outcome.status !== 'rolled-back' ||
-            activeUid.current !== mutationUid
-          ) return;
+        .then(async (outcome) => {
+          if (activeUid.current !== mutationUid) return;
+          if (outcome.status === 'rolled-back') {
+            const pending = await readPendingNotificationPreferences(mutationUid);
+            if (activeUid.current !== mutationUid) return;
+            latestValues.current = { ...storedPreferences, ...pending };
+            setErrorKey(errorTarget);
+          }
+          if (outcome.status === 'pending') return;
           setOverrides((current) => {
-            const { [key]: _removed, ...rest } = current;
-            return rest;
+            const next = { ...current };
+            for (const key of keys) {
+              if (mutationVersions.current[key] === versions[key]) {
+                delete next[key];
+                optimisticKeys.current.delete(key);
+              }
+            }
+            return next;
           });
-          setErrorKey(key);
         })
-        .catch((err) => logError('notificationSettings:remote', err, { key }));
+        .catch((err) => logError('notificationSettings:remote', err, { errorTarget }));
     } catch (err) {
-      logError('notificationSettings:toggle', err, { key });
+      logError('notificationSettings:toggle', err, { errorTarget });
       if (activeUid.current !== mutationUid) return;
       setOverrides((current) => {
-        const { [key]: _removed, ...rest } = current;
-        return rest;
+        const updated = { ...current };
+        for (const key of keys) {
+          if (mutationVersions.current[key] === versions[key]) {
+            delete updated[key];
+            optimisticKeys.current.delete(key);
+          }
+        }
+        return updated;
       });
-      setErrorKey(key);
-    } finally {
-      if (activeUid.current === mutationUid) {
-        setBusyKeys((current) => {
-          const nextKeys = new Set(current);
-          nextKeys.delete(key);
-          return nextKeys;
-        });
-      }
+      setErrorKey(errorTarget);
     }
   };
+
+  const handleToggle = (key: NotificationPreferenceKey, next: boolean) =>
+    void handleChanges({ [key]: next }, key);
+
+  const handleAllToggle = (next: boolean) =>
+    void handleChanges(setAllNotificationPreferences(next), 'all');
 
   const handleEnablePermission = async () => {
     const permissionUid = uid;
@@ -349,8 +544,44 @@ export function NotificationSettingsScreen({ onBack }: { onBack?: () => void }) 
             onOpenSettings={() => void openSystemNotificationSettings()}
           />
 
+          {/* Master control — its own card, tinted and bordered with the
+              brand accent instead of the neutral settings-group styling
+              below, so it reads as superior to (not just first among) the
+              5 individual categories. */}
+          <View style={{ paddingHorizontal: 22, paddingBottom: spacing[7] }}>
+            <View
+              style={{
+                borderRadius: 14,
+                overflow: 'hidden',
+                backgroundColor: theme.colors.primarySurfaceSubtle,
+                borderWidth: 1,
+                borderColor: theme.colors.primaryBorderSoft,
+              }}
+            >
+              <NotificationToggleRow
+                emphasized
+                title={t('notifications:all.title')}
+                description={t('notifications:all.description')}
+                value={allNotificationPreferencesEnabled(Object.fromEntries(
+                  NOTIFICATION_PREFERENCE_KEYS.map((key) => [key, valueFor(key)]),
+                ))}
+                disabled={!user}
+                onValueChange={handleAllToggle}
+              />
+              {errorKey === 'all' ? (
+                <Text style={[theme.typography.bodySmall, {
+                  color: theme.colors.feedbackErrorText,
+                  paddingHorizontal: spacing[4], paddingBottom: spacing[3],
+                }]}>{t('notifications:errors.changeFailed')}</Text>
+              ) : null}
+            </View>
+          </View>
+
+          {/* Individual categories — same neutral card styling the rest of
+              the app's settings groups use, visually subordinate to the
+              master card above. */}
           <View style={{ paddingHorizontal: 22, paddingBottom: 16 }}>
-            <SettingsHeader>{t('notifications:screenTitle').toUpperCase()}</SettingsHeader>
+            <SettingsHeader>{t('notifications:categoriesSectionTitle').toUpperCase()}</SettingsHeader>
             <View
               style={{
                 borderRadius: 14,
@@ -367,8 +598,8 @@ export function NotificationSettingsScreen({ onBack }: { onBack?: () => void }) 
                     title={t(`notifications:groups.${key}.title`)}
                     description={t(`notifications:groups.${key}.description`)}
                     value={valueFor(key)}
-                    disabled={!user || busyKeys.has(key)}
-                    onValueChange={(next) => void handleToggle(key, next)}
+                    disabled={!user}
+                    onValueChange={(next) => handleToggle(key, next)}
                   />
                   {errorKey === key ? (
                     <Text

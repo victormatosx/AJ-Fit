@@ -28,6 +28,7 @@ const MIGRATED_FLAGS = [
   'showEditProfile',
   'showSubscriptionCenter',
   'showDeleteAccount',
+  'showNotificationSettings',
 ];
 
 /** Screens still ephemeral — sensitive/transactional, per docs/23 §10/§17. */
@@ -94,6 +95,7 @@ describe('AppShell centralized prewarm queue', () => {
       ['active={showAssessment}', 'prewarm={prewarmed.ASSESSMENT}'],
       ['active={showSettings}', 'prewarm={prewarmed.SETTINGS}'],
       ['active={showSecurity}', 'prewarm={prewarmed.SECURITY}'],
+      ['active={showNotificationSettings}', 'prewarm={prewarmed.NOTIFICATION_SETTINGS}'],
       ['active={showEditProfile}', 'prewarm={prewarmed.EDIT_PROFILE}'],
       ['active={showSubscriptionCenter}', 'prewarm={prewarmed.SUBSCRIPTION_CENTER}'],
       [

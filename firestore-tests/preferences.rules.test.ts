@@ -144,6 +144,108 @@ describe('other allowed updates continue to work', () => {
   });
 });
 
+describe('notification preferences', () => {
+  beforeEach(seedUser);
+
+  it('allows the owner to update all five boolean categories atomically', async () => {
+    await assertSucceeds(updateDoc(doc(ownerDb(), 'users', UID), {
+      'preferences.notificationPreferences.workoutsAndReminders': false,
+      'preferences.notificationPreferences.evolutionAndAchievements': false,
+      'preferences.notificationPreferences.progress': false,
+      'preferences.notificationPreferences.subscription': false,
+      'preferences.notificationPreferences.support': false,
+      'metadata.updatedAt': serverTimestamp(),
+    }));
+    expect((await getDoc(doc(ownerDb(), 'users', UID))).data()?.preferences.notificationPreferences)
+      .toEqual({ workoutsAndReminders: false, evolutionAndAchievements: false,
+        progress: false, subscription: false, support: false });
+  });
+
+  it('rejects unknown keys and nonboolean category values', async () => {
+    await assertFails(updateDoc(doc(ownerDb(), 'users', UID), {
+      'preferences.notificationPreferences.allEnabled': false,
+      'metadata.updatedAt': serverTimestamp(),
+    }));
+    await assertFails(updateDoc(doc(ownerDb(), 'users', UID), {
+      'preferences.notificationPreferences.support': 'off',
+      'metadata.updatedAt': serverTimestamp(),
+    }));
+  });
+
+  it('rejects updates by another account', async () => {
+    await assertFails(updateDoc(doc(otherDb(), 'users', UID), {
+      'preferences.notificationPreferences.subscription': false,
+      'metadata.updatedAt': serverTimestamp(),
+    }));
+  });
+
+  it('allows a single category toggle when notificationPreferences does not exist yet', async () => {
+    // Brand-new real user who never touched a toggle — the map is absent,
+    // not merely empty, until the first write ever creates it.
+    await assertSucceeds(updateDoc(doc(ownerDb(), 'users', UID), {
+      'preferences.notificationPreferences.subscription': false,
+      'metadata.updatedAt': serverTimestamp(),
+    }));
+    expect((await getDoc(doc(ownerDb(), 'users', UID))).data()?.preferences.notificationPreferences)
+      .toEqual({ subscription: false });
+  });
+
+  it('allows toggling one category on a legacy user who only ever had the original 3 keys', async () => {
+    // Shape a pre-rollout real account could still have: written by the app
+    // before `subscription`/`support` existed, never touched since.
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users', UID), {
+        profile: { name: 'Alice', email: 'alice@example.com' },
+        preferences: {
+          language: 'pt-BR', units: 'system', theme: 'dark',
+          notificationPreferences: {
+            workoutsAndReminders: false, evolutionAndAchievements: true, progress: true,
+          },
+        },
+        subscription: {},
+        metadata: { role: 'user', createdAt: Timestamp.now(), updatedAt: Timestamp.now() },
+      });
+    });
+
+    await assertSucceeds(updateDoc(doc(ownerDb(), 'users', UID), {
+      'preferences.notificationPreferences.support': false,
+      'metadata.updatedAt': serverTimestamp(),
+    }));
+    expect((await getDoc(doc(ownerDb(), 'users', UID))).data()?.preferences.notificationPreferences)
+      .toEqual({
+        workoutsAndReminders: false, evolutionAndAchievements: true, progress: true,
+        support: false,
+      });
+  });
+
+  it('allows toggling one category on a user who already has all five keys stored', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users', UID), {
+        profile: { name: 'Alice', email: 'alice@example.com' },
+        preferences: {
+          language: 'pt-BR', units: 'system', theme: 'dark',
+          notificationPreferences: {
+            workoutsAndReminders: true, evolutionAndAchievements: true, progress: true,
+            subscription: true, support: true,
+          },
+        },
+        subscription: {},
+        metadata: { role: 'user', createdAt: Timestamp.now(), updatedAt: Timestamp.now() },
+      });
+    });
+
+    await assertSucceeds(updateDoc(doc(ownerDb(), 'users', UID), {
+      'preferences.notificationPreferences.progress': false,
+      'metadata.updatedAt': serverTimestamp(),
+    }));
+    expect((await getDoc(doc(ownerDb(), 'users', UID))).data()?.preferences.notificationPreferences)
+      .toEqual({
+        workoutsAndReminders: true, evolutionAndAchievements: true, progress: false,
+        subscription: true, support: true,
+      });
+  });
+});
+
 describe('legacy migration branch remains valid', () => {
   it('accepts the flat→nested migration write', async () => {
     await seedLegacyUser();

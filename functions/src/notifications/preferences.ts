@@ -5,7 +5,7 @@ import {
   NOTIFICATION_LOCALES,
   type NotificationLocale,
 } from './contentPolicy';
-import type { NotificationCategory } from './schema';
+import type { NotificationCategory, NotificationType } from './schema';
 
 export const NOTIFICATION_PREFERENCE_CATEGORIES = [
   'WORKOUTS_AND_REMINDERS',
@@ -22,6 +22,14 @@ export const NOTIFICATION_PREFERENCE_FIELDS: Readonly<
   WORKOUTS_AND_REMINDERS: 'workoutsAndReminders',
   EVOLUTION_AND_ACHIEVEMENTS: 'evolutionAndAchievements',
   PROGRESS: 'progress',
+};
+
+/** Keep the persisted OPERATIONAL dispatch category for historical idempotency hashes. */
+export const OPERATIONAL_TYPE_PREFERENCE_FIELDS: Readonly<Partial<Record<NotificationType, string>>> = {
+  BILLING_ISSUE: 'subscription',
+  PREMIUM_ENDED: 'subscription',
+  SUPPORT_SINGLE_REPLY: 'support',
+  SUPPORT_CHAT_MESSAGE: 'support',
 };
 
 export type NotificationEligibilityReason =
@@ -46,17 +54,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function readToggle(
   preferences: unknown,
-  category: TogglableNotificationCategory,
+  field: string,
 ): boolean {
   if (!isRecord(preferences)) return true;
   const notificationPreferences = preferences.notificationPreferences;
   if (!isRecord(notificationPreferences)) return true;
-  const value = notificationPreferences[NOTIFICATION_PREFERENCE_FIELDS[category]];
+  const value = notificationPreferences[field];
   return typeof value === 'boolean' ? value : true;
 }
 
 export async function resolveNotificationEligibility(
-  params: { uid: string; category: NotificationCategory },
+  params: { uid: string; category: NotificationCategory; type?: NotificationType },
   db: Firestore = defaultDb,
 ): Promise<NotificationEligibilityResult> {
   const { locale: _locale, ...eligibility } = await resolveUserNotificationPolicy(params, db);
@@ -64,7 +72,7 @@ export async function resolveNotificationEligibility(
 }
 
 export async function resolveUserNotificationPolicy(
-  params: { uid: string; category: NotificationCategory },
+  params: { uid: string; category: NotificationCategory; type?: NotificationType },
   db: Firestore = defaultDb,
 ): Promise<UserNotificationPolicyResult> {
   const [user, deletionLock] = await Promise.all([
@@ -78,11 +86,14 @@ export async function resolveUserNotificationPolicy(
       : 'pt-BR';
   if (!user.exists) return { allowed: false, reason: 'USER_NOT_FOUND', locale };
   if (deletionLock.exists) return { allowed: false, reason: 'ACCOUNT_INACTIVE', locale };
-  if (params.category === 'OPERATIONAL') {
+  const field = params.category === 'OPERATIONAL'
+    ? (params.type ? OPERATIONAL_TYPE_PREFERENCE_FIELDS[params.type] : undefined)
+    : NOTIFICATION_PREFERENCE_FIELDS[params.category];
+  if (!field) {
     return { allowed: true, reason: 'ALLOWED', locale };
   }
 
-  const allowed = readToggle(user.data()?.preferences, params.category);
+  const allowed = readToggle(user.data()?.preferences, field);
   return allowed
     ? { allowed: true, reason: 'ALLOWED', locale }
     : { allowed: false, reason: 'DISABLED_BY_USER', locale };

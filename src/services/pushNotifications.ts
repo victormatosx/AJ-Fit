@@ -613,10 +613,32 @@ const pushNotifications = createPushNotificationsService(createDefaultDependenci
 
 export const isPushSupported = pushNotifications.isPushSupported;
 export const getPushSupportStatus = pushNotifications.getPushSupportStatus;
-export const getNotificationPermissionStatus =
-  pushNotifications.getNotificationPermissionStatus;
-export const requestNotificationPermission =
-  pushNotifications.requestNotificationPermission;
+
+// In-memory only — a synchronous hint for screens (e.g.
+// NotificationSettingsScreen) that would otherwise always mount assuming
+// "unknown" and visibly pop in a permission banner a render or two later
+// once this resolves. `setAuthenticatedPushUser` already calls the
+// permission check below at app boot/sign-in as part of its own device-sync
+// flow, well before the user could navigate anywhere — this wrapper just
+// also remembers that result instead of discarding it.
+let lastKnownPermissionStatus: PushPermissionStatus | null = null;
+
+export function getLastKnownNotificationPermissionStatus(): PushPermissionStatus | null {
+  return lastKnownPermissionStatus;
+}
+
+export async function getNotificationPermissionStatus(): Promise<PushPermissionStatus> {
+  const status = await pushNotifications.getNotificationPermissionStatus();
+  lastKnownPermissionStatus = status;
+  return status;
+}
+
+export async function requestNotificationPermission(): Promise<PushPermissionStatus> {
+  const status = await pushNotifications.requestNotificationPermission();
+  lastKnownPermissionStatus = status;
+  return status;
+}
+
 export const getPushToken = pushNotifications.getPushToken;
 export const refreshPushToken = pushNotifications.refreshPushToken;
 export const getCurrentPushToken = pushNotifications.getCurrentPushToken;

@@ -42,6 +42,36 @@ describe('notification preference policy', () => {
     )).resolves.toEqual({ allowed: true, reason: 'ALLOWED' });
   });
 
+  it.each(['BILLING_ISSUE', 'PREMIUM_ENDED', 'SUPPORT_SINGLE_REPLY', 'SUPPORT_CHAT_MESSAGE'] as const)
+  ('allows legacy users without %s preference', async (type) => {
+    await expect(resolveNotificationEligibility(
+      { uid: 'uid', category: 'OPERATIONAL', type },
+      firestoreFixture({ user: { preferences: { notificationPreferences: { progress: false } } } }) as never,
+    )).resolves.toEqual({ allowed: true, reason: 'ALLOWED' });
+  });
+
+  it.each([
+    ['BILLING_ISSUE', 'subscription'],
+    ['PREMIUM_ENDED', 'subscription'],
+    ['SUPPORT_SINGLE_REPLY', 'support'],
+    ['SUPPORT_CHAT_MESSAGE', 'support'],
+  ] as const)('suppresses %s when %s is disabled', async (type, field) => {
+    await expect(resolveNotificationEligibility(
+      { uid: 'uid', category: 'OPERATIONAL', type },
+      firestoreFixture({ user: { preferences: { notificationPreferences: { [field]: false } } } }) as never,
+    )).resolves.toEqual({ allowed: false, reason: 'DISABLED_BY_USER' });
+  });
+
+  it('keeps QA_TEST independent of every preference', async () => {
+    await expect(resolveNotificationEligibility(
+      { uid: 'uid', category: 'OPERATIONAL', type: 'QA_TEST' },
+      firestoreFixture({ user: { preferences: { notificationPreferences: {
+        workoutsAndReminders: false, evolutionAndAchievements: false,
+        progress: false, subscription: false, support: false,
+      } } } }) as never,
+    )).resolves.toEqual({ allowed: true, reason: 'ALLOWED' });
+  });
+
   it.each(['WORKOUTS_AND_REMINDERS', 'EVOLUTION_AND_ACHIEVEMENTS', 'PROGRESS'])
   ('QA preview ignores the product preference OFF without weakening account checks (%s)', async (field) => {
     await expect(resolveQaPreviewNotificationPolicy(

@@ -34,6 +34,7 @@ function dependencies(preflight: NonNullable<DispatcherDependencies['preflight']
     expoClient: { send: vi.fn() } as never,
     now: () => NOW,
     preflight,
+    eligibility: vi.fn(async () => ({ allowed: true, reason: 'ALLOWED' as const })),
   };
 }
 
@@ -49,6 +50,33 @@ beforeEach(() => {
 });
 
 describe('dispatcher mode boundary', () => {
+  it('stops a retry when the category was disabled after the first attempt', async () => {
+    const eligibility = vi.fn(async () => ({
+      allowed: false as const, reason: 'DISABLED_BY_USER' as const,
+    }));
+    mocks.claimDispatch.mockResolvedValueOnce({
+      outcome: 'RETRY_ALLOWED', dispatchId: 'dispatch-1', attemptCount: 2, claimToken: 'claim-2',
+    });
+    mocks.loadEligibleDevices.mockResolvedValueOnce({
+      eligible: [{ installationId: 'installation-1', expoPushToken: 'ExponentPushToken[test]' }],
+      scannedCount: 1, scanLimitReached: false,
+    });
+    const deps = {
+      ...dependencies(vi.fn(async () => ({ allowed: true as const }))), eligibility,
+      db: { collection: () => ({ doc: () => ({ collection: () => ({
+        where: () => ({ get: async () => ({ docs: [] }) }),
+      }) }) }) } as never,
+    };
+    await expect(dispatchNotification(REQUEST, deps, 'PRODUCT')).resolves.toEqual({
+      status: 'SUPPRESSED_BY_PREFERENCE', dispatchId: 'dispatch-1',
+    });
+    expect(mocks.markDispatchOutcome).toHaveBeenCalledWith(
+      expect.anything(), 'dispatch-1', 'claim-2',
+      { status: 'SUPPRESSED_BY_PREFERENCE', terminalReason: 'DISABLED_BY_USER' }, NOW,
+    );
+    expect(mocks.loadEligibleDevices).toHaveBeenCalledOnce();
+    expect(deps.expoClient.send).not.toHaveBeenCalled();
+  });
   it('PRODUCT still applies canonical product preflight', async () => {
     const preflight = vi.fn(async () => ({
       allowed: false as const, reason: 'EVOLUTION_UNLOCKED_PRIORITY',

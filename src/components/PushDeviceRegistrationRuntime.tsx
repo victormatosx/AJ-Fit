@@ -12,6 +12,7 @@ import {
 } from '../services/pushDeviceRegistration';
 import {
   clearNotificationPreferenceState,
+  primeNotificationPreferencesCache,
   reconcilePendingNotificationPreferences,
 } from '../services/notificationPreferences';
 import { configureNotificationAccountLifecycle } from '../services/notificationAccountLifecycle';
@@ -40,7 +41,13 @@ export function PushDeviceRegistrationRuntime() {
       void clearNotificationPreferenceState(outgoingUid);
     }
     void setAuthenticatedPushUser(uid);
-    if (uid) void reconcilePendingNotificationPreferences(uid);
+    if (uid) {
+      void reconcilePendingNotificationPreferences(uid);
+      // Warms NotificationSettingsScreen's synchronous first-render hint —
+      // see `primeNotificationPreferencesCache`'s doc comment — well before
+      // the user could navigate there.
+      void primeNotificationPreferencesCache(uid);
+    }
   }, [identityReady, uid]);
 
   useEffect(() => subscribeToPushTokenChanges((token) => {

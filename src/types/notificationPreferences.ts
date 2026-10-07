@@ -1,10 +1,6 @@
 /**
- * The three user-facing notification groups (AJ Fit product notifications —
- * docs Fase 4 §5/§12). Deliberately NOT the 16 individual future
- * notifications and NOT `OPERATIONAL` (billing alerts): those always reach
- * the user regardless of these toggles — see
- * `functions/src/notifications/preferences.ts`, the server-side mirror of
- * this exact field list.
+ * User-facing push categories. QA previews and the native rest activity are
+ * intentionally outside this preference map.
  *
  * `firestore.rules :: notificationPreferencesValid` MUST accept exactly this
  * set. If you add or remove a key, update the rules file (and its tests) in
@@ -15,6 +11,8 @@ export const NOTIFICATION_PREFERENCE_KEYS = [
   'workoutsAndReminders',
   'evolutionAndAchievements',
   'progress',
+  'subscription',
+  'support',
 ] as const;
 
 export type NotificationPreferenceKey = (typeof NOTIFICATION_PREFERENCE_KEYS)[number];
@@ -38,4 +36,18 @@ export function resolveNotificationPreference(
 ): boolean {
   const value = preferences?.[key];
   return typeof value === 'boolean' ? value : DEFAULT_NOTIFICATION_PREFERENCE;
+}
+
+/** The master switch is derived; it is never stored independently. */
+export function allNotificationPreferencesEnabled(
+  preferences: NotificationPreferences | undefined,
+): boolean {
+  return NOTIFICATION_PREFERENCE_KEYS.every((key) =>
+    resolveNotificationPreference(preferences, key));
+}
+
+export function setAllNotificationPreferences(next: boolean): Required<NotificationPreferences> {
+  return Object.fromEntries(
+    NOTIFICATION_PREFERENCE_KEYS.map((key) => [key, next]),
+  ) as Required<NotificationPreferences>;
 }

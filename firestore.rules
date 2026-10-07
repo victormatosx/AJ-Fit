@@ -180,11 +180,15 @@ service cloud.firestore {
         && data.keys().hasOnly([
              'workoutsAndReminders',
              'evolutionAndAchievements',
-             'progress'
+             'progress',
+             'subscription',
+             'support'
            ])
         && (!('workoutsAndReminders' in data) || data.workoutsAndReminders is bool)
         && (!('evolutionAndAchievements' in data) || data.evolutionAndAchievements is bool)
-        && (!('progress' in data) || data.progress is bool);
+        && (!('progress' in data) || data.progress is bool)
+        && (!('subscription' in data) || data.subscription is bool)
+        && (!('support' in data) || data.support is bool);
     }
 
     // Shape of `users/{userId}.subscription` — consolidated in Sprint 3.5 to

@@ -1,5 +1,10 @@
 {
   "screenTitle": "Notificações",
+  "categoriesSectionTitle": "Categorias",
+  "all": {
+    "title": "Todas as notificações",
+    "description": "Ative ou desative todas as categorias abaixo."
+  },
   "groups": {
     "workoutsAndReminders": {
       "title": "Treinos e lembretes",
@@ -12,6 +17,14 @@
     "progress": {
       "title": "Progresso",
       "description": "Receba lembretes para registrar e acompanhar seu progresso."
+    },
+    "subscription": {
+      "title": "Assinatura",
+      "description": "Receba avisos sobre sua assinatura Premium."
+    },
+    "support": {
+      "title": "Suporte",
+      "description": "Saiba quando o suporte responder ou enviar uma mensagem."
     }
   },
   "permission": {

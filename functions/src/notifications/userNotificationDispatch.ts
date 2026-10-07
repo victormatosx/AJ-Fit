@@ -73,7 +73,7 @@ export async function dispatchUserNotification(
   dependencies: DispatcherDependencies = defaultDependencies(),
 ): Promise<NotificationDispatchOutcome> {
   const eligibility = await resolveNotificationEligibility(
-    { uid: request.uid, category: request.category },
+    { uid: request.uid, category: request.category, type: request.type },
     dependencies.db,
   );
   return dispatchWithEligibility(request, eligibility, dependencies);
@@ -87,8 +87,9 @@ export async function dispatchUserNotificationCandidate(
   },
   dependencies: DispatcherDependencies = defaultDependencies(),
 ): Promise<NotificationDispatchOutcome> {
+  const sample = candidate.build('pt-BR');
   const policy = await resolveUserNotificationPolicy(
-    { uid: candidate.uid, category: candidate.category },
+    { uid: candidate.uid, category: candidate.category, type: sample.type },
     dependencies.db,
   );
   const request = candidate.build(policy.locale);

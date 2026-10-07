@@ -1,5 +1,10 @@
 {
   "screenTitle": "Notifications",
+  "categoriesSectionTitle": "Categories",
+  "all": {
+    "title": "All notifications",
+    "description": "Turn all the categories below on or off."
+  },
   "groups": {
     "workoutsAndReminders": {
       "title": "Workouts & reminders",
@@ -12,6 +17,14 @@
     "progress": {
       "title": "Progress",
       "description": "Get reminders to log and track your progress."
+    },
+    "subscription": {
+      "title": "Subscription",
+      "description": "Get updates about your Premium subscription."
+    },
+    "support": {
+      "title": "Support",
+      "description": "Know when support replies or sends a message."
     }
   },
   "permission": {

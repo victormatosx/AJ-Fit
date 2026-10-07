@@ -179,3 +179,22 @@ describe('ChangePasswordScreen — sensitive fields wiped on deactivation, not o
     expect(activationBody).not.toContain('setCurrentPassword');
   });
 });
+
+describe('NotificationSettingsScreen — permission/pending refresh follows activation, not just mount', () => {
+  const CODE = code('src/screens/NotificationSettingsScreen.tsx');
+
+  it('refreshes permission status and pending mutations via useScreenFocusEffect', () => {
+    expect(CODE).toContain("import { useScreenFocusEffect } from '../state/ScreenActivity'");
+    const block = CODE.slice(
+      CODE.indexOf('useScreenFocusEffect(() => {'),
+      CODE.indexOf('});', CODE.indexOf('useScreenFocusEffect(() => {')) + 3,
+    );
+    expect(block).toContain('setErrorKey(null);');
+    expect(block).toContain('void refreshPermission();');
+    expect(block).toContain('void syncPending(uid);');
+  });
+
+  it('does not reintroduce a bare mount-only effect for the permission refresh', () => {
+    expect(CODE).not.toMatch(/useEffect\(\(\) => \{\s*void refreshPermission\(\);\s*\}, \[refreshPermission\]\)/);
+  });
+});

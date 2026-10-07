@@ -27,6 +27,7 @@ import {
   type NotificationDispatchRequest,
 } from './schema';
 import { runNotificationPreflight, type NotificationPreflightResult } from './notificationPreflight';
+import { resolveNotificationEligibility, type NotificationEligibilityResult } from './preferences';
 import {
   applyDeliveryTokenInvalidation,
   readDeliveryOwnershipState,
@@ -42,6 +43,7 @@ export interface DispatcherDependencies {
   now(): Timestamp;
   random?(): number;
   preflight?(request: NotificationDispatchRequest, now: Timestamp): Promise<NotificationPreflightResult>;
+  eligibility?(request: NotificationDispatchRequest): Promise<NotificationEligibilityResult>;
 }
 
 export function defaultDependencies(): DispatcherDependencies {
@@ -51,6 +53,8 @@ export function defaultDependencies(): DispatcherDependencies {
     now: Timestamp.now,
     random: Math.random,
     preflight: (request, now) => runNotificationPreflight(defaultDb, request, now),
+    eligibility: (request) => resolveNotificationEligibility(
+      { uid: request.uid, category: request.category, type: request.type }, defaultDb),
   };
 }
 
@@ -351,6 +355,21 @@ export async function dispatchNotification(
         reason: 'NO_ELIGIBLE_DEVICE',
       });
       return { status: 'NO_ELIGIBLE_DEVICE', dispatchId: claim.dispatchId };
+    }
+
+    // All PRODUCT paths, including persisted retries and direct callers, read
+    // the latest user preference immediately before contacting Expo.
+    const eligibility = dispatchMode === 'QA_PREVIEW'
+      ? { allowed: true as const, reason: 'ALLOWED' as const }
+      : await (dependencies.eligibility?.(request) ?? resolveNotificationEligibility(
+          { uid: request.uid, category: request.category, type: request.type }, dependencies.db));
+    if (!eligibility.allowed) {
+      const written = await markDispatchOutcome(
+        dependencies.db, claim.dispatchId, claim.claimToken,
+        { status: 'SUPPRESSED_BY_PREFERENCE', terminalReason: eligibility.reason }, now,
+      );
+      if (!written) return { status: 'DUPLICATE', dispatchId: claim.dispatchId };
+      return { status: 'SUPPRESSED_BY_PREFERENCE', dispatchId: claim.dispatchId };
     }
 
     logInfo(SCOPE, 'provider_request', {
