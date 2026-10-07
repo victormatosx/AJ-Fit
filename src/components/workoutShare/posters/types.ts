@@ -18,4 +18,6 @@ export interface WorkoutSharePosterProps {
   width: number;
   height: number;
   posterRef: RefObject<View | null>;
+  /** Reuses the exact overlay layout while omitting photo and canvas backgrounds. */
+  variant?: 'photo' | 'transparent';
 }

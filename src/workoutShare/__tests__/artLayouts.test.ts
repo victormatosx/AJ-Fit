@@ -7,15 +7,17 @@ import {
   WORKOUT_SHARE_ART_EXPORT_WIDTH,
   WORKOUT_SHARE_ART_LAYOUTS,
 } from '../artLayouts';
+import { WORKOUT_SHARE_LAYOUTS } from '../layouts';
+
+const derivedIds = ['photoClassic', 'photoMinimal', 'photoPerformance', 'photoBodymap', 'photoCreative', 'photoSocial'];
+const existingIds = ['artMinimal', 'artPerformance', 'artPr', 'artStats'];
 
 describe('workout share art layouts', () => {
-  it('declares the four ARTE designs, artMinimal first', () => {
-    expect(WORKOUT_SHARE_ART_LAYOUTS.map((layout) => layout.id)).toEqual([
-      'artMinimal',
-      'artPerformance',
-      'artPr',
-      'artStats',
-    ]);
+  it('places every FOTO-derived art in the FOTO order, followed by all four existing arts', () => {
+    expect(WORKOUT_SHARE_ART_LAYOUTS.map((layout) => layout.id)).toEqual([...derivedIds, ...existingIds]);
+    expect(WORKOUT_SHARE_ART_LAYOUTS.slice(0, WORKOUT_SHARE_LAYOUTS.length).map((layout) => layout.sourcePhotoLayoutId))
+      .toEqual(WORKOUT_SHARE_LAYOUTS.map((layout) => layout.id));
+    expect(WORKOUT_SHARE_ART_LAYOUTS.slice(WORKOUT_SHARE_LAYOUTS.length).every((layout) => !layout.sourcePhotoLayoutId)).toBe(true);
   });
 
   it('shares the FOTO posters\' 9:16 aspect ratio, but exports at 2x the resolution (2160x3840) for Stories-safe enlargement', () => {
@@ -39,11 +41,11 @@ describe('workout share art layouts', () => {
 
   it('filters artPr out of the available list when there is no personal record', () => {
     const ids = availableWorkoutShareArtLayouts({ personalRecords: [] }).map((layout) => layout.id);
-    expect(ids).toEqual(['artMinimal', 'artPerformance', 'artStats']);
+    expect(ids).toEqual([...derivedIds, 'artMinimal', 'artPerformance', 'artStats']);
   });
 
   it('keeps artPr in the available list when there is at least one personal record', () => {
     const ids = availableWorkoutShareArtLayouts({ personalRecords: [{}] }).map((layout) => layout.id);
-    expect(ids).toEqual(['artMinimal', 'artPerformance', 'artPr', 'artStats']);
+    expect(ids).toEqual([...derivedIds, ...existingIds]);
   });
 });

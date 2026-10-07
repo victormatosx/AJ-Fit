@@ -38,7 +38,7 @@ import type { WorkoutSharePosterProps } from './types';
  * stand-in for "when this was posted") — never a stored/invented workout
  * time.
  */
-export function PosterCreative({ sex, data, posterRef, width, height }: WorkoutSharePosterProps) {
+export function PosterCreative({ sex, data, posterRef, width, height, variant = 'photo' }: WorkoutSharePosterProps) {
   const { theme } = useTheme();
   const { t, i18n } = useTranslation(['workout', 'profile']);
   const { user, profile } = useAuth();
@@ -72,14 +72,16 @@ export function PosterCreative({ sex, data, posterRef, width, height }: WorkoutS
       ref={posterRef}
       collapsable={false}
       testID="workout-share-poster"
-      style={{ width, height, overflow: 'hidden', backgroundColor: '#050B1E' }}
+      style={{ width, height, overflow: 'hidden', ...(variant === 'photo' ? { backgroundColor: '#050B1E' } : {}) }}
     >
-      <LinearGradient
-        colors={theme.gradients.background}
-        start={{ x: 0.1, y: 0 }}
-        end={{ x: 0.9, y: 1 }}
-        style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }}
-      />
+      {variant === 'photo' ? (
+        <LinearGradient
+          colors={theme.gradients.background}
+          start={{ x: 0.1, y: 0 }}
+          end={{ x: 0.9, y: 1 }}
+          style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }}
+        />
+      ) : null}
 
       <View style={{ height: topHeight, paddingHorizontal: 26 * scale, paddingTop: 34 * scale }}>
         {/* Same hollow "AJ" watermark ProfileScreen uses in its header —
@@ -163,15 +165,19 @@ export function PosterCreative({ sex, data, posterRef, width, height }: WorkoutS
           {/* Fixed gym artwork for this model only. The near-opaque blue
               veil keeps the image intentionally understated behind the
               muscle map and labels. */}
-          <Image
-            source={gymArtSource}
-            contentFit="cover"
-            style={{ position: 'absolute', left: 0, right: 0, top: 0, width, height: bodyMapHeight }}
-          />
-          <View
-            pointerEvents="none"
-            style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(2,32,88,0.92)' }}
-          />
+          {variant === 'photo' ? (
+            <Image
+              source={gymArtSource}
+              contentFit="cover"
+              style={{ position: 'absolute', left: 0, right: 0, top: 0, width, height: bodyMapHeight }}
+            />
+          ) : null}
+          {variant === 'photo' ? (
+            <View
+              pointerEvents="none"
+              style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(2,32,88,0.92)' }}
+            />
+          ) : null}
 
           <View style={{ flex: 1, paddingTop: 18 * scale, paddingBottom: 10 * scale, paddingHorizontal: 26 * scale }}>
             <Text style={{ color: 'rgba(255,255,255,0.8)', fontFamily: theme.fonts.uiSemi, fontSize: 14 * scale, marginBottom: 10 * scale }}>

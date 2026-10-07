@@ -15,7 +15,7 @@ import type { WorkoutSharePosterProps } from './types';
  * full-bleed photo or navy gradient, bottom readability veil, kicker +
  * workout name + 3-metric row + logo pinned near the bottom.
  */
-export function PosterClassic({ data, photo, width, height, posterRef }: WorkoutSharePosterProps) {
+export function PosterClassic({ data, photo, width, height, posterRef, variant = 'photo' }: WorkoutSharePosterProps) {
   const { theme } = useTheme();
   const { t } = useTranslation('workout');
   const logoSource = useAjLogoSource();
@@ -31,9 +31,9 @@ export function PosterClassic({ data, photo, width, height, posterRef }: Workout
       ref={posterRef}
       collapsable={false}
       testID="workout-share-poster"
-      style={{ width, height, overflow: 'hidden', backgroundColor: '#040214' }}
+      style={{ width, height, overflow: 'hidden', ...(variant === 'photo' ? { backgroundColor: '#040214' } : {}) }}
     >
-      {photo ? (
+      {variant === 'transparent' ? null : photo ? (
         <PosterPhoto key={photo.uri} photo={photo} width={width} height={height} />
       ) : (
         <LinearGradient
@@ -43,12 +43,14 @@ export function PosterClassic({ data, photo, width, height, posterRef }: Workout
           style={{ width, height }}
         />
       )}
-      <LinearGradient
-        pointerEvents="none"
-        colors={['transparent', 'rgba(1,0,8,0.18)', 'rgba(1,0,8,0.76)']}
-        locations={[0, 0.55, 1]}
-        style={{ position: 'absolute', left: 0, right: 0, top: height * 0.38, bottom: 0 }}
-      />
+      {variant === 'photo' ? (
+        <LinearGradient
+          pointerEvents="none"
+          colors={['transparent', 'rgba(1,0,8,0.18)', 'rgba(1,0,8,0.76)']}
+          locations={[0, 0.55, 1]}
+          style={{ position: 'absolute', left: 0, right: 0, top: height * 0.38, bottom: 0 }}
+        />
+      ) : null}
       <View
         pointerEvents="none"
         style={{

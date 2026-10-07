@@ -19,7 +19,7 @@ import type { WorkoutSharePosterProps } from './types';
  * identically with or without a photo — the flat gradient below stands in
  * for it.
  */
-export function PosterMinimal({ data, photo, width, height, posterRef }: WorkoutSharePosterProps) {
+export function PosterMinimal({ data, photo, width, height, posterRef, variant = 'photo' }: WorkoutSharePosterProps) {
   const { theme } = useTheme();
   const { t } = useTranslation('workout');
   const logoSource = useAjLogoSource();
@@ -35,9 +35,9 @@ export function PosterMinimal({ data, photo, width, height, posterRef }: Workout
       ref={posterRef}
       collapsable={false}
       testID="workout-share-poster"
-      style={{ width, height, overflow: 'hidden', backgroundColor: '#0A0A0A' }}
+      style={{ width, height, overflow: 'hidden', ...(variant === 'photo' ? { backgroundColor: '#0A0A0A' } : {}) }}
     >
-      {photo ? (
+      {variant === 'transparent' ? null : photo ? (
         <PosterPhoto key={photo.uri} photo={photo} width={width} height={height} />
       ) : (
         <LinearGradient
@@ -47,12 +47,14 @@ export function PosterMinimal({ data, photo, width, height, posterRef }: Workout
           style={{ width, height }}
         />
       )}
-      <LinearGradient
-        pointerEvents="none"
-        colors={['transparent', 'rgba(0,0,0,0.72)']}
-        locations={[0.55, 1]}
-        style={{ position: 'absolute', left: 0, right: 0, top: height * 0.55, bottom: 0 }}
-      />
+      {variant === 'photo' ? (
+        <LinearGradient
+          pointerEvents="none"
+          colors={['transparent', 'rgba(0,0,0,0.72)']}
+          locations={[0.55, 1]}
+          style={{ position: 'absolute', left: 0, right: 0, top: height * 0.55, bottom: 0 }}
+        />
+      ) : null}
 
       <View pointerEvents="none" style={{ position: 'absolute', left: 24 * scale, right: 24 * scale, bottom: 64 * scale, alignItems: 'center' }}>
         <Text style={{ color: 'rgba(255,255,255,0.65)', fontFamily: theme.fonts.mono, fontSize: 9 * scale, letterSpacing: 2.6 * scale }}>

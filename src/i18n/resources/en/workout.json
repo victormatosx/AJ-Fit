@@ -289,6 +289,12 @@
       "artSaved": "PNG saved",
       "artSaveFailed": "Couldn't save the PNG",
       "artLayouts": {
+        "photoClassic": "Transparent Classic",
+        "photoMinimal": "Transparent Minimal",
+        "photoPerformance": "Transparent Performance",
+        "photoBodymap": "Transparent Body Map",
+        "photoCreative": "Transparent Creative",
+        "photoSocial": "Transparent Social",
         "artMinimal": "Minimal",
         "artPerformance": "Performance",
         "artPr": "PR",

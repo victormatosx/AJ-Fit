@@ -34,7 +34,7 @@ const PHOTO_RECT_HORIZONTAL_INSET = 44;
  * one `flex: 1` child, so it simply absorbs whatever room the fixed-height
  * chrome around it doesn't use — no dead gaps, no manual pixel tuning.
  */
-export function PosterSocial({ data, photo, posterRef, width, height }: WorkoutSharePosterProps) {
+export function PosterSocial({ data, photo, posterRef, width, height, variant = 'photo' }: WorkoutSharePosterProps) {
   const { theme } = useTheme();
   const { t, i18n } = useTranslation(['workout', 'profile']);
   const { user, profile } = useAuth();
@@ -59,14 +59,16 @@ export function PosterSocial({ data, photo, posterRef, width, height }: WorkoutS
       ref={posterRef}
       collapsable={false}
       testID="workout-share-poster"
-      style={{ width, height, overflow: 'hidden', backgroundColor: '#0B0F1A' }}
+      style={{ width, height, overflow: 'hidden', ...(variant === 'photo' ? { backgroundColor: '#0B0F1A' } : {}) }}
     >
-      <LinearGradient
-        colors={theme.gradients.background}
-        start={{ x: 0.1, y: 0 }}
-        end={{ x: 0.9, y: 1 }}
-        style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }}
-      />
+      {variant === 'photo' ? (
+        <LinearGradient
+          colors={theme.gradients.background}
+          start={{ x: 0.1, y: 0 }}
+          end={{ x: 0.9, y: 1 }}
+          style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }}
+        />
+      ) : null}
 
       <View style={{ flex: 1, paddingHorizontal: 22 * scale, paddingTop: 30 * scale, paddingBottom: 20 * scale }}>
         {/* Header — the real signed-in user's own avatar + name. */}
@@ -103,9 +105,9 @@ export function PosterSocial({ data, photo, posterRef, width, height }: WorkoutS
             pixel height up front, not a flex value. */}
         <View
           onLayout={(event) => setPhotoBoxHeight(Math.round(event.nativeEvent.layout.height))}
-          style={{ flex: 1, marginTop: 16 * scale, borderRadius: 14 * scale, overflow: 'hidden', backgroundColor: '#050B1E' }}
+          style={{ flex: 1, marginTop: 16 * scale, borderRadius: 14 * scale, overflow: 'hidden', ...(variant === 'photo' ? { backgroundColor: '#050B1E' } : {}) }}
         >
-          {photo ? (
+          {variant === 'transparent' ? null : photo ? (
             photoBoxHeight > 0 ? (
               <PosterPhoto
                 key={photo.uri}

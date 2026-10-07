@@ -289,6 +289,12 @@
       "artSaved": "PNG salvo",
       "artSaveFailed": "Não foi possível salvar o PNG",
       "artLayouts": {
+        "photoClassic": "Clássico transparente",
+        "photoMinimal": "Minimalista transparente",
+        "photoPerformance": "Performance transparente",
+        "photoBodymap": "Mapa Muscular transparente",
+        "photoCreative": "Criativo transparente",
+        "photoSocial": "Social transparente",
         "artMinimal": "Minimalista",
         "artPerformance": "Performance",
         "artPr": "Recorde",

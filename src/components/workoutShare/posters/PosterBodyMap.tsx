@@ -24,7 +24,7 @@ import type { WorkoutSharePosterProps } from './types';
  * layout degrades to a clean name+metrics card (still intentional, never a
  * broken/empty silhouette).
  */
-export function PosterBodyMap({ sex, data, photo, width, height, posterRef }: WorkoutSharePosterProps) {
+export function PosterBodyMap({ sex, data, photo, width, height, posterRef, variant = 'photo' }: WorkoutSharePosterProps) {
   const { theme } = useTheme();
   const { t } = useTranslation('workout');
   const logoSource = useAjLogoSource();
@@ -41,9 +41,9 @@ export function PosterBodyMap({ sex, data, photo, width, height, posterRef }: Wo
       ref={posterRef}
       collapsable={false}
       testID="workout-share-poster"
-      style={{ width, height, overflow: 'hidden', backgroundColor: '#040214' }}
+      style={{ width, height, overflow: 'hidden', ...(variant === 'photo' ? { backgroundColor: '#040214' } : {}) }}
     >
-      {photo ? (
+      {variant === 'transparent' ? null : photo ? (
         <PosterPhoto key={photo.uri} photo={photo} width={width} height={height} />
       ) : (
         <LinearGradient
@@ -53,12 +53,14 @@ export function PosterBodyMap({ sex, data, photo, width, height, posterRef }: Wo
           style={{ width, height }}
         />
       )}
-      <LinearGradient
-        pointerEvents="none"
-        colors={['rgba(1,0,8,0.15)', 'rgba(1,0,8,0.55)', 'rgba(1,0,8,0.85)']}
-        locations={[0, 0.5, 1]}
-        style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }}
-      />
+      {variant === 'photo' ? (
+        <LinearGradient
+          pointerEvents="none"
+          colors={['rgba(1,0,8,0.15)', 'rgba(1,0,8,0.55)', 'rgba(1,0,8,0.85)']}
+          locations={[0, 0.5, 1]}
+          style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }}
+        />
+      ) : null}
 
       <View pointerEvents="none" style={{ position: 'absolute', left: 24 * scale, right: 24 * scale, top: 30 * scale }}>
         <Text style={{ color: '#AFCBFF', fontFamily: theme.fonts.monoBold, fontSize: 9.5 * scale, letterSpacing: 2 * scale }}>

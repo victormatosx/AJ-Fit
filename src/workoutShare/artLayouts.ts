@@ -11,7 +11,9 @@
  * margin over that baseline — see `exportArt.ts`'s `workoutShareArtRenderSize`
  * for how this is actually reached without any upscaling.
  */
-export type WorkoutShareArtLayoutId = 'artMinimal' | 'artPerformance' | 'artPr' | 'artStats';
+import { WORKOUT_SHARE_LAYOUTS, type WorkoutShareLayoutId } from './layouts';
+
+export type WorkoutShareArtLayoutId = `photo${Capitalize<WorkoutShareLayoutId>}` | 'artMinimal' | 'artPerformance' | 'artPr' | 'artStats';
 
 export const WORKOUT_SHARE_ART_ASPECT_RATIO = 9 / 16;
 export const WORKOUT_SHARE_ART_EXPORT_WIDTH = 2160;
@@ -24,10 +26,29 @@ export interface WorkoutShareArtLayoutMeta {
   exportHeight: number;
   /** i18n key for the design's accessible/selector label. */
   labelKey: string;
+  /** Present when this transparent art reuses a FOTO poster's composition. */
+  sourcePhotoLayoutId?: WorkoutShareLayoutId;
 }
 
-/** Order here IS carousel order — `artMinimal` is the default/first design. */
+const PHOTO_ART_IDS: Record<WorkoutShareLayoutId, `photo${Capitalize<WorkoutShareLayoutId>}`> = {
+  classic: 'photoClassic',
+  minimal: 'photoMinimal',
+  performance: 'photoPerformance',
+  bodymap: 'photoBodymap',
+  creative: 'photoCreative',
+  social: 'photoSocial',
+};
+
+/** FOTO-derived artwork always leads, in the FOTO registry's own order. */
 export const WORKOUT_SHARE_ART_LAYOUTS: readonly WorkoutShareArtLayoutMeta[] = [
+  ...WORKOUT_SHARE_LAYOUTS.map((photoLayout) => ({
+    id: PHOTO_ART_IDS[photoLayout.id],
+    sourcePhotoLayoutId: photoLayout.id,
+    aspectRatio: WORKOUT_SHARE_ART_ASPECT_RATIO,
+    exportWidth: WORKOUT_SHARE_ART_EXPORT_WIDTH,
+    exportHeight: WORKOUT_SHARE_ART_EXPORT_HEIGHT,
+    labelKey: `done.shareComposer.artLayouts.${PHOTO_ART_IDS[photoLayout.id]}`,
+  })),
   {
     id: 'artMinimal',
     aspectRatio: WORKOUT_SHARE_ART_ASPECT_RATIO,
@@ -58,7 +79,7 @@ export const WORKOUT_SHARE_ART_LAYOUTS: readonly WorkoutShareArtLayoutMeta[] = [
   },
 ];
 
-export const DEFAULT_WORKOUT_SHARE_ART_LAYOUT_ID: WorkoutShareArtLayoutId = 'artMinimal';
+export const DEFAULT_WORKOUT_SHARE_ART_LAYOUT_ID: WorkoutShareArtLayoutId = 'photoClassic';
 
 export function getWorkoutShareArtLayoutMeta(id: WorkoutShareArtLayoutId): WorkoutShareArtLayoutMeta {
   const layout = WORKOUT_SHARE_ART_LAYOUTS.find((item) => item.id === id);

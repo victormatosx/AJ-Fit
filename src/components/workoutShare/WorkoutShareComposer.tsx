@@ -756,6 +756,7 @@ export function WorkoutShareComposer({ sex, data, summaryData, onDone }: Props) 
                               <ArtPreviewCheckerboard width={previewWidth} height={previewHeight} />
                               {mounted ? (
                                 <ArtPosterComponent
+                                  sex={sex}
                                   shareData={data}
                                   summaryData={summaryData}
                                   width={previewWidth}
@@ -823,6 +824,7 @@ export function WorkoutShareComposer({ sex, data, summaryData, onDone }: Props) 
                 style={{ position: 'absolute', left: -100000, top: 0, width: hdSize.width, height: hdSize.height }}
               >
                 <HdPosterComponent
+                  sex={sex}
                   shareData={data}
                   summaryData={summaryData}
                   width={hdSize.width}

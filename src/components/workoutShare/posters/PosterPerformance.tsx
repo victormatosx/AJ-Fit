@@ -17,7 +17,7 @@ import type { WorkoutSharePosterProps } from './types';
  * instead of Classic's compact 3-column block. No metric beyond
  * exercises/sets/duration is invented here.
  */
-export function PosterPerformance({ data, photo, width, height, posterRef }: WorkoutSharePosterProps) {
+export function PosterPerformance({ data, photo, width, height, posterRef, variant = 'photo' }: WorkoutSharePosterProps) {
   const { theme } = useTheme();
   const { t } = useTranslation('workout');
   const logoSource = useAjLogoSource();
@@ -33,9 +33,9 @@ export function PosterPerformance({ data, photo, width, height, posterRef }: Wor
       ref={posterRef}
       collapsable={false}
       testID="workout-share-poster"
-      style={{ width, height, overflow: 'hidden', backgroundColor: '#050505' }}
+      style={{ width, height, overflow: 'hidden', ...(variant === 'photo' ? { backgroundColor: '#050505' } : {}) }}
     >
-      {photo ? (
+      {variant === 'transparent' ? null : photo ? (
         <PosterPhoto key={photo.uri} photo={photo} width={width} height={height} />
       ) : (
         <LinearGradient
@@ -45,12 +45,14 @@ export function PosterPerformance({ data, photo, width, height, posterRef }: Wor
           style={{ width, height }}
         />
       )}
-      <LinearGradient
-        pointerEvents="none"
-        colors={['transparent', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0.92)']}
-        locations={[0, 0.42, 1]}
-        style={{ position: 'absolute', left: 0, right: 0, top: height * 0.3, bottom: 0 }}
-      />
+      {variant === 'photo' ? (
+        <LinearGradient
+          pointerEvents="none"
+          colors={['transparent', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0.92)']}
+          locations={[0, 0.42, 1]}
+          style={{ position: 'absolute', left: 0, right: 0, top: height * 0.3, bottom: 0 }}
+        />
+      ) : null}
 
       <View pointerEvents="none" style={{ position: 'absolute', left: 26 * scale, top: 30 * scale }}>
         <Text style={{ color: theme.colors.primaryEmphasis, fontFamily: theme.fonts.monoBold, fontSize: 9 * scale, letterSpacing: 2 * scale }}>
