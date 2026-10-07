@@ -6,6 +6,7 @@
   "currentWorkout": {
     "continue": "Continuar entreno"
   },
+  "hero": { "inProgress": "Entreno en curso" },
   "changeWorkout": {
     "cta": "Cambiar entreno",
     "sheetTitle": "Elegir otro entreno",
@@ -20,13 +21,21 @@
   },
   "mySplit": {
     "title": "Mi división",
-    "nextBadge": "Próximo"
+    "nextBadge": "Próximo",
+    "sequence": "Tu secuencia",
+    "exerciseCount_one": "{{count}} ejercicio",
+    "exerciseCount_other": "{{count}} ejercicios"
   },
   "agenda": {
     "title": "Agenda de entreno",
     "fixedLabel": "Días fijos",
     "flexibleLabel": "Entreno libre",
     "flexibleHint": "Entrena cuando quieras",
+    "trainingDay": "Día de entreno",
+    "activeRecoveryDay": "Recuperación activa",
+    "restDay": "Día de descanso",
+    "today": "Hoy",
+    "weekday": { "MON": "LUN", "TUE": "MAR", "WED": "MIÉ", "THU": "JUE", "FRI": "VIE", "SAT": "SÁB", "SUN": "DOM" },
     "edit": "Editar agenda",
     "sheetTitle": "Agenda de entreno",
     "sheetQuestion": "¿Qué días quieres entrenar?",

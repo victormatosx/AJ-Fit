@@ -6,6 +6,7 @@
   "currentWorkout": {
     "continue": "Continue workout"
   },
+  "hero": { "inProgress": "Workout in progress" },
   "changeWorkout": {
     "cta": "Change workout",
     "sheetTitle": "Choose another workout",
@@ -20,13 +21,21 @@
   },
   "mySplit": {
     "title": "My split",
-    "nextBadge": "Next"
+    "nextBadge": "Next",
+    "sequence": "Your sequence",
+    "exerciseCount_one": "{{count}} exercise",
+    "exerciseCount_other": "{{count}} exercises"
   },
   "agenda": {
     "title": "Training schedule",
     "fixedLabel": "Fixed days",
     "flexibleLabel": "Free training",
     "flexibleHint": "Train whenever you want",
+    "trainingDay": "Training day",
+    "activeRecoveryDay": "Active recovery",
+    "restDay": "Rest day",
+    "today": "Today",
+    "weekday": { "MON": "MON", "TUE": "TUE", "WED": "WED", "THU": "THU", "FRI": "FRI", "SAT": "SAT", "SUN": "SUN" },
     "edit": "Edit schedule",
     "sheetTitle": "Training schedule",
     "sheetQuestion": "Which days do you want to train?",

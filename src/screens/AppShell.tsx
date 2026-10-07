@@ -1954,6 +1954,7 @@ function AppShellContent({
         {tab === 'workout' && !workoutStartPending && prescription.status === 'SUCCESS'
           && (!workoutInProgress || !workoutExecutionVisible) && (
           <TreinoScreen
+            sex={sex}
             plan={prescription.plan}
             resolution={schedule.resolution}
             completedTodaySessionIndex={schedule.completedTodaySessionIndex}
