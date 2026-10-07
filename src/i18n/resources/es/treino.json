@@ -1,0 +1,54 @@
+{
+  "header": {
+    "title": "Entreno",
+    "subtitle": "Tu secuencia, tu agenda, bajo tu control"
+  },
+  "currentWorkout": {
+    "continue": "Continuar entreno"
+  },
+  "changeWorkout": {
+    "cta": "Cambiar entreno",
+    "sheetTitle": "Elegir otro entreno",
+    "sheetSubtitle": "La secuencia de los próximos entrenos continuará a partir de este entreno.",
+    "confirm": "Confirmar",
+    "cancel": "Cancelar",
+    "blockedInProgress": "Termina o descarta tu entreno en curso antes de reordenar la secuencia.",
+    "blockedCompletedToday": "Ya completaste este entreno hoy.",
+    "error": "No se pudo cambiar tu entreno ahora. Inténtalo de nuevo.",
+    "accessibilityOpen": "Cambiar el entreno actual de la secuencia",
+    "accessibilityClose": "Cerrar selección de entreno"
+  },
+  "mySplit": {
+    "title": "Mi división",
+    "nextBadge": "Próximo"
+  },
+  "agenda": {
+    "title": "Agenda de entreno",
+    "fixedLabel": "Días fijos",
+    "flexibleLabel": "Entreno libre",
+    "flexibleHint": "Entrena cuando quieras",
+    "edit": "Editar agenda",
+    "sheetTitle": "Agenda de entreno",
+    "sheetQuestion": "¿Qué días quieres entrenar?",
+    "modeFixed": "Días fijos",
+    "modeFlexible": "Entreno libre",
+    "save": "Guardar agenda",
+    "frequencyChangeTitle": "¿Cambiar la frecuencia de entreno?",
+    "frequencyChangeBody": "Estás cambiando de {{from}} a {{to}} entrenos por semana. Para adaptar tu rutina a la nueva frecuencia, tu división será actualizada.",
+    "frequencyChangeCancel": "Cancelar",
+    "frequencyChangeConfirm": "Actualizar mi división",
+    "updating": "Actualizando tu división…",
+    "saving": "Guardando agenda…",
+    "saved": "Agenda actualizada.",
+    "error": "No se pudo guardar tu agenda ahora. Inténtalo de nuevo.",
+    "accessibilityClose": "Cerrar edición de agenda"
+  },
+  "summary": {
+    "title": "Resumen de entrenos",
+    "thisWeek": "Esta semana",
+    "thisWeekValue": "{{completed}}/{{scheduled}} entrenos",
+    "last30Days": "Últimos 30 días",
+    "last30DaysValue_one": "{{count}} entreno",
+    "last30DaysValue_other": "{{count}} entrenos"
+  }
+}

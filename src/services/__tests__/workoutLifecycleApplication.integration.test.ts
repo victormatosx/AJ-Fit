@@ -87,9 +87,11 @@ import {
 } from './workoutLifecycleAuthorityFixture';
 import type { WorkoutLifecycleAuthorityCanonicalContent } from '../../workoutLifecycle/authorityProvider';
 import type { FinalWorkoutPlan } from '../../workoutPrescription/types';
+import { currentPlanAvailableDays } from '../../screens/myPlanPresentation';
 
 const T003_SEED = buildSeedDocuments().find((t) => t.id === 'T003');
-if (!T003_SEED) throw new Error('T003 fixture missing from catalog — cannot run this integration test');
+const T004_SEED = buildSeedDocuments().find((t) => t.id === 'T004');
+if (!T003_SEED || !T004_SEED) throw new Error('T003/T004 fixture missing from catalog — cannot run this integration test');
 
 const TRAINING_DAYS = ['MON', 'TUE', 'THU', 'FRI'] as const;
 
@@ -136,6 +138,7 @@ async function seedBaseUser() {
       metadata: { role: 'user', createdAt: Timestamp.now(), updatedAt: Timestamp.now(), commercialGateResolvedAt: Timestamp.now() },
     });
     await setDoc(doc(rawDb, 'workoutTemplates', 'T003'), T003_SEED);
+    await setDoc(doc(rawDb, 'workoutTemplates', 'T004'), T004_SEED);
     await setDoc(doc(rawDb, 'limitationDatasetState', 'active'), {
       datasetVersion: CANONICAL_LIMITATION_DATASET_VERSION,
       limitationDatasetHash: CANONICAL_LIMITATION_DATASET_HASH,
@@ -854,6 +857,71 @@ describe.skipIf(!enabled)('Fase 4 Lifecycle Orchestrator — real Firestore Emul
     const instances = await listProgramInstances(UID);
     expect(instances).toHaveLength(2);
     expect(instances.find((i) => i.programInstanceId === sourceInstanceId)?.supersededAt).not.toBeNull();
+  }, 30_000);
+
+  it('frequency 4→5→4 uses ADAPT, preserves history/old instances and reconciles ScheduleConfig', async () => {
+    await seedBaseUser();
+    const generated = await generateAndPersistWorkoutProgram({
+      uid: UID, questionnaireId: QUESTIONNAIRE_ID, questionnaireVersion: 1, answers: BEGINNER_ANSWERS, source: 'onboarding',
+    });
+    if (generated.status !== 'SUCCESS') throw new Error('setup failed');
+    const firstInstanceId = generated.program.programInstanceId!;
+    await testEnv.withSecurityRulesDisabled(async (ctx) => setDoc(
+      doc(ctx.firestore(), 'users', UID, 'workoutExecutions', 'frequency-history'),
+      { programInstanceId: firstInstanceId, status: 'COMPLETED' },
+    ));
+
+    const fiveDays = ['MON', 'TUE', 'THU', 'FRI', 'SAT'] as const;
+    const toFive = await adaptWorkoutProgram({
+      uid: UID,
+      updatedFields: { days: 5, scheduleMode: 'fixed', trainingDays: [...fiveDays] },
+      reason: 'AVAILABILITY', idempotencyKey: 'frequency-4-to-5',
+    });
+    expect(toFive.status).toBe('SUCCESS');
+    if (toFive.status !== 'SUCCESS') return;
+    expect(toFive.program).toMatchObject({ templateId: 'T004', prescribedTrainingFrequency: 5 });
+    expect(currentPlanAvailableDays(toFive.program, BEGINNER_ANSWERS.days)).toBe(5);
+    expect(toFive.program.programInstanceId).not.toBe(firstInstanceId);
+    expect((await loadWorkoutLifecycle(UID))!.programInstance.prescriptionInputSnapshot?.inputs.trainingDays)
+      .toEqual(fiveDays);
+    expect((await getDoc(doc(mocks.db as never, 'users', UID, 'workoutProgramState', 'scheduleConfig'))).data())
+      .toMatchObject({ scheduleMode: 'fixed', trainingDays: fiveDays, timezone: 'UTC' });
+
+    const secondInstanceId = toFive.program.programInstanceId!;
+    const backToFour = await adaptWorkoutProgram({
+      uid: UID,
+      updatedFields: { days: 4, scheduleMode: 'fixed', trainingDays: [...TRAINING_DAYS] },
+      reason: 'AVAILABILITY', idempotencyKey: 'frequency-5-to-4',
+    });
+    expect(backToFour.status).toBe('SUCCESS');
+    if (backToFour.status !== 'SUCCESS') return;
+    expect(backToFour.program).toMatchObject({ templateId: 'T003', prescribedTrainingFrequency: 4 });
+    expect(currentPlanAvailableDays(backToFour.program, BEGINNER_ANSWERS.days)).toBe(4);
+    expect(backToFour.program.programInstanceId).not.toBe(secondInstanceId);
+    const instances = await listProgramInstances(UID);
+    expect(instances.find((item) => item.programInstanceId === firstInstanceId)?.supersededAt).not.toBeNull();
+    expect(instances.find((item) => item.programInstanceId === secondInstanceId)?.supersededAt).not.toBeNull();
+    expect((await getDoc(doc(mocks.db as never, 'users', UID, 'workoutExecutions', 'frequency-history'))).exists()).toBe(true);
+    expect((await getDoc(doc(mocks.db as never, 'users', UID, 'workoutProgramState', 'scheduleConfig'))).data())
+      .toMatchObject({ trainingDays: [...TRAINING_DAYS], timezone: 'UTC' });
+  }, 60_000);
+
+  it('rejects days without consistent trainingDays before sealing a fixed program', async () => {
+    await seedBaseUser();
+    const generated = await generateAndPersistWorkoutProgram({
+      uid: UID, questionnaireId: QUESTIONNAIRE_ID, questionnaireVersion: 1, answers: BEGINNER_ANSWERS, source: 'onboarding',
+    });
+    if (generated.status !== 'SUCCESS') throw new Error('setup failed');
+    const before = (await loadWorkoutLifecycle(UID))!;
+    const trainingDaysBefore = generated.program.weeklySchedule?.filter((day) => day.state === 'TRAINING').length ?? 0;
+    const result = await adaptWorkoutProgram({
+      uid: UID, updatedFields: { days: 5 }, reason: 'AVAILABILITY', idempotencyKey: 'frequency-inconsistent',
+    });
+    expect(result).toEqual({ status: 'FAILED', reasonCodes: ['FREQUENCY_TRAINING_DAYS_INCONSISTENT'] });
+    expect((await loadWorkoutLifecycle(UID))!.lifecycle.activeProgramInstanceId)
+      .toBe(before.lifecycle.activeProgramInstanceId);
+    const active = await loadActiveWorkoutProgram(UID);
+    expect(active?.weeklySchedule?.filter((day) => day.state === 'TRAINING')).toHaveLength(trainingDaysBefore);
   }, 30_000);
 
   it('8B missing adapted ProgramInstance fails safely instead of rebuilding stale questionnaire inputs', async () => {

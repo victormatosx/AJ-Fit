@@ -104,7 +104,7 @@ describe('WorkoutScreen source — Descartar requires confirmation and bypasses 
     expect(discardHandler).toContain('setWorkoutInProgress(false);');
     expect(discardHandler).toContain("setTab('home');");
     const discardFlow = APP_SHELL_SRC.slice(
-      APP_SHELL_SRC.indexOf('const discardWorkout = () =>'),
+      APP_SHELL_SRC.indexOf('const discardWorkout = async () =>'),
       APP_SHELL_SRC.indexOf('const leaveDiscardedWorkout = async () =>'),
     );
     expect(discardFlow).toContain('runWorkoutDiscardFlow');

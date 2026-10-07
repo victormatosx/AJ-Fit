@@ -57,8 +57,8 @@ describe('AppShell main-tab lifecycle', () => {
 
   it('keeps an active Workout mounted while it is minimized', () => {
     expect(APP_SHELL_CODE).toContain("{workoutInProgress && !workoutStartPending && !execution.starting && execution.execution && prescription.status === 'SUCCESS' && (");
-    expect(APP_SHELL_CODE).toContain("pointerEvents={tab === 'workout' ? 'auto' : 'none'}");
-    expect(APP_SHELL_CODE).toContain("{ opacity: tab === 'workout' ? 1 : 0");
+    expect(APP_SHELL_CODE).toContain("pointerEvents={tab === 'workout' && workoutExecutionVisible ? 'auto' : 'none'}");
+    expect(APP_SHELL_CODE).toContain("opacity: tab === 'workout' && workoutExecutionVisible ? 1 : 0");
     expect(APP_SHELL_CODE).not.toContain("active={tab === 'workout'}");
   });
 
@@ -186,12 +186,12 @@ describe('AppShell sensitive-screen shell/secret separation (docs/23 §10)', () 
 describe('AppShell overlay geometry stability', () => {
   it('never removes the tab bar from layout because an overlay is open', () => {
     expect(APP_SHELL_CODE).not.toMatch(/!overlayOpen && <TabBar/);
-    expect(APP_SHELL_CODE).toMatch(/\{tab !== 'workout' && \(/);
+    expect(APP_SHELL_CODE).toContain("{!(tab === 'workout' && (workoutExecutionVisible || workoutStartPending || execution.starting)) && (");
   });
 
   it('hides the tab bar from touch and accessibility while an overlay is open', () => {
     const tabBarBlock = APP_SHELL_CODE.slice(
-      APP_SHELL_CODE.indexOf("{tab !== 'workout' && ("),
+      APP_SHELL_CODE.indexOf("{!(tab === 'workout' && (workoutExecutionVisible || workoutStartPending || execution.starting)) && ("),
       APP_SHELL_CODE.indexOf('<TabBar'),
     );
     expect(tabBarBlock).toContain(

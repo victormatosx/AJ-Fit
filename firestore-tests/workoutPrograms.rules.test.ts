@@ -956,6 +956,99 @@ describe('workoutPrograms', () => {
       }));
     });
 
+    it('allows only the exact grant-backed REPOSITIONED cursor/events mutation', async () => {
+      await seedV2WithInstance();
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore(), 'users', UID, 'workoutPrograms', programId, 'scheduleState', programInstanceId), {
+          programId, programInstanceId, nextSessionIndex: 0, cursorDate: '2026-09-01',
+          lastCompletedAt: null, pendingMissDecision: null, updatedAt: Timestamp.now(),
+        });
+        await setDoc(doc(context.firestore(), 'users', UID, 'workoutLifecycleAuthorityGrants', 'current'), {
+          uid: UID, schemaVersion: 1, operation: 'REPOSITION_SCHEDULE_CURSOR',
+          sourceProgramInstanceId: programInstanceId, expectedCurrentNextSessionIndex: 0,
+          targetNextSessionIndex: 2, targetCursorDate: '2026-09-04',
+          targetScheduleEvents: [{ type: 'REPOSITIONED', sessionIndex: 0, scheduledDate: '2026-09-05' }],
+          expiresAt: Timestamp.fromMillis(Date.now() + 60_000),
+        });
+      });
+      const db = dbFor(UID);
+      await assertSucceeds(runTransaction(db, async (transaction) => {
+        transaction.update(doc(db, 'users', UID, 'workoutPrograms', programId, 'scheduleState', programInstanceId), {
+          programId, programInstanceId, nextSessionIndex: 2, cursorDate: '2026-09-04',
+          lastCompletedAt: null, pendingMissDecision: null, updatedAt: serverTimestamp(),
+        });
+        transaction.set(doc(db, 'users', UID, 'workoutPrograms', programId, 'scheduleEvents', 'repositioned_0'), {
+          type: 'REPOSITIONED', sessionIndex: 0, scheduledDate: '2026-09-05', occurredAt: serverTimestamp(), programInstanceId,
+        });
+        transaction.delete(doc(db, 'users', UID, 'workoutLifecycleAuthorityGrants', 'current'));
+      }));
+    });
+
+    it('rejects a stale reposition grant and never accepts SKIPPED for that operation', async () => {
+      await seedV2WithInstance();
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore(), 'users', UID, 'workoutPrograms', programId, 'scheduleState', programInstanceId), {
+          programId, programInstanceId, nextSessionIndex: 1, cursorDate: '2026-09-01',
+          lastCompletedAt: null, pendingMissDecision: null, updatedAt: Timestamp.now(),
+        });
+        await setDoc(doc(context.firestore(), 'users', UID, 'workoutLifecycleAuthorityGrants', 'current'), {
+          uid: UID, schemaVersion: 1, operation: 'REPOSITION_SCHEDULE_CURSOR',
+          sourceProgramInstanceId: programInstanceId, expectedCurrentNextSessionIndex: 0,
+          targetNextSessionIndex: 2, targetCursorDate: '2026-09-04',
+          targetScheduleEvents: [{ type: 'REPOSITIONED', sessionIndex: 0, scheduledDate: '2026-09-05' }],
+          expiresAt: Timestamp.fromMillis(Date.now() + 60_000),
+        });
+      });
+      const db = dbFor(UID);
+      await assertFails(runTransaction(db, async (transaction) => {
+        transaction.update(doc(db, 'users', UID, 'workoutPrograms', programId, 'scheduleState', programInstanceId), {
+          nextSessionIndex: 2, cursorDate: '2026-09-04', updatedAt: serverTimestamp(),
+        });
+        transaction.delete(doc(db, 'users', UID, 'workoutLifecycleAuthorityGrants', 'current'));
+      }));
+      await assertFails(runTransaction(db, async (transaction) => {
+        transaction.set(doc(db, 'users', UID, 'workoutPrograms', programId, 'scheduleEvents', 'forged_skipped'), {
+          type: 'SKIPPED', sessionIndex: 0, scheduledDate: '2026-09-05', occurredAt: serverTimestamp(), programInstanceId,
+        });
+        transaction.delete(doc(db, 'users', UID, 'workoutLifecycleAuthorityGrants', 'current'));
+      }));
+    });
+
+    it('commits the exact five-session wrap 4→0 and clears pendingMissDecision', async () => {
+      await seedV2WithInstance();
+      const statePath = ['users', UID, 'workoutPrograms', programId, 'scheduleState', programInstanceId] as const;
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore(), ...statePath), {
+          programId, programInstanceId, nextSessionIndex: 4, cursorDate: '2026-09-05',
+          lastCompletedAt: null,
+          pendingMissDecision: {
+            missedSessionIndex: 4, calendarSessionIndex: 0,
+            missedScheduledDate: '2026-09-04', detectedOnDate: '2026-09-05',
+          },
+          updatedAt: Timestamp.now(),
+        });
+        await setDoc(doc(context.firestore(), 'users', UID, 'workoutLifecycleAuthorityGrants', 'current'), {
+          uid: UID, schemaVersion: 1, operation: 'REPOSITION_SCHEDULE_CURSOR',
+          sourceProgramInstanceId: programInstanceId, expectedCurrentNextSessionIndex: 4,
+          targetNextSessionIndex: 0, targetCursorDate: '2026-09-04',
+          targetScheduleEvents: [{ type: 'REPOSITIONED', sessionIndex: 4, scheduledDate: '2026-09-05' }],
+          expiresAt: Timestamp.fromMillis(Date.now() + 60_000),
+        });
+      });
+      const db = dbFor(UID);
+      await assertSucceeds(runTransaction(db, async (transaction) => {
+        transaction.update(doc(db, ...statePath), {
+          nextSessionIndex: 0, cursorDate: '2026-09-04', pendingMissDecision: null, updatedAt: serverTimestamp(),
+        });
+        transaction.set(doc(db, 'users', UID, 'workoutPrograms', programId, 'scheduleEvents', 'repositioned_4_to_0'), {
+          type: 'REPOSITIONED', sessionIndex: 4, scheduledDate: '2026-09-05', occurredAt: serverTimestamp(), programInstanceId,
+        });
+        transaction.delete(doc(db, 'users', UID, 'workoutLifecycleAuthorityGrants', 'current'));
+      }));
+      const state = (await getDoc(doc(db, ...statePath))).data();
+      expect(state).toMatchObject({ nextSessionIndex: 0, cursorDate: '2026-09-04', pendingMissDecision: null });
+    });
+
     it('a genuinely legacy V1 account can still write scheduleEvents without a grant', async () => {
       await testEnv.withSecurityRulesDisabled(async (context) => {
         await setDoc(doc(context.firestore(), 'users', UID, 'workoutPrograms', programId), programDocument(programId));

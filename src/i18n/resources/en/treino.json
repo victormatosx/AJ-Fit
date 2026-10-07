@@ -1,0 +1,54 @@
+{
+  "header": {
+    "title": "Training",
+    "subtitle": "Your sequence, your schedule, your call"
+  },
+  "currentWorkout": {
+    "continue": "Continue workout"
+  },
+  "changeWorkout": {
+    "cta": "Change workout",
+    "sheetTitle": "Choose another workout",
+    "sheetSubtitle": "Your upcoming sequence will continue from this workout.",
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "blockedInProgress": "Finish or discard your current workout before reordering the sequence.",
+    "blockedCompletedToday": "You already completed this workout today.",
+    "error": "Couldn't change your workout right now. Try again.",
+    "accessibilityOpen": "Change the current workout in the sequence",
+    "accessibilityClose": "Close workout selection"
+  },
+  "mySplit": {
+    "title": "My split",
+    "nextBadge": "Next"
+  },
+  "agenda": {
+    "title": "Training schedule",
+    "fixedLabel": "Fixed days",
+    "flexibleLabel": "Free training",
+    "flexibleHint": "Train whenever you want",
+    "edit": "Edit schedule",
+    "sheetTitle": "Training schedule",
+    "sheetQuestion": "Which days do you want to train?",
+    "modeFixed": "Fixed days",
+    "modeFlexible": "Free training",
+    "save": "Save schedule",
+    "frequencyChangeTitle": "Change training frequency?",
+    "frequencyChangeBody": "You're changing from {{from}} to {{to}} workouts per week. To adapt your routine to the new frequency, your split will be updated.",
+    "frequencyChangeCancel": "Cancel",
+    "frequencyChangeConfirm": "Update my split",
+    "updating": "Updating your split…",
+    "saving": "Saving schedule…",
+    "saved": "Schedule updated.",
+    "error": "Couldn't save your schedule right now. Try again.",
+    "accessibilityClose": "Close schedule editing"
+  },
+  "summary": {
+    "title": "Training summary",
+    "thisWeek": "This week",
+    "thisWeekValue": "{{completed}}/{{scheduled}} workouts",
+    "last30Days": "Last 30 days",
+    "last30DaysValue_one": "{{count}} workout",
+    "last30DaysValue_other": "{{count}} workouts"
+  }
+}

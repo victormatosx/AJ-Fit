@@ -25,7 +25,7 @@ export interface PrescribedOpportunity {
 }
 
 interface OpportunityEvent {
-  type: 'COMPLETED' | 'SKIPPED' | 'MISS_RESOLVED';
+  type: 'COMPLETED' | 'SKIPPED' | 'MISS_RESOLVED' | 'REPOSITIONED';
   programInstanceId?: string;
   sessionIndex: number;
   scheduledDate: string;

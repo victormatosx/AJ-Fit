@@ -3,7 +3,7 @@ import { normalizeWeekdayOrder, weekdayOfLocalDate } from '../scheduleEngine/cal
 import type { Weekday } from '../state/AppState';
 
 interface RotationEvent {
-  type: 'COMPLETED' | 'SKIPPED' | 'MISS_RESOLVED';
+  type: 'COMPLETED' | 'SKIPPED' | 'MISS_RESOLVED' | 'REPOSITIONED';
   programInstanceId?: string;
   sessionIndex: number;
   scheduledDate: string;
@@ -43,7 +43,12 @@ export function buildExpectedSessionIndexByDate(input: {
   const eventsByDate = new Map<string, number[]>();
   for (const event of input.rotationEvents) {
     if (event.programInstanceId !== input.programInstanceId) continue;
-    if (event.type !== 'COMPLETED' && event.type !== 'SKIPPED') continue;
+    // REPOSITIONED replays exactly like SKIPPED here: both mean the rotation
+    // walked past this sessionIndex on this date without performing it, so
+    // the cursor must still advance past it when reconstructing "what was
+    // expected on date X" — never treated as a miss/skip for adherence
+    // itself, only for this cursor replay mechanic.
+    if (event.type !== 'COMPLETED' && event.type !== 'SKIPPED' && event.type !== 'REPOSITIONED') continue;
     const list = eventsByDate.get(event.scheduledDate) ?? [];
     list.push(event.sessionIndex);
     eventsByDate.set(event.scheduledDate, list);

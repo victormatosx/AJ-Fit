@@ -2,7 +2,7 @@ import { Timestamp, type DocumentData } from 'firebase-admin/firestore';
 import { HttpsError } from 'firebase-functions/v2/https';
 
 import type { PendingMissDecision, ScheduleConfig } from './scheduleEngine/types';
-import type { Weekday } from './scheduleEngine/weekday';
+import { prescribedSessionCount, resolveEffectiveCalendarAuthority } from './scheduleEngine/calendarAuthority';
 
 function plainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -32,37 +32,25 @@ export function buildScheduleAuthorityContext(input: {
 }): ScheduleAuthorityContext {
   const snapshotInputs = plainObject(input.instance.prescriptionInputSnapshot?.inputs)
     ? input.instance.prescriptionInputSnapshot.inputs as Record<string, unknown> : {};
-  const prescribedTrainingDays = Array.isArray(input.program.weeklySchedule)
-    ? input.program.weeklySchedule.flatMap((item: unknown) =>
-      plainObject(item) && item.state === 'TRAINING' && typeof item.weekday === 'string'
-        ? [item.weekday] : []) : [];
-  const configuredDays = prescribedTrainingDays.length > 0 ? prescribedTrainingDays
-    : Array.isArray(snapshotInputs.trainingDays) && snapshotInputs.trainingDays.length > 0
-      ? snapshotInputs.trainingDays
-      : Array.isArray(input.scheduleConfigData.trainingDays) ? input.scheduleConfigData.trainingDays : [];
-  const trainingDays = configuredDays.filter((item): item is Weekday => typeof item === 'string');
-  // Authority is sealed prescription data only: the explicit WorkoutProgram
-  // wins, then its immutable ProgramInstance snapshot. scheduleConfig is a
-  // client-writable preference and must never be allowed to change the mode.
-  // Records that predate both sealed discriminators remain fixed.
-  const scheduleMode = input.program.scheduleMode === 'flexible'
-    ? 'flexible'
-    : input.program.scheduleMode === 'fixed'
-      ? 'fixed'
-      : snapshotInputs.scheduleMode === 'flexible'
-        ? 'flexible'
-        : 'fixed';
   const timezone = typeof input.scheduleConfigData.timezone === 'string' ? input.scheduleConfigData.timezone : 'UTC';
   if (!(input.instance.activatedAt instanceof Timestamp)) {
     throw new HttpsError('failed-precondition', 'program_instance_activation_missing');
   }
-  const sessionCount = Number.isInteger(input.program.prescribedTrainingFrequency) && input.program.prescribedTrainingFrequency > 0
-    ? input.program.prescribedTrainingFrequency
-    : Number.isInteger(input.program.prescribedStructuredDays) && input.program.prescribedStructuredDays > 0
-      ? input.program.prescribedStructuredDays
-      : Array.isArray(input.program.sessions) ? input.program.sessions.length : 0;
+  const calendar = resolveEffectiveCalendarAuthority({
+    scheduleConfig: input.scheduleConfigData,
+    program: input.program,
+    snapshotInputs,
+  });
+  const sessionCount = prescribedSessionCount(input.program);
+
   return {
-    config: { scheduleMode, trainingDays, timezone, scheduleVersion: 1 },
+    config: {
+      scheduleMode: calendar.scheduleMode,
+      trainingDays: calendar.trainingDays,
+      activeRecoveryDays: calendar.activeRecoveryDays,
+      timezone,
+      scheduleVersion: 1,
+    },
     state: input.stateData ? {
       nextSessionIndex: input.stateData.nextSessionIndex,
       cursorDate: input.stateData.cursorDate,

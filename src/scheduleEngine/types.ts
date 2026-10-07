@@ -19,7 +19,16 @@ export interface ScheduleConfig {
   scheduleVersion: number;
 }
 
-export type ScheduleEventType = 'COMPLETED' | 'SKIPPED' | 'MISS_RESOLVED';
+/**
+ * `REPOSITIONED` marks a session the rotation walked past because the user
+ * manually chose a different session as the new sequence anchor
+ * (`REPOSITION_SCHEDULE_CURSOR`). Deliberately distinct from `SKIPPED`
+ * (which is always a consequence of a MISSED_SESSION_DECISION_REQUIRED gap)
+ * — a `REPOSITIONED` session is NEVER counted as a miss/skip by adherence or
+ * streak (docs §Reposicionamento manual), since the user didn't fail to
+ * train, they deliberately reordered what they wanted to train.
+ */
+export type ScheduleEventType = 'COMPLETED' | 'SKIPPED' | 'MISS_RESOLVED' | 'REPOSITIONED';
 export type SkipReasonCode = 'FOLLOWED_SCHEDULE_AFTER_MISS';
 export type MissDecision = 'CONTINUE_SEQUENCE' | 'FOLLOW_SCHEDULE';
 

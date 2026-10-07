@@ -43,6 +43,9 @@ import esEvolution from './resources/es/evolution.json';
 import ptBRNotifications from './resources/pt-BR/notifications.json';
 import enNotifications from './resources/en/notifications.json';
 import esNotifications from './resources/es/notifications.json';
+import ptBRTreino from './resources/pt-BR/treino.json';
+import enTreino from './resources/en/treino.json';
+import esTreino from './resources/es/treino.json';
 
 /** Single runtime registry used by bootstrap, parity tests and audits. */
 export const resources = {
@@ -62,6 +65,7 @@ export const resources = {
     myPlan: ptBRMyPlan,
     evolution: ptBREvolution,
     notifications: ptBRNotifications,
+    treino: ptBRTreino,
   },
   en: {
     common: enCommon,
@@ -79,6 +83,7 @@ export const resources = {
     myPlan: enMyPlan,
     evolution: enEvolution,
     notifications: enNotifications,
+    treino: enTreino,
   },
   es: {
     common: esCommon,
@@ -96,6 +101,7 @@ export const resources = {
     myPlan: esMyPlan,
     evolution: esEvolution,
     notifications: esNotifications,
+    treino: esTreino,
   },
 } as const;
 

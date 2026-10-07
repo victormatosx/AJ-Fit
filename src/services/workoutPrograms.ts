@@ -604,6 +604,7 @@ export async function saveAndActivateWorkoutProgram(input: {
   const lifecycleStateRef = doc(db, USERS, input.uid, 'workoutLifecycleState', 'current');
   const questionnaireRef = doc(db, USERS, input.uid, 'questionnaires', input.questionnaireId);
   const pendingRef = doc(db, USERS, input.uid, 'pendingEvolutions', 'current');
+  const scheduleConfigRef = doc(db, USERS, input.uid, 'workoutProgramState', 'scheduleConfig');
   const authorityGrantRef = doc(
     db, USERS, input.uid, 'workoutLifecycleAuthorityGrants', WORKOUT_LIFECYCLE_AUTHORITY_GRANT_ID,
   );
@@ -820,13 +821,15 @@ export async function saveAndActivateWorkoutProgram(input: {
 
   try {
     await runTransaction(db, async (transaction) => {
-    const [parentSnapshot, stateSnapshot, targetSnapshot, questionnaireSnapshot, lifecycleSnapshot, pendingSnapshot] = await Promise.all([
+    const frequencyChanged = input.source === 'program_adaptation' && input.authorityUpdatedFields?.days != null;
+    const [parentSnapshot, stateSnapshot, targetSnapshot, questionnaireSnapshot, lifecycleSnapshot, pendingSnapshot, configSnapshot] = await Promise.all([
       transaction.get(parentRef),
       transaction.get(stateRef),
       transaction.get(targetRef),
       transaction.get(questionnaireRef),
       transaction.get(lifecycleStateRef),
       input.expectedPendingEvolutionId ? transaction.get(pendingRef) : Promise.resolve(null),
+      frequencyChanged ? transaction.get(scheduleConfigRef) : Promise.resolve(null),
     ]);
     if (!parentSnapshot.exists()) throw new Error('WORKOUT_PROGRAM_USER_NOT_FOUND');
     if (!questionnaireSnapshot.exists()) throw new Error('WORKOUT_PROGRAM_QUESTIONNAIRE_NOT_FOUND');
@@ -1104,6 +1107,23 @@ export async function saveAndActivateWorkoutProgram(input: {
       ...(nextProgramInstanceId ? { programInstanceId: nextProgramInstanceId } : {}),
       updatedAt: now,
     });
+    if (frequencyChanged) {
+      const inputs = authorizedInput.prescriptionInputSnapshot.inputs;
+      const mode = inputs.scheduleMode ?? 'fixed';
+      const trainingDays = inputs.trainingDays ?? [];
+      if ((mode === 'fixed' && (trainingDays.length !== inputs.days || trainingDays.length < 2))
+        || (mode === 'flexible' && trainingDays.length !== 0)
+        || authorizedInput.plan.prescribedTrainingFrequency !== inputs.days) {
+        throw new Error('ADAPTATION_FREQUENCY_SCHEDULE_INCONSISTENT');
+      }
+      transaction.set(scheduleConfigRef, {
+        scheduleMode: mode,
+        trainingDays,
+        timezone: configSnapshot?.data()?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC',
+        scheduleVersion: 1,
+        updatedAt: now,
+      });
+    }
     if (v2LifecycleEnabled && input.clearPendingEvolution) {
       transaction.delete(pendingRef);
     }

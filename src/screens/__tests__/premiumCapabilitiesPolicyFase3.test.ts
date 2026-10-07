@@ -69,15 +69,13 @@ describe('FASE 3 — START_WORKOUT boundary', () => {
     );
   });
 
-  it('selectTab bypasses startWorkout() only when returning to an already-active workout', () => {
-    // selectTab itself now only decides tab vs. requestStartWorkout — the
-    // resume-vs-gated-confirmation decision lives in requestStartWorkout,
-    // which selectTab (and every other entry point) funnels through.
+  it('selectTab opens the hub while its CTA preserves the gated resume/start boundary', () => {
     const selectTabBody = appShellCode.slice(
       appShellCode.indexOf('const selectTab = (nextTab: TabId) => {'),
       appShellCode.indexOf('};', appShellCode.indexOf('const selectTab = (nextTab: TabId) => {')),
     );
-    expect(selectTabBody).toContain('requestStartWorkout();');
+    expect(selectTabBody).not.toContain('requestStartWorkout();');
+    expect(selectTabBody).toContain('setWorkoutExecutionVisible(false)');
     const requestStartWorkoutBody = appShellCode.slice(
       appShellCode.indexOf('const requestStartWorkout = useCallback(() => {'),
       appShellCode.indexOf('}, [workoutInProgress', appShellCode.indexOf('const requestStartWorkout = useCallback(() => {')),

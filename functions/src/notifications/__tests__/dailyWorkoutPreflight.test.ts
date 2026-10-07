@@ -8,6 +8,7 @@ import {
   buildRecoveryDayNotification,
   buildWorkoutDayNotification,
 } from '../contentPolicy';
+import { loadDailyWorkoutContext } from '../dailyWorkoutNotifications';
 import { runNotificationPreflight } from '../notificationPreflight';
 
 const UID = 'uid-1';
@@ -34,11 +35,12 @@ function seedProgram(
     instanceId?: string;
     activatedAtLocalDate?: string;
     sessionCount?: number;
+    scheduleConfig?: Record<string, unknown>;
   } = {},
 ) {
   const instanceId = options.instanceId ?? INSTANCE;
   harness.seed(`users/${UID}`, { preferences: {} });
-  harness.seed(`users/${UID}/workoutProgramState/scheduleConfig`, { timezone: 'UTC' });
+  harness.seed(`users/${UID}/workoutProgramState/scheduleConfig`, { timezone: 'UTC', ...options.scheduleConfig });
   harness.seed(`users/${UID}/workoutLifecycleState/current`, {
     activeContentIdentity: PROGRAM,
     activeProgramInstanceId: instanceId,
@@ -84,6 +86,42 @@ function missedWorkout(plannedSessionIdentity: string) {
  * schedule changed, or "Treino perdido" after the miss was resolved.
  */
 describe('daily workout retry preflight', () => {
+  it('uses ScheduleConfig training days while preserving program ACTIVE_RECOVERY', async () => {
+    const harness = createFakeFirestore();
+    seedProgram(harness, {
+      weeklySchedule: week({ MON: 'REST', TUE: 'TRAINING', WED: 'ACTIVE_RECOVERY' }),
+      scheduleConfig: { scheduleMode: 'fixed', trainingDays: ['MON'] },
+    });
+    const loaded = await loadDailyWorkoutContext(harness.db as never, UID, MONDAY.toDate());
+    expect(loaded.status).toBe('READY');
+    if (loaded.status === 'READY') {
+      expect(loaded.timezone).toBe('UTC');
+      expect(loaded.weeklySchedule.filter((day) => day.state === 'TRAINING').map((day) => day.weekday)).toEqual(['MON']);
+      expect(loaded.weeklySchedule.filter((day) => day.state === 'ACTIVE_RECOVERY').map((day) => day.weekday)).toEqual(['WED']);
+    }
+  });
+
+  it('falls back to the sealed calendar when ScheduleConfig is inconsistent', async () => {
+    const harness = createFakeFirestore();
+    seedProgram(harness, {
+      weeklySchedule: week({ MON: 'REST', TUE: 'TRAINING' }),
+      scheduleConfig: { scheduleMode: 'fixed', trainingDays: [] },
+    });
+    const loaded = await loadDailyWorkoutContext(harness.db as never, UID, TUESDAY.toDate());
+    expect(loaded.status).toBe('READY');
+    if (loaded.status === 'READY') {
+      expect(loaded.weeklySchedule.filter((day) => day.state === 'TRAINING').map((day) => day.weekday)).toEqual(['TUE']);
+    }
+  });
+
+  it('supports flexible ScheduleConfig without assigning weekdays', async () => {
+    const harness = createFakeFirestore();
+    seedProgram(harness, { scheduleConfig: { scheduleMode: 'flexible', trainingDays: [] } });
+    const loaded = await loadDailyWorkoutContext(harness.db as never, UID, MONDAY.toDate());
+    expect(loaded.status).toBe('READY');
+    if (loaded.status === 'READY') expect(loaded).toMatchObject({ scheduleMode: 'flexible', weeklySchedule: [] });
+  });
+
   it('allows a legitimate retry while the same fact is still true', async () => {
     const harness = createFakeFirestore();
     seedProgram(harness);

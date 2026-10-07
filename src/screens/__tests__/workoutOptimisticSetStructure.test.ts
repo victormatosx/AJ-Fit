@@ -29,8 +29,8 @@ describe('optimistic completed-set wiring', () => {
 
   it('keeps the workout mounted while minimized so the in-memory queue survives', () => {
     expect(shell).toContain("{workoutInProgress && !workoutStartPending");
-    expect(shell).toContain("pointerEvents={tab === 'workout' ? 'auto' : 'none'}");
-    expect(shell).toContain("{ opacity: tab === 'workout' ? 1 : 0");
+    expect(shell).toContain("pointerEvents={tab === 'workout' && workoutExecutionVisible ? 'auto' : 'none'}");
+    expect(shell).toContain("opacity: tab === 'workout' && workoutExecutionVisible ? 1 : 0");
   });
 
   it('serializes immediate same-set editing behind the original record', () => {

@@ -1,0 +1,54 @@
+{
+  "header": {
+    "title": "Treino",
+    "subtitle": "Sua sequência, sua agenda, no seu controle"
+  },
+  "currentWorkout": {
+    "continue": "Continuar treino"
+  },
+  "changeWorkout": {
+    "cta": "Alterar treino",
+    "sheetTitle": "Escolher outro treino",
+    "sheetSubtitle": "A sequência dos próximos treinos continuará a partir deste treino.",
+    "confirm": "Confirmar",
+    "cancel": "Cancelar",
+    "blockedInProgress": "Finalize ou descarte o treino em andamento antes de trocar a sequência.",
+    "blockedCompletedToday": "Você já concluiu este treino hoje.",
+    "error": "Não foi possível trocar o treino agora. Tente novamente.",
+    "accessibilityOpen": "Alterar o treino atual da sequência",
+    "accessibilityClose": "Fechar seleção de treino"
+  },
+  "mySplit": {
+    "title": "Minha divisão",
+    "nextBadge": "Próximo"
+  },
+  "agenda": {
+    "title": "Agenda de treino",
+    "fixedLabel": "Dias fixos",
+    "flexibleLabel": "Treino livre",
+    "flexibleHint": "Treine quando quiser",
+    "edit": "Editar agenda",
+    "sheetTitle": "Agenda de treino",
+    "sheetQuestion": "Quais dias você quer treinar?",
+    "modeFixed": "Dias fixos",
+    "modeFlexible": "Treino livre",
+    "save": "Salvar agenda",
+    "frequencyChangeTitle": "Alterar frequência de treino?",
+    "frequencyChangeBody": "Você está mudando de {{from}} para {{to}} treinos por semana. Para adaptar sua rotina à nova frequência, sua divisão de treino será atualizada.",
+    "frequencyChangeCancel": "Cancelar",
+    "frequencyChangeConfirm": "Atualizar minha divisão",
+    "updating": "Atualizando sua divisão…",
+    "saving": "Salvando agenda…",
+    "saved": "Agenda atualizada.",
+    "error": "Não foi possível salvar sua agenda agora. Tente novamente.",
+    "accessibilityClose": "Fechar edição de agenda"
+  },
+  "summary": {
+    "title": "Resumo de treinos",
+    "thisWeek": "Esta semana",
+    "thisWeekValue": "{{completed}}/{{scheduled}} treinos",
+    "last30Days": "Últimos 30 dias",
+    "last30DaysValue_one": "{{count}} treino",
+    "last30DaysValue_other": "{{count}} treinos"
+  }
+}

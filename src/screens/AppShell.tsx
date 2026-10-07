@@ -12,7 +12,7 @@ import { OutlineNumber } from '../components/ui/OutlineNumber';
 import { CtaButton } from '../components/ui/CtaButton';
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { darkTheme, useTheme } from '../theme';
-import { useAppState, TabId, type Sex } from '../state/AppState';
+import { useAppState, TabId, type Sex, type ScheduleMode, type Weekday } from '../state/AppState';
 import { useAuth } from '../state/AuthContext';
 import { PremiumActionProvider } from '../state/PremiumActionContext';
 import { PremiumAction } from '../components/premium/PremiumAction';
@@ -69,6 +69,9 @@ import {
   sameMissedDecision,
 } from '../scheduleEngine/missedDecisionResolution';
 import { MissedSessionDecisionModal } from '../components/schedule/MissedSessionDecisionModal';
+import { TreinoScreen, type RepositionOutcome } from './TreinoScreen';
+import { TreinoAgendaSheet, type AgendaSaveOutcome } from './TreinoAgendaSheet';
+import { effectiveNextSessionIndex } from '../scheduleEngine/effectiveNextSessionIndex';
 import { WorkoutExecutionPendingModal } from '../components/workout/WorkoutExecutionPendingModal';
 import { FullScreenLoading } from '../components/ui/FullScreenLoading';
 import { useWorkoutExecution, type WorkoutExecutionStartError } from '../workoutExecution/useWorkoutExecution';
@@ -101,7 +104,7 @@ import {
   type WorkoutFinalizationMode,
 } from '../services/finalizeWorkoutSession';
 import { subscribeToWorkoutFinalizationProgress } from '../services/workoutFinalizationProgress';
-import { hasScheduledSessionCompletion } from '../services/workoutSchedule';
+import { hasScheduledSessionCompletion, repositionScheduleCursor, saveScheduleConfig } from '../services/workoutSchedule';
 import {
   furthestWorkoutFinalizationStage,
   type WorkoutFinalizationProgressStage,
@@ -123,7 +126,7 @@ import { useWidgetSnapshotSync } from '../widgets/useWidgetSnapshotSync';
 import { deriveHomeInitialReadiness } from '../home/homeInitialReadiness';
 import { useHomeInitialVisualReady } from '../home/useHomeInitialVisualReady';
 import { canUseTodayActions, canWriteHomePresentationSnapshot, chooseHomeFrequencyPresentation, shouldUseSnapshotPlaceholders } from '../home/homePresentationPolicy';
-import { processWorkoutLifecycleAfterSession } from '../services/workoutLifecycleApplication';
+import { adaptWorkoutProgram, processWorkoutLifecycleAfterSession } from '../services/workoutLifecycleApplication';
 import {
   applyExerciseSubstitution,
   loadManualSubstitutionUserContext,
@@ -131,7 +134,7 @@ import {
 import type { ManualSubstitutionUserContext } from '../services/exerciseSubstitutionCandidates';
 import { workoutExercisesFromPlan, type ManualSubstitutionContextStatus } from './workoutScreenPlan';
 import { EvolutionUnlockScreen } from './EvolutionUnlockScreen';
-import { errorClass, errorCode, logError, logInfo, logWarn } from '../lib/logger';
+import { errorClass, errorCode, errorReason, logError, logInfo, logWarn } from '../lib/logger';
 import { resolveSessionDisplayName, type LooseTranslate } from '../workoutPrescription/sessionPresentation';
 import { useReducedMotionPreference } from '../lib/reducedMotion';
 import { useDeepLinkIntent } from '../state/DeepLinkContext';
@@ -277,7 +280,7 @@ function AppShellContent({
     ? (prescription.plan as WorkoutProgramSnapshot)
     : null;
   const schedule = useWorkoutSchedule(activeProgram);
-  const execution = useWorkoutExecution(activeProgram, schedule.config?.timezone);
+  const execution = useWorkoutExecution(activeProgram, schedule.config?.timezone, schedule.config?.scheduleMode);
   // Manual Substitution (exercise-substitution architecture audit): the same
   // declared-limitation-regions + equipment-context inputs the server-side
   // resolver uses, loaded once per active program so the "trocar" action can
@@ -332,7 +335,7 @@ function AppShellContent({
   })();
   const activitySnapshot = useWorkoutActivitySnapshot({
     timezone: schedule.config?.timezone ?? deviceTimezone(),
-    scheduleMode: activeProgram?.scheduleMode ?? 'fixed',
+    scheduleMode: schedule.config?.scheduleMode ?? activeProgram?.scheduleMode ?? 'fixed',
     prescribedTrainingFrequency: activeProgram?.prescribedTrainingFrequency ?? activeProgram?.prescribedStructuredDays,
     trainingDays: schedule.config?.trainingDays ?? [],
     activeRecoveryDays: schedule.config?.activeRecoveryDays ?? [],
@@ -349,7 +352,7 @@ function AppShellContent({
     timezone: schedule.config?.timezone ?? deviceTimezone(),
     sex,
     hasActiveProgram: activeProgram !== null,
-    scheduleMode: activeProgram?.scheduleMode ?? 'fixed',
+    scheduleMode: schedule.config?.scheduleMode ?? activeProgram?.scheduleMode ?? 'fixed',
     prescribedTrainingFrequency: activeProgram?.prescribedTrainingFrequency ?? activeProgram?.prescribedStructuredDays,
     trainingDays: schedule.config?.trainingDays ?? [],
     activeRecoveryDays: schedule.config?.activeRecoveryDays ?? [],
@@ -367,6 +370,7 @@ function AppShellContent({
   } = useRestSession();
   const [activeSessionIndex, setActiveSessionIndex] = useState(0);
   const [workoutInProgress, setWorkoutInProgress] = useState(false);
+  const [workoutExecutionVisible, setWorkoutExecutionVisible] = useState(false);
 
   const beginPersistedWorkoutSession = (
     started: PersistedWorkoutExecution,
@@ -495,6 +499,7 @@ function AppShellContent({
   // on top of it — a documented cause of a stuck/unresponsive overlay).
   const [startWorkoutFlow, setStartWorkoutFlow] = useState<'idle' | 'missedDecision' | 'confirmation'>('idle');
   const [showAdvanceWorkoutConfirmation, setShowAdvanceWorkoutConfirmation] = useState(false);
+  const [agendaEditorOpen, setAgendaEditorOpen] = useState(false);
   const [missedDecisionPending, setMissedDecisionPending] = useState<MissDecision | null>(null);
   const [missedDecisionError, setMissedDecisionError] = useState(false);
   const [missedDecisionContext, setMissedDecisionContext] = useState<MissedSessionDecisionIdentity | null>(null);
@@ -650,7 +655,7 @@ function AppShellContent({
   const recoveryModalOpen = recovery.state.status === 'pending' || recovery.state.status === 'inconsistent';
   const advanceTarget = activeProgram && schedule.config
     ? advancedWorkoutTarget({
-        scheduleMode: activeProgram.scheduleMode ?? 'fixed',
+        scheduleMode: schedule.config?.scheduleMode ?? activeProgram.scheduleMode ?? 'fixed',
         resolution: schedule.resolution,
         todayLocalDate: localDateInTimezone(new Date(), schedule.config.timezone),
         sessionCount: activeProgram.sessions.length,
@@ -728,6 +733,7 @@ function AppShellContent({
   const requestStartWorkout = useCallback(() => {
     if (workoutStartInFlightRef.current || workoutStartPending) return;
     if (workoutInProgress) {
+      setWorkoutExecutionVisible(true);
       setTab('workout');
       return;
     }
@@ -753,14 +759,115 @@ function AppShellContent({
     setShowAdvanceWorkoutConfirmation(true);
   }, [advanceTarget, overlayOpen]);
 
+  // TREINO Nav Bar tab now navigates to the hub screen instead of
+  // immediately opening the start-workout confirmation (docs §Nova tela
+  // TREINO) — starting a workout is still reached through the SAME single
+  // entry point (`requestStartWorkout`), just from the hub's own CTA instead
+  // of from the tab tap itself.
   const selectTab = (nextTab: TabId) => {
-    if (nextTab === 'workout' && tab !== 'workout') {
-      requestStartWorkout();
-      return;
-    }
-
+    if (nextTab === 'workout' && workoutInProgress) setWorkoutExecutionVisible(false);
     setTab(nextTab);
   };
+
+  /**
+   * Manual sequence reposition (docs §Escolha manual de treino). The Schedule
+   * Engine's own already-resolved `resolution` is the only source for "where
+   * the rotation currently is" — never recomputed a second way here.
+   */
+  const requestReposition = useCallback(async (targetSessionIndex: number): Promise<RepositionOutcome> => {
+    if (!user || !activeProgram || !schedule.config) return 'ERROR';
+    if (workoutInProgress || workoutStartPending || execution.starting) return 'BLOCKED_IN_PROGRESS';
+    const expectedCurrentNextSessionIndex = effectiveNextSessionIndex(schedule.resolution);
+    if (expectedCurrentNextSessionIndex === null) return 'ERROR';
+    try {
+      await repositionScheduleCursor({
+        uid: user.uid,
+        programId: activeProgram.programId,
+        programInstanceId: activeProgram.programInstanceId,
+        sessionCount: activeProgram.sessions.length,
+        scheduleMode: schedule.config.scheduleMode ?? 'fixed',
+        targetSessionIndex,
+        todayLocalDate: localDateInTimezone(new Date(), schedule.config.timezone),
+        expectedCurrentNextSessionIndex,
+      });
+      await schedule.reload();
+      return 'OK';
+    } catch (error) {
+      const code = errorCode(error);
+      const reason = errorReason(error);
+      logWarn('workout_schedule', 'reposition_schedule_cursor_failed', {
+        errorCode: code,
+        errorReason: reason,
+        errorClass: errorClass(error),
+        targetSessionIndex,
+        expectedCurrentNextSessionIndex,
+        sessionCount: activeProgram.sessions.length,
+        scheduleMode: schedule.config.scheduleMode ?? 'fixed',
+        scheduledLocalDate: localDateInTimezone(new Date(), schedule.config.timezone),
+        hasProgramInstanceId: Boolean(activeProgram.programInstanceId),
+      });
+      if (reason === 'reposition_target_already_completed_today') return 'ALREADY_COMPLETED_TODAY';
+      if (reason === 'reposition_blocked_by_in_progress_execution') return 'BLOCKED_IN_PROGRESS';
+      return 'ERROR';
+    }
+  }, [user, activeProgram, schedule, workoutInProgress, workoutStartPending, execution.starting]);
+
+  /** Same N days -> other N days, or fixed <-> flexible with no frequency change (docs §Alteração de agenda). Never touches the program. */
+  const handleSaveAgenda = useCallback(async (value: { scheduleMode: ScheduleMode; trainingDays: Weekday[] }): Promise<AgendaSaveOutcome> => {
+    if (!user || !schedule.config) return 'ERROR';
+    if (workoutInProgress || workoutStartPending || execution.starting) return 'ERROR';
+    try {
+      // Decision #5 precedent (resolving a pending miss never requires the
+      // user to answer "recover or skip" first): switching modes while a
+      // miss decision is pending must not leave it orphaned either — resolve
+      // it as CONTINUE_SEQUENCE (preserves adherence, never SKIPPED) before
+      // the mode that can no longer see it (`flexible`) takes over.
+      if (schedule.resolution.status === 'MISSED_SESSION_DECISION_REQUIRED') {
+        const identity = missedDecisionIdentity(schedule.resolution);
+        if (identity) {
+          const outcome = await schedule.resolveMiss('CONTINUE_SEQUENCE', identity);
+          if (outcome.status === 'FAILED') return 'ERROR';
+        }
+      }
+      await saveScheduleConfig(user.uid, {
+        scheduleMode: value.scheduleMode,
+        trainingDays: value.trainingDays,
+        timezone: schedule.config.timezone,
+      });
+      await schedule.reload();
+      return 'OK';
+    } catch (error) {
+      logWarn('workout_schedule', 'save_schedule_config_failed', { errorCode: errorCode(error), errorClass: errorClass(error) });
+      return 'ERROR';
+    }
+  }, [user, schedule, workoutInProgress, workoutStartPending, execution.starting]);
+
+  /** Frequency actually changed (docs §Alteração de frequência) — the authoritative ADAPT trail, never a manual template swap. */
+  const handleChangeFrequency = useCallback(async (value: { scheduleMode: ScheduleMode; trainingDays: Weekday[]; days: number }): Promise<AgendaSaveOutcome> => {
+    if (!user || !activeProgram) return 'ERROR';
+    if (workoutInProgress || workoutStartPending || execution.starting) return 'ERROR';
+    try {
+      const idempotencyKey = `agenda-frequency:${activeProgram.programInstanceId ?? activeProgram.programId}:${value.scheduleMode}:${value.days}:${[...value.trainingDays].sort().join('-')}`;
+      const result = await adaptWorkoutProgram({
+        uid: user.uid,
+        updatedFields: { days: value.days, scheduleMode: value.scheduleMode, trainingDays: value.scheduleMode === 'fixed' ? value.trainingDays : null },
+        reason: 'AVAILABILITY',
+        idempotencyKey,
+      });
+      if (result.status !== 'SUCCESS') return 'ERROR';
+      // ScheduleConfig is reconciled inside ADAPT before success returns.
+      // Reload the prescription first; useWorkoutSchedule's program-scoped
+      // effect then resolves the new instance, avoiding an eager reload that
+      // still closes over the superseded program.
+      await reloadPrescription();
+      return 'OK';
+    } catch (error) {
+      logWarn('workout_lifecycle', 'adapt_workout_program_frequency_failed', {
+        errorCode: errorCode(error), errorClass: errorClass(error), errorReason: errorReason(error),
+      });
+      return 'ERROR';
+    }
+  }, [user, activeProgram, reloadPrescription, workoutInProgress, workoutStartPending, execution.starting]);
 
   useEffect(() => {
     // RootNavigator and the workout-readiness gate have already resolved by
@@ -950,6 +1057,7 @@ function AppShellContent({
     setActiveSessionIndex(sessionIndex);
     setWorkoutStartAttempt({ id: attemptId, requestedAtMs, sessionIndex });
     setWorkoutStartPending(true);
+    setWorkoutExecutionVisible(true);
     // Navigation is deliberately before the first await. Only the inert
     // preparing surface can render until the authoritative start succeeds.
     setTab('workout');
@@ -964,6 +1072,7 @@ function AppShellContent({
         // never mounted, there is no local set/rest/finish state to unwind.
         setWorkoutStartPending(false);
         setWorkoutInProgress(false);
+        setWorkoutExecutionVisible(false);
         setWorkoutStartAttempt(null);
         setTab('home');
         setStartWorkoutError(error);
@@ -987,6 +1096,7 @@ function AppShellContent({
       // this boundary keeps a future unexpected throw from stranding the UI.
       setWorkoutStartPending(false);
       setWorkoutInProgress(false);
+      setWorkoutExecutionVisible(false);
       setWorkoutStartAttempt(null);
       setTab('home');
       setStartWorkoutError({ code: 'UNKNOWN' });
@@ -1008,7 +1118,7 @@ function AppShellContent({
   const startAdvancedWorkout = async () => {
     if (prescription.status !== 'SUCCESS' || !activeProgram || !schedule.config) return;
     const target = advancedWorkoutTarget({
-      scheduleMode: activeProgram.scheduleMode ?? 'fixed',
+      scheduleMode: schedule.config?.scheduleMode ?? activeProgram.scheduleMode ?? 'fixed',
       resolution: schedule.resolution,
       todayLocalDate: localDateInTimezone(new Date(), schedule.config.timezone),
       sessionCount: activeProgram.sessions.length,
@@ -1036,6 +1146,7 @@ function AppShellContent({
     setActiveSessionIndex(sessionIndex);
     setWorkoutStartAttempt({ id: attemptId, requestedAtMs, sessionIndex });
     setWorkoutStartPending(true);
+    setWorkoutExecutionVisible(true);
     setTab('workout');
     try {
       const { execution: started, error } = await execution.startAdvanced(schedule.resolution);
@@ -1043,6 +1154,7 @@ function AppShellContent({
       if (!started) {
         setWorkoutStartPending(false);
         setWorkoutInProgress(false);
+        setWorkoutExecutionVisible(false);
         setWorkoutStartAttempt(null);
         setTab('home');
         setStartWorkoutError(error);
@@ -1059,6 +1171,7 @@ function AppShellContent({
     } catch (error) {
       setWorkoutStartPending(false);
       setWorkoutInProgress(false);
+      setWorkoutExecutionVisible(false);
       setWorkoutStartAttempt(null);
       setTab('home');
       setStartWorkoutError({ code: 'UNKNOWN' });
@@ -1127,6 +1240,7 @@ function AppShellContent({
       setFinishingSession(false);
       setActiveSessionIndex(fresh.sessionIndex);
       setWorkoutInProgress(true);
+      setWorkoutExecutionVisible(true);
       setTab('workout');
       beginPersistedWorkoutSession(fresh, fresh.sessionIndex);
       recovery.resolve();
@@ -1565,6 +1679,7 @@ function AppShellContent({
           execution.adoptExecution(terminal);
           setActiveSessionIndex(terminal.sessionIndex);
           setWorkoutInProgress(true);
+          setWorkoutExecutionVisible(true);
           setTab('workout');
         } else {
           // Completion is already durable, so a secondary read failure must
@@ -1578,6 +1693,7 @@ function AppShellContent({
           ]);
           endWorkoutSession();
           setWorkoutInProgress(false);
+          setWorkoutExecutionVisible(false);
           setTab('home');
         }
         recovery.resolve();
@@ -1699,6 +1815,7 @@ function AppShellContent({
         });
         endWorkoutSession();
         setWorkoutInProgress(false);
+        setWorkoutExecutionVisible(false);
         setWorkoutStartAttempt(null);
         setTab('home');
       });
@@ -1737,6 +1854,7 @@ function AppShellContent({
   const leaveDiscardedWorkout = async () => {
     endWorkoutSession();
     setWorkoutInProgress(false);
+    setWorkoutExecutionVisible(false);
     setWorkoutStartAttempt(null);
     workoutCompletionRef.current = null;
     workoutFinalizationInputRef.current = { mode: 'NORMAL' };
@@ -1833,21 +1951,46 @@ function AppShellContent({
         {tab === 'workout' && (workoutStartPending || execution.starting || (workoutInProgress && !execution.execution)) && (
           <FullScreenLoading accessibilityLabel={t('preparing.title')} />
         )}
-        {tab === 'workout' && !workoutStartPending && !workoutInProgress && prescription.status === 'SUCCESS' && schedule.resolution.status !== 'SESSION_READY' && (
-          <WorkoutTabBlockedState
-            resolution={schedule.resolution}
+        {tab === 'workout' && !workoutStartPending && prescription.status === 'SUCCESS'
+          && (!workoutInProgress || !workoutExecutionVisible) && (
+          <TreinoScreen
             plan={prescription.plan}
-            onDone={finishWorkoutSession}
+            resolution={schedule.resolution}
+            completedTodaySessionIndex={schedule.completedTodaySessionIndex}
+            scheduleConfig={schedule.config}
+            workoutInProgress={workoutInProgress}
+            startPending={workoutStartPending || execution.starting}
+            onStart={requestStartWorkout}
+            onOpenAgendaEditor={() => setAgendaEditorOpen(true)}
+            onReposition={requestReposition}
+            weekSummary={activitySnapshot.week
+              ? { completedCount: activitySnapshot.week.completedCount, scheduledCount: activitySnapshot.week.scheduledCount }
+              : null}
+            last30DaysCompletedCount={frequencyPresentation.source === 'AUTHORITATIVE' && frequencyPresentation.value
+              ? frequencyPresentation.value.completedCount : null}
+          />
+        )}
+        {tab === 'workout' && !workoutInProgress && agendaEditorOpen && activeProgram && (
+          <TreinoAgendaSheet
+            initialScheduleMode={schedule.config?.scheduleMode ?? 'fixed'}
+            initialTrainingDays={schedule.config?.trainingDays ?? []}
+            currentFrequency={activeProgram.prescribedTrainingFrequency ?? activeProgram.prescribedStructuredDays ?? activeProgram.sessions.length}
+            onClose={() => setAgendaEditorOpen(false)}
+            onSave={handleSaveAgenda}
+            onChangeFrequency={handleChangeFrequency}
           />
         )}
         {workoutInProgress && !workoutStartPending && !execution.starting && execution.execution && prescription.status === 'SUCCESS' && (
           <View
-            pointerEvents={tab === 'workout' ? 'auto' : 'none'}
-            accessibilityElementsHidden={tab !== 'workout'}
-            importantForAccessibility={tab === 'workout' ? 'auto' : 'no-hide-descendants'}
+            pointerEvents={tab === 'workout' && workoutExecutionVisible ? 'auto' : 'none'}
+            accessibilityElementsHidden={tab !== 'workout' || !workoutExecutionVisible}
+            importantForAccessibility={tab === 'workout' && workoutExecutionVisible ? 'auto' : 'no-hide-descendants'}
             style={[
               FULL_BLEED.tab,
-              { opacity: tab === 'workout' ? 1 : 0, zIndex: tab === 'workout' ? 1 : 0 },
+              {
+                opacity: tab === 'workout' && workoutExecutionVisible ? 1 : 0,
+                zIndex: tab === 'workout' && workoutExecutionVisible ? 1 : 0,
+              },
             ]}
           >
             <WorkoutScreen
@@ -1860,7 +2003,7 @@ function AppShellContent({
               onDone={finishWorkoutSession}
               onRetryCompletion={() => { void retryWorkoutCompletion(); }}
               onDiscarded={leaveDiscardedWorkout}
-              onMinimize={() => setTab('home')}
+              onMinimize={() => { setWorkoutExecutionVisible(false); setTab('home'); }}
               // Docs §8: `WorkoutScreen` awaits this before navigating away
               // (then calls `onDiscarded`, never the finish callback) —
               // abandon must be a durable, persisted fact before the UI
@@ -1966,7 +2109,7 @@ function AppShellContent({
         covering the whole viewport, so the tab bar staying laid out (just
         untouchable/inaccessible) underneath is never visible.
       */}
-      {tab !== 'workout' && (
+      {!(tab === 'workout' && (workoutExecutionVisible || workoutStartPending || execution.starting)) && (
         <View
           pointerEvents={overlayOpen || !homeInitialVisualReady ? 'none' : 'auto'}
           accessibilityElementsHidden={overlayOpen || !homeInitialVisualReady}

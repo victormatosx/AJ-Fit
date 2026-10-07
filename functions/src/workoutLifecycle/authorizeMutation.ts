@@ -6,6 +6,7 @@ import { HttpsError, type CallableRequest } from 'firebase-functions/v2/https';
 import { db as defaultDb } from '../lib/firebaseAdmin';
 import { requireAuth } from '../lib/auth';
 import { detectMissedSessionGap, resolveWorkoutSchedule } from './scheduleEngine/resolver';
+import { repositionedSessionIndexes } from './scheduleEngine/reposition';
 import type { ScheduleAuthorityContext } from './finalizationAuthority';
 import { buildScheduleAuthorityContext, prescribedExecutionCounts } from './finalizationAuthority';
 import type { FinalWorkoutPlan, QuestionnaireAnswers } from './prescriptionEngine/workoutPrescription/types';
@@ -38,6 +39,7 @@ const CANONICAL_ACTIVITY_IDS = new Set(CANONICAL_ACTIVITIES.map((activity) => ac
 const OPERATIONS = [
   'INITIALIZE', 'MIGRATE', 'RECOVER', 'EARN', 'PREPARE', 'DEFER',
   'ACTIVATE', 'ADAPT', 'FINISH_EXECUTION', 'COMPLETE_SCHEDULE', 'RESOLVE_MISSED_SESSION',
+  'REPOSITION_SCHEDULE_CURSOR',
 ] as const;
 type AuthorityOperation = typeof OPERATIONS[number];
 
@@ -69,6 +71,8 @@ export interface AuthorityRequest {
   expectedMissedSessionIndex?: number;
   expectedCalendarSessionIndex?: number;
   expectedMissedScheduledDate?: string;
+  targetSessionIndex?: number;
+  expectedCurrentNextSessionIndex?: number;
   targetPlan?: Record<string, unknown>;
   targetPrescriptionInputSnapshot?: Record<string, unknown>;
   updatedFields?: Record<string, unknown>;
@@ -301,27 +305,21 @@ async function authoritativeEarnedFactWithCycleHistory(
   ]);
   const config = resolveProgressionV2Config(progressionPolicyModeFor(qaMode));
   const scheduleConfig = scheduleConfigSnapshot.data() ?? {};
-  const snapshotInputs = plainObject(instance.prescriptionInputSnapshot?.inputs)
-    ? instance.prescriptionInputSnapshot.inputs as Record<string, unknown>
-    : {};
-  const scheduleMode = program.scheduleMode === 'flexible'
-    ? 'flexible'
-    : program.scheduleMode === 'fixed'
-      ? 'fixed'
-      : snapshotInputs.scheduleMode === 'flexible'
-        ? 'flexible'
-        : 'fixed';
-  const programTrainingDays = Array.isArray(program.weeklySchedule)
-    ? program.weeklySchedule.flatMap((item: unknown) => plainObject(item)
-      && item.state === 'TRAINING' && typeof item.weekday === 'string' ? [item.weekday] : [])
-    : [];
-  const configuredDays = programTrainingDays.length > 0
-    ? programTrainingDays
-    : Array.isArray(snapshotInputs.trainingDays) && snapshotInputs.trainingDays.length > 0
-      ? snapshotInputs.trainingDays
-      : Array.isArray(scheduleConfig.trainingDays) ? scheduleConfig.trainingDays : [];
-  const trainingDays = new Set(configuredDays.filter((item): item is string => typeof item === 'string'));
-  const timezone = typeof scheduleConfig.timezone === 'string' ? scheduleConfig.timezone : 'UTC';
+  // Same calendar authority as every other reader (docs §Agenda
+  // configurável): ScheduleConfig wins when present and structurally
+  // consistent with the program's prescribed frequency; the sealed
+  // program/snapshot is only a migration-safety fallback. Single source of
+  // truth — reuses `buildScheduleAuthorityContext` instead of a second,
+  // independently drifting derivation.
+  const scheduleAuthority = buildScheduleAuthorityContext({
+    scheduleConfigData: scheduleConfig,
+    stateData: null,
+    instance,
+    program,
+  });
+  const scheduleMode = scheduleAuthority.config.scheduleMode;
+  const trainingDays = new Set<string>(scheduleAuthority.config.trainingDays);
+  const timezone = scheduleAuthority.config.timezone;
   const start = localDate((instance.activatedAt as Timestamp).toDate(), timezone);
   const today = localDate(now, timezone);
   const executions = executionsSnapshot.docs.map((item) => item.data());
@@ -1054,6 +1052,13 @@ export async function validateRequest(uid: string, request: AuthorityRequest, fi
     || request.targetCycleNumber !== bundle.state.currentCycleNumber)) {
     throw new HttpsError('permission-denied', 'adaptation_cannot_change_cycle_semantics');
   }
+  // A v1.27 ADAPT is a server-side activation, not a grant-only preflight.
+  // Reject older/incomplete requests before sealing any content.
+  if (request.operation === 'ADAPT'
+    && contentCanonical?.plan.versions.templateLibrary === '1.27.0'
+    && request.eventType !== 'PROGRAM_ADAPTED') {
+    throw new HttpsError('invalid-argument', 'adaptation_event_type_required');
+  }
   const expectedEventTypes: Partial<Record<AuthorityOperation, string[]>> = {
     DEFER: ['EVOLUTION_DEFERRED'],
     ACTIVATE: ['EVOLUTION_ACTIVATED', 'LEVEL_PROMOTED', 'MOTIVATIONAL_RENEWAL_ACTIVATED'],
@@ -1270,6 +1275,106 @@ export async function validateRequest(uid: string, request: AuthorityRequest, fi
     }
     scheduleAuthorityFields = { targetNextSessionIndex, targetCursorDate, targetScheduleEvents };
   }
+  if (request.operation === 'REPOSITION_SCHEDULE_CURSOR') {
+    // User manually chose a different session from the current division to
+    // become the new sequence anchor (docs §Escolha manual de treino). This
+    // is never a one-off/ad-hoc session — the cursor itself moves, exactly
+    // like `FOLLOW_SCHEDULE` already does for a missed-session gap, just
+    // without ever recording `SKIPPED` (see `REPOSITIONED` below).
+    if (!Number.isInteger(request.targetSessionIndex) || (request.targetSessionIndex as number) < 0) {
+      throw new HttpsError('invalid-argument', 'invalid_reposition_target_session_index', { reason: 'invalid_reposition_target_session_index' });
+    }
+    if (!Number.isInteger(request.expectedCurrentNextSessionIndex)
+      || (request.expectedCurrentNextSessionIndex as number) < 0) {
+      throw new HttpsError('invalid-argument', 'missing_reposition_current_session_index', { reason: 'missing_reposition_current_session_index' });
+    }
+    if (!request.scheduledLocalDate) {
+      throw new HttpsError('invalid-argument', 'invalid_reposition_date', { reason: 'invalid_reposition_date' });
+    }
+    const context = await loadScheduleAuthorityContext(uid, bundle, firestore);
+    if (context.sessionCount <= 0) {
+      throw new HttpsError('failed-precondition', 'schedule_not_configured');
+    }
+    const targetSessionIndex = request.targetSessionIndex as number;
+    if (targetSessionIndex >= context.sessionCount) {
+      throw new HttpsError('invalid-argument', 'reposition_target_session_index_out_of_range', { reason: 'reposition_target_session_index_out_of_range' });
+    }
+    if ((request.expectedCurrentNextSessionIndex as number) >= context.sessionCount) {
+      throw new HttpsError('invalid-argument', 'reposition_current_session_index_out_of_range', { reason: 'reposition_current_session_index_out_of_range' });
+    }
+    assertNotBackdated(request.scheduledLocalDate, context.config.timezone, new Date());
+    // Block IN_PROGRESS execution — the exact same rule EARN already
+    // enforces (`authoritativeEarnedFactWithCycleHistory`): a manual
+    // reposition must never race or corrupt a session actively being
+    // recorded.
+    const executionsSnapshot = await firestore.collection('users').doc(uid).collection('workoutExecutions')
+      .where('programInstanceId', '==', bundle.state.activeProgramInstanceId).get();
+    if (executionsSnapshot.docs.some((item) => item.data().status === 'IN_PROGRESS')) {
+      throw new HttpsError('failed-precondition', 'reposition_blocked_by_in_progress_execution');
+    }
+    // Same-day repetition (starting a session that was already finished
+    // today, under this same sessionIndex) stays out of scope for manual
+    // reposition — `occurrence` expansion is a `flexible`-only mechanism and
+    // is deliberately not extended here (docs §Mesmo treino duas vezes).
+    const alreadyCompletedToday = executionsSnapshot.docs.some((item) => {
+      const data = item.data();
+      return data.sessionIndex === targetSessionIndex
+        && data.scheduledLocalDate === request.scheduledLocalDate
+        && ['COMPLETED', 'PARTIALLY_COMPLETED'].includes(data.status);
+    });
+    if (alreadyCompletedToday) {
+      throw new HttpsError('failed-precondition', 'reposition_target_already_completed_today');
+    }
+    // Never trust the client's own idea of "where the rotation currently is"
+    // — recompute it from the authoritative cursor via the exact same
+    // resolver every other schedule mutation uses, and reject a stale
+    // request instead of silently repositioning from a cursor the user never
+    // actually saw.
+    const resolution = resolveWorkoutSchedule({
+      hasActiveProgram: true,
+      sessionCount: context.sessionCount,
+      scheduleMode: context.config.scheduleMode ?? 'fixed',
+      config: context.config,
+      state: context.state,
+      activatedAtLocalDate: context.activatedAtLocalDate,
+      todayLocalDate: request.scheduledLocalDate,
+    });
+    const currentEffectiveSessionIndex = resolution.status === 'SESSION_READY'
+      ? resolution.sessionIndex
+      : resolution.status === 'MISSED_SESSION_DECISION_REQUIRED'
+        ? resolution.missedSessionIndex
+        : (resolution.status === 'REST_DAY' || resolution.status === 'ACTIVE_RECOVERY_DAY' || resolution.status === 'TODAY_COMPLETED')
+          ? resolution.nextSessionIndex
+          : null;
+    if (currentEffectiveSessionIndex === null) {
+      throw new HttpsError('failed-precondition', 'schedule_not_configured');
+    }
+    if (currentEffectiveSessionIndex !== request.expectedCurrentNextSessionIndex) {
+      throw new HttpsError('aborted', 'stale_schedule_cursor');
+    }
+    // One REPOSITIONED event per session the rotation walks past to reach
+    // the chosen target — never SKIPPED, so adherence/streak (which only
+    // ever counts COMPLETED ledger entries, see `authoritativeEarnedFactWithCycleHistory`)
+    // is entirely unaffected by a deliberate manual reorder.
+    const targetScheduleEvents = repositionedSessionIndexes(
+      currentEffectiveSessionIndex,
+      targetSessionIndex,
+      context.sessionCount,
+    ).map((sessionIndex) => ({
+      type: 'REPOSITIONED', sessionIndex, scheduledDate: request.scheduledLocalDate as string,
+    }));
+    const scheduleMode = context.config.scheduleMode ?? 'fixed';
+    // Same "day before" convention `FOLLOW_SCHEDULE` already uses: `cursorDate`
+    // means "every trainingDay up to and including this date is already
+    // accounted for," so setting it to today itself would make the very next
+    // read treat today's own opportunity as already consumed and collapse to
+    // REST_DAY instead of offering the just-chosen session. `flexible` never
+    // reads `cursorDate` to decide readiness, so today is a safe, semantically
+    // coherent value there (it only matters again if the user later switches
+    // back to `fixed`).
+    const targetCursorDate = scheduleMode === 'flexible' ? request.scheduledLocalDate : addDays(request.scheduledLocalDate, -1);
+    scheduleAuthorityFields = { targetNextSessionIndex: targetSessionIndex, targetCursorDate, targetScheduleEvents };
+  }
   const canonicalTargetContentIdentity = contentCanonical
     ? canonicalContentIdentity({
       questionnaireId: String(bundle.program.questionnaireId),
@@ -1325,9 +1430,10 @@ export interface AuthorityCanonicalContent {
 /**
  * Fase 16 (ADAPT/ACTIVATE v1.27 cutover) — the ADAPT/ACTIVATE counterpart to
  * `initializeWorkoutProgramV127Handler`'s INITIALIZE fix. Both operations
- * already sealed `workoutPrograms/{contentIdentity}` via Admin SDK
- * (`sealTargetProgram`, called just above in the handler) BEFORE this
- * function existed — the remaining gap was the CLIENT's own subsequent
+ * formerly sealed `workoutPrograms/{contentIdentity}` via Admin SDK
+ * before the lifecycle transaction. This function now seals that content
+ * within the SAME transaction — the remaining original gap was the CLIENT's
+ * subsequent
  * `saveAndActivateWorkoutProgram` transaction, which still wrote
  * `programInstances`/`trainingCycles`/`workoutLifecycleState`/
  * `workoutLifecycleEvents`/`workoutProgramState` (and re-validated the now-
@@ -1396,10 +1502,14 @@ async function persistLifecycleActivationV127(
   const currentInstanceRef = userRoot.collection('programInstances').doc(sourceProgramInstanceId);
   const currentCycleRef = userRoot.collection('trainingCycles').doc(sourceCycleId);
   const pendingRef = userRoot.collection('pendingEvolutions').doc('current');
+  const targetProgramRef = userRoot.collection('workoutPrograms').doc(targetContentIdentity);
+  const scheduleConfigRef = userRoot.collection('workoutProgramState').doc('scheduleConfig');
+  const frequencyChanged = merged.operation === 'ADAPT' && Number.isInteger(merged.updatedFields?.days);
 
   await firestore.runTransaction(async (transaction) => {
-    const [lifecycleSnapshot, instanceSnapshot] = await Promise.all([
-      transaction.get(lifecycleRef), transaction.get(instanceRef),
+    const [lifecycleSnapshot, instanceSnapshot, targetProgramSnapshot, configSnapshot] = await Promise.all([
+      transaction.get(lifecycleRef), transaction.get(instanceRef), transaction.get(targetProgramRef),
+      frequencyChanged ? transaction.get(scheduleConfigRef) : Promise.resolve(null),
     ]);
     if (instanceSnapshot.exists) {
       // Idempotent retry (double tap / redelivered call) — this exact
@@ -1410,7 +1520,72 @@ async function persistLifecycleActivationV127(
     if (!lifecycleData || lifecycleData.activeProgramInstanceId !== sourceProgramInstanceId) {
       throw new HttpsError('aborted', 'workout_lifecycle_v127_transition_source_changed');
     }
+    if (!boundedId(merged.targetContentIdentity) || !plainObject(merged.targetPlan)
+      || !boundedId(merged.targetPrescriptionIdentity) || !boundedId(merged.questionnaireId)
+      || !Number.isInteger(merged.questionnaireVersion)
+      || typeof merged.targetProgramSource !== 'string'
+      || !Number.isInteger(merged.targetTemplateVersion)
+      || typeof merged.targetTemplateSourceVersion !== 'string'
+      || typeof merged.targetTemplateContentHash !== 'string') {
+      throw new HttpsError('invalid-argument', 'target_program_seal_metadata_missing');
+    }
+    if (targetProgramSnapshot.exists) {
+      const data = targetProgramSnapshot.data()!;
+      const samePlan = Object.keys(merged.targetPlan).every((key) =>
+        canonical(data[key]) === canonical(merged.targetPlan![key]));
+      if (!samePlan || data.prescriptionId !== targetPrescriptionIdentity
+        || data.questionnaireId !== merged.questionnaireId
+        || data.questionnaireVersion !== merged.questionnaireVersion) {
+        throw new HttpsError('permission-denied', 'target_content_identity_already_bound_to_different_plan');
+      }
+    }
+    if (frequencyChanged) {
+      const inputs = merged.targetPrescriptionInputSnapshot?.inputs;
+      const mode = plainObject(inputs) && inputs.scheduleMode === 'flexible' ? 'flexible' : 'fixed';
+      const days = plainObject(inputs) && inputs.scheduleMode === 'flexible' && inputs.trainingDays == null
+        ? [] : plainObject(inputs) ? inputs.trainingDays : null;
+      const count = plainObject(inputs) ? inputs.days : null;
+      const validDays = Array.isArray(days) && days.every((day) =>
+        typeof day === 'string' && ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].includes(day))
+        && new Set(days).size === days.length;
+      if (!Number.isInteger(count) || !validDays
+        || (mode === 'fixed' && (days.length !== count || count < 2 || count > 7))
+        || (mode === 'flexible' && days.length !== 0)
+        || merged.targetPlan.prescribedTrainingFrequency !== count) {
+        throw new HttpsError('invalid-argument', 'adaptation_frequency_schedule_inconsistent');
+      }
+    }
     const now = FieldValue.serverTimestamp();
+    // The target content and all lifecycle pointers commit together. An
+    // already-sealed orphan from an earlier failed attempt is safely reused.
+    if (!targetProgramSnapshot.exists) {
+      transaction.set(targetProgramRef, {
+        ...merged.targetPlan,
+        programId: targetContentIdentity,
+        prescriptionId: targetPrescriptionIdentity,
+        status: 'active',
+        source: merged.targetProgramSource,
+        templateVersion: merged.targetTemplateVersion,
+        templateSourceVersion: merged.targetTemplateSourceVersion,
+        templateContentHash: merged.targetTemplateContentHash,
+        questionnaireId: merged.questionnaireId,
+        questionnaireVersion: merged.questionnaireVersion,
+        createdAt: now, activatedAt: now, updatedAt: now,
+      });
+    } else if (targetProgramSnapshot.data()?.status !== 'active') {
+      transaction.update(targetProgramRef, { status: 'active', updatedAt: now });
+    }
+    if (frequencyChanged) {
+      const inputs = merged.targetPrescriptionInputSnapshot!.inputs as Record<string, unknown>;
+      const existingTimezone = configSnapshot?.data()?.timezone;
+      transaction.set(scheduleConfigRef, {
+        scheduleMode: inputs.scheduleMode === 'flexible' ? 'flexible' : 'fixed',
+        trainingDays: inputs.scheduleMode === 'flexible' ? [] : inputs.trainingDays,
+        timezone: typeof existingTimezone === 'string' && existingTimezone.length > 0 ? existingTimezone : 'UTC',
+        scheduleVersion: 1,
+        updatedAt: now,
+      });
+    }
     // Mirrors `saveAndActivateWorkoutProgram`'s own `status: 'superseded'`
     // write on the previously-active `workoutPrograms` doc — Admin SDK, so
     // (unlike the client's own equivalent write) this is never subject to
@@ -1492,7 +1667,7 @@ async function persistLifecycleActivationV127(
         : {}),
       updatedAt: now,
     });
-    if (merged.operation === 'ACTIVATE') {
+    if (merged.operation === 'ACTIVATE' || merged.operation === 'ADAPT') {
       transaction.delete(pendingRef);
     }
   });
@@ -1664,11 +1839,12 @@ export async function authorizeWorkoutLifecycleMutationHandler(
   // whatever the client sent in `data`, both for sealing and for the grant.
   const merged = { ...data, ...validated } as AuthorityRequest;
   // Sealing is unconditional for every operation that installs prescription
-  // content — never opt-out-able via an omitted client field. A caller that
-  // used to skip this by not sending `targetProgramSource` now fails inside
-  // `sealTargetProgram` itself (missing seal metadata) instead of silently
-  // bypassing the safety check.
-  if (['INITIALIZE', 'MIGRATE', 'ACTIVATE', 'ADAPT'].includes(data.operation)) {
+  // content. v1.27 ADAPT/ACTIVATE seal in their activation transaction below
+  // so a failed transition cannot leave a newly sealed orphan.
+  const targetVersions = plainObject(merged.targetPlan) ? merged.targetPlan.versions : null;
+  const serverSideV127Transition = (data.operation === 'ADAPT' || data.operation === 'ACTIVATE')
+    && plainObject(targetVersions) && targetVersions.templateLibrary === '1.27.0';
+  if (['INITIALIZE', 'MIGRATE', 'ACTIVATE', 'ADAPT'].includes(data.operation) && !serverSideV127Transition) {
     await sealTargetProgram(uid, merged, firestore);
   }
   // Fase 16 — v1.27 ADAPT/ACTIVATE: perform the FULL lifecycle transition
@@ -1678,8 +1854,7 @@ export async function authorizeWorkoutLifecycleMutationHandler(
   // this branch is only ever reached for ADAPT/ACTIVATE with v1.27 target
   // content.
   if (data.operation === 'ADAPT' || data.operation === 'ACTIVATE') {
-    const targetVersions = plainObject(merged.targetPlan) ? merged.targetPlan.versions : null;
-    if (plainObject(targetVersions) && targetVersions.templateLibrary === '1.27.0') {
+    if (serverSideV127Transition) {
       const pendingData = data.operation === 'ACTIVATE'
         ? (await firestore.collection('users').doc(uid).collection('pendingEvolutions').doc('current').get()).data() ?? null
         : null;

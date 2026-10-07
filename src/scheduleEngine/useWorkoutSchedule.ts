@@ -27,6 +27,8 @@ import {
 } from './missedDecisionResolution';
 import type { WorkoutProgramSnapshot } from '../services/workoutPrograms';
 import { legacyTrainingDays } from '../workoutPrescription/weeklySchedule';
+import { resolveEffectiveCalendarAuthority } from './calendarAuthority';
+import { completedSessionIndexForLocalDate } from './completedSessionIndex';
 import {
   applyScheduleReloadOutcome,
   type ScheduleRefreshError,
@@ -53,6 +55,7 @@ export function terminalExecutionForScheduleRecovery(
 
 export interface WorkoutScheduleController {
   resolution: ScheduleResolution;
+  completedTodaySessionIndex: number | null;
   config: ScheduleConfig | null;
   loading: boolean;
   /** False for the render where a new program arrived before its schedule reload reset the old projection. */
@@ -87,11 +90,13 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
   const uid = user?.uid ?? null;
   const programId = program?.programId ?? null;
   const programInstanceId = program?.programInstanceId ?? null;
-  const scheduleMode = program?.scheduleMode ?? 'fixed';
+  // Sealed-program mode: only a bootstrap default (brand-new ScheduleConfig)
+  // and a last-resort fallback for legacy accounts with no ScheduleConfig at
+  // all. ScheduleConfig is the calendar authority now (docs §Agenda
+  // configurável) — see `effectiveScheduleMode`/`reload()` below, which
+  // always prefer the user-editable config over this sealed value.
+  const sealedProgramScheduleMode = program?.scheduleMode ?? 'fixed';
   const prescribedProgramDays = useMemo(() => (program ? legacyTrainingDays(program) : []), [program]);
-  const prescribedRecoveryDays = useMemo(() => program?.weeklySchedule
-    ?.filter((day) => day.state === 'ACTIVE_RECOVERY')
-    .map((day) => day.weekday) ?? [], [program]);
   const sessionCount = program
     ? program.prescribedTrainingFrequency ?? program.prescribedStructuredDays ?? program.sessions.length
     : 0;
@@ -105,6 +110,14 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
     refreshError: null,
   });
   const [config, setConfig] = useState<ScheduleConfig | null>(null);
+  const [completedToday, setCompletedToday] = useState<{
+    scopeKey: string; localDate: string; sessionIndex: number | null;
+  } | null>(null);
+  // Render-level effective mode, derived from the last successfully reloaded
+  // ScheduleConfig. Used by callers (e.g. `resolveMiss`) that run outside
+  // `reload()`'s own scope and therefore can't recompute it from a freshly
+  // awaited read.
+  const effectiveScheduleMode = config?.scheduleMode ?? sealedProgramScheduleMode;
   const [loading, setLoading] = useState(true);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const reloadSequenceRef = useRef(0);
@@ -153,12 +166,12 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
       // overwrites a config the user edited afterward) and transaction-
       // guarded (safe against this hook mounting twice concurrently) — see
       // its doc comment in `services/workoutSchedule.ts`.
-      if (!loadedConfig && (scheduleMode === 'flexible' || prescribedProgramDays.length > 0)) {
+      if (!loadedConfig && (sealedProgramScheduleMode === 'flexible' || prescribedProgramDays.length > 0)) {
         loadedConfig = await ensureScheduleConfigFromQuestionnaire(
           uid,
           prescribedProgramDays,
           deviceTimezone(),
-          scheduleMode,
+          sealedProgramScheduleMode,
         );
       } else if (!loadedConfig && questionnaire && trainingDaysValid(questionnaire.answers)) {
         loadedConfig = await ensureScheduleConfigFromQuestionnaire(
@@ -168,21 +181,45 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
           questionnaire.answers.scheduleMode ?? 'fixed',
         );
       }
-      const effectiveConfig = loadedConfig && prescribedProgramDays.length > 0
-        ? { ...loadedConfig, trainingDays: prescribedProgramDays, activeRecoveryDays: prescribedRecoveryDays }
-        : loadedConfig;
+      // ScheduleConfig — the user-editable preference doc — is now the
+      // calendar authority (docs §Agenda configurável): it decides both
+      // `scheduleMode` and `trainingDays` whenever it holds a value that's
+      // structurally consistent with this program's prescribed frequency.
+      // The sealed program's `weeklySchedule`/`scheduleMode` only steps back
+      // in as a migration-safety fallback — never silently overriding an
+      // account that explicitly edited its agenda, and never leaving a
+      // legacy/inconsistent account stuck in REST_DAY.
+      const calendar = resolveEffectiveCalendarAuthority({
+        scheduleConfig: loadedConfig ? { ...loadedConfig } : null,
+        program: program ?? {},
+        snapshotInputs: questionnaire?.answers ? { ...questionnaire.answers } : null,
+      });
+      const effectiveScheduleModeForThisLoad = calendar.scheduleMode;
+      const effectiveConfig = loadedConfig
+        ? {
+            ...loadedConfig,
+            scheduleMode: calendar.scheduleMode,
+            trainingDays: calendar.trainingDays,
+            activeRecoveryDays: calendar.activeRecoveryDays,
+          }
+        : null;
       recordPerfMark('today_schedule_config_ready');
+
+      const timezone = loadedConfig?.timezone ?? deviceTimezone();
+      const todayLocalDate = localDateInTimezone(new Date(), timezone);
+      let completedTodaySessionIndex: number | null = null;
 
       // Process-death recovery, case B: finishWorkoutExecution atomically
       // terminalizes the execution and clears the active mutex, so `current`
       // intentionally cannot be used as a completion marker. Re-discover the
       // terminal execution from Firestore and resume only the missing,
       // idempotent Schedule mutation. Both documents remain authoritative.
-      if (programId && (scheduleMode === 'flexible' || effectiveConfig?.trainingDays.length) && activatedAtLocalDate) {
+      if (programId && (effectiveScheduleModeForThisLoad === 'flexible' || effectiveConfig?.trainingDays.length) && activatedAtLocalDate) {
         try {
-          const candidate = terminalExecutionForScheduleRecovery(
-            await listExecutionsForProgram(uid, programId),
-            programInstanceId,
+          const executions = await listExecutionsForProgram(uid, programId);
+          const candidate = terminalExecutionForScheduleRecovery(executions, programInstanceId);
+          completedTodaySessionIndex = completedSessionIndexForLocalDate(
+            executions, programInstanceId, todayLocalDate, sessionCount,
           );
           if (candidate && !(await hasScheduledSessionCompletion({
             uid,
@@ -213,25 +250,24 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
         }
       }
       recordPerfMark('today_schedule_recovery_checked');
-      const timezone = loadedConfig?.timezone ?? deviceTimezone();
-      const todayLocalDate = localDateInTimezone(new Date(), timezone);
       const result = await resolveTodaysSchedule({
         uid,
         programId,
         programInstanceId,
         sessionCount,
-        scheduleMode,
+        scheduleMode: effectiveScheduleModeForThisLoad,
         activatedAtLocalDate,
         todayLocalDate,
-        trainingDaysOverride: prescribedProgramDays,
-        activeRecoveryDaysOverride: prescribedRecoveryDays,
         // Already awaited above (`loadedConfig`) — same uid, same document,
         // no write in between. Skips resolveTodaysSchedule's own otherwise-
         // redundant `loadScheduleConfig` read.
-        storedConfig: loadedConfig,
+        storedConfig: effectiveConfig,
       });
       recordPerfMark('today_schedule_resolved');
-      if (reloadId === reloadSequenceRef.current) setConfig(effectiveConfig);
+      if (reloadId === reloadSequenceRef.current) {
+        setConfig(effectiveConfig);
+        setCompletedToday({ scopeKey: scheduleScopeKey!, localDate: todayLocalDate, sessionIndex: completedTodaySessionIndex });
+      }
       setProjection((current) => applyScheduleReloadOutcome(current, reloadSequenceRef.current, {
         kind: 'success',
         reloadId,
@@ -266,7 +302,7 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
     } finally {
       if (reloadId === reloadSequenceRef.current) setLoading(false);
     }
-  }, [uid, programId, programInstanceId, sessionCount, scheduleMode, activatedAtLocalDate, questionnaire, prescribedProgramDays, prescribedRecoveryDays, scheduleScopeKey]);
+  }, [uid, programId, programInstanceId, sessionCount, sealedProgramScheduleMode, activatedAtLocalDate, questionnaire, prescribedProgramDays, program, scheduleScopeKey]);
 
   useEffect(() => { void reload(); }, [reload]);
 
@@ -309,7 +345,7 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
     expected: MissedSessionDecisionIdentity,
   ): Promise<MissResolutionOutcome> => {
     if (missResolutionInFlightRef.current) return missResolutionInFlightRef.current;
-    if (scheduleMode === 'flexible' || !uid || !programId || sessionCount === 0) {
+    if (effectiveScheduleMode === 'flexible' || !uid || !programId || sessionCount === 0) {
       return Promise.resolve({ status: 'FAILED', resolution: null });
     }
     const timezone = config?.timezone ?? deviceTimezone();
@@ -339,10 +375,14 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
     };
     void operation.then(release, release);
     return operation;
-  }, [uid, programId, programInstanceId, sessionCount, scheduleMode, config, reload]);
+  }, [uid, programId, programInstanceId, sessionCount, effectiveScheduleMode, config, reload]);
 
   return {
     resolution: projection.resolution,
+    completedTodaySessionIndex: projection.resolution.status === 'TODAY_COMPLETED'
+      && completedToday?.scopeKey === scheduleScopeKey
+      && completedToday.localDate === localDateInTimezone(new Date(), config?.timezone ?? deviceTimezone())
+      ? completedToday.sessionIndex : null,
     config,
     loading,
     matchesActiveProgram: scheduleScopeRef.current === scheduleScopeKey,

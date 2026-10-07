@@ -24,6 +24,15 @@ export interface MyPlanEffectiveSession {
   effectiveExerciseIds: ReadonlyMap<number, string>;
 }
 
+/** The current prescription records adapted availability; onboarding answers are historical. */
+export function currentPlanAvailableDays(
+  plan: Partial<Pick<FinalWorkoutPlan, 'requestedDays' | 'prescribedTrainingFrequency' | 'prescribedStructuredDays'>> | null,
+  historicalQuestionnaireDays: number | null,
+): number | null {
+  return plan?.requestedDays ?? plan?.prescribedTrainingFrequency
+    ?? plan?.prescribedStructuredDays ?? historicalQuestionnaireDays;
+}
+
 /**
  * Builds Meu Plano's non-persisted effective view with the exact resolver
  * used for a new WorkoutExecution. It never reads an active execution and

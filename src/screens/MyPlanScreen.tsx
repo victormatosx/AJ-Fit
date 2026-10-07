@@ -12,7 +12,7 @@ import { useAuth } from '../state/AuthContext';
 import { localDateInTimezone, weekdayOfLocalDate, type WorkoutScheduleController } from '../scheduleEngine';
 import { workoutExercisesFromPlan } from './workoutScreenPlan';
 import { resolveSessionDisplayName } from '../workoutPrescription/sessionPresentation';
-import { buildAdaptationFlags, buildMyPlanEffectiveSessions, buildWeekView, hasAnyAdaptation } from './myPlanPresentation';
+import { buildAdaptationFlags, buildMyPlanEffectiveSessions, buildWeekView, currentPlanAvailableDays, hasAnyAdaptation } from './myPlanPresentation';
 import type { PrescriptionResult } from '../workoutPrescription/types';
 import type { WorkoutProgramSnapshot } from '../services/workoutPrograms';
 import type { ManualSubstitutionUserContext } from '../services/exerciseSubstitutionCandidates';
@@ -139,7 +139,7 @@ export function MyPlanScreen({
   const equipmentLabels = (answers?.equipment ?? [])
     .map((id) => t(`quiz:equipment.options.${id}`, { defaultValue: '' }))
     .filter(Boolean);
-  const daysAvailable = answers?.days ?? plan?.requestedDays ?? null;
+  const daysAvailable = currentPlanAvailableDays(plan, answers?.days ?? null);
   const goalFallbackLabel = plan
     ? t(`goalFamily.${plan.goalFamily}`, { defaultValue: '' })
     : '';

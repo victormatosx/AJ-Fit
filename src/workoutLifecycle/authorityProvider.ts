@@ -5,7 +5,8 @@ export const WORKOUT_LIFECYCLE_AUTHORITY_GRANT_ID = 'current';
 
 export type WorkoutLifecycleAuthorityOperation =
   | 'INITIALIZE' | 'MIGRATE' | 'RECOVER' | 'EARN' | 'PREPARE' | 'DEFER'
-  | 'ACTIVATE' | 'ADAPT' | 'FINISH_EXECUTION' | 'COMPLETE_SCHEDULE' | 'RESOLVE_MISSED_SESSION';
+  | 'ACTIVATE' | 'ADAPT' | 'FINISH_EXECUTION' | 'COMPLETE_SCHEDULE' | 'RESOLVE_MISSED_SESSION'
+  | 'REPOSITION_SCHEDULE_CURSOR';
 
 export interface WorkoutLifecycleAuthorityRequest {
   operation: WorkoutLifecycleAuthorityOperation;
@@ -35,6 +36,8 @@ export interface WorkoutLifecycleAuthorityRequest {
   expectedMissedSessionIndex?: number;
   expectedCalendarSessionIndex?: number;
   expectedMissedScheduledDate?: string;
+  targetSessionIndex?: number;
+  expectedCurrentNextSessionIndex?: number;
   targetPlan?: Record<string, unknown>;
   targetPrescriptionInputSnapshot?: Record<string, unknown>;
   updatedFields?: Record<string, unknown>;

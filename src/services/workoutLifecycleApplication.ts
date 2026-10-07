@@ -1256,19 +1256,6 @@ export type ProgramAdaptationResult =
  * it was prepared against constraints that no longer apply (docs §72/§74)
  * — the EARNED fact itself survives in the immutable event ledger.
  */
-async function invalidatePendingEvolutionForAdaptation(
-  uid: string,
-  authority: WorkoutLifecycleAuthorityRequest,
-): Promise<void> {
-  await authorizeWorkoutLifecycleMutation(authority);
-  const pendingRef = pendingEvolutionRef(uid);
-  await runTransaction(db, async (transaction) => {
-    const snapshot = await transaction.get(pendingRef);
-    if (snapshot.exists()) transaction.delete(pendingRef);
-    transaction.delete(authorityGrantRef(uid));
-  });
-}
-
 async function adaptWorkoutProgramAttempt(input: {
   uid: string;
   updatedFields: Partial<Omit<QuestionnaireAnswers, 'level'>>;
@@ -1290,6 +1277,26 @@ async function adaptWorkoutProgramAttempt(input: {
     ...input.updatedFields,
     level: authoritative.answers.level,
   };
+  // Frequency-change safety gate (docs §Mudança da frequência): a bare
+  // `updatedFields: { days: M }` with a stale `trainingDays` left at the OLD
+  // length reaches `engineV127`'s `normalizeWeekdays(trainingDays).length ===
+  // availabilityDays` check, fails it silently, and seals a `fixed` program
+  // with `weeklySchedule: []` — which `Array.isArray([])` lets straight
+  // through every calendar-authority reader, trapping the user in REST_DAY
+  // forever. `days` and `trainingDays` must always be changed together and
+  // consistently; reject here, before the prescription engine ever runs,
+  // rather than discovering it as a live scheduling outage.
+  if (input.updatedFields.days != null) {
+    const effectiveScheduleMode = syntheticAnswers.scheduleMode ?? 'fixed';
+    const effectiveTrainingDays = syntheticAnswers.trainingDays ?? [];
+    const frequencyTrainingDaysConsistent = effectiveScheduleMode === 'flexible'
+      ? effectiveTrainingDays.length === 0
+      : effectiveTrainingDays.length === input.updatedFields.days;
+    if (!frequencyTrainingDaysConsistent) {
+      return { status: 'FAILED', reasonCodes: ['FREQUENCY_TRAINING_DAYS_INCONSISTENT'] };
+    }
+  }
+
   const prescriptionInputSnapshot = buildPrescriptionInputSnapshot({
     answers: syntheticAnswers,
     currentTrainingLevel: lifecycle.lifecycle.currentTrainingLevel,
@@ -1306,6 +1313,22 @@ async function adaptWorkoutProgramAttempt(input: {
     usedLocalLimitationCatalog: false,
   });
   if (prepared.status !== 'SUCCESS') return { status: 'FAILED', reasonCodes: prepared.reasonCodes };
+  // Safety net, independent of the early guard above: no matter what
+  // produced it, a `fixed` plan with an empty `weeklySchedule` must never be
+  // sealed — `buildScheduleAuthorityContext`'s `Array.isArray([])` check
+  // would accept it as "configured" and leave the user permanently in
+  // REST_DAY.
+  if ((prepared.plan.scheduleMode ?? 'fixed') === 'fixed') {
+    const prescribedFrequency = prepared.plan.prescribedTrainingFrequency
+      ?? prepared.plan.prescribedStructuredDays
+      ?? prepared.plan.sessions.length;
+    const sealedTrainingDayCount = Array.isArray(prepared.plan.weeklySchedule)
+      ? prepared.plan.weeklySchedule.filter((day) => day.state === 'TRAINING').length
+      : 0;
+    if (sealedTrainingDayCount === 0 || sealedTrainingDayCount !== prescribedFrequency) {
+      return { status: 'FAILED', reasonCodes: ['ADAPTATION_PRODUCED_EMPTY_WEEKLY_SCHEDULE'] };
+    }
+  }
 
   const template = await loadWorkoutTemplate(prepared.templateId);
   if (!template) return { status: 'FAILED', reasonCodes: ['WORKOUT_TEMPLATE_NOT_FOUND'] };
@@ -1324,41 +1347,12 @@ async function adaptWorkoutProgramAttempt(input: {
     expectedPrescriptionInputSnapshotId: lifecycle.programInstance.prescriptionInputSnapshot?.snapshotId
       ?? `legacy:${lifecycle.programInstance.programInstanceId}`,
     authorityUpdatedFields: input.updatedFields as Record<string, unknown>,
+    clearPendingEvolution: true,
     // No `nextCycle` — adaptation never starts a new TrainingCycle (docs §59).
     eventType: 'PROGRAM_ADAPTED' as const,
     eventPayload: { reason: input.reason },
   };
 
-  // Invalidate the old target before committing new safety inputs. Activation
-  // now CAS-checks the same pending id inside its own transaction, so a stale
-  // target cannot slip through between this delete and the adaptation commit.
-  // The immutable earned event remains and is re-prepared afterward.
-  await invalidatePendingEvolutionForAdaptation(input.uid, {
-    operation: 'ADAPT',
-    sourceProgramInstanceId: lifecycle.programInstance.programInstanceId,
-    sourceCycleId: lifecycle.cycle.cycleId,
-    sourcePrescriptionInputSnapshotId: lifecycle.programInstance.prescriptionInputSnapshot?.snapshotId
-      ?? `legacy:${lifecycle.programInstance.programInstanceId}`,
-    targetProgramInstanceId: programInstanceIdForOperation(`activation:adaptation:${input.idempotencyKey}`),
-    targetContentIdentity: contentIdentityFor({
-      questionnaireId: program.questionnaireId,
-      questionnaireVersion: program.questionnaireVersion,
-      plan: prepared.plan,
-      template,
-    }),
-    targetPrescriptionIdentity: prepared.plan.planId,
-    targetTrainingLevel: lifecycle.lifecycle.currentTrainingLevel,
-    targetCycleNumber: lifecycle.lifecycle.currentCycleNumber,
-    questionnaireId: program.questionnaireId,
-    questionnaireVersion: program.questionnaireVersion,
-    targetProgramSource: 'program_adaptation',
-    targetTemplateVersion: template.version,
-    targetTemplateSourceVersion: template.sourceVersion,
-    targetTemplateContentHash: template.contentHash,
-    targetPlan: withoutUndefined(prepared.plan) as unknown as Record<string, unknown>,
-    targetPrescriptionInputSnapshot: prescriptionInputSnapshot as unknown as Record<string, unknown>,
-    updatedFields: input.updatedFields as Record<string, unknown>,
-  });
   const result = await saveAndActivateWorkoutProgram(activationInput);
   await reconcileWorkoutLifecycle({ uid: input.uid }).catch(() => undefined);
   return { status: 'SUCCESS', program: result };

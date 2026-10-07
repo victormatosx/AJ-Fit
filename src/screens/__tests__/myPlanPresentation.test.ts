@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildAdaptationFlags, buildMyPlanEffectiveSessions, buildWeekView, hasAnyAdaptation } from '../myPlanPresentation';
+import { buildAdaptationFlags, buildMyPlanEffectiveSessions, buildWeekView, currentPlanAvailableDays, hasAnyAdaptation } from '../myPlanPresentation';
 import { generateWorkoutPrescription } from '../../workoutPrescription/engine';
 import { completeAnswers } from '../../workoutPrescription/__tests__/fixtures';
 import type { FinalWorkoutPlan, PrescriptionTrace } from '../../workoutPrescription/types';
@@ -64,6 +64,21 @@ function effectiveIds(
     catalog: options.localCatalog ?? catalog,
   })[0].exercises.map((exercise) => exercise.effectiveExerciseId);
 }
+
+describe('Meu Plano — disponibilidade atual após ADAPT', () => {
+  it('5x → 4x shows 4, then 4x → 5x shows 5 without rewriting the historical questionnaire', () => {
+    const historicalOnboardingDays = 5;
+    const adaptedFour = { requestedDays: 4, prescribedTrainingFrequency: 4, prescribedStructuredDays: 4 };
+    const adaptedFive = { requestedDays: 5, prescribedTrainingFrequency: 5, prescribedStructuredDays: 5 };
+    expect(currentPlanAvailableDays(adaptedFour, historicalOnboardingDays)).toBe(4);
+    expect(currentPlanAvailableDays(adaptedFive, historicalOnboardingDays)).toBe(5);
+    expect(historicalOnboardingDays).toBe(5);
+  });
+
+  it('uses the active prescription frequency when a legacy plan lacks requestedDays', () => {
+    expect(currentPlanAvailableDays({ prescribedTrainingFrequency: 4, prescribedStructuredDays: 4 }, 5)).toBe(4);
+  });
+});
 
 describe('buildMyPlanEffectiveSessions — permanent substitution effective view', () => {
   it('shows the prescribed exercise when no permanent preference exists', () => {

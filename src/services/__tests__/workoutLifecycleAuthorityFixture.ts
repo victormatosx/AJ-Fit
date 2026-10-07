@@ -125,31 +125,9 @@ async function persistLifecycleActivationV127ForTests(
     : null;
   const pendingType = pendingSnapshot?.data()?.type as string | undefined;
 
-  // Mirrors `sealTargetProgram` (functions/src/workoutLifecycle/authorizeMutation.ts)
-  // — the real backend seals `workoutPrograms/{contentIdentity}` as a
-  // SEPARATE step, before this transition transaction ever runs. Without
-  // this, `saveAndActivateWorkoutProgram`'s post-persist read-back
-  // (`getDoc(programRef(...))`) would find nothing.
+  // The v1.27 backend seals target content inside the same transition
+  // transaction, so a failed activation cannot leave an orphan program.
   const sealedRef = doc(fixtureDb, 'users', uid, 'workoutPrograms', targetContentIdentity);
-  const sealedSnapshot = await getDoc(sealedRef);
-  if (!sealedSnapshot.exists()) {
-    const plan = authoritativeRequest.targetPlan as unknown as FinalWorkoutPlan;
-    await setDoc(sealedRef, {
-      ...plan,
-      programId: targetContentIdentity,
-      prescriptionId: targetPrescriptionIdentity,
-      status: 'active',
-      source: authoritativeRequest.targetProgramSource,
-      templateVersion: authoritativeRequest.targetTemplateVersion,
-      templateSourceVersion: authoritativeRequest.targetTemplateSourceVersion,
-      templateContentHash: authoritativeRequest.targetTemplateContentHash,
-      questionnaireId: authoritativeRequest.questionnaireId,
-      questionnaireVersion: authoritativeRequest.questionnaireVersion,
-      createdAt: Timestamp.now(),
-      activatedAt: Timestamp.now(),
-      updatedAt: Timestamp.now(),
-    });
-  }
   const activationReason = activationReasonFor(isNewCycle, authoritativeRequest.targetProgramSource);
   const progressionReason = pendingType === 'LEVEL_PROMOTION'
     ? 'EARNED_LEVEL_PROMOTION' : pendingType === 'CYCLE_EVOLUTION' ? 'EARNED_CYCLE_EVOLUTION' : 'EARNED_EVOLUTION';
@@ -162,13 +140,40 @@ async function persistLifecycleActivationV127ForTests(
   const currentInstanceRef = doc(fixtureDb, 'users', uid, 'programInstances', sourceProgramInstanceId);
   const currentCycleRef = doc(fixtureDb, 'users', uid, 'trainingCycles', sourceCycleId);
   const pendingRef = doc(fixtureDb, 'users', uid, 'pendingEvolutions', 'current');
+  const configRef = doc(fixtureDb, 'users', uid, 'workoutProgramState', 'scheduleConfig');
+  const frequencyChanged = request.operation === 'ADAPT' && request.updatedFields?.days != null;
 
   await runTransaction(fixtureDb, async (transaction) => {
-    const [instanceSnapshot, lifecycleSnapshot] = await Promise.all([
-      transaction.get(instanceRef), transaction.get(lifecycleRef),
+    const [instanceSnapshot, lifecycleSnapshot, sealedSnapshot, configSnapshot] = await Promise.all([
+      transaction.get(instanceRef), transaction.get(lifecycleRef), transaction.get(sealedRef),
+      frequencyChanged ? transaction.get(configRef) : Promise.resolve(null),
     ]);
     if (instanceSnapshot.exists()) return;
     const now = serverTimestamp();
+    if (!sealedSnapshot.exists()) {
+      transaction.set(sealedRef, {
+        ...authoritativeRequest.targetPlan as unknown as FinalWorkoutPlan,
+        programId: targetContentIdentity, prescriptionId: targetPrescriptionIdentity,
+        status: 'active', source: authoritativeRequest.targetProgramSource,
+        templateVersion: authoritativeRequest.targetTemplateVersion,
+        templateSourceVersion: authoritativeRequest.targetTemplateSourceVersion,
+        templateContentHash: authoritativeRequest.targetTemplateContentHash,
+        questionnaireId: authoritativeRequest.questionnaireId,
+        questionnaireVersion: authoritativeRequest.questionnaireVersion,
+        createdAt: now, activatedAt: now, updatedAt: now,
+      });
+    } else if (sealedSnapshot.data()?.status !== 'active') {
+      transaction.update(sealedRef, { status: 'active', updatedAt: now });
+    }
+    if (frequencyChanged) {
+      const inputs = authoritativeRequest.targetPrescriptionInputSnapshot?.inputs as Record<string, unknown>;
+      transaction.set(configRef, {
+        scheduleMode: inputs.scheduleMode === 'flexible' ? 'flexible' : 'fixed',
+        trainingDays: inputs.scheduleMode === 'flexible' ? [] : inputs.trainingDays,
+        timezone: configSnapshot?.data()?.timezone ?? 'UTC',
+        scheduleVersion: 1, updatedAt: now,
+      });
+    }
     const previousContentIdentity = lifecycleSnapshot.data()?.activeContentIdentity as string | undefined;
     if (previousContentIdentity && previousContentIdentity !== targetContentIdentity) {
       transaction.update(doc(fixtureDb, 'users', uid, 'workoutPrograms', previousContentIdentity), {
@@ -240,7 +245,7 @@ async function persistLifecycleActivationV127ForTests(
       updatedAt: now,
     });
   });
-  if (request.operation === 'ACTIVATE') {
+  if (request.operation === 'ACTIVATE' || request.operation === 'ADAPT') {
     await deleteDoc(pendingRef).catch(() => undefined);
   }
   return { programId: targetContentIdentity, programInstanceId: targetProgramInstanceId };

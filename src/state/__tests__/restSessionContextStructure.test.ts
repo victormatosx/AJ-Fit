@@ -96,7 +96,7 @@ describe('WorkoutScreen temporal integration', () => {
   });
 
   it('allows minimizing without ending the provider-owned workout session', () => {
-    expect(appShell).toContain("onMinimize={() => setTab('home')}");
+    expect(appShell).toContain("onMinimize={() => { setWorkoutExecutionVisible(false); setTab('home'); }}");
     expect(appShell).toContain('onDone={finishWorkoutSession}');
   });
 });

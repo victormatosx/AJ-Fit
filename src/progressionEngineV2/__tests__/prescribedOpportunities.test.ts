@@ -111,6 +111,32 @@ describe('countFulfilledPrescribedOpportunities', () => {
       prescribedOpportunities: opportunities('2026-01-05', '2026-01-06'), prescribedSessions: threeSessions, trainingDays: ALL_DAYS,
     })).toBe(1);
   });
+
+  it('replays REPOSITIONED for rotation but never counts it as adherence or a missed session', () => {
+    const threeSessions = [
+      { exercises: [{ exerciseId: 'a', setCount: 1 }] },
+      { exercises: [{ exerciseId: 'b', setCount: 1 }] },
+      { exercises: [{ exerciseId: 'c', setCount: 1 }] },
+    ];
+    const repositionedA = { type: 'REPOSITIONED' as const, programInstanceId: 'wpi-a', sessionIndex: 0, scheduledDate: '2026-01-05' };
+    const repositionedB = { type: 'REPOSITIONED' as const, programInstanceId: 'wpi-a', sessionIndex: 1, scheduledDate: '2026-01-05' };
+    const completedC = {
+      programInstanceId: 'wpi-a', sessionIndex: 2, scheduledLocalDate: '2026-01-06', status: 'COMPLETED' as const,
+      exercises: [{ exerciseIndex: 0, exerciseId: 'c', sets: [{ setIndex: 0, status: 'COMPLETED' as const }] }],
+    };
+    expect(countFulfilledPrescribedOpportunities({
+      programInstanceId: 'wpi-a',
+      executions: [completedC],
+      scheduleEvents: [
+        repositionedA,
+        repositionedB,
+        { type: 'COMPLETED' as const, programInstanceId: 'wpi-a', sessionIndex: 2, scheduledDate: '2026-01-06' },
+      ],
+      prescribedOpportunities: opportunities('2026-01-05', '2026-01-06'),
+      prescribedSessions: threeSessions,
+      trainingDays: ALL_DAYS,
+    })).toBe(1);
+  });
 });
 
 describe('buildPrescribedOpportunities calendar boundaries', () => {

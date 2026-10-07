@@ -52,9 +52,13 @@ const OPERATIONS_BLOCKED_WHEN_CIRCUIT_OPEN = [
  * - FINISH_EXECUTION / COMPLETE_SCHEDULE / RESOLVE_MISSED_SESSION: normal
  *   day-to-day use of the account's current, already-active, pre-incident
  *   content. Blocking these would stop users from training at all.
+ * - REPOSITION_SCHEDULE_CURSOR: only reorders which already-sealed, already-
+ *   existing session of the CURRENT program is next — never installs new
+ *   prescription content, exactly like COMPLETE_SCHEDULE/RESOLVE_MISSED_SESSION.
  */
 const OPERATIONS_ALLOWED_WHEN_CIRCUIT_OPEN = [
   'RECOVER', 'EARN', 'DEFER', 'FINISH_EXECUTION', 'COMPLETE_SCHEDULE', 'RESOLVE_MISSED_SESSION',
+  'REPOSITION_SCHEDULE_CURSOR',
 ] as const;
 
 export type CircuitBreakerOperation =

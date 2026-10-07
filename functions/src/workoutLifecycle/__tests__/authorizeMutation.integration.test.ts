@@ -13,6 +13,7 @@ import { countEarnedIntermediateCycles } from '../prescriptionEngine/progression
 import { effectivePrescriptionInputsFromAnswers } from '../prescriptionEngine/workoutLifecycle/prescriptionInputs';
 import { seedRealPrescriptionCatalog } from './realCatalogFixture';
 import { weekdayOfLocalDate } from '../scheduleEngine/calendar';
+import { resolveWorkoutSchedule } from '../scheduleEngine/resolver';
 
 const enabled = process.env.WORKOUT_LIFECYCLE_AUTHORITY_INTEGRATION === '1';
 const UID = 'authority-adversary';
@@ -394,7 +395,7 @@ describe.skipIf(!enabled)('Workout Lifecycle authority — real Firestore Emulat
     const result = await authorizeWorkoutLifecycleMutationHandler({
       auth: { uid: UID },
       data: {
-        operation: 'ADAPT', targetProgramSource: 'program_adaptation',
+        operation: 'ADAPT', targetProgramSource: 'program_adaptation', eventType: 'PROGRAM_ADAPTED',
         questionnaireId: 'q1', questionnaireVersion: 1,
         sourceProgramInstanceId: 'wpi_active', sourceCycleId: 'cyc_active',
         sourcePrescriptionInputSnapshotId: 'pis_active', targetProgramInstanceId: 'wpi_unsafe',
@@ -837,8 +838,8 @@ describe.skipIf(!enabled)('Workout Lifecycle authority — real Firestore Emulat
 
     const BASE_ADAPT_ANSWERS = completeInputs({ level: 'intermediate', days: 2, place: 'gym' });
 
-    async function seedActiveV127Program(questionnaireId: string) {
-      await db.collection('users').doc(UID).collection('questionnaires').doc(questionnaireId).set({ answers: BASE_ADAPT_ANSWERS, version: 1 });
+    async function seedActiveV127Program(questionnaireId: string, answers = BASE_ADAPT_ANSWERS) {
+      await db.collection('users').doc(UID).collection('questionnaires').doc(questionnaireId).set({ answers, version: 1 });
       const init = await initializeWorkoutProgramV127Handler(
         { auth: { uid: UID }, data: { questionnaireId, questionnaireVersion: 1 } } as never, db,
       );
@@ -850,13 +851,13 @@ describe.skipIf(!enabled)('Workout Lifecycle authority — real Firestore Emulat
      * seeded instance's own `prescriptionInputSnapshot.inputs`, built via
      * `effectivePrescriptionInputsFromAnswers` at INITIALIZE time) merged
      * with `updatedFields`, `level` unchanged, `source: 'PROGRAM_ADAPTATION'`. */
-    function adaptSnapshotFor(updatedFields: Record<string, unknown>) {
+    function adaptSnapshotFor(updatedFields: Record<string, unknown>, sourceAnswers = BASE_ADAPT_ANSWERS) {
       // JSON round-tripped to match exactly what `initializeWorkoutProgramV127Handler`
       // actually persisted (it strips `undefined` fields the same way — see
       // that handler's own comment); `assertSnapshot`
       // reads `sourceInputs` straight back off the persisted document.
       const sourceInputs = JSON.parse(JSON.stringify(
-        effectivePrescriptionInputsFromAnswers(BASE_ADAPT_ANSWERS as never, 'INTERMEDIATE'),
+        effectivePrescriptionInputsFromAnswers(sourceAnswers as never, 'INTERMEDIATE'),
       )) as Record<string, unknown>;
       const inputs = { ...sourceInputs, ...updatedFields, level: 'intermediate' };
       return {
@@ -906,6 +907,85 @@ describe.skipIf(!enabled)('Workout Lifecycle authority — real Firestore Emulat
       if (persisted.programId !== init.programId) {
         expect(oldProgram.data()?.status).toBe('superseded');
       }
+    });
+
+    it('fixed 5→4 commits T003, lifecycle, pending invalidation and calendar atomically; incomplete metadata writes nothing', async () => {
+      const root = db.collection('users').doc(UID);
+      const fiveDays = ['MON', 'TUE', 'THU', 'FRI', 'SAT'];
+      const fourDays: Array<'MON' | 'TUE' | 'THU' | 'FRI'> = ['MON', 'TUE', 'THU', 'FRI'];
+      const fiveAnswers = completeInputs({ level: 'intermediate', days: 5, trainingDays: fiveDays, place: 'gym' });
+      const init = await seedActiveV127Program('q_v127_fixed_frequency', fiveAnswers);
+      expect((await root.collection('workoutPrograms').doc(init.programId).get()).data())
+        .toMatchObject({ templateId: 'T004', prescribedTrainingFrequency: 5 });
+      expect((await root.collection('workoutPrograms').doc(init.programId).get()).data()?.sessions).toHaveLength(5);
+      await root.collection('workoutProgramState').doc('scheduleConfig').set({
+        scheduleMode: 'fixed', trainingDays: fiveDays, timezone: 'America/Sao_Paulo', scheduleVersion: 1,
+      });
+      await root.collection('pendingEvolutions').doc('current').set({ type: 'CYCLE_EVOLUTION' });
+      await root.collection('workoutExecutions').doc('historical').set({ programInstanceId: init.programInstanceId, status: 'COMPLETED' });
+      await root.collection('workoutPrograms').doc(init.programId).collection('scheduleState')
+        .doc(init.programInstanceId).set({
+          programId: init.programId, programInstanceId: init.programInstanceId,
+          nextSessionIndex: 1, cursorDate: '2026-10-05', lastCompletedAt: '2026-10-05', pendingMissDecision: null,
+        });
+      const updatedFields = { days: 4, scheduleMode: 'fixed', trainingDays: fourDays };
+      const data = {
+        operation: 'ADAPT', sourceProgramInstanceId: init.programInstanceId,
+        targetProgramInstanceId: 'wpi_placeholder', targetCycleId: 'cyc_placeholder',
+        targetTrainingLevel: 'INTERMEDIATE', targetCycleNumber: 1,
+        questionnaireId: 'q_v127_fixed_frequency', questionnaireVersion: 1,
+        targetProgramSource: 'program_adaptation', eventType: 'PROGRAM_ADAPTED',
+        updatedFields, targetPrescriptionInputSnapshot: adaptSnapshotFor(updatedFields, fiveAnswers),
+      };
+      await expect(authorizeWorkoutLifecycleMutationHandler({
+        auth: { uid: UID }, data: { ...data, eventType: undefined },
+      } as never, db)).rejects.toMatchObject({ code: 'invalid-argument', message: 'adaptation_event_type_required' });
+      expect((await root.collection('workoutPrograms').get()).size).toBe(1);
+      expect((await root.collection('programInstances').get()).size).toBe(1);
+      expect((await root.collection('workoutProgramState').doc('scheduleConfig').get()).data()?.trainingDays).toEqual(fiveDays);
+
+      const inconsistentFields = { days: 4, scheduleMode: 'fixed', trainingDays: fiveDays };
+      await expect(authorizeWorkoutLifecycleMutationHandler({
+        auth: { uid: UID }, data: {
+          ...data, updatedFields: inconsistentFields,
+          targetPrescriptionInputSnapshot: adaptSnapshotFor(inconsistentFields, fiveAnswers),
+        },
+      } as never, db)).rejects.toMatchObject({
+        code: 'invalid-argument', message: 'adaptation_frequency_schedule_inconsistent',
+      });
+      expect((await root.collection('workoutPrograms').get()).size).toBe(1);
+      expect((await root.collection('programInstances').get()).size).toBe(1);
+      expect((await root.collection('workoutProgramState').doc('scheduleConfig').get()).data()?.trainingDays).toEqual(fiveDays);
+
+      const result = await authorizeWorkoutLifecycleMutationHandler({ auth: { uid: UID }, data } as never, db);
+      const [program, oldInstance, active, config, pending, history] = await Promise.all([
+        root.collection('workoutPrograms').doc(result.persisted!.programId).get(),
+        root.collection('programInstances').doc(init.programInstanceId).get(),
+        root.collection('workoutLifecycleState').doc('current').get(),
+        root.collection('workoutProgramState').doc('scheduleConfig').get(),
+        root.collection('pendingEvolutions').doc('current').get(),
+        root.collection('workoutExecutions').doc('historical').get(),
+      ]);
+      expect(program.data()).toMatchObject({ templateId: 'T003', prescribedTrainingFrequency: 4 });
+      expect(program.data()?.weeklySchedule.filter((day: { state: string }) => day.state === 'TRAINING')).toHaveLength(4);
+      expect(active.data()?.activeProgramInstanceId).toBe(result.persisted!.programInstanceId);
+      expect(oldInstance.data()?.supersededAt).not.toBeNull();
+      expect(config.data()).toMatchObject({ scheduleMode: 'fixed', trainingDays: fourDays, timezone: 'America/Sao_Paulo' });
+      expect(pending.exists).toBe(false);
+      expect(history.exists).toBe(true);
+      expect((await root.collection('workoutPrograms').doc(init.programId).collection('scheduleState')
+        .doc(init.programInstanceId).get()).data()?.nextSessionIndex).toBe(1);
+      expect((await root.collection('programInstances').get()).size).toBe(2);
+      expect((await root.collection('workoutLifecycleEvents').where('type', '==', 'PROGRAM_ADAPTED').get()).size).toBe(1);
+      // The new instance intentionally has no persisted cursor until its
+      // first completion; the resolver must still offer a real first session.
+      expect((await root.collection('workoutPrograms').doc(result.persisted!.programId)
+        .collection('scheduleState').doc(result.persisted!.programInstanceId).get()).exists).toBe(false);
+      expect(resolveWorkoutSchedule({
+        hasActiveProgram: true, sessionCount: program.data()!.sessions.length,
+        config: { scheduleMode: 'fixed', trainingDays: fourDays, timezone: 'America/Sao_Paulo', scheduleVersion: 1 },
+        state: null, activatedAtLocalDate: '2026-10-05', todayLocalDate: '2026-10-05',
+      })).toMatchObject({ status: 'SESSION_READY' });
     });
 
     it('two concurrent identical ADAPT calls (double tap) converge on one transition, never two', async () => {
@@ -1113,7 +1193,7 @@ describe.skipIf(!enabled)('Workout Lifecycle authority — real Firestore Emulat
     const result = await authorizeWorkoutLifecycleMutationHandler({
       auth: { uid: UID },
       data: {
-        operation: 'ADAPT', targetProgramSource: 'program_adaptation',
+        operation: 'ADAPT', targetProgramSource: 'program_adaptation', eventType: 'PROGRAM_ADAPTED',
         questionnaireId: 'q1', questionnaireVersion: 1,
         sourceProgramInstanceId: 'wpi_active', sourceCycleId: 'cyc_active',
         sourcePrescriptionInputSnapshotId: 'pis_active', targetProgramInstanceId: 'wpi_attacker',
@@ -1733,6 +1813,100 @@ describe.skipIf(!enabled)('Workout Lifecycle authority — real Firestore Emulat
       } as never, db)).rejects.toMatchObject({
         code: 'invalid-argument', message: 'missing_missed_session_decision_identity',
       });
+    });
+  });
+
+  describe('REPOSITION_SCHEDULE_CURSOR — authoritative sequence reposition', () => {
+    const today = new Date().toISOString().slice(0, 10);
+
+    beforeEach(async () => {
+      const root = db.collection('users').doc(UID);
+      await Promise.all([
+        root.collection('workoutPrograms').doc('wpg_active').update({
+          scheduleMode: 'flexible', prescribedTrainingFrequency: 3, weeklySchedule: [],
+          sessions: [{ name: 'A', exercises: [] }, { name: 'B', exercises: [] }, { name: 'C', exercises: [] }],
+        }),
+        root.collection('workoutProgramState').doc('scheduleConfig').set({
+          scheduleMode: 'flexible', trainingDays: [], timezone: 'UTC', scheduleVersion: 1,
+        }),
+      ]);
+    });
+
+    const request = (targetSessionIndex: number, expectedCurrentNextSessionIndex = 0) => ({
+      auth: { uid: UID },
+      data: {
+        operation: 'REPOSITION_SCHEDULE_CURSOR', sourceProgramInstanceId: 'wpi_active',
+        targetSessionIndex, expectedCurrentNextSessionIndex, scheduledLocalDate: today,
+      },
+    });
+
+    it('grants a forward path as neutral REPOSITIONED events and same-index as no-op', async () => {
+      await expect(authorizeWorkoutLifecycleMutationHandler(request(2) as never, db))
+        .resolves.toMatchObject({ grantId: 'current' });
+      let grant = (await db.collection('users').doc(UID).collection('workoutLifecycleAuthorityGrants').doc('current').get()).data();
+      expect(grant).toMatchObject({
+        operation: 'REPOSITION_SCHEDULE_CURSOR', targetNextSessionIndex: 2,
+        targetScheduleEvents: [
+          { type: 'REPOSITIONED', sessionIndex: 0, scheduledDate: today },
+          { type: 'REPOSITIONED', sessionIndex: 1, scheduledDate: today },
+        ],
+      });
+      await expect(authorizeWorkoutLifecycleMutationHandler(request(0) as never, db))
+        .resolves.toMatchObject({ grantId: 'current' });
+      grant = (await db.collection('users').doc(UID).collection('workoutLifecycleAuthorityGrants').doc('current').get()).data();
+      expect(grant?.targetScheduleEvents).toEqual([]);
+    });
+
+    it('rejects stale/out-of-range cursors', async () => {
+      await expect(authorizeWorkoutLifecycleMutationHandler(request(2, 1) as never, db))
+        .rejects.toMatchObject({ code: 'aborted' });
+      await expect(authorizeWorkoutLifecycleMutationHandler(request(3) as never, db))
+        .rejects.toMatchObject({ code: 'invalid-argument' });
+    });
+
+    it('blocks IN_PROGRESS and a target already completed today', async () => {
+      const executions = db.collection('users').doc(UID).collection('workoutExecutions');
+      await executions.doc('active').set({ programInstanceId: 'wpi_active', sessionIndex: 1, status: 'IN_PROGRESS' });
+      await expect(authorizeWorkoutLifecycleMutationHandler(request(1) as never, db))
+        .rejects.toMatchObject({ code: 'failed-precondition' });
+      await executions.doc('active').delete();
+      await executions.doc('done').set({
+        programInstanceId: 'wpi_active', sessionIndex: 1, scheduledLocalDate: today, status: 'COMPLETED',
+      });
+      await expect(authorizeWorkoutLifecycleMutationHandler(request(1) as never, db))
+        .rejects.toMatchObject({ code: 'failed-precondition' });
+    });
+
+    it('accepts the real five-session wrap 4→0 even when prescribed weekly frequency is 4', async () => {
+      const root = db.collection('users').doc(UID);
+      await Promise.all([
+        root.collection('workoutPrograms').doc('wpg_active').update({
+          prescribedTrainingFrequency: 4,
+          sessions: [
+            { name: 'Empurrar', exercises: [] },
+            { name: 'Puxar', exercises: [] },
+            { name: 'Pernas', exercises: [] },
+            { name: 'Superiores Extra', exercises: [] },
+            { name: 'Inferiores Extra', exercises: [] },
+          ],
+        }),
+        root.collection('workoutPrograms').doc('wpg_active').collection('scheduleState').doc('wpi_active').set({
+          programId: 'wpg_active', programInstanceId: 'wpi_active',
+          nextSessionIndex: 4, cursorDate: today, lastCompletedAt: null,
+          pendingMissDecision: null,
+        }),
+      ]);
+
+      await expect(authorizeWorkoutLifecycleMutationHandler(request(0, 4) as never, db))
+        .resolves.toMatchObject({ grantId: 'current' });
+      const grant = (await root.collection('workoutLifecycleAuthorityGrants').doc('current').get()).data();
+      expect(grant).toMatchObject({
+        operation: 'REPOSITION_SCHEDULE_CURSOR',
+        expectedCurrentNextSessionIndex: 4,
+        targetNextSessionIndex: 0,
+        targetScheduleEvents: [{ type: 'REPOSITIONED', sessionIndex: 4, scheduledDate: today }],
+      });
+      expect(grant?.targetScheduleEvents.some((event: { type: string }) => event.type === 'SKIPPED')).toBe(false);
     });
   });
 

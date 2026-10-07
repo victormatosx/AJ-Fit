@@ -9,13 +9,12 @@ const headerStatus = readFileSync(
 );
 
 describe('minimized active workout UX', () => {
-  it('returns directly to an active workout without showing start confirmation', () => {
-    // selectTab funnels every 'workout' tab tap through requestStartWorkout,
-    // which is what actually decides resume-vs-gated-confirmation.
+  it('returns to the workout hub first and continues through its explicit CTA', () => {
     const selectTabStart = appShell.indexOf('const selectTab = (nextTab: TabId) => {');
     const selectTabEnd = appShell.indexOf('};', selectTabStart);
     const selectTab = appShell.slice(selectTabStart, selectTabEnd);
-    expect(selectTab).toContain('requestStartWorkout();');
+    expect(selectTab).toContain('setWorkoutExecutionVisible(false)');
+    expect(selectTab).not.toContain('requestStartWorkout();');
 
     const requestStartWorkoutStart = appShell.indexOf('const requestStartWorkout = useCallback(() => {');
     const requestStartWorkoutEnd = appShell.indexOf('}, [workoutInProgress', requestStartWorkoutStart);
@@ -27,8 +26,8 @@ describe('minimized active workout UX', () => {
 
   it('keeps WorkoutScreen mounted and makes it non-interactive only while hidden', () => {
     expect(appShell).toContain("{workoutInProgress && !workoutStartPending && !execution.starting && execution.execution && prescription.status === 'SUCCESS' && (");
-    expect(appShell).toContain("pointerEvents={tab === 'workout' ? 'auto' : 'none'}");
-    expect(appShell).toContain("accessibilityElementsHidden={tab !== 'workout'}");
+    expect(appShell).toContain("pointerEvents={tab === 'workout' && workoutExecutionVisible ? 'auto' : 'none'}");
+    expect(appShell).toContain("accessibilityElementsHidden={tab !== 'workout' || !workoutExecutionVisible}");
   });
 
   it('turns the Today card into a return-to-workout design', () => {

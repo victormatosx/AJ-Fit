@@ -75,9 +75,14 @@ export function errorCode(err: unknown): string | undefined {
 export function errorReason(err: unknown): string | undefined {
   const details = typeof err === 'object' && err !== null && 'details' in err
     ? (err as { details?: unknown }).details : null;
-  const raw = typeof details === 'object' && details !== null && 'reason' in details
+  const detailReason = typeof details === 'object' && details !== null && 'reason' in details
     ? String((details as { reason?: unknown }).reason) : '';
-  return /^[a-z0-9_/-]{1,96}$/i.test(raw) ? raw : undefined;
+  if (/^[a-z0-9_/-]{1,96}$/i.test(detailReason)) return detailReason;
+  // Firebase Functions exposes the backend HttpsError message separately
+  // from `details`. Accept it only when it is itself a bounded enum-like
+  // reason; arbitrary human text is intentionally not logged.
+  const message = err instanceof Error ? err.message : '';
+  return /^[a-z0-9_/-]{1,96}$/i.test(message) ? message : undefined;
 }
 
 /** Constructor name only (e.g. `FirebaseError`, `TypeError`) — never the message/stack. */

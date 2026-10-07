@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 // Phase 10 (docs/workout-lifecycle/v2/decisions/ADR-016_BACKEND_AUTHORITATIVE_PRESCRIPTION.md):
-// the schedule rotation resolver (`src/scheduleEngine/{calendar,resolver,types,localDate}.ts`)
+// the schedule rotation resolver and calendar authority
+// (`src/scheduleEngine/{calendar,resolver,types,localDate,calendarAuthority}.ts`)
 // is pure, dependency-free TS with no RN/Expo imports except the `Weekday` type from
 // `src/state/AppState.tsx` (a React/RN module). To make the backend authoritative for
 // "what session was expected on this date" (instead of trusting `execution.sessionIndex`),
@@ -25,7 +26,7 @@ const REPO_ROOT = path.resolve(__dirname, '..');
 const SOURCE_DIR = path.join(REPO_ROOT, 'src', 'scheduleEngine');
 const DEST_DIR = path.join(REPO_ROOT, 'functions', 'src', 'workoutLifecycle', 'scheduleEngine');
 
-const FILES = ['calendar.ts', 'resolver.ts', 'types.ts', 'localDate.ts', 'identities.ts'];
+const FILES = ['calendar.ts', 'resolver.ts', 'types.ts', 'localDate.ts', 'identities.ts', 'calendarAuthority.ts', 'reposition.ts'];
 
 const HEADER = `// GENERATED FILE — do not edit directly.
 // Synced from src/scheduleEngine by scripts/syncScheduleEngineToFunctions.cjs.

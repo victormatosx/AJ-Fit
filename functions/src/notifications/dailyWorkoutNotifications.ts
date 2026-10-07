@@ -14,6 +14,10 @@ import { detectMissedSessionGap, resolveWorkoutSchedule } from '../workoutLifecy
 import type { PendingMissDecision, ScheduleConfig } from '../workoutLifecycle/scheduleEngine/types';
 import type { Weekday } from '../workoutLifecycle/scheduleEngine/weekday';
 import {
+  prescribedSessionCount,
+  resolveEffectiveCalendarAuthority,
+} from '../workoutLifecycle/scheduleEngine/calendarAuthority';
+import {
   buildMissedWorkoutNotification,
   buildRecoveryDayNotification,
   buildWorkoutDayNotification,
@@ -146,6 +150,25 @@ function legacyWeeklySchedule(value: unknown): WeeklyDay[] | null {
   }));
 }
 
+/**
+ * ScheduleConfig governs WHICH days are TRAINING (docs §Agenda configurável)
+ * — but it has no concept of ACTIVE_RECOVERY, so a day it doesn't claim as
+ * TRAINING must still defer to whatever the sealed program's own
+ * `weeklySchedule` already said about that exact day, rather than silently
+ * collapsing every account's active-recovery days to REST the moment
+ * ScheduleConfig becomes the calendar authority.
+ */
+function scheduleConfigWeeklySchedule(trainingDays: Weekday[], existing: WeeklyDay[] | null): WeeklyDay[] {
+  const trainingSet = new Set(trainingDays);
+  const existingByWeekday = new Map((existing ?? []).map((day) => [day.weekday, day.state]));
+  return (['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'] as const).map((weekday) => ({
+    weekday,
+    state: trainingSet.has(weekday)
+      ? 'TRAINING'
+      : existingByWeekday.get(weekday) === 'ACTIVE_RECOVERY' ? 'ACTIVE_RECOVERY' : 'REST',
+  }));
+}
+
 function effectiveWeeklySchedule(
   programValue: unknown,
   configuredTrainingDays: unknown,
@@ -182,15 +205,6 @@ function parseScheduleState(data: DocumentData | undefined): ScheduleStateInput 
     pendingMissDecision,
     lastCompletedAt: data.lastCompletedAt ?? null,
   };
-}
-
-function sessionCountFor(program: DocumentData): number {
-  for (const value of [program.prescribedTrainingFrequency, program.prescribedStructuredDays]) {
-    if (Number.isInteger(value) && value > 0 && value <= 7) return value;
-  }
-  return Array.isArray(program.sessions) && program.sessions.length > 0
-    ? program.sessions.length
-    : 0;
 }
 
 export async function loadDailyWorkoutContext(
@@ -240,11 +254,23 @@ export async function loadDailyWorkoutContext(
     || programData?.status !== 'active'
   ) return { status: 'PROGRAM_UNAVAILABLE', timezone };
 
-  const scheduleMode = programData.scheduleMode === 'flexible' ? 'flexible' : 'fixed';
-  const weeklySchedule = scheduleMode === 'flexible' ? [] : effectiveWeeklySchedule(
-    programData.weeklySchedule,
-    scheduleConfig.data()?.trainingDays,
-  );
+  const scheduleConfigData = scheduleConfig.data() ?? null;
+  const snapshotInputs = isRecord(instanceData.prescriptionInputSnapshot?.inputs)
+    ? instanceData.prescriptionInputSnapshot.inputs
+    : null;
+  const calendar = resolveEffectiveCalendarAuthority({
+    scheduleConfig: scheduleConfigData,
+    program: programData,
+    snapshotInputs,
+  });
+  const { scheduleMode } = calendar;
+  const sessionCount = prescribedSessionCount(programData);
+  const weeklySchedule = scheduleMode === 'flexible'
+    ? []
+    : scheduleConfigWeeklySchedule(
+        calendar.trainingDays,
+        effectiveWeeklySchedule(programData.weeklySchedule, snapshotInputs?.trainingDays),
+      );
   if (!weeklySchedule) return { status: 'SCHEDULE_UNAVAILABLE', timezone };
   const trainingDays = weeklySchedule
     .filter((day) => day.state === 'TRAINING')
@@ -252,7 +278,6 @@ export async function loadDailyWorkoutContext(
   const activeRecoveryDays = weeklySchedule
     .filter((day) => day.state === 'ACTIVE_RECOVERY')
     .map((day) => day.weekday);
-  const sessionCount = sessionCountFor(programData);
   if ((scheduleMode === 'fixed' && trainingDays.length === 0) || sessionCount === 0) {
     return { status: 'SCHEDULE_UNAVAILABLE', timezone };
   }

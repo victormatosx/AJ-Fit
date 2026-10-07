@@ -1,5 +1,6 @@
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -25,6 +26,7 @@ import type { ScheduleMode, Weekday } from '../state/AppState';
 import { addDaysLocal } from '../scheduleEngine/calendar';
 import { scheduleEventDocumentId } from '../scheduleEngine/identities';
 import { detectMissedSessionGap, resolveWorkoutSchedule } from '../scheduleEngine/resolver';
+import { repositionedSessionIndexes } from '../scheduleEngine/reposition';
 import {
   pendingMissMatchesGap,
   reconcilePendingMissDecision,
@@ -221,14 +223,16 @@ export async function resolveTodaysSchedule(input: {
   const hasActiveProgram = input.programId != null && input.sessionCount > 0;
   const storedConfig = input.storedConfig !== undefined ? input.storedConfig : await loadScheduleConfig(input.uid);
   const scheduleMode = input.scheduleMode ?? storedConfig?.scheduleMode ?? 'fixed';
-  const config = storedConfig && input.trainingDaysOverride?.length
+  const config = storedConfig
     ? {
         ...storedConfig,
         scheduleMode,
-        trainingDays: input.trainingDaysOverride,
-        activeRecoveryDays: input.activeRecoveryDaysOverride ?? [],
+        ...(input.trainingDaysOverride?.length ? { trainingDays: input.trainingDaysOverride } : {}),
+        ...(input.activeRecoveryDaysOverride
+          ? { activeRecoveryDays: input.activeRecoveryDaysOverride }
+          : {}),
       }
-    : storedConfig ? { ...storedConfig, scheduleMode } : null;
+    : null;
 
   if (!hasActiveProgram) return resolveWorkoutSchedule({
     hasActiveProgram: false,
@@ -489,6 +493,119 @@ export async function resolveMissedSession(input: {
     });
     if (input.programInstanceId) transaction.delete(grantRef);
   });
+}
+
+/**
+ * Manual sequence reposition (docs §Escolha manual de treino): the user
+ * picked a session other than the one automatically offered, and that
+ * session becomes the new rotation anchor going forward — never a one-off,
+ * out-of-sequence session. Mirrors `resolveMissedSession`'s FOLLOW_SCHEDULE
+ * branch byte-for-byte (one ledger event per session walked past, same
+ * "day before" `cursorDate` convention), except the ledger entries are
+ * `REPOSITIONED` — never `SKIPPED` — so adherence/streak (which only ever
+ * counts `COMPLETED` events) is entirely unaffected by a deliberate manual
+ * reorder. Also unconditionally resolves any `pendingMissDecision` (docs
+ * decision #5): the user's explicit choice already represents their
+ * intent, so this never re-asks "recover or skip" first.
+ */
+export async function repositionScheduleCursor(input: {
+  uid: string;
+  programId: string;
+  programInstanceId?: string;
+  sessionCount: number;
+  scheduleMode: ScheduleMode;
+  targetSessionIndex: number;
+  todayLocalDate: string;
+  /** The rotation's current effective next session, as the caller's own already-resolved `ScheduleResolution` sees it — never re-derived here. */
+  expectedCurrentNextSessionIndex: number;
+}): Promise<void> {
+  const repositionedIndexes = repositionedSessionIndexes(
+    input.expectedCurrentNextSessionIndex,
+    input.targetSessionIndex,
+    input.sessionCount,
+  );
+  const stateRef = scheduleStateRef(input.uid, input.programId, input.programInstanceId);
+
+  // Idempotent retry / already-applied (double tap, redelivered call):
+  // nothing left to do.
+  const precheck = await getDoc(stateRef);
+  if (precheck.exists()) {
+    const precheckData = precheck.data();
+    if (precheckData.nextSessionIndex === input.targetSessionIndex && !precheckData.pendingMissDecision) return;
+  }
+
+  if (input.programInstanceId) {
+    await authorizeWorkoutLifecycleMutation({
+      operation: 'REPOSITION_SCHEDULE_CURSOR',
+      sourceProgramInstanceId: input.programInstanceId,
+      scheduledLocalDate: input.todayLocalDate,
+      targetSessionIndex: input.targetSessionIndex,
+      expectedCurrentNextSessionIndex: input.expectedCurrentNextSessionIndex,
+    });
+  }
+  const grantRef = doc(
+    db, 'users', input.uid, 'workoutLifecycleAuthorityGrants', WORKOUT_LIFECYCLE_AUTHORITY_GRANT_ID,
+  );
+
+  let staleCursor = false;
+  try {
+    await runTransaction(db, async (transaction) => {
+      const stateSnapshot = await transaction.get(stateRef);
+      const data = stateSnapshot.exists() ? stateSnapshot.data() : null;
+      if (data && data.nextSessionIndex === input.targetSessionIndex && !data.pendingMissDecision) {
+        if (input.programInstanceId) transaction.delete(grantRef);
+        return;
+      }
+      // Close the grant-to-transaction race: the backend authorized the exact
+      // cursor the caller saw, but another device may have advanced it before
+      // this transaction acquired its snapshot. Never overwrite that newer
+      // cursor with the stale target. Consume the one-time grant and fail after
+      // the cleanup commit so it cannot remain reusable for its remaining TTL.
+      if (data && data.nextSessionIndex !== input.expectedCurrentNextSessionIndex) {
+        staleCursor = true;
+        if (input.programInstanceId) transaction.delete(grantRef);
+        return;
+      }
+
+      for (const index of repositionedIndexes) {
+        const repositionedRef = doc(
+          scheduleEventsCollection(input.uid, input.programId),
+          scheduleEventId({ type: 'REPOSITIONED', sessionIndex: index, scheduledDate: input.todayLocalDate }, input.programInstanceId),
+        );
+        transaction.set(repositionedRef, {
+          type: 'REPOSITIONED',
+          ...(input.programInstanceId ? { programInstanceId: input.programInstanceId } : {}),
+          sessionIndex: index,
+          scheduledDate: input.todayLocalDate,
+          occurredAt: serverTimestamp(),
+        });
+      }
+
+      // Same "day before" convention FOLLOW_SCHEDULE already uses in fixed
+      // mode (`resolveMissedSession` above), so the very next resolve doesn't
+      // collapse today's just-chosen session into REST_DAY/TODAY_COMPLETED.
+      // Flexible never reads `cursorDate` to decide readiness, so today is a
+      // safe, semantically coherent value there.
+      const targetCursorDate = input.scheduleMode === 'flexible'
+        ? input.todayLocalDate
+        : addDaysLocal(input.todayLocalDate, -1);
+
+      transaction.set(stateRef, {
+        programId: input.programId,
+        ...(input.programInstanceId ? { programInstanceId: input.programInstanceId } : {}),
+        nextSessionIndex: input.targetSessionIndex,
+        cursorDate: targetCursorDate,
+        lastCompletedAt: data?.lastCompletedAt ?? null,
+        pendingMissDecision: null,
+        updatedAt: serverTimestamp(),
+      });
+      if (input.programInstanceId) transaction.delete(grantRef);
+    });
+  } catch (error) {
+    if (input.programInstanceId) await deleteDoc(grantRef).catch(() => undefined);
+    throw error;
+  }
+  if (staleCursor) throw new Error('STALE_SCHEDULE_CURSOR');
 }
 
 /**

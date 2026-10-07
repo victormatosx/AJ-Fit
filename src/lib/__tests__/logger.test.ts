@@ -1,9 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { logError, logInfo, sanitizeLogContext, sanitizeLogText } from '../logger';
+import { errorReason, logError, logInfo, sanitizeLogContext, sanitizeLogText } from '../logger';
 
 afterEach(() => vi.restoreAllMocks());
 
 describe('client logging policy', () => {
+  it('extracts only safe callable reason enums from details or message', () => {
+    expect(errorReason({ details: { reason: 'reposition_current_session_index_out_of_range' } }))
+      .toBe('reposition_current_session_index_out_of_range');
+    expect(errorReason(new Error('reposition_current_session_index_out_of_range')))
+      .toBe('reposition_current_session_index_out_of_range');
+    expect(errorReason(new Error('User email is user@example.com'))).toBeUndefined();
+  });
+
   it('redacts identifiers, credentials, emails and JWT-like values', () => {
     expect(
       sanitizeLogContext({

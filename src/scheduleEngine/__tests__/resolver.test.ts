@@ -95,6 +95,20 @@ describe('resolveWorkoutSchedule — flexible mode', () => {
     expect(resolveWorkoutSchedule(base({ config: flexibleConfig, state: afterLast })))
       .toEqual({ status: 'SESSION_READY', sessionIndex: 0 });
   });
+
+  it('resolves Empurrar after a five-session cursor reposition from 4 to 0', () => {
+    const repositioned = {
+      nextSessionIndex: 0,
+      cursorDate: '2026-08-03',
+      pendingMissDecision: null,
+      lastCompletedAt: null,
+    };
+    expect(resolveWorkoutSchedule(base({
+      sessionCount: 5,
+      config: flexibleConfig,
+      state: repositioned,
+    }))).toEqual({ status: 'SESSION_READY', sessionIndex: 0 });
+  });
 });
 
 describe('resolveWorkoutSchedule — activation and rest days', () => {

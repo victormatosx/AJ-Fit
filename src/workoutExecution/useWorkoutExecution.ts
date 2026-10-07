@@ -4,6 +4,7 @@ import { errorClass, errorCode, errorReason, logInfo, logWarn } from '../lib/log
 import { localDateInTimezone } from '../scheduleEngine/localDate';
 import { advancedWorkoutTarget } from '../scheduleEngine/advanceWorkout';
 import type { ScheduleResolution } from '../scheduleEngine/types';
+import type { ScheduleMode } from '../state/AppState';
 import {
   abandonWorkoutExecution,
   editCompletedSetExecution,
@@ -166,7 +167,17 @@ export interface WorkoutExecutionController {
  * presentation-only and reaches persistence only through the callbacks this
  * hook produces (docs/workout-lifecycle/09_WORKOUT_EXECUTION_AND_HISTORY.md).
  */
-export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, timezone: string | undefined): WorkoutExecutionController {
+export function useWorkoutExecution(
+  program: WorkoutProgramSnapshot | null,
+  timezone: string | undefined,
+  // ScheduleConfig is the calendar authority now (docs §Agenda
+  // configurável) — callers that already resolved it (`AppShell`'s
+  // `schedule.config?.scheduleMode`) should pass it through so the "advance
+  // tomorrow's session today" nudge never disagrees with the sealed
+  // program's own (possibly stale) `scheduleMode`. Omitted only by callers
+  // with no resolved ScheduleConfig yet, which fall back to the sealed value.
+  scheduleModeOverride?: ScheduleMode,
+): WorkoutExecutionController {
   const { user } = useAuth();
   const uid = user?.uid ?? null;
   const preparationKey = uid && program
@@ -379,14 +390,14 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
     if (!program) return Promise.resolve(unknownError);
     const todayLocalDate = localDateInTimezone(new Date(), timezone ?? deviceTimezone());
     const target = advancedWorkoutTarget({
-      scheduleMode: program.scheduleMode ?? 'fixed',
+      scheduleMode: scheduleModeOverride ?? program.scheduleMode ?? 'fixed',
       resolution,
       todayLocalDate,
       sessionCount: program.sessions.length,
       hasIncompatibleExecution: starting || execution?.status === 'IN_PROGRESS',
     });
     return target ? startWithDates(target) : Promise.resolve(unknownError);
-  }, [execution?.status, program, startWithDates, starting, timezone]);
+  }, [execution?.status, program, startWithDates, starting, timezone, scheduleModeOverride]);
 
   const adoptExecution = useCallback((next: PersistedWorkoutExecution) => {
     pendingStartedAtMsRef.current = null;

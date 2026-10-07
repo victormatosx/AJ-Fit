@@ -56,12 +56,11 @@ describe('AppShell start-workout flow — single state machine', () => {
   });
 
   it('routes every real entry point into starting a workout through requestStartWorkout', () => {
-    // TabBar (selectTab), Home's card (onStart) and the deep-link intent
-    // effect are the three audited entry points — none may bypass the
-    // Schedule Engine check by opening 'confirmation' directly.
+    // The TREINO tab opens the hub; only the hub/Home CTA and deep-link
+    // enter the canonical start state machine.
     const selectTabStart = APP_SHELL_CODE.indexOf('const selectTab = (nextTab: TabId) => {');
     const selectTabEnd = APP_SHELL_CODE.indexOf('};', selectTabStart);
-    expect(APP_SHELL_CODE.slice(selectTabStart, selectTabEnd)).toContain('requestStartWorkout();');
+    expect(APP_SHELL_CODE.slice(selectTabStart, selectTabEnd)).not.toContain('requestStartWorkout();');
     expect(APP_SHELL_CODE).toContain('onStart={requestStartWorkout}');
     const intentEffectStart = APP_SHELL_CODE.indexOf("if (pendingIntent.type === 'active-workout')");
     const intentEffectEnd = APP_SHELL_CODE.indexOf('}, [', intentEffectStart);

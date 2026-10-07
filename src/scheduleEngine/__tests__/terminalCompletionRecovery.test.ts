@@ -6,7 +6,7 @@ const service = readFileSync(new URL('../../services/workoutSchedule.ts', import
 
 describe('terminal Execution -> pending Schedule process-death recovery', () => {
   it('does not use AsyncStorage or the cleared current mutex as completion authority', () => {
-    const recovery = hook.slice(hook.indexOf('// Process-death recovery, case B:'), hook.indexOf('const timezone ='));
+    const recovery = hook.slice(hook.indexOf('// Process-death recovery, case B:'), hook.indexOf("recordPerfMark('today_schedule_recovery_checked')"));
     expect(recovery).toContain('listExecutionsForProgram');
     expect(recovery).toContain('hasScheduledSessionCompletion');
     expect(recovery).not.toContain('AsyncStorage');
@@ -23,26 +23,26 @@ describe('terminal Execution -> pending Schedule process-death recovery', () => 
 
   it('checks the exact durable Schedule event before idempotently resuming completion', () => {
     expect(service).toContain('export async function hasScheduledSessionCompletion');
-    const recovery = hook.slice(hook.indexOf('// Process-death recovery, case B:'), hook.indexOf('const timezone ='));
+    const recovery = hook.slice(hook.indexOf('// Process-death recovery, case B:'), hook.indexOf("recordPerfMark('today_schedule_recovery_checked')"));
     expect(recovery).toContain('await finalizeWorkoutSession({ executionId: candidate.executionId })');
     expect(recovery).toContain('candidate.scheduledLocalDate');
     expect(recovery).toContain('candidate.sessionIndex');
   });
 
   it('fails closed and leaves a missing Schedule fact retryable on cold start/foreground', () => {
-    const recovery = hook.slice(hook.indexOf('// Process-death recovery, case B:'), hook.indexOf('const timezone ='));
+    const recovery = hook.slice(hook.indexOf('// Process-death recovery, case B:'), hook.indexOf("recordPerfMark('today_schedule_recovery_checked')"));
     expect(recovery).toContain("'terminal_execution_schedule_recovery_failed'");
     expect(hook).toContain("AppState.addEventListener('change'");
   });
 
   it('uses the atomic finalizer instead of the legacy Schedule grant pipeline', () => {
-    const recovery = hook.slice(hook.indexOf('// Process-death recovery, case B:'), hook.indexOf('const timezone ='));
+    const recovery = hook.slice(hook.indexOf('// Process-death recovery, case B:'), hook.indexOf("recordPerfMark('today_schedule_recovery_checked')"));
     expect(recovery).toContain('finalizeWorkoutSession');
     expect(recovery).not.toContain('authorizeWorkoutLifecycleMutation');
   });
 
   it('recognizes a committed Schedule event before invoking recovery', () => {
-    const recovery = hook.slice(hook.indexOf('// Process-death recovery, case B:'), hook.indexOf('const timezone ='));
+    const recovery = hook.slice(hook.indexOf('// Process-death recovery, case B:'), hook.indexOf("recordPerfMark('today_schedule_recovery_checked')"));
     expect(recovery.indexOf('hasScheduledSessionCompletion')).toBeLessThan(recovery.indexOf('finalizeWorkoutSession'));
   });
 
@@ -52,7 +52,7 @@ describe('terminal Execution -> pending Schedule process-death recovery', () => 
     // check fall back to occurrence 1's id, silently skipping recovery for a
     // terminal occurrence 2+ execution whenever an earlier occurrence that
     // same day had already completed.
-    const recovery = hook.slice(hook.indexOf('// Process-death recovery, case B:'), hook.indexOf('const timezone ='));
+    const recovery = hook.slice(hook.indexOf('// Process-death recovery, case B:'), hook.indexOf("recordPerfMark('today_schedule_recovery_checked')"));
     expect(recovery).toContain('candidate.occurrence');
     expect(recovery.indexOf('candidate.occurrence')).toBeLessThan(recovery.indexOf('finalizeWorkoutSession'));
   });
