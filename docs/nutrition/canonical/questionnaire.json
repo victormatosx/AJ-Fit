@@ -1,0 +1,123 @@
+{
+  "schemaVersion": "1.0.0",
+  "questionnaireVersion": 1,
+  "name": "nutrition_profile",
+  "displayName": "Perfil nutricional",
+  "cta": "Criar minha dieta",
+  "inheritFromExistingProfile": [
+    "sex",
+    "birthDate",
+    "height",
+    "goal"
+  ],
+  "weightSource": "latest_progress_weight",
+  "questions": [
+    {
+      "id": "progressionPace",
+      "type": "single_select",
+      "required": true,
+      "options": [
+        "gradual",
+        "moderate",
+        "accelerated"
+      ]
+    },
+    {
+      "id": "targetWeightKg",
+      "type": "number",
+      "required": false
+    },
+    {
+      "id": "nonTrainingActivityLevel",
+      "type": "single_select",
+      "required": true,
+      "options": [
+        "sedentary",
+        "low_active",
+        "active",
+        "very_active"
+      ]
+    },
+    {
+      "id": "mealSlots",
+      "type": "multi_select",
+      "required": true,
+      "minSelections": 2,
+      "maxSelections": 6,
+      "options": [
+        "breakfast",
+        "morning_snack",
+        "lunch",
+        "afternoon_snack",
+        "dinner",
+        "supper"
+      ]
+    },
+    {
+      "id": "dietaryPattern",
+      "type": "single_select",
+      "required": true,
+      "options": [
+        "omnivore",
+        "vegetarian",
+        "vegan",
+        "pescatarian"
+      ]
+    },
+    {
+      "id": "preferredFoodIds",
+      "type": "food_selection",
+      "required": false,
+      "allowIndifferent": true
+    },
+    {
+      "id": "usualFoodIds",
+      "type": "food_selection",
+      "required": false
+    },
+    {
+      "id": "excludedFoodIds",
+      "type": "food_selection",
+      "required": false,
+      "semantics": "hard_exclusion"
+    },
+    {
+      "id": "supplements",
+      "type": "multi_select",
+      "required": false,
+      "options": [
+        "whey_or_protein",
+        "creatine",
+        "caffeine_or_preworkout",
+        "multivitamin",
+        "omega_3",
+        "other"
+      ],
+      "directlyImpactsPlan": [
+        "whey_or_protein"
+      ]
+    },
+    {
+      "id": "breastfeeding",
+      "type": "boolean",
+      "required": true
+    },
+    {
+      "id": "varietyPreference",
+      "type": "single_select",
+      "required": true,
+      "options": [
+        "repeatable",
+        "variety",
+        "indifferent"
+      ]
+    }
+  ],
+  "externalPregnancySource": "existing_aj_fit_profile_or_questionnaire",
+  "medicalConditionsCollectedInV1": false,
+  "freeTextQuestion": false,
+  "languages": [
+    "pt-BR"
+  ],
+  "snapshotOnGeneration": true
+}

@@ -1,0 +1,126 @@
+{
+  "schemaVersion": "1.0.0",
+  "status": "DRAFT",
+  "domain": "nutrition",
+  "engine": {
+    "version": "1.0.0",
+    "deterministic": true,
+    "activePlanRecalculationOnWeightChange": false,
+    "newGenerationRequiredForRecalculation": true
+  },
+  "energy": {
+    "restingEnergyFormula": {
+      "id": "mifflin_st_jeor",
+      "male": "10*weightKg + 6.25*heightCm - 5*ageYears + 5",
+      "female": "10*weightKg + 6.25*heightCm - 5*ageYears - 161"
+    },
+    "nonTrainingActivityLevels": [
+      "sedentary",
+      "low_active",
+      "active",
+      "very_active"
+    ],
+    "useAuthoritativeWorkoutFrequency": true,
+    "avoidWorkoutActivityDoubleCounting": true,
+    "activityMultipliers": {
+      "status": "PENDING_PROFESSIONAL_VALIDATION",
+      "values": null
+    }
+  },
+  "goals": {
+    "allowed": [
+      "weight_loss",
+      "muscle_gain",
+      "maintenance",
+      "body_recomposition"
+    ],
+    "objectiveSource": "existing_aj_fit_goal",
+    "independentNutritionGoalAllowed": false,
+    "pace": [
+      "gradual",
+      "moderate",
+      "accelerated"
+    ],
+    "deficitMethod": "percentage_of_tdee",
+    "surplusMethod": "percentage_of_tdee",
+    "deficitPercentages": {
+      "status": "PENDING_PROFESSIONAL_VALIDATION",
+      "values": null
+    },
+    "surplusPercentages": {
+      "status": "PENDING_PROFESSIONAL_VALIDATION",
+      "values": null
+    },
+    "bodyRecompositionRule": {
+      "status": "PENDING_PROFESSIONAL_VALIDATION",
+      "value": null
+    }
+  },
+  "safety": {
+    "minimumCaloriesBySex": {
+      "status": "PENDING_PROFESSIONAL_VALIDATION",
+      "values": null
+    },
+    "acceleratedPaceStillSubjectToSafetyLimits": true
+  },
+  "macros": {
+    "protein": {
+      "basis": "g_per_kg_current_body_weight",
+      "mode": "range_with_target_center",
+      "rangesByGoal": {
+        "status": "PENDING_PROFESSIONAL_VALIDATION",
+        "values": null
+      }
+    },
+    "fat": {
+      "basis": "minimum_g_per_kg_plus_adjustment",
+      "ranges": {
+        "status": "PENDING_PROFESSIONAL_VALIDATION",
+        "values": null
+      }
+    },
+    "carbohydrates": {
+      "method": "remaining_calories_after_protein_and_fat",
+      "allowNegative": false
+    },
+    "fiber": {
+      "basis": "g_per_1000_kcal",
+      "target": {
+        "status": "PENDING_PROFESSIONAL_VALIDATION",
+        "value": null
+      }
+    },
+    "calorieConversions": {
+      "proteinKcalPerGram": 4,
+      "carbohydrateKcalPerGram": 4,
+      "fatKcalPerGram": 9
+    }
+  },
+  "mealDistribution": {
+    "mealCountMin": 2,
+    "mealCountMax": 6,
+    "proteinRelativelyEven": true,
+    "engineProducesRanges": true,
+    "aiComposesWithinRanges": true,
+    "distributionWeights": {
+      "status": "PENDING_PROFESSIONAL_VALIDATION",
+      "values": null
+    }
+  },
+  "tolerances": {
+    "status": "PENDING_PROFESSIONAL_VALIDATION",
+    "calories": null,
+    "protein": null,
+    "carbohydrates": null,
+    "fat": null,
+    "fiber": null
+  },
+  "conflictPriority": [
+    "safety",
+    "calories",
+    "protein",
+    "fat_minimum",
+    "carbohydrates",
+    "fiber"
+  ]
+}
