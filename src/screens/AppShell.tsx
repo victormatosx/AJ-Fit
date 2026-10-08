@@ -1914,7 +1914,6 @@ function AppShellContent({
             loading={prescriptionLoading}
             generating={generatingWorkout}
             scheduleResolution={schedule.resolution}
-            scheduleConfig={schedule.config}
             workoutInProgress={workoutInProgress}
             activeWorkoutSessionIndex={activeSessionIndex}
             activeRest={activeRest}
@@ -1944,7 +1943,6 @@ function AppShellContent({
               scheduleMatchesActiveProgram: schedule.matchesActiveProgram,
             })}
             todayStatus={homeInitialReadiness.today}
-            programPresentationReady={schedule.matchesActiveProgram && Boolean(activeProgram?.programInstanceId)}
             onSnapshotLayoutCommitted={onSnapshotLayoutCommitted}
             homeInitialDataSettled={homeInitialDataSettled}
             homeInitialVisualReady={homeInitialVisualReady}

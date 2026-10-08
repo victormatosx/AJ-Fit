@@ -52,7 +52,6 @@ export function HomeEvoTicker({
   return (
     <View
       style={{
-        marginHorizontal: -22,
         borderTopWidth: 1,
         borderBottomWidth: 1,
         // Deliberately a hardcoded dark value, not `theme.colors.*` — this

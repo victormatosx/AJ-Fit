@@ -16,7 +16,7 @@ import { ProfileAvatar } from '../components/ui/ProfileAvatar';
 import type { PrescriptionResult } from '../workoutPrescription/types';
 import { prescriptionOutcomeKey } from '../workoutPrescription/uiOutcome';
 import { resolveSessionDisplayName, type LooseTranslate } from '../workoutPrescription/sessionPresentation';
-import { weekdayOfLocalDate, type ScheduleConfig, type ScheduleResolution } from '../scheduleEngine';
+import { weekdayOfLocalDate, type ScheduleResolution } from '../scheduleEngine';
 import { HomeEvoTicker } from '../components/home/HomeEvoTicker';
 import { CycleProgressBlock } from '../components/home/CycleProgressBlock';
 import { PendingEvolutionBanner } from '../components/home/PendingEvolutionBanner';
@@ -45,7 +45,6 @@ export function HomeScreen({
   loading,
   generating,
   scheduleResolution,
-  scheduleConfig,
   workoutInProgress = false,
   activeWorkoutSessionIndex,
   activeRest = null,
@@ -70,7 +69,6 @@ export function HomeScreen({
   snapshotPresentationActive = false,
   todayActionsReady = false,
   todayStatus = 'PENDING',
-  programPresentationReady = false,
   onSnapshotLayoutCommitted,
   homeInitialDataSettled = false,
   homeInitialVisualReady = false,
@@ -92,13 +90,6 @@ export function HomeScreen({
   generating?: boolean;
   /** Schedule Engine's read on "what to train right now" (docs/workout-lifecycle/03_SCHEDULE_ENGINE.md). Optional — omitted callers keep the pre-Schedule-Engine behavior of always showing session 0. */
   scheduleResolution?: ScheduleResolution;
-  /**
-   * The user's real `trainingDays`/`timezone` (same object `useWorkoutSchedule`
-   * resolved). Only used to project the "próximos treinos" list forward from
-   * `scheduleResolution` — never to re-decide what may be trained today.
-   * Omitted/null simply omits that section.
-   */
-  scheduleConfig?: ScheduleConfig | null;
   /** Switches the Today card from a start action to a direct resume action. */
   workoutInProgress?: boolean;
   /** Latched session being performed; it remains stable while the schedule reconciles. */
@@ -134,7 +125,6 @@ export function HomeScreen({
   snapshotPresentationActive?: boolean;
   todayActionsReady?: boolean;
   todayStatus?: InitialSectionStatus;
-  programPresentationReady?: boolean;
   onSnapshotLayoutCommitted?: () => void;
   /** Bootstrap-only: mounts a fresh layout marker only after every required Home section is terminal. */
   homeInitialDataSettled?: boolean;
