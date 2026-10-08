@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '../../theme';
 import { useIsScreenActive } from '../../state/ScreenActivity';
 import type { EvolutionViewModel } from '../../workoutEvolution/types';
 import type { Streak } from '../../home/streak';
@@ -9,6 +8,17 @@ import { buildHomeEvoTickerItems, type HomeEvoTickerTranslate } from './homeEvoT
 
 const LOOP_DURATION_MS = 18000;
 const ITEM_GAP = 36;
+
+// Deliberately hardcoded, not sourced from `useTheme()` — this whole Home
+// redesign is a fixed-dark "poster" surface regardless of the app's active
+// theme (same precedent as `EvoRing.tsx`'s `trackColor` and
+// `HomeScreen.tsx`'s `TODAY_WORKOUT_THEME`). `ACCENT_COLOR` is the same
+// value `theme.colors.primaryEmphasis` resolves to in dark theme — visually
+// identical to before, just no longer reactive to a theme switch. Font
+// names aren't theme-dependent anyway, but `FONT_FAMILY` is kept as a fixed
+// literal too for consistency with that same "fixed, not reactive" principle.
+const ACCENT_COLOR = '#4da3ff';
+const FONT_FAMILY = 'JetBrainsMono_400Regular';
 
 /**
  * Home-only HUD marquee (section 2.2 of the Home redesign). Deliberately a
@@ -30,7 +40,6 @@ export function HomeEvoTicker({
   sessionsLast30Days: number | null;
 }) {
   const { t } = useTranslation(['home', 'evolution']);
-  const { theme } = useTheme();
   const tLoose = t as unknown as HomeEvoTickerTranslate;
 
   const items = useMemo<string[]>(
@@ -46,12 +55,16 @@ export function HomeEvoTicker({
         marginHorizontal: -22,
         borderTopWidth: 1,
         borderBottomWidth: 1,
-        borderColor: theme.colors.settingsGroupBorder,
+        // Deliberately a hardcoded dark value, not `theme.colors.*` — this
+        // whole Home redesign is a fixed-dark "poster" surface regardless of
+        // the active theme (same precedent as `EvoRing.tsx`'s `trackColor`
+        // and `HomeScreen.tsx`'s `TODAY_WORKOUT_THEME`).
+        borderColor: 'rgba(255,255,255,0.06)',
         paddingVertical: 8,
         overflow: 'hidden',
       }}
     >
-      <TickerMarquee items={items} accentColor={theme.colors.primaryEmphasis} fontFamily={theme.fonts.mono} />
+      <TickerMarquee items={items} accentColor={ACCENT_COLOR} fontFamily={FONT_FAMILY} />
     </View>
   );
 }
