@@ -1494,7 +1494,7 @@ export function PendingEvolutionBanner({
 
   if (isDeferred) {
     return (
-      <Pressable onPress={onPress} style={{ marginTop: 14 }}>
+      <Pressable onPress={onPress} accessibilityRole="button" style={{ marginTop: 14 }}>
         <Text style={{ fontSize: 13, color: ACCENT_COLOR, fontFamily: 'Archivo_600SemiBold' }}>
           {t('home:evoPending.deferredLink')}
         </Text>
