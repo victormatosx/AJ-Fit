@@ -55,6 +55,24 @@
     "renewalSub": "Active days start counting again",
     "tapHint": "Tap to see your new workout"
   },
+  "reveal": {
+    "kicker": "YOUR NEW WORKOUT",
+    "cycleTitle": "CYCLE {{number}}.",
+    "levelTitle": "{{level}}.",
+    "renewalTitle": "CYCLE RENEWED.",
+    "cycleSubtitle": "Same sets, reps and rest · refreshed exercises",
+    "levelSubtitle": "New split · weekly frequency kept",
+    "renewalSubtitle": "Same plan · counter reset",
+    "newCount": "NEW",
+    "exerciseCount": "EXERCISES",
+    "perWeek": "X PER WEEK",
+    "exercisesLabel": "exercises",
+    "newLabel": "NEW",
+    "before": "before: {{name}}",
+    "ctaCycle": "Start cycle {{number}} →",
+    "ctaLevel": "Start {{level}} level →",
+    "ctaRenewal": "Start renewed cycle →"
+  },
   "motivationalRenewal": {
     "eyebrow": "A NEW VERSION IS AVAILABLE",
     "cardReady": "A new workout version is available",

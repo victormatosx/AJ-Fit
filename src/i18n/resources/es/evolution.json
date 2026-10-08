@@ -55,6 +55,24 @@
     "renewalSub": "Los días activos vuelven a contar",
     "tapHint": "Toca para ver tu nuevo entrenamiento"
   },
+  "reveal": {
+    "kicker": "TU NUEVO ENTRENAMIENTO",
+    "cycleTitle": "CICLO {{number}}.",
+    "levelTitle": "{{level}}.",
+    "renewalTitle": "CICLO RENOVADO.",
+    "cycleSubtitle": "Mismas series, repeticiones y descanso · ejercicios renovados",
+    "levelSubtitle": "Nueva división · frecuencia semanal mantenida",
+    "renewalSubtitle": "Mismo plan · contador reiniciado",
+    "newCount": "NUEVOS",
+    "exerciseCount": "EJERCICIOS",
+    "perWeek": "X POR SEMANA",
+    "exercisesLabel": "ejercicios",
+    "newLabel": "NUEVO",
+    "before": "antes: {{name}}",
+    "ctaCycle": "Comenzar ciclo {{number}} →",
+    "ctaLevel": "Comenzar nivel {{level}} →",
+    "ctaRenewal": "Comenzar ciclo renovado →"
+  },
   "motivationalRenewal": {
     "eyebrow": "HAY UNA NUEVA VERSIÓN DISPONIBLE",
     "cardReady": "Hay una nueva versión del entrenamiento",
