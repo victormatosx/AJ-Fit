@@ -66,6 +66,8 @@ export function NewPlanRevealScreen({
           </Text>
           <Pressable
             onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel={t('accessibility.close')}
             style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' }}
           >
             <Icon name="x" size={15} color="rgba(255,255,255,0.8)" />
@@ -109,6 +111,9 @@ export function NewPlanRevealScreen({
               <View key={sessionIndex} style={{ borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.07)' }}>
                 <Pressable
                   onPress={() => setOpenSession(isOpen ? -1 : sessionIndex)}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: isOpen }}
+                  accessibilityLabel={`${sessionLabel}, ${exercises.length} ${t('reveal.exercisesLabel')}`}
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 16 }}
                 >
                   <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 22, width: 18, color: isOpen ? '#fff' : 'rgba(255,255,255,0.45)' }}>
@@ -117,7 +122,7 @@ export function NewPlanRevealScreen({
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 15.5, fontFamily: 'Archivo_700Bold', color: '#fff' }}>{sessionLabel}</Text>
                     <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 3 }}>
-                      {session.exercises.length} {t('reveal.exercisesLabel')}
+                      {exercises.length} {t('reveal.exercisesLabel')}
                       {newSlots.size > 0 ? ` · ${newSlots.size} ${t('reveal.newLabel').toLowerCase()}` : ''}
                     </Text>
                   </View>
@@ -163,6 +168,8 @@ export function NewPlanRevealScreen({
       <View style={{ padding: 24 }}>
         <Pressable
           onPress={onBegin}
+          accessibilityRole="button"
+          accessibilityLabel={cta}
           style={{ height: 58, borderRadius: 12, backgroundColor: CTA_BACKGROUND, alignItems: 'center', justifyContent: 'center' }}
         >
           <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 17, letterSpacing: 1.5, color: '#fff' }}>{cta.toUpperCase()}</Text>
