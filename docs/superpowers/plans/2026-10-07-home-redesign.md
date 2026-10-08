@@ -1887,15 +1887,18 @@ export function EvolutionUnlockScreen({
 }) {
 ```
 
-Add the import:
+Add the import (the file already imports `useTranslation` from `react-i18next` — do not add a second import of it):
 
 ```ts
 import type { FinalWorkoutPlan } from '../workoutPrescription/types';
 import { workoutExercisesFromPlan } from './workoutScreenPlan';
-import { useTranslation as useI18nTranslation } from 'react-i18next'; // already imported as useTranslation below; do not duplicate — use the existing `i18n` instance from the existing `useTranslation('evolution')` call for the locale.
 ```
 
-(Remove the placeholder duplicate import line above — the file already calls `const { t } = useTranslation('evolution');`; get `i18n.language` from a second destructure on that same call: `const { t, i18n } = useTranslation('evolution');`.)
+The file already calls `const { t } = useTranslation('evolution');` — change that single line to also destructure `i18n` (needed for `i18n.language`, the locale `WhatChanged` needs):
+
+```ts
+const { t, i18n } = useTranslation('evolution');
+```
 
 - [ ] **Step 2: Pass `currentPlan`/`pendingPlan` into `WhatChanged`**
 
