@@ -16,3 +16,6 @@ export function requiredActiveDaysForLevel(level: CurrentTrainingLevel): number 
 
 /** Same cap the engine uses for Intermediate → Advanced ("Rumo ao Avançado X/4"). */
 export const INTERMEDIATE_CYCLES_FOR_ADVANCED = PROGRESSION_V2_CONFIG.intermediateCyclesForPromotion;
+
+/** Same threshold the engine uses to classify adherence as earned-eligible vs. below-target (`PROGRESSION_V2_CONFIG.adherenceEarnedThresholdBp`, basis points). Expressed as a whole percent (70, not 7000) since every consumer renders it as a percent. */
+export const ADHERENCE_EARNED_THRESHOLD_PERCENT = PROGRESSION_V2_CONFIG.adherenceEarnedThresholdBp / 100;
