@@ -2210,6 +2210,8 @@ git add src/components/evolution/EvolutionCelebration.tsx src/i18n/resources/pt-
 git commit -m "Adiciona EvolutionCelebration (animacao de evolucao atingida) e expo-haptics"
 ```
 
+**Post-review fix:** the reference code above calls `useEffect` conditionally inside the `phase === 3 || reduceMotion` early-return branch — a real `react-hooks/rules-of-hooks` violation. The implementer correctly moved that effect to the top level (always called) with a `doneFiredRef` guard (commit `12a2c8d`). A subsequent spec review then found the tap-to-skip handler only called `setPhase(3)` without cancelling the three pending timers (the scheduling effect's deps are `[reduceMotion, onDone]`, not `phase`) — so a tap before 1700ms didn't stop `toExplosion`/`toTitle` from firing later (reviving the dismissed UI with a stray haptic) and let the 5200ms `toDone` timeout call `onDone()` a second time, unguarded. Fixed in commit `bef4785`: the three timers are now held in refs, and a single `finish()` function clears all three and calls `onDone()` through the `doneFiredRef` guard; the 5200ms timeout, the reduce-motion path, and the tap handler all route through `finish()`. Also note: the worktree's installed Expo SDK is actually 57 (`expo@57.0.24`, `expo-haptics@~57.0.3`), not 56 as `AGENTS.md` states — `AGENTS.md` itself was left untouched (out of scope for this plan) but this is worth flagging to the user.
+
 ---
 
 ### Task 19: `NewPlanRevealScreen` — section 5
