@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../state/AuthContext';
 import type { ScheduleMode, Weekday } from '../state/AppState';
 import { localDateInTimezone } from '../scheduleEngine/localDate';
@@ -33,11 +33,9 @@ export function useHomeStreak(input: UseHomeStreakInput): Streak | null {
   const uid = user?.uid ?? null;
   const trainingDaysKey = input.trainingDays.join(',');
   const activeRecoveryDaysKey = input.activeRecoveryDays.join(',');
-  const streakRef = useRef<Streak | null>(null);
 
   const load = useCallback(async () => {
     if (!uid || !input.hasActiveProgram) {
-      streakRef.current = null;
       setStreak(null);
       return;
     }
@@ -54,7 +52,6 @@ export function useHomeStreak(input: UseHomeStreakInput): Streak | null {
         },
         fetchRange: listCompletedWorkoutActivityDatesInRange,
       });
-      streakRef.current = result.streak;
       setStreak(result.streak);
     } catch {
       // A transient failure must never blank an already-shown real streak —
