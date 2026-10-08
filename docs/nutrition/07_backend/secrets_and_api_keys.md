@@ -2,7 +2,7 @@
 
 ## 1. OpenAI
 
-A chave da OpenAI deve ficar no Google Secret Manager/Firebase Functions Secrets.
+A chave da OpenAI deve ficar no Google Secret Manager/Firebase Functions Secrets, seguindo o padrão real já usado no projeto via `defineSecret` (ver `functions/src/billing/revenuecat.ts`). Essa integração ainda não existe hoje — será o primeiro secret de IA do projeto, não uma extensão de um secret de IA já configurado.
 
 Nunca:
 

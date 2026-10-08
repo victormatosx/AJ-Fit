@@ -58,9 +58,11 @@ A alteração do objetivo geral do AJ Fit deve refletir no contexto nutricional.
 
 ### 3.3 Gestação
 
-Quando a informação de gestação já existir no questionário/perfil atual, ela deve ser reutilizada.
+`Quiz.pregnancyScreening` é um snapshot imutável do onboarding e não pode ser tratado como autoridade eterna. Ele serve apenas para **pré-preencher** `nutritionProfile/current.pregnant` na primeira vez que o Perfil Nutricional é criado.
 
-Usuárias gestantes não são elegíveis para geração automática de dieta na V1.
+A partir daí, o estado de gestação passa a ser mantido e editado exclusivamente em `nutritionProfile/current`, como estado atual do Perfil Nutricional — não como dado herdado continuamente de `Quiz`.
+
+Usuárias gestantes não são elegíveis para geração automática de dieta na V1. O backend deve validar `nutritionProfile/current.pregnant` a cada nova geração, nunca reler `Quiz.pregnancyScreening`.
 
 ### 3.4 Idade
 
@@ -161,7 +163,7 @@ A pergunta deve usar linguagem simples e exemplos de rotina diária, trabalho e 
 
 A resposta é input do Nutrition Engine e não deve ser interpretada livremente pela IA.
 
-A frequência de treino não deve ser perguntada novamente no Perfil Nutricional. Se o Nutrition Engine precisar de dados de treino, deve consumir a fonte autoritativa já existente no AJ Fit.
+A frequência de treino não deve ser perguntada novamente no Perfil Nutricional. O Nutrition Engine deve consumir `prescribedTrainingFrequency` do programa ativo de Treino, com fallback para `Quiz.days` quando não houver programa ativo — nunca `Quiz.frequency`/`Quiz.trainingDays`/`requestedDays` (ver decisão final em `10_integrations/workout_integration.md`).
 
 ### 5.5 Alimentos que gosta
 
@@ -268,16 +270,21 @@ A ausência dessas perguntas não autoriza a IA a produzir dietas terapêuticas 
 
 #### Gestação
 
-- reutilizar a informação já existente no AJ Fit;
-- bloquear geração automática na V1.
+- pré-preencher a pergunta de gestação com `Quiz.pregnancyScreening` apenas na criação inicial do Perfil Nutricional (snapshot imutável, usado uma única vez como ponto de partida);
+- a partir da criação, o estado de gestação vive e é editável em `nutritionProfile/current.pregnant`;
+- bloquear geração automática na V1 com base no valor atual em `nutritionProfile/current`.
 
 #### Lactação / amamentação
 
-O perfil nutricional deve coletar se a usuária está amamentando quando essa informação ainda não existir de forma confiável no produto.
+O perfil nutricional deve coletar se a usuária está amamentando.
+
+O estado de lactação vive em `nutritionProfile/current.breastfeeding`, como estado atual e editável — não existe fonte prévia confiável no restante do AJ Fit para esse dado.
 
 Usuárias em lactação não são elegíveis para geração automática de dieta na V1.
 
 Quando houver bloqueio, o produto deve orientar acompanhamento profissional adequado.
+
+Ambos os gates (gravidez e lactação) são revalidados a partir de `nutritionProfile/current` a cada nova geração, e nenhum dos dois pode ter bypass.
 
 ---
 

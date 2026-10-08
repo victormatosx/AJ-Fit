@@ -98,9 +98,17 @@
       ]
     },
     {
+      "id": "pregnant",
+      "type": "boolean",
+      "required": true,
+      "semantics": "current_state_not_snapshot",
+      "prefillSource": "quiz_pregnancy_screening_initial_only"
+    },
+    {
       "id": "breastfeeding",
       "type": "boolean",
-      "required": true
+      "required": true,
+      "semantics": "current_state_not_snapshot"
     },
     {
       "id": "varietyPreference",
@@ -113,7 +121,9 @@
       ]
     }
   ],
-  "externalPregnancySource": "existing_aj_fit_profile_or_questionnaire",
+  "pregnancyAndLactationStateOwner": "nutritionProfile/current",
+  "pregnancyInitialPrefillSource": "quiz_pregnancy_screening",
+  "pregnancyInitialPrefillSourceNote": "Quiz.pregnancyScreening is an immutable onboarding snapshot and must only be used to pre-fill pregnant/breastfeeding the first time nutritionProfile/current is created. It is never read again after that; the current value always lives in nutritionProfile/current and must be revalidated before every generation.",
   "medicalConditionsCollectedInV1": false,
   "freeTextQuestion": false,
   "languages": [

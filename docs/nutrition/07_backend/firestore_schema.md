@@ -47,9 +47,9 @@ nutritionRateLimits/{limitId}
 users/{uid}/nutritionProfile/current
 ```
 
-Contém somente respostas específicas de Nutrição.
+Contém somente respostas específicas de Nutrição, mais o **estado atual** de gravidez/lactação (ver `3.1`).
 
-Não duplicar:
+Não duplicar como nova fonte mutável:
 
 - sexo;
 - nascimento/idade;
@@ -57,7 +57,7 @@ Não duplicar:
 - peso;
 - objetivo geral.
 
-Esses dados continuam em suas fontes autoritativas já existentes.
+Esses dados continuam em suas fontes autoritativas já existentes (ver hierarquia completa em `3.2`).
 
 Campos conceituais:
 
@@ -87,7 +87,15 @@ interface NutritionProfileDocument {
   excludedFoodIds: string[];
 
   supplements: string[];
-  breastfeeding?: boolean | null;
+
+  // Estado atual, não snapshot. Editável pela usuária e revalidado a
+  // cada geração pelo backend. `pregnant` é pré-preenchido a partir de
+  // `Quiz.pregnancyScreening` (snapshot imutável do onboarding) apenas na
+  // criação inicial deste documento; depois disso, Quiz.pregnancyScreening
+  // nunca é lido de novo. `breastfeeding` não tem fonte prévia no AJ Fit e
+  // vive inteiramente aqui.
+  pregnant: boolean;
+  breastfeeding: boolean;
 
   varietyPreference:
     | "repeatable"
@@ -97,6 +105,31 @@ interface NutritionProfileDocument {
   updatedAt: Timestamp;
 }
 ```
+
+### 3.1 Gravidez e lactação são estado atual, não dado herdado
+
+Ao contrário de sexo/altura/idade/peso/objetivo (seção `3.2`), gravidez e lactação **não** são lidos de uma fonte autoritativa externa a cada geração:
+
+- `pregnant`: pré-preenchido 1x a partir de `Quiz.pregnancyScreening` na criação do documento; depois disso, só é lido/escrito via `nutritionProfile/current`;
+- `breastfeeding`: não existe fonte prévia confiável no restante do AJ Fit; é coletado e mantido inteiramente aqui.
+
+O backend deve validar `nutritionProfile/current.pregnant` e `nutritionProfile/current.breastfeeding` antes de toda nova geração. Ambos continuam sendo safety gates bloqueadores (ver `09_safety/eligibility_and_gates.md`) e nenhum dos dois pode ter bypass.
+
+### 3.2 Hierarquia das fontes físicas
+
+Para evitar ambiguidade, esta é a fonte autoritativa exata de cada dado físico consumido por Nutrição:
+
+| Dado | Fonte primária | Fallback |
+|---|---|---|
+| Nascimento/idade | `UserProfile.profile.birthDate` (`src/services/userProfile.ts`) | `Quiz.birthDate` (questionário imutável) |
+| Altura | `UserProfile.profile.height` (`src/services/userProfile.ts`) | `Quiz.height` (questionário imutável) |
+| Peso | Assessment mais recente em `users/{uid}/assessments/{id}`, ordenado por `measuredAt` desc (`src/services/assessments.ts`) | — (obrigatório; bloqueia geração se ausente) |
+| Sexo | `Quiz.sex` | — (não há fonte mutável melhor hoje) |
+| Objetivo | `Quiz.goal` | — (não há fonte mutável melhor hoje) |
+| Gravidez | `nutritionProfile/current.pregnant` | Pré-preenchimento inicial único a partir de `Quiz.pregnancyScreening` |
+| Lactação | `nutritionProfile/current.breastfeeding` | — (sem fonte prévia) |
+
+Nenhum desses dados deve ser copiado para dentro de `nutritionProfile` como uma nova fonte mutável de verdade — Nutrição sempre lê diretamente da fonte da tabela acima no momento da geração e materializa o valor usado apenas dentro do snapshot imutável do plano gerado.
 
 ---
 

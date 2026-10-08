@@ -1,5 +1,16 @@
 # AJ Fit Nutrition — Eventos de Analytics
 
+## 0. Status real de infraestrutura — greenfield
+
+Hoje **não existe provider real de analytics de produto** no AJ Fit (nenhum Firebase Analytics, Amplitude, Mixpanel, Segment ou equivalente integrado). O único precedente é `src/onboarding/onboardingAnalytics.ts`, que é explicitamente um logger **no-op** — não deve ser tratado como infraestrutura consolidada nem copiado como padrão de produção.
+
+Os eventos listados abaixo são, por ora, um **contrato conceitual de produto**: definem o que deveria ser medido, não como medir. Implementá-los de fato depende de uma decisão de produto/infra anterior (escolher e integrar um provider real) que está fora do escopo da documentação de Nutrição. Até essa decisão existir, a implementação de Nutrição pode:
+
+- registrar estes eventos como no-op, seguindo o mesmo padrão de `onboardingAnalytics.ts`, até um provider real existir; ou
+- aguardar a decisão de provider antes de instrumentar.
+
+Não criar um pipeline de analytics paralelo e específico de Nutrição para contornar essa lacuna.
+
 ## 1. Princípio
 
 Analytics deve medir comportamento de produto sem transportar dados nutricionais sensíveis detalhados.

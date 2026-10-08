@@ -1,5 +1,14 @@
 # AJ Fit Nutrition — Feature Flags
 
+## 0. Mecanismo real a reaproveitar
+
+O AJ Fit já possui um mecanismo de rollout gradual determinístico, usado hoje para a migração V1→V2 do ciclo de vida de treino:
+
+- `src/workoutLifecycle/rollout.ts` — `WorkoutLifecycleRolloutConfig { schemaVersion, enabled, percentage }`, bucket determinístico e estável por uid via `stickyRolloutBucket(uid)` (hash de `uid` + chave do flag, 0-99), e `isEligibleForNewMigration(uid, config)`;
+- doc Firestore `workoutLifecycleRolloutConfig/active`, Admin-only (ver `firestore.rules:2781`), lido pelo cliente/backend conforme o call site.
+
+Nutrição **deve reaproveitar/copiar esse padrão** — mesma forma de config (`schemaVersion`, `enabled`, `percentage`), mesmo hash estável por uid, mesmo doc Admin-only — adaptado para um novo flag/documento próprio (ex.: `nutritionRolloutConfig/active`), em vez de inventar outro mecanismo de feature flag. Isso não significa reutilizar o mesmo doc do workout lifecycle; significa clonar a mesma arquitetura para um namespace de Nutrição.
+
 ## 1. Objetivo
 
 Permitir rollout gradual, desligamento rápido e controle independente por capacidade.

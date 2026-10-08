@@ -108,6 +108,8 @@ Receitas são entidades separadas compostas por alimentos simples e quantidades.
 
 ## 5. IA
 
+Hoje não existe nenhuma integração de IA generativa no AJ Fit — a camada descrita abaixo (abstração de provider, client, secret, retries, observabilidade) é infraestrutura inteiramente nova, não uma extensão de algo existente (ver `06_ai/ai_architecture.md` §0).
+
 A OpenAI é o provider inicial.
 
 A integração deve ficar atrás de uma abstração para permitir troca futura.
@@ -306,6 +308,17 @@ Suporte clínico futuro exige ADR próprio, regras canônicas e revisão profiss
 
 Nutrição pode usar frequência semanal de treino no cálculo de gasto energético.
 
+Fonte autoritativa confirmada por microauditoria técnica (2026-10-08):
+
+```text
+prescribedTrainingFrequency
+-> prescribedStructuredDays
+-> Quiz.days
+-> fallback determinístico do Nutrition Engine
+```
+
+`requestedDays` nunca é usado como fallback — representa apenas teto de disponibilidade, não frequência prescrita. Detalhes completos em `10_integrations/workout_integration.md`.
+
 A V1 não usa:
 
 - treino do dia;
@@ -320,7 +333,7 @@ Não existe diferenciação entre dieta de treino e descanso.
 
 ## 15. Integração com Evolução
 
-Peso vem do módulo Evolução.
+Peso vem do assessment mais recente em `users/{uid}/assessments/{id}` (`src/services/assessments.ts`), ordenado por `measuredAt`. Na UI esse domínio é chamado "Evolução", mas não existe módulo com esse nome no código — `assessments.ts` é a fonte real.
 
 O plano guarda snapshot do peso usado.
 
@@ -347,6 +360,8 @@ Sem horários personalizados por refeição na V1.
 ---
 
 ## 17. Analytics
+
+Hoje não existe provider real de analytics de produto integrado ao AJ Fit; os eventos/métricas definidos para Nutrição são um contrato conceitual até essa infraestrutura ser decidida e construída (ver `11_analytics/events.md` §0).
 
 Métricas principais:
 
@@ -511,6 +526,8 @@ Ainda não estão fechados para produção:
 - tolerâncias;
 - pesos de distribuição das refeições;
 - source-of-truth policy para futuras integrações Apple Health / Health Connect / similares.
+
+A fonte de frequência semanal de treino para Nutrição já foi decidida por microauditoria técnica e não é mais um ponto pendente (ver `10_integrations/workout_integration.md`).
 
 Esses pontos não devem ser preenchidos por conveniência durante implementação.
 

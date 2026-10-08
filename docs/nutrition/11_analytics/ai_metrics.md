@@ -1,5 +1,9 @@
 # AJ Fit Nutrition — Métricas de IA
 
+## 0. Status real de infraestrutura
+
+Estas métricas dependem do pipeline de observabilidade de IA descrito em `06_ai/ai_observability.md` §0, que é infraestrutura inteiramente nova (não existe integração de IA nem logging de chamadas de IA no AJ Fit hoje).
+
 ## 1. Objetivo
 
 Medir qualidade, confiabilidade, latência e custo da camada de IA.

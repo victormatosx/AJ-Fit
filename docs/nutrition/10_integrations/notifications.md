@@ -4,7 +4,12 @@
 
 Nutrição terá notificações próprias na V1.
 
-Elas devem usar a infraestrutura de notificações já existente do AJ Fit.
+Elas devem usar a infraestrutura de notificações já existente do AJ Fit — concretamente, estender os contratos reais de `functions/src/notifications/schema.ts`:
+
+- `NOTIFICATION_TYPES`: adicionar os novos tipos de Nutrição (plano pronto, lembrete de registro, resumo semanal, recomendação de nova geração) a essa união existente, não criar uma enum paralela;
+- `NOTIFICATION_CATEGORIES`: Nutrição precisa de uma categoria própria nessa lista (hoje: `WORKOUTS_AND_REMINDERS`, `EVOLUTION_AND_ACHIEVEMENTS`, `PROGRESS`, `OPERATIONAL`);
+- preferências do usuário: estender `NOTIFICATION_PREFERENCE_KEYS` (`src/types/notificationPreferences.ts`) com a chave de Nutrição, mantendo compatibilidade com o contrato existente e com `notificationPreferencesValid` em `firestore.rules`;
+- disparo segue o mesmo fluxo de dispatch/delivery já existente (`notificationDispatches`, `deliveries`), não um pipeline de envio próprio.
 
 Não criar sistema paralelo.
 
@@ -66,7 +71,7 @@ Não gerar plano automaticamente.
 
 As notificações de Nutrição devem respeitar o sistema global de preferências do AJ Fit.
 
-Se necessário, ampliar `notificationPreferences` com categoria própria de Nutrição, mantendo compatibilidade com o contrato existente.
+Ampliar `NOTIFICATION_PREFERENCE_KEYS` em `src/types/notificationPreferences.ts` com uma chave própria de Nutrição, mantendo compatibilidade com o contrato existente (inclusive o teste de contrato em `src/lib/__tests__/firestoreRulesContract.test.ts`, que verifica paridade entre essa constante e as Rules).
 
 ---
 

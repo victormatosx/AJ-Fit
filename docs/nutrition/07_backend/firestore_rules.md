@@ -162,9 +162,9 @@ Cliente:
 
 ## 11. Account deletion
 
-Todas as novas Rules privadas sob `users/{uid}` devem reutilizar o mesmo gate de conta ativa já existente no AJ Fit.
+Todas as novas Rules privadas sob `users/{uid}` devem reutilizar o mesmo gate de conta ativa já existente no AJ Fit (`accountActive(userId)`).
 
-A feature também deve entrar no workflow de exclusão de conta para purge completo.
+A feature também deve entrar no workflow de exclusão de conta para purge completo. O registry real que precisa ser estendido é `functions/src/accountDeletion/firestoreCleanup/resources.ts` — cada nova subcoleção de Nutrição sob `users/{uid}` (`nutritionProfile`, `nutritionPlans`, `nutritionDailyLogs`, `nutritionRecipes`, `nutritionFoods`, `nutritionPreferences`, `nutritionGenerationJobs`) precisa de uma função de cleanup própria registrada lá, seguindo o mesmo padrão (`QUESTIONNAIRES_COLLECTION`, `ASSESSMENTS_COLLECTION` etc. já presentes no arquivo). Isso não é implementado nesta fase de documentação — é um lembrete de que a implementação futura do backend de Nutrição deve tocar esse arquivo, e não criar um fluxo de exclusão paralelo.
 
 ---
 

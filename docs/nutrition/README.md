@@ -318,7 +318,7 @@ O Perfil Nutricional coleta principalmente:
 - lactação;
 - preferência por repetição/variedade.
 
-Gravidez vem da fonte já existente no AJ Fit.
+Gravidez e lactação são **estado atual**, mantido em `nutritionProfile/current`. `Quiz.pregnancyScreening` (snapshot imutável do onboarding) só serve para pré-preencher gravidez na criação inicial do Perfil Nutricional; depois disso, a fonte de verdade é exclusivamente `nutritionProfile/current`.
 
 ---
 
@@ -413,7 +413,9 @@ O consumo real nunca altera silenciosamente o plano recomendado.
 
 # 12. IA
 
-Provider inicial:
+Hoje não existe nenhuma integração de IA generativa no AJ Fit — tudo abaixo é infraestrutura nova a ser construída (ver `06_ai/ai_architecture.md` §0).
+
+Provider inicial decidido:
 
 `OpenAI`
 
@@ -557,9 +559,11 @@ Nutrição pode usar frequência semanal de treino para estimar gasto energétic
 
 Não usa treino do dia na V1.
 
+Fonte autoritativa confirmada: `users/{uid}/workoutPrograms/{activeProgramId}.prescribedTrainingFrequency` (alias legado `prescribedStructuredDays`), com fallback para `Quiz.days` quando não houver programa ativo. `requestedDays`, `scheduleConfig.trainingDays.length`, `Quiz.frequency` e `Quiz.trainingDays` nunca devem ser usados para esse cálculo (ver `10_integrations/workout_integration.md`).
+
 ## Evolução
 
-Peso vem do módulo Evolução.
+Peso vem do assessment mais recente em `users/{uid}/assessments/{id}` (`src/services/assessments.ts`), ordenado por `measuredAt`. Na UI esse domínio é chamado "Evolução", mas não existe módulo com esse nome — `assessments.ts` é a fonte real.
 
 Novo peso não altera plano automaticamente.
 
@@ -583,6 +587,8 @@ A política futura de source of truth ainda está pendente.
 ---
 
 # 18. Analytics
+
+Hoje não existe provider real de analytics de produto integrado ao AJ Fit; os eventos/métricas abaixo são um contrato conceitual até essa infraestrutura ser decidida e construída (ver `11_analytics/events.md` §0).
 
 Métricas principais:
 
@@ -682,6 +688,8 @@ em `canonical/nutrition_rules.json`.
 Também permanece pendente:
 
 - política de source of truth para futuras integrações de saúde.
+
+A fonte de frequência semanal de treino para Nutrição já foi decidida por microauditoria técnica e não é mais uma pendência (ver `10_integrations/workout_integration.md`).
 
 ---
 

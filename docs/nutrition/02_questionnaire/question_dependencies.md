@@ -17,7 +17,7 @@ Antes de iniciar o Perfil Nutricional, o sistema deve verificar a disponibilidad
 - altura;
 - peso atual mais recente da evolução;
 - objetivo atual;
-- estado de gestação, quando aplicável e já existente no produto.
+- estado de gestação inicial (`Quiz.pregnancyScreening`), usado apenas como pré-preenchimento de `nutritionProfile/current.pregnant` na primeira criação do Perfil Nutricional.
 
 Se um dado obrigatório estiver ausente ou inválido, o fluxo deve direcionar o usuário para a fonte autoritativa daquele dado.
 
@@ -35,20 +35,28 @@ Nenhum fluxo nutricional específico para menor deve existir na V1.
 
 ### 3.2 Gestação
 
-Se `pregnant == true` ou equivalente no modelo existente:
+O estado de gestação é mantido em `nutritionProfile/current.pregnant`, não em `Quiz.pregnancyScreening`.
+
+`Quiz.pregnancyScreening` (snapshot imutável do onboarding) é usado apenas para pré-preencher `nutritionProfile/current.pregnant` na primeira criação do Perfil Nutricional. Depois disso, o valor é editável pela usuária e vive exclusivamente em `nutritionProfile/current`.
+
+Se `nutritionProfile/current.pregnant == true`:
 
 - não iniciar geração automática;
 - apresentar estado de inelegibilidade para a V1;
 - recomendar acompanhamento profissional.
 
+Essa validação deve ocorrer no backend a cada nova geração, lendo o valor atual — nunca reutilizando `Quiz.pregnancyScreening` como se fosse eterno.
+
 ### 3.3 Lactação
 
-Quando aplicável, coletar status de lactação.
+Coletar e manter o status de lactação em `nutritionProfile/current.breastfeeding`, como estado atual e editável.
 
-Se `breastfeeding == true` ou equivalente:
+Se `nutritionProfile/current.breastfeeding == true`:
 
 - não permitir geração automática na V1;
 - apresentar orientação para acompanhamento profissional.
+
+Nenhum dos dois gates (gravidez, lactação) pode ter bypass.
 
 ---
 
@@ -132,7 +140,7 @@ Opções:
 
 A resposta descreve apenas a rotina fora das sessões de treino e é utilizada pelo Nutrition Engine.
 
-Não perguntar frequência de treino novamente no Perfil Nutricional. Caso o engine utilize informações de treino, deve consumi-las da fonte autoritativa existente no AJ Fit.
+Não perguntar frequência de treino novamente no Perfil Nutricional. O engine deve consumir `prescribedTrainingFrequency` do programa ativo de Treino, com fallback para `Quiz.days` apenas quando não houver programa ativo — nunca `Quiz.frequency`/`Quiz.trainingDays`/`requestedDays`/`scheduleConfig.trainingDays.length` (ver decisão final em `10_integrations/workout_integration.md`).
 
 ### 5.5 Padrão alimentar
 
@@ -194,7 +202,7 @@ O sistema deve impedir que um item excluído apareça em:
 
 ### 5.9 Lactação
 
-Mostrar quando aplicável ao perfil da usuária e quando essa informação não estiver disponível de outra fonte autoritativa no AJ Fit.
+Mostrar quando aplicável ao perfil da usuária. Não existe fonte autoritativa prévia no AJ Fit para lactação — o valor é coletado e mantido inteiramente em `nutritionProfile/current.breastfeeding`.
 
 Se positivo, encerrar o fluxo de geração com bloqueio de elegibilidade.
 
@@ -308,8 +316,8 @@ Quando uma versão nova incluir uma pergunta essencial:
 | Peso atual | Evolução AJ Fit | Sim | Não | Não | Sim se ausente |
 | Altura | AJ Fit | Sim | Não | Não | Sim se ausente |
 | Objetivo | AJ Fit | Sim | Não | Não | Sim se ausente/inválido |
-| Gestação | AJ Fit | Quando aplicável | Não | Sim | Sim |
-| Lactação | Nutrição/AJ Fit | Quando aplicável | Não | Sim | Sim |
+| Gestação | `nutritionProfile/current` (pré-preenchido 1x por `Quiz.pregnancyScreening`) | Quando aplicável | Não | Sim | Sim |
+| Lactação | `nutritionProfile/current` | Quando aplicável | Não | Sim | Sim |
 | Refeições | Nutrição | Sim | Não | Sim para estrutura | Sim |
 | Velocidade | Nutrição | Quando aplicável | Não | Limitada pelo engine | Sim quando requerida |
 | Peso desejado | Nutrição | Não | Sim | Não | Não |

@@ -1,5 +1,11 @@
 # AJ Fit Nutrition — Arquitetura de IA
 
+## 0. Status real de infraestrutura — greenfield
+
+Hoje não existe nenhuma integração com OpenAI (ou qualquer outro provider de IA generativa) no código do AJ Fit: não há dependência, client, secret configurado via `defineSecret`, nem camada de abstração de provider reutilizável. Tudo neste capítulo — `NutritionAIProvider`, orquestração, configuração de modelo versionada — é infraestrutura **inteiramente nova** a ser construída para Nutrição, não uma extensão de algo existente.
+
+Isso não muda a decisão já tomada: **OpenAI continua sendo o provider inicial** para a V1 (ADR-001 §5). A ressalva é apenas sobre o que já existe no código vs. o que precisa ser construído do zero — incluindo o secret da API key, que deve seguir o padrão real do projeto (`defineSecret`, como em `functions/src/billing/revenuecat.ts`), não uma env var solta.
+
 ## 1. Objetivo
 
 Definir como a IA entra na arquitetura de Nutrição do AJ Fit sem se tornar autoridade sobre cálculos, segurança ou dados nutricionais.

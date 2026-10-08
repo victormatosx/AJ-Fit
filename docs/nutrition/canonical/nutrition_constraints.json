@@ -6,6 +6,8 @@
       "pregnancy",
       "lactation"
     ],
+    "pregnancyAndLactationStateSource": "nutritionProfile/current",
+    "pregnancyAndLactationStateSourceNote": "Quiz.pregnancyScreening is an immutable onboarding snapshot and is used only to pre-fill nutritionProfile/current the first time it is created. The authoritative current value for both gates always lives in nutritionProfile/current and must be re-read and revalidated before every generation, not assumed from the Quiz.",
     "onBlockedGeneration": {
       "callAi": false,
       "allowBypass": false,

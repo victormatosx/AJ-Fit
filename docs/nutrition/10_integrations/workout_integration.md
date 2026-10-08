@@ -8,13 +8,35 @@ O plano alimentar recomendado é o mesmo ao longo da semana.
 
 ---
 
-## 2. O que Nutrição pode usar do domínio de Treino
+## 2. Fonte autoritativa da frequência semanal de treino (decisão final)
 
-O Nutrition Engine pode utilizar a frequência semanal de treino como parte do contexto de gasto energético.
+Decisão confirmada por microauditoria técnica em 2026-10-08. Não é mais uma pendência.
 
-Essa informação deve vir da fonte autoritativa já existente do domínio de treino.
+O Nutrition Engine pode utilizar a frequência semanal de treino como parte do contexto de gasto energético, lendo-a nesta ordem:
 
-Não perguntar novamente ao usuário algo que o AJ Fit já conhece.
+```text
+users/{uid}/workoutPrograms/{activeProgramId}.prescribedTrainingFrequency
+-> prescribedStructuredDays (alias legado do mesmo campo)
+-> Quiz.days (fallback, quando não houver programa ativo)
+-> fallback determinístico do próprio Nutrition Engine (ver §6)
+```
+
+`prescribedTrainingFrequency` representa o número de sessões de treino **estruturadas** por semana que o programa ativo do usuário de fato prescreve. É mantido atualizado: toda mudança real de frequência passa por `adaptWorkoutProgram`, que sela uma nova instância de programa ativo com esse campo recalculado. Mudanças de "quais dias" sem mudar a frequência não tocam este campo.
+
+`Quiz.days` só deve ser usado quando não existir programa ativo — é um snapshot histórico do onboarding, nunca reescrito depois, mas ainda assim o melhor número disponível nesse caso específico.
+
+### 2.1 Campos proibidos como fonte de frequência
+
+Não usar para cálculo energético:
+
+- `requestedDays` — representa apenas o teto de disponibilidade que o usuário informou, não a frequência realmente prescrita pelo programa (pode ser maior que o que o programa de fato executa);
+- `scheduleConfig.trainingDays.length` — representa posicionamento dos dias, não frequência; é `[]` no modo flexível e pode não existir se nunca houve programa;
+- `Quiz.frequency` — rótulo legado do onboarding, não numérico, não autoritativo;
+- `Quiz.trainingDays` — lista de dias do onboarding, histórico, não a frequência atual.
+
+### 2.2 Treino livre (`scheduleMode: 'flexible'`)
+
+Não existe tratamento especial. A frequência continua vindo de `prescribedTrainingFrequency`, independentemente de `trainingDays` estar vazio (o que é esperado e normal no modo flexível).
 
 ---
 
@@ -40,11 +62,11 @@ Ao estimar gasto energético, o engine deve evitar contar duas vezes:
 - atividade cotidiana fora do treino;
 - componente de treino.
 
-A atividade fora do treino vem do Perfil Nutricional.
+A atividade fora do treino vem do Perfil Nutricional, como `nonTrainingActivityLevel` — representa exclusivamente atividade **fora** do treino (rotina diária, trabalho, deslocamento).
 
-A frequência de treino vem do domínio de Treino.
+A frequência de treino vem do domínio de Treino, conforme §2.
 
-A fórmula exata deve ser definida nas regras canônicas do Nutrition Engine.
+Esses dois dados entram separadamente no cálculo. O risco de double counting não está na origem dos dados (não há interseção de código entre `nonTrainingActivityLevel` e os campos de Treino), e sim na **fórmula**: os multiplicadores de atividade do Nutrition Engine não podem embutir implicitamente um componente de treino que já seria somado separadamente pela frequência semanal. Essa garantia é responsabilidade de quem definir a fórmula canônica em `canonical/nutrition_rules.json` — permanece pendente até essa definição final, mas a decisão de *fonte* de frequência (este documento) já está encerrada.
 
 ---
 
@@ -52,9 +74,9 @@ A fórmula exata deve ser definida nas regras canônicas do Nutrition Engine.
 
 Nutrição não deve depender de UI ou estado React do módulo de treino.
 
-A integração deve ocorrer via contrato/domínio compartilhado.
+Nutrição **não deve chamar `loadActiveWorkoutProgram` (ou qualquer outra função de serviço de Treino) diretamente** — isso traria todo o grafo de módulos de serviço/lifecycle de Treino como dependência de Nutrição, o que é exatamente o acoplamento que este documento quer evitar.
 
-Exemplo conceitual:
+A implementação futura deve criar um **leitor fino, próprio da Nutrição**, que resolve a fonte do §2 (programa ativo em `users/{uid}/workoutPrograms/{activeProgramId}`, com fallback para `Quiz.days`) e devolve apenas:
 
 ```ts
 interface WorkoutNutritionContext {
@@ -62,11 +84,13 @@ interface WorkoutNutritionContext {
 }
 ```
 
+Esse leitor é o único ponto de contato entre Nutrição e o domínio de Treino. Nenhum outro campo do programa, do schedule ou do lifecycle deve atravessar esse contrato.
+
 ---
 
 ## 6. Falta de dado
 
-Se a frequência de treino não estiver disponível:
+Se não houver programa ativo, usar `Quiz.days` (§2). Se nem isso existir:
 
 - não inventar;
 - usar fallback determinístico definido pelo engine;

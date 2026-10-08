@@ -1,5 +1,9 @@
 # AJ Fit Nutrition — Observabilidade da IA
 
+## 0. Status real de infraestrutura — greenfield
+
+Hoje não existe nenhuma integração com IA generativa (OpenAI ou qualquer outro provider) no AJ Fit, nem pipeline de logging/observabilidade de chamadas de IA. Tudo descrito neste documento — coleta de `generationId`/tokens/custo/latência, dashboards, alertas — é infraestrutura **inteiramente nova**, não uma extensão de algo já existente. Da mesma forma, não há provider de analytics de produto integrado (ver `11_analytics/events.md` §0); as métricas de `11_analytics/ai_metrics.md` derivadas deste log também dependem dessa infraestrutura nova.
+
 ## 1. Objetivo
 
 Permitir entender qualidade, falhas, latência e custo sem depender de logs manuais.

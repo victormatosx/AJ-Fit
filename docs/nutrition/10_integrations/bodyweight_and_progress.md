@@ -2,7 +2,7 @@
 
 ## 1. Fonte de peso
 
-Nutrição reutiliza automaticamente o **peso mais recente** registrado no módulo Evolução.
+Nutrição reutiliza automaticamente o **peso mais recente** registrado em `users/{uid}/assessments/{id}` (serviço real `src/services/assessments.ts`), ordenado por `measuredAt` desc. Na UI do AJ Fit esse domínio é apresentado como "Evolução", mas não existe um módulo/serviço com esse nome — `assessments.ts` é a fonte real.
 
 Não manter peso nutricional separado.
 
@@ -10,7 +10,7 @@ Não manter peso nutricional separado.
 
 ## 2. Fonte autoritativa
 
-O módulo Evolução continua sendo a fonte de verdade para peso corporal.
+`users/{uid}/assessments/{id}` (`src/services/assessments.ts`) continua sendo a fonte de verdade para peso corporal.
 
 Nutrição consome o valor.
 
@@ -70,9 +70,9 @@ Não criar segunda implementação de gráfico de peso se o app já possui uma a
 
 ## 7. Integração com progresso
 
-Nutrição consome dados do domínio de Evolução.
+Nutrição consome dados de `users/{uid}/assessments/{id}` (`src/services/assessments.ts`), exibido na UI como "Evolução".
 
-Não deve alterar o histórico de Evolução diretamente.
+Não deve alterar esse histórico de assessments diretamente.
 
 ---
 

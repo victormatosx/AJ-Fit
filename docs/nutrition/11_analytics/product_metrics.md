@@ -1,5 +1,9 @@
 # AJ Fit Nutrition — Métricas de Produto
 
+## 0. Status real de infraestrutura
+
+Estas métricas dependem dos eventos definidos em `11_analytics/events.md`, que hoje são um contrato conceitual — não há provider de analytics real integrado ao AJ Fit (ver `events.md` §0). O funil e as métricas abaixo só podem ser calculados depois que um provider real existir e os eventos forem de fato instrumentados.
+
 ## 1. Métricas principais
 
 As duas métricas principais da V1 são:
