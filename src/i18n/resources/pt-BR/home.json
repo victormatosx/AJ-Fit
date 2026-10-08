@@ -10,6 +10,17 @@
     "level": "NÍVEL {{level}}",
     "sessions30d": "TREINOS {{count}} NOS ÚLTIMOS 30 DIAS"
   },
+  "evoRing": {
+    "ofCycle": "DO CICLO",
+    "daysLeft": "Faltam {{count}} dias",
+    "paused": "Progresso pausado",
+    "unlocked": "Evolução liberada",
+    "streakLabel": "SEQUÊNCIA",
+    "streakUnit": "dias",
+    "adherenceLabel": "ADERÊNCIA",
+    "towardAdvanced": "RUMO AO AVANÇADO",
+    "towardAdvancedUnit": "/ {{count}} ciclos"
+  },
   "greeting": {
     "casual": "E aí,"
   },

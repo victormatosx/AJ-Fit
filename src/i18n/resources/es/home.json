@@ -10,6 +10,17 @@
     "level": "NIVEL {{level}}",
     "sessions30d": "{{count}} ENTRENAMIENTOS EN LOS ÚLTIMOS 30 DÍAS"
   },
+  "evoRing": {
+    "ofCycle": "DEL CICLO",
+    "daysLeft": "Faltan {{count}} días",
+    "paused": "Progreso en pausa",
+    "unlocked": "Evolución disponible",
+    "streakLabel": "RACHA",
+    "streakUnit": "días",
+    "adherenceLabel": "ADHERENCIA",
+    "towardAdvanced": "HACIA AVANZADO",
+    "towardAdvancedUnit": "/ {{count}} ciclos"
+  },
   "greeting": {
     "casual": "Hola,"
   },

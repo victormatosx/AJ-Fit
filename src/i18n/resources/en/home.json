@@ -10,6 +10,17 @@
     "level": "LEVEL {{level}}",
     "sessions30d": "{{count}} WORKOUTS IN THE LAST 30 DAYS"
   },
+  "evoRing": {
+    "ofCycle": "OF CYCLE",
+    "daysLeft": "{{count}} days left",
+    "paused": "Progress paused",
+    "unlocked": "Evolution unlocked",
+    "streakLabel": "STREAK",
+    "streakUnit": "days",
+    "adherenceLabel": "ADHERENCE",
+    "towardAdvanced": "TOWARD ADVANCED",
+    "towardAdvancedUnit": "/ {{count}} cycles"
+  },
   "support": {
     "iconLabel": "My support cases",
     "iconLabelUnread": "My support cases, {{count}} with new messages"
