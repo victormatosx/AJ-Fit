@@ -15,6 +15,7 @@ export function PendingEvolutionBanner({
   onPress,
 }: {
   viewModel: Extract<EvolutionViewModel, { kind: 'EVOLUTION_READY' | 'EVOLUTION_DEFERRED' }>;
+  /** `null` only acceptable transiently (Task 16 wires this with a placeholder `null` until Task 20 supplies the real value) — a `null` diff silently renders "0 new exercises" for the cycle-evolution title, so don't pass `null` from any new call site without a reason. */
   diff: PrescriptionDiffSummary | null;
   onPress: () => void;
 }) {
