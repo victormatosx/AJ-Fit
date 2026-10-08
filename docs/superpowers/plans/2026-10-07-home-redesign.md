@@ -892,11 +892,10 @@ import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withSequence, w
 export function LitFlame({ size = 40, lit = true }: { size?: number; lit?: boolean }) {
   const scaleX = useSharedValue(1);
   const scaleY = useSharedValue(1);
-  const rotate = useSharedValue(0);
 
   useEffect(() => {
     if (!lit) {
-      scaleX.value = 1; scaleY.value = 1; rotate.value = 0;
+      scaleX.value = 1; scaleY.value = 1;
       return;
     }
     scaleX.value = withRepeat(
@@ -915,7 +914,7 @@ export function LitFlame({ size = 40, lit = true }: { size?: number; lit?: boole
       ),
       -1,
     );
-  }, [lit, scaleX, scaleY, rotate]);
+  }, [lit, scaleX, scaleY]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scaleX: scaleX.value }, { scaleY: scaleY.value }],
