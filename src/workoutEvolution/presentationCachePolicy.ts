@@ -21,9 +21,11 @@ export function viewModelFromEvolutionPresentationCache(
       adherenceQuality: cache.summary.adherenceQuality,
       // Also deliberately absent from disk; Home does not render this flag.
       isHistoryComplete: false,
-      // Deliberately absent from disk, same reasoning as earnedLevel/isHistoryComplete above —
+      // Deliberately defaulted to null, same reasoning as earnedLevel/isHistoryComplete above —
       // a stale cached entry never claims a numeric adherence ratio, a pause, or a cycle count.
       adherenceRatio: null,
+      // NOT defaulted: freshly derived from the cached activeLevel (a pure function of a
+      // value the cache already stores), so it's always correct — never "fix" this to null.
       requiredActiveDays: requiredActiveDaysForLevel(cache.summary.activeLevel),
       pausedAtLocalDate: null,
       intermediateCyclesEarned: null,

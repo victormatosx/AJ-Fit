@@ -22,7 +22,7 @@ export interface ProgressingSummary {
   adherenceQuality: EvolutionQuality | null;
   /** False when the account is on an unaugmented V1 baseline — copy must not claim "first cycle"/"lifetime cycles" it cannot prove (docs §78/§79/§111). */
   isHistoryComplete: boolean;
-  /** Same ratio the engine already computed (`ProgressionDecision.adherence.ratio`), 0-1, capped at 1. Null exactly when `adherenceQuality` is null (evaluation blocked). */
+  /** Same ratio the engine already computed (`ProgressionDecision.adherence.ratio`), 0-1, capped at 1. Null when `adherenceQuality` is null (evaluation blocked), OR when the summary was reconstructed from the on-disk presentation cache (`presentationCachePolicy.ts`), which never persists this ratio — in that case `adherenceQuality` can still be non-null. */
   adherenceRatio: number | null;
   /** `activeDays` denominator for `activeLevel` — same constant the engine itself uses (`progressionEngineV2/config.ts`), never recomputed as a new rule. Always known (static per level). */
   requiredActiveDays: number;

@@ -55,7 +55,7 @@ export interface EvolutionViewModelInput {
   pending: PendingEvolutionSummary | null;
   /** Latest persisted AUTO activation for the currently-active ProgramInstance, after UX acknowledgement filtering. */
   autoActivationNotice: { eventId: string; type: PendingEvolutionType } | null;
-  /** From a separate `evaluateProgressionV2ForUserFull` read — see `useWorkoutEvolution.ts`. Omitted/undefined is treated as `null` (not-yet-known), never as "not paused". */
+  /** Will be sourced from a separate `evaluateProgressionV2ForUserFull` read once `useWorkoutEvolution.ts` is wired up (a later task) — until then, always `null`/omitted. Omitted/undefined is treated as `null` (not-yet-known), never as "not paused". */
   pausedAtLocalDate?: string | null;
   intermediateCyclesEarned?: number | null;
   error?: string;
