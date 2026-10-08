@@ -3,16 +3,30 @@ import { Animated, Pressable, View, useWindowDimensions } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { MonoLabel } from '../ui/Display';
 import { Icon } from '../ui/Icon';
-import { GRID_COLUMNS, type FrequencyWindowViewModel } from '../../home/frequencyHeatmap';
+import { GRID_COLUMNS, GRID_ROWS, type FrequencyWindowViewModel } from '../../home/frequencyHeatmap';
 
-const GAP = 4;
+// Matches the design spec's explicit "gap 3" between heatmap cells (section
+// 2.6) — also the single source of truth for `cellSizeForWidth`'s sizing
+// math below, so the rendered gap and the sizing math can never drift apart
+// again (they did briefly during the GitHub-grid restyle).
+const GAP = 3;
 const MAX_CELL = 30;
+// Fixed width of the weekday-letter gutter column — unlike every other
+// column, it is NOT `cellSize`-wide. See `cellSizeForWidth` below.
+const LABEL_GUTTER = 14;
 // A known Monday — only used to derive Monday-first weekday letters, never as an actual date.
 const WEEKDAY_HEADER_ANCHOR_MONDAY = '2024-01-01';
 
+/**
+ * The rendered grid is 1 fixed-width label gutter + `GRID_ROWS` (calendar
+ * weeks, rendered as columns) `cellSize`-wide columns, with `GAP` between
+ * every adjacent element (`GRID_ROWS` gaps total, since `GRID_ROWS + 1`
+ * elements sit side by side). Keep this in sync with the actual JSX below —
+ * this is the single place cell size is computed from available width.
+ */
 function cellSizeForWidth(width: number): number {
   if (width <= 0) return 0;
-  const raw = (width - GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS;
+  const raw = (width - LABEL_GUTTER - GAP * GRID_ROWS) / GRID_ROWS;
   return Math.max(0, Math.min(MAX_CELL, Math.floor(raw)));
 }
 
@@ -129,20 +143,25 @@ export function FrequencyHeatmap({
         </Pressable>
       </View>
 
-      <Animated.View style={{ marginTop: 14, opacity: fade, flexDirection: 'row', gap: 3 }}>
+      <Animated.View style={{ marginTop: 14, opacity: fade, flexDirection: 'row', gap: GAP }}>
         {cellSize > 0 && freqWindow && (
           <>
-            <View style={{ width: 14, justifyContent: 'space-between' }}>
-              {[0, 1, 2, 3, 4, 5, 6].map((row) => (
+            <View style={{ width: LABEL_GUTTER, justifyContent: 'space-between' }}>
+              {Array.from({ length: GRID_COLUMNS }, (_, i) => i).map((row) => (
                 <View key={row} style={{ height: cellSize, justifyContent: 'center' }}>
-                  {(row === 0 || row === 2 || row === 4 || row === 6) && (
+                  {/* GitHub's own convention: label every other weekday row to reduce clutter (Mon/Wed/Fri/Sun here, since rows are Monday-first). */}
+                  {row % 2 === 0 && (
                     <MonoLabel size={8} color={'rgba(255,255,255,0.32)'}>{weekdayLetter(row, locale)}</MonoLabel>
                   )}
                 </View>
               ))}
             </View>
             {freqWindow.weeks.map((week, columnIndex) => (
-              <View key={columnIndex} style={{ gap: 3 }}>
+              // Positional, not date-based: navigating swaps this cell's
+              // props in place instead of unmounting/remounting a brand-new
+              // node for every date, which is what made period navigation
+              // feel heavy.
+              <View key={columnIndex} style={{ gap: GAP }}>
                 {week.map((day, rowIndex) => (
                   <View
                     key={rowIndex}
@@ -156,7 +175,7 @@ export function FrequencyHeatmap({
                       height: cellSize,
                       borderRadius: 3,
                       backgroundColor: source === 'CACHE' && day && knownThroughLocalDate && day.localDate > knownThroughLocalDate
-                        ? 'rgba(255,255,255,0.05)'
+                        ? '#020010'
                         : day?.completed ? '#4da3ff' : 'rgba(255,255,255,0.05)',
                       borderWidth: day?.isToday ? 1 : 0,
                       borderColor: 'rgba(77,163,255,0.8)',
