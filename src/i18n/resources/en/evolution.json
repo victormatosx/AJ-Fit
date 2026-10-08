@@ -42,6 +42,19 @@
     "secondDeferConsequence": "The next workout is available and will activate automatically when this period ends.",
     "errorRetry": "This couldn't be completed. Review the current state and try again."
   },
+  "celebration": {
+    "cycleDone": "CYCLE {{number}} COMPLETE",
+    "levelDone": "BEGINNER LEVEL COMPLETE",
+    "renewalDone": "A FRESH START",
+    "cycleBigTop": "CYCLE",
+    "levelBigTop": "LEVEL",
+    "renewalBigTop": "CYCLE",
+    "renewalBigBottom": "RENEWED",
+    "cycleSub": "{{count}} new exercises in your workout",
+    "levelSub": "Your program got a new structure",
+    "renewalSub": "Active days start counting again",
+    "tapHint": "Tap to see your new workout"
+  },
   "motivationalRenewal": {
     "eyebrow": "A NEW VERSION IS AVAILABLE",
     "cardReady": "A new workout version is available",

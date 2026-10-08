@@ -42,6 +42,19 @@
     "secondDeferConsequence": "O próximo treino já está disponível e será ativado automaticamente ao fim deste período.",
     "errorRetry": "Não foi possível concluir agora. Revise o estado e tente novamente."
   },
+  "celebration": {
+    "cycleDone": "CICLO {{number}} CONCLUÍDO",
+    "levelDone": "NÍVEL DE INICIANTE CONCLUÍDO",
+    "renewalDone": "NOVO COMEÇO",
+    "cycleBigTop": "CICLO",
+    "levelBigTop": "NÍVEL",
+    "renewalBigTop": "CICLO",
+    "renewalBigBottom": "RENOVADO",
+    "cycleSub": "{{count}} exercícios novos no seu treino",
+    "levelSub": "Seu programa ganhou uma nova estrutura",
+    "renewalSub": "Os dias ativos voltam a contar",
+    "tapHint": "Toque para ver seu novo treino"
+  },
   "motivationalRenewal": {
     "eyebrow": "UMA NOVA VERSÃO ESTÁ DISPONÍVEL",
     "cardReady": "Nova versão de treino disponível",
