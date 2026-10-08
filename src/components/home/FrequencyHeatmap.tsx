@@ -3,7 +3,6 @@ import { Animated, Pressable, View, useWindowDimensions } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { MonoLabel } from '../ui/Display';
 import { Icon } from '../ui/Icon';
-import { useTheme } from '../../theme';
 import { GRID_COLUMNS, type FrequencyWindowViewModel } from '../../home/frequencyHeatmap';
 
 const GAP = 4;
@@ -56,7 +55,6 @@ export function FrequencyHeatmap({
   knownThroughLocalDate?: string;
 }) {
   const { t, i18n } = useTranslation('home');
-  const { theme } = useTheme();
   const { width: windowWidth } = useWindowDimensions();
   const locale = i18n.resolvedLanguage ?? i18n.language;
   // The section has a deterministic 22pt inset on both sides. Deriving the
@@ -98,7 +96,12 @@ export function FrequencyHeatmap({
 
   return (
     <View style={{ paddingHorizontal: 22, paddingVertical: 12, opacity: loading ? 0.55 : 1 }}>
-      <MonoLabel>{t('activity.frequency.title').toUpperCase()}</MonoLabel>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <MonoLabel>{t('activity.frequency.title').toUpperCase()}</MonoLabel>
+        <Animated.View style={{ opacity: fade }}>
+          <MonoLabel color={'rgba(255,255,255,0.5)'}>{summary}</MonoLabel>
+        </Animated.View>
+      </View>
 
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14, marginTop: 10 }}>
         <Pressable
@@ -108,13 +111,11 @@ export function FrequencyHeatmap({
           accessibilityRole="button"
           accessibilityLabel={t('activity.frequency.prev')}
         >
-          <Icon name="arrow-left" size={14} color={theme.colors.textSecondary} />
+          <Icon name="arrow-left" size={14} color={'rgba(255,255,255,0.5)'} />
         </Pressable>
-
         <Animated.View style={{ opacity: fade }}>
-          <MonoLabel color={theme.colors.textSecondary}>{rangeLabel}</MonoLabel>
+          <MonoLabel color={'rgba(255,255,255,0.5)'}>{rangeLabel}</MonoLabel>
         </Animated.View>
-
         <Pressable
           onPress={source === 'AUTHORITATIVE' && canGoNext ? onNext : undefined}
           disabled={source !== 'AUTHORITATIVE' || !canGoNext}
@@ -124,57 +125,56 @@ export function FrequencyHeatmap({
           accessibilityState={{ disabled: source !== 'AUTHORITATIVE' || !canGoNext }}
           style={{ opacity: canGoNext ? 1 : 0.25 }}
         >
-          <Icon name="arrow-right" size={14} color={theme.colors.textSecondary} />
+          <Icon name="arrow-right" size={14} color={'rgba(255,255,255,0.5)'} />
         </Pressable>
       </View>
 
-      <Animated.View style={{ marginTop: 12, alignItems: 'center', opacity: fade }}>
+      <Animated.View style={{ marginTop: 14, opacity: fade, flexDirection: 'row', gap: 3 }}>
         {cellSize > 0 && freqWindow && (
           <>
-            <View style={{ flexDirection: 'row', gap: GAP, marginBottom: 6 }}>
-              {Array.from({ length: GRID_COLUMNS }, (_, index) => (
-                <View key={index} style={{ width: cellSize, alignItems: 'center' }}>
-                  <MonoLabel size={9} color={theme.colors.textFaint}>{weekdayLetter(index, locale)}</MonoLabel>
+            <View style={{ width: 14, justifyContent: 'space-between' }}>
+              {[0, 1, 2, 3, 4, 5, 6].map((row) => (
+                <View key={row} style={{ height: cellSize, justifyContent: 'center' }}>
+                  {(row === 0 || row === 2 || row === 4 || row === 6) && (
+                    <MonoLabel size={8} color={'rgba(255,255,255,0.32)'}>{weekdayLetter(row, locale)}</MonoLabel>
+                  )}
                 </View>
               ))}
             </View>
-            <View style={{ gap: GAP }}>
-              {freqWindow.weeks.map((row, rowIndex) => (
-                <View key={rowIndex} style={{ flexDirection: 'row', gap: GAP }}>
-                  {row.map((day, columnIndex) => (
-                    <View
-                      // Positional, not date-based: navigating swaps this
-                      // cell's props in place instead of unmounting/
-                      // remounting a brand-new node for every date, which
-                      // is what made period navigation feel heavy.
-                      key={columnIndex}
-                      accessibilityLabel={day && (source !== 'CACHE' || !knownThroughLocalDate || day.localDate <= knownThroughLocalDate)
-                        ? (day.completed
-                            ? t('activity.frequency.cellCompleted', { date: formatLocalDate(day.localDate, locale, { day: 'numeric', month: 'long' }) })
-                            : t('activity.frequency.cellEmpty', { date: formatLocalDate(day.localDate, locale, { day: 'numeric', month: 'long' }) }))
-                        : undefined}
-                      style={{
-                        width: cellSize,
-                        height: cellSize,
-                        borderRadius: theme.radii.xs,
-                        backgroundColor: source === 'CACHE' && day && knownThroughLocalDate && day.localDate > knownThroughLocalDate
-                          ? theme.colors.background
-                          : day?.completed ? theme.colors.primaryEmphasis : theme.colors.surfaceMuted,
-                        borderWidth: day?.isToday ? 1.5 : 0,
-                        borderColor: theme.colors.primaryBorderMuted,
-                        opacity: day ? (source === 'CACHE' && knownThroughLocalDate && day.localDate > knownThroughLocalDate ? 0.45 : 1) : 0,
-                      }}
-                    />
-                  ))}
-                </View>
-              ))}
-            </View>
+            {freqWindow.weeks.map((week, columnIndex) => (
+              <View key={columnIndex} style={{ gap: 3 }}>
+                {week.map((day, rowIndex) => (
+                  <View
+                    key={rowIndex}
+                    accessibilityLabel={day && (source !== 'CACHE' || !knownThroughLocalDate || day.localDate <= knownThroughLocalDate)
+                      ? (day.completed
+                          ? t('activity.frequency.cellCompleted', { date: formatLocalDate(day.localDate, locale, { day: 'numeric', month: 'long' }) })
+                          : t('activity.frequency.cellEmpty', { date: formatLocalDate(day.localDate, locale, { day: 'numeric', month: 'long' }) }))
+                      : undefined}
+                    style={{
+                      width: cellSize,
+                      height: cellSize,
+                      borderRadius: 3,
+                      backgroundColor: source === 'CACHE' && day && knownThroughLocalDate && day.localDate > knownThroughLocalDate
+                        ? 'rgba(255,255,255,0.05)'
+                        : day?.completed ? '#4da3ff' : 'rgba(255,255,255,0.05)',
+                      borderWidth: day?.isToday ? 1 : 0,
+                      borderColor: 'rgba(77,163,255,0.8)',
+                      opacity: day ? (source === 'CACHE' && knownThroughLocalDate && day.localDate > knownThroughLocalDate ? 0.45 : 1) : 0,
+                    }}
+                  />
+                ))}
+              </View>
+            ))}
           </>
         )}
       </Animated.View>
 
-      <View style={{ marginTop: 10 }}>
-        <MonoLabel color={theme.colors.textSecondary}>{summary}</MonoLabel>
+      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 4, marginTop: 12 }}>
+        <MonoLabel size={9} color={'rgba(255,255,255,0.32)'}>{t('activity.frequency.less').toUpperCase()}</MonoLabel>
+        <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.05)' }} />
+        <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: '#4da3ff' }} />
+        <MonoLabel size={9} color={'rgba(255,255,255,0.32)'}>{t('activity.frequency.more').toUpperCase()}</MonoLabel>
       </View>
     </View>
   );

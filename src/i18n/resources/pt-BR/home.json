@@ -499,7 +499,9 @@
       "cellCompleted": "{{date}} — treino concluído",
       "cellEmpty": "{{date}} — nenhum treino registrado",
       "prev": "Período de 30 dias anterior",
-      "next": "Próximo período de 30 dias"
+      "next": "Próximo período de 30 dias",
+      "less": "menos",
+      "more": "mais"
     }
   },
   "upcoming": {

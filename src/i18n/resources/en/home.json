@@ -499,7 +499,9 @@
       "cellCompleted": "{{date}} — workout completed",
       "cellEmpty": "{{date}} — no workout logged",
       "prev": "Previous 30-day period",
-      "next": "Next 30-day period"
+      "next": "Next 30-day period",
+      "less": "less",
+      "more": "more"
     }
   },
   "upcoming": {
