@@ -7,6 +7,7 @@ const VALID_PROGRESSING = {
   summary: {
     earnedLevel: 'INTERMEDIATE' as const, activeLevel: 'INTERMEDIATE' as const, cycleNumber: 2,
     proximity: 'ON_TRACK' as const, activeDays: 10, sessionsCompleted: 6, adherenceQuality: 'GOOD' as const, isHistoryComplete: true,
+    adherenceRatio: null, requiredActiveDays: 85, pausedAtLocalDate: null, intermediateCyclesEarned: null,
   },
 } satisfies EvolutionViewModel;
 

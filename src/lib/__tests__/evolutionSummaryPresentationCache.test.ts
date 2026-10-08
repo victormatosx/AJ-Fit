@@ -26,6 +26,10 @@ const summary: ProgressingSummary = {
   sessionsCompleted: 9,
   adherenceQuality: 'GOOD',
   isHistoryComplete: true,
+  adherenceRatio: null,
+  requiredActiveDays: 85,
+  pausedAtLocalDate: null,
+  intermediateCyclesEarned: null,
 };
 
 beforeEach(() => values.clear());

@@ -1,3 +1,4 @@
+import { requiredActiveDaysForLevel } from '../home/evoRingMetrics';
 import type { ProgressionDecision } from '../progressionEngineV2/types';
 import { isPromptable, type DeferralView } from '../workoutLifecycle/deferral';
 import type { CurrentTrainingLevel, PendingEvolutionType } from '../workoutLifecycle/types';
@@ -19,15 +20,22 @@ export interface LifecycleContext {
   isHistoryComplete: boolean;
 }
 
-function buildProgressingSummary(decision: ProgressionDecision, lifecycle: LifecycleContext): ProgressingSummary {
+function buildProgressingSummary(
+  decision: ProgressionDecision,
+  lifecycle: LifecycleContext,
+  extra: { pausedAtLocalDate: string | null; intermediateCyclesEarned: number | null },
+): ProgressingSummary {
   const base = {
     earnedLevel: lifecycle.earnedLevel,
     activeLevel: lifecycle.activeLevel,
     cycleNumber: lifecycle.cycleNumber,
     isHistoryComplete: lifecycle.isHistoryComplete,
+    requiredActiveDays: requiredActiveDaysForLevel(lifecycle.activeLevel),
+    pausedAtLocalDate: extra.pausedAtLocalDate,
+    intermediateCyclesEarned: extra.intermediateCyclesEarned,
   };
   if (decision.type === 'NO_ACTION') {
-    return { ...base, proximity: null, activeDays: null, sessionsCompleted: null, adherenceQuality: null };
+    return { ...base, proximity: null, activeDays: null, sessionsCompleted: null, adherenceQuality: null, adherenceRatio: null };
   }
   return {
     ...base,
@@ -35,6 +43,7 @@ function buildProgressingSummary(decision: ProgressionDecision, lifecycle: Lifec
     activeDays: decision.activeDays,
     sessionsCompleted: decision.validSessionCount,
     adherenceQuality: decision.adherence.quality,
+    adherenceRatio: decision.adherence.ratio,
   };
 }
 
@@ -46,6 +55,9 @@ export interface EvolutionViewModelInput {
   pending: PendingEvolutionSummary | null;
   /** Latest persisted AUTO activation for the currently-active ProgramInstance, after UX acknowledgement filtering. */
   autoActivationNotice: { eventId: string; type: PendingEvolutionType } | null;
+  /** From a separate `evaluateProgressionV2ForUserFull` read — see `useWorkoutEvolution.ts`. Omitted/undefined is treated as `null` (not-yet-known), never as "not paused". */
+  pausedAtLocalDate?: string | null;
+  intermediateCyclesEarned?: number | null;
   error?: string;
 }
 
@@ -66,18 +78,26 @@ export function isResolvedEvolutionViewModel(viewModel: EvolutionViewModel): boo
 
 /** Shared by the terminal presenter and the provisional (Fase 5.2) one — the
  * exact same summary shape regardless of which wrapper kind ends up winning. */
-function buildSummary(decision: ProgressionDecision | null, lifecycle: LifecycleContext): ProgressingSummary {
+function buildSummary(
+  decision: ProgressionDecision | null,
+  lifecycle: LifecycleContext,
+  extra: { pausedAtLocalDate: string | null; intermediateCyclesEarned: number | null },
+): ProgressingSummary {
   return decision
-    ? buildProgressingSummary(decision, lifecycle)
+    ? buildProgressingSummary(decision, lifecycle, extra)
     : {
         earnedLevel: lifecycle.earnedLevel,
         activeLevel: lifecycle.activeLevel,
         cycleNumber: lifecycle.cycleNumber,
         isHistoryComplete: lifecycle.isHistoryComplete,
+        requiredActiveDays: requiredActiveDaysForLevel(lifecycle.activeLevel),
+        pausedAtLocalDate: extra.pausedAtLocalDate,
+        intermediateCyclesEarned: extra.intermediateCyclesEarned,
         proximity: null,
         activeDays: null,
         sessionsCompleted: null,
         adherenceQuality: null,
+        adherenceRatio: null,
       };
 }
 
@@ -95,11 +115,16 @@ function buildSummary(decision: ProgressionDecision | null, lifecycle: Lifecycle
 export function buildProvisionalEvolutionViewModel(input: {
   lifecycle: LifecycleContext;
   decision: ProgressionDecision | null;
+  pausedAtLocalDate?: string | null;
+  intermediateCyclesEarned?: number | null;
 }): EvolutionViewModel {
   return {
     kind: 'SUMMARY_READY',
     source: 'CURRENT_SESSION',
-    summary: buildSummary(input.decision, input.lifecycle),
+    summary: buildSummary(input.decision, input.lifecycle, {
+      pausedAtLocalDate: input.pausedAtLocalDate ?? null,
+      intermediateCyclesEarned: input.intermediateCyclesEarned ?? null,
+    }),
   };
 }
 
@@ -107,7 +132,11 @@ export function buildEvolutionViewModel(input: EvolutionViewModelInput): Evoluti
   if (input.error) return { kind: 'ERROR', message: input.error };
   if (!input.lifecycle) return { kind: 'LOADING' };
 
-  const summary = buildSummary(input.decision, input.lifecycle);
+  const extra = {
+    pausedAtLocalDate: input.pausedAtLocalDate ?? null,
+    intermediateCyclesEarned: input.intermediateCyclesEarned ?? null,
+  };
+  const summary = buildSummary(input.decision, input.lifecycle, extra);
 
   if (input.autoActivationNotice) {
     return {

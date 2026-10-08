@@ -17,6 +17,10 @@ function summary(overrides: Partial<ProgressingSummary> = {}): ProgressingSummar
     sessionsCompleted: 8,
     adherenceQuality: 'GOOD',
     isHistoryComplete: true,
+    adherenceRatio: null,
+    requiredActiveDays: 85,
+    pausedAtLocalDate: null,
+    intermediateCyclesEarned: null,
     ...overrides,
   };
 }

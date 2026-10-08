@@ -37,6 +37,33 @@ describe('truthful lifecycle boundary', () => {
     expect(vm.summary).not.toHaveProperty('consistencyPercent');
   });
 
+  it('surfaces the real adherence ratio and the engine-derived active-day requirement', () => {
+    const vm = buildEvolutionViewModel({ now: NOW, lifecycle: lifecycle(), pending: null, ...NO_NOTICE,
+      decision: progressing({ activeDays: 12, validSessionCount: 8, adherence: { ratio: 0.64, quality: 'BELOW_TARGET' } }) });
+    expect(vm.kind).toBe('PROGRESSING');
+    if (vm.kind !== 'PROGRESSING') return;
+    expect(vm.summary.adherenceRatio).toBe(0.64);
+    expect(vm.summary.requiredActiveDays).toBe(28); // BEGINNER
+  });
+
+  it('surfaces pausedAtLocalDate and intermediateCyclesEarned only when the caller supplies them', () => {
+    const vm = buildEvolutionViewModel({ now: NOW, lifecycle: lifecycle({ activeLevel: 'INTERMEDIATE' }), pending: null, ...NO_NOTICE,
+      decision: progressing(), pausedAtLocalDate: '2026-05-20', intermediateCyclesEarned: 2 });
+    expect(vm.kind).toBe('PROGRESSING');
+    if (vm.kind !== 'PROGRESSING') return;
+    expect(vm.summary.pausedAtLocalDate).toBe('2026-05-20');
+    expect(vm.summary.intermediateCyclesEarned).toBe(2);
+    expect(vm.summary.requiredActiveDays).toBe(85); // INTERMEDIATE
+  });
+
+  it('defaults pausedAtLocalDate/intermediateCyclesEarned to null when the caller omits them', () => {
+    const vm = buildEvolutionViewModel({ now: NOW, lifecycle: lifecycle(), pending: null, ...NO_NOTICE, decision: progressing() });
+    expect(vm.kind).toBe('PROGRESSING');
+    if (vm.kind !== 'PROGRESSING') return;
+    expect(vm.summary.pausedAtLocalDate).toBeNull();
+    expect(vm.summary.intermediateCyclesEarned).toBeNull();
+  });
+
   it('does not fabricate zeroes while an in-progress execution blocks evaluation', () => {
     const vm = buildEvolutionViewModel({ now: NOW, lifecycle: lifecycle(), pending: null, ...NO_NOTICE,
       decision: { type: 'NO_ACTION', reason: 'IN_PROGRESS_EXECUTION' } });
@@ -141,7 +168,8 @@ describe('buildProvisionalEvolutionViewModel — progressive rendering (Fase 5.2
       kind: 'SUMMARY_READY',
       source: 'CURRENT_SESSION',
       summary: { earnedLevel: 'BEGINNER', activeLevel: 'BEGINNER', cycleNumber: 1, isHistoryComplete: true,
-        proximity: null, activeDays: null, sessionsCompleted: null, adherenceQuality: null },
+        proximity: null, activeDays: null, sessionsCompleted: null, adherenceQuality: null,
+        adherenceRatio: null, requiredActiveDays: 28, pausedAtLocalDate: null, intermediateCyclesEarned: null },
     });
   });
 

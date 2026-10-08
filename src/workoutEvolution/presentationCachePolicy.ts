@@ -1,3 +1,4 @@
+import { requiredActiveDaysForLevel } from '../home/evoRingMetrics';
 import type { EvolutionSummaryPresentationCache } from '../lib/evolutionSummaryPresentationCache';
 import type { EvolutionViewModel } from './types';
 
@@ -20,6 +21,12 @@ export function viewModelFromEvolutionPresentationCache(
       adherenceQuality: cache.summary.adherenceQuality,
       // Also deliberately absent from disk; Home does not render this flag.
       isHistoryComplete: false,
+      // Deliberately absent from disk, same reasoning as earnedLevel/isHistoryComplete above —
+      // a stale cached entry never claims a numeric adherence ratio, a pause, or a cycle count.
+      adherenceRatio: null,
+      requiredActiveDays: requiredActiveDaysForLevel(cache.summary.activeLevel),
+      pausedAtLocalDate: null,
+      intermediateCyclesEarned: null,
     },
   };
 }
