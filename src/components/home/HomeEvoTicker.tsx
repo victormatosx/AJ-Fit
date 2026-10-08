@@ -5,6 +5,7 @@ import { useTheme } from '../../theme';
 import { useIsScreenActive } from '../../state/ScreenActivity';
 import type { EvolutionViewModel } from '../../workoutEvolution/types';
 import type { Streak } from '../../home/streak';
+import { buildHomeEvoTickerItems, type HomeEvoTickerTranslate } from './homeEvoTickerItems';
 
 const LOOP_DURATION_MS = 18000;
 const ITEM_GAP = 36;
@@ -30,27 +31,12 @@ export function HomeEvoTicker({
 }) {
   const { t } = useTranslation(['home', 'evolution']);
   const { theme } = useTheme();
+  const tLoose = t as unknown as HomeEvoTickerTranslate;
 
-  const items = useMemo<string[]>(() => {
-    if (viewModel.kind === 'LOADING' || viewModel.kind === 'ERROR' || viewModel.kind === 'UNAVAILABLE') return [];
-    const { summary } = viewModel;
-    const result: string[] = [];
-    if (streak) {
-      result.push(t('home:evoTicker.streak', { count: streak.current }));
-    }
-    if (summary.activeDays !== null) {
-      result.push(t('home:evoTicker.activeDays', { count: summary.activeDays, required: summary.requiredActiveDays }));
-    }
-    if (summary.adherenceRatio !== null) {
-      result.push(t('home:evoTicker.adherence', { percent: Math.round(summary.adherenceRatio * 100) }));
-    }
-    result.push(t('home:evoTicker.cycle', { number: summary.cycleNumber }));
-    result.push(t('home:evoTicker.level', { level: t(`evolution:level.${summary.activeLevel}`) }));
-    if (sessionsLast30Days !== null) {
-      result.push(t('home:evoTicker.sessions30d', { count: sessionsLast30Days }));
-    }
-    return result;
-  }, [viewModel, streak, sessionsLast30Days, t]);
+  const items = useMemo<string[]>(
+    () => buildHomeEvoTickerItems(viewModel, streak, sessionsLast30Days, tLoose),
+    [viewModel, streak, sessionsLast30Days, tLoose],
+  );
 
   if (items.length === 0) return null;
 
@@ -60,19 +46,30 @@ export function HomeEvoTicker({
         marginHorizontal: -22,
         borderTopWidth: 1,
         borderBottomWidth: 1,
-        borderColor: 'rgba(255,255,255,0.06)',
+        borderColor: theme.colors.settingsGroupBorder,
         paddingVertical: 8,
         overflow: 'hidden',
       }}
     >
-      <TickerMarquee items={items} accentColor={theme.colors.primaryEmphasis} />
+      <TickerMarquee items={items} accentColor={theme.colors.primaryEmphasis} fontFamily={theme.fonts.mono} />
     </View>
   );
 }
 
-function TickerMarquee({ items, accentColor }: { items: string[]; accentColor: string }) {
+function TickerMarquee({
+  items,
+  accentColor,
+  fontFamily,
+}: {
+  items: string[];
+  accentColor: string;
+  fontFamily: string;
+}) {
   const [width, setWidth] = useState(0);
   const x = useRef(new Animated.Value(0)).current;
+  // Home is kept alive while inactive (docs/23_navegacao_e_lifecycle.md) —
+  // without this guard the marquee's native-driven loop would keep running
+  // forever on an invisible screen every time another tab is active.
   const isActive = useIsScreenActive();
 
   useEffect(() => {
@@ -93,7 +90,7 @@ function TickerMarquee({ items, accentColor }: { items: string[]; accentColor: s
       {items.map((item, i) => (
         <Text
           key={i}
-          style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 10, letterSpacing: 2, color: accentColor }}
+          style={{ fontFamily, fontSize: 10, letterSpacing: 2, color: accentColor }}
         >
           {item}
         </Text>
