@@ -31,6 +31,26 @@ export function EvolutionCelebration({
   const [phase, setPhase] = useState<Phase>(0);
   const [reduceMotion, setReduceMotion] = useState(false);
   const doneFiredRef = useRef(false);
+  const toExplosionRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toTitleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toDoneRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Shared, idempotent terminal path: every way this component can finish
+  // (tap-to-skip, the 5200ms timeout, or reduce-motion convergence) must
+  // funnel through here so `onDone` fires exactly once and no stray timer
+  // can revive the UI after the user already dismissed it.
+  const finish = () => {
+    if (toExplosionRef.current) clearTimeout(toExplosionRef.current);
+    if (toTitleRef.current) clearTimeout(toTitleRef.current);
+    if (toDoneRef.current) clearTimeout(toDoneRef.current);
+    toExplosionRef.current = null;
+    toTitleRef.current = null;
+    toDoneRef.current = null;
+    if (!doneFiredRef.current) {
+      doneFiredRef.current = true;
+      onDone();
+    }
+  };
 
   useEffect(() => {
     AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion).catch(() => undefined);
@@ -42,26 +62,28 @@ export function EvolutionCelebration({
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
-    const toExplosion = setTimeout(() => {
+    toExplosionRef.current = setTimeout(() => {
       setPhase(1);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
     }, 1700);
-    const toTitle = setTimeout(() => setPhase(2), 2500);
-    const toDone = setTimeout(() => onDone(), 5200);
-    return () => { clearTimeout(toExplosion); clearTimeout(toTitle); clearTimeout(toDone); };
+    toTitleRef.current = setTimeout(() => setPhase(2), 2500);
+    toDoneRef.current = setTimeout(() => finish(), 5200);
+    return () => {
+      if (toExplosionRef.current) clearTimeout(toExplosionRef.current);
+      if (toTitleRef.current) clearTimeout(toTitleRef.current);
+      if (toDoneRef.current) clearTimeout(toDoneRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reduceMotion, onDone]);
 
-  // Reduced-motion / final-phase shortcut: skip straight to the outcome
-  // (Task 19 mounts immediately after `onDone`), per the design's own
-  // "respect reduce motion" rule. This effect must stay unconditional
-  // (not nested inside the early return below) so hook order never
-  // changes between renders.
+  // Reduced-motion shortcut: skip straight to the outcome (Task 19 mounts
+  // immediately after `onDone`), per the design's own "respect reduce
+  // motion" rule. This effect must stay unconditional (not nested inside
+  // the early return below) so hook order never changes between renders.
   useEffect(() => {
-    if ((phase === 3 || reduceMotion) && !doneFiredRef.current) {
-      doneFiredRef.current = true;
-      onDone();
-    }
-  }, [phase, reduceMotion, onDone]);
+    if (reduceMotion) finish();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reduceMotion]);
 
   if (phase === 3 || reduceMotion) {
     return null;
@@ -76,7 +98,7 @@ export function EvolutionCelebration({
 
   return (
     <Pressable
-      onPress={() => setPhase(3)}
+      onPress={() => { setPhase(3); finish(); }}
       style={{ flex: 1, backgroundColor: '#020010', alignItems: 'center', justifyContent: 'center' }}
     >
       <View style={{ width: 210, height: 210, alignItems: 'center', justifyContent: 'center' }}>
