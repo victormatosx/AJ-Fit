@@ -1020,6 +1020,8 @@ git commit -m "Adiciona CountUp, texto numerico animado do redesign da Home"
 
 This is a **new, separate** component from `EvolutionTicker.tsx` (never edited — shared with `TreinoScreen.tsx`). It reads the same `EvolutionViewModel` plus the new `Streak | null` prop.
 
+**As actually implemented (post-review), differs from the code below in three ways** — keep these in mind if you ever need to re-read this file's real content instead of this plan: (1) `borderColor` uses `theme.colors.settingsGroupBorder`, not the hardcoded `'rgba(255,255,255,0.06)'` shown below (the hardcoded value was a plan bug — it breaks in light theme); (2) `fontFamily` uses `theme.fonts.mono`, not the hardcoded string literal shown below; (3) the item-building `useMemo` body was extracted into a pure, RN-free sibling module `src/components/home/homeEvoTickerItems.ts` (exporting `buildHomeEvoTickerItems`), with its own test file `src/components/home/__tests__/homeEvoTicker.test.ts` — mirroring the established `tickerItems.ts`/`tickerItems.test.ts` pattern, since a `.tsx` file can't be imported directly into a Vitest test in this project.
+
 **Files:**
 - Create: `src/components/home/HomeEvoTicker.tsx`
 - Modify: `src/i18n/resources/pt-BR/home.json`, `src/i18n/resources/en/home.json`, `src/i18n/resources/es/home.json` (done together in Task 15 — add the keys referenced below now, in this task, since the component needs them to compile against real copy during manual testing; Task 15 is the pass that also covers every other new key).
