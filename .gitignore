@@ -56,3 +56,6 @@ modules/ajfit-app-check/ios/AJFitAppCheckDebugTokenLocal.swift
 
 # Home bootstrap perf audit — local cold-start capture artifacts, not source.
 perf-runs/
+
+# Local git worktrees (isolated workspaces for subagent-driven development)
+.worktrees/
