@@ -224,7 +224,6 @@ function WhatChanged({
   framing: 'level' | 'cycle' | 'renewal' | 'auto';
 }) {
   const { t } = useTranslation('evolution');
-  const { theme } = useTheme();
   if (!diff) return null;
   const rows: { icon: 'swap' | 'check' | 'calendar' | 'list' | 'sparkles'; text: string }[] = [];
   if (diff.addedExerciseCount > 0) rows.push({ icon: 'list', text: t('diff.added', { count: diff.addedExerciseCount }) });
@@ -242,15 +241,28 @@ function WhatChanged({
 
   const swapRows = currentPlan && pendingPlan
     ? diff.exerciseReplacements.map((replacement) => {
-        const oldExercises = workoutExercisesFromPlan(currentPlan, locale, replacement.sessionIndex);
-        const newExercises = workoutExercisesFromPlan(pendingPlan, locale, replacement.sessionIndex);
         const sessionLetter = String.fromCharCode(65 + replacement.sessionIndex); // A, B, C...
-        return {
-          key: `${replacement.sessionIndex}:${replacement.slotIndex}`,
-          sessionLetter,
-          oldName: oldExercises[replacement.slotIndex]?.name ?? replacement.fromExerciseId,
-          newName: newExercises[replacement.slotIndex]?.name ?? replacement.toExerciseId,
-        };
+        try {
+          const oldExercises = workoutExercisesFromPlan(currentPlan, locale, replacement.sessionIndex);
+          const newExercises = workoutExercisesFromPlan(pendingPlan, locale, replacement.sessionIndex);
+          return {
+            key: `${replacement.sessionIndex}:${replacement.slotIndex}`,
+            sessionLetter,
+            oldName: oldExercises[replacement.slotIndex]?.name ?? replacement.fromExerciseId,
+            newName: newExercises[replacement.slotIndex]?.name ?? replacement.toExerciseId,
+          };
+        } catch {
+          // Same degrade-gracefully contract as UpcomingWorkoutDetailModal.tsx:
+          // a catalog lookup miss on this supplementary swap-list row must
+          // never take down the whole screen (whose primary job is the
+          // onStart/onDefer CTAs below) — fall back to the raw exercise ids.
+          return {
+            key: `${replacement.sessionIndex}:${replacement.slotIndex}`,
+            sessionLetter,
+            oldName: replacement.fromExerciseId,
+            newName: replacement.toExerciseId,
+          };
+        }
       })
     : [];
 
