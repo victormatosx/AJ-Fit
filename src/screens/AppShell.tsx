@@ -362,6 +362,10 @@ function AppShellContent({
     scheduleResolution: schedule.matchesActiveProgram ? schedule.resolution : null,
     programIdentity: activeProgram?.programInstanceId ?? activeProgram?.programId ?? null,
   });
+  // Home-only streak read — deliberately separate from `widgetSnapshotSync`
+  // above; reuses the same resolved schedule inputs but owns its own bounded
+  // Firestore read (see `useHomeStreak`'s doc comment for why it can't reuse
+  // `widgetSnapshotSync`'s already-loaded streak state).
   const homeStreak = useHomeStreak({
     timezone: schedule.config?.timezone ?? deviceTimezone(),
     hasActiveProgram: activeProgram !== null,
