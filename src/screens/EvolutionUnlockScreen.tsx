@@ -11,6 +11,8 @@ import { useTheme } from '../theme';
 import { sizes, spacing } from '../theme/tokens';
 import type { EvolutionViewModel } from '../workoutEvolution/types';
 import type { PrescriptionDiffSummary } from '../workoutEvolution/diff';
+import type { FinalWorkoutPlan } from '../workoutPrescription/types';
+import { workoutExercisesFromPlan } from './workoutScreenPlan';
 
 /**
  * Fase 5 — the dedicated unlock/decision experience for an earned evolution
@@ -22,6 +24,8 @@ import type { PrescriptionDiffSummary } from '../workoutEvolution/diff';
 export function EvolutionUnlockScreen({
   viewModel,
   diff,
+  currentPlan,
+  pendingPlan,
   actionPending,
   actionError,
   onStart,
@@ -30,13 +34,16 @@ export function EvolutionUnlockScreen({
 }: {
   viewModel: Extract<EvolutionViewModel, { kind: 'EVOLUTION_READY' | 'EVOLUTION_DEFERRED' | 'AUTO_ACTIVATION_NOTICE' }>;
   diff: PrescriptionDiffSummary | null;
+  /** The plan active when this evolution was offered — `null` only for AUTO_ACTIVATION_NOTICE, where there is no pending plan to diff against here (that screen already shows `diff` only). */
+  currentPlan: FinalWorkoutPlan | null;
+  pendingPlan: FinalWorkoutPlan | null;
   actionPending: boolean;
   actionError: string | null;
   onStart: () => void;
   onDefer: () => void;
   onClose: () => void;
 }) {
-  const { t } = useTranslation('evolution');
+  const { t, i18n } = useTranslation('evolution');
   const { theme } = useTheme();
 
   if (viewModel.kind === 'AUTO_ACTIVATION_NOTICE') {
@@ -60,7 +67,7 @@ export function EvolutionUnlockScreen({
                   cycle: viewModel.summary.cycleNumber,
                 })}
               </MonoLabel>
-              <WhatChanged diff={diff} framing="auto" />
+              <WhatChanged diff={diff} currentPlan={null} pendingPlan={null} locale={i18n.language} framing="auto" />
               <CtaButton
                 onPress={onClose}
                 accessibilityLabel={t('auto.ackCta')}
@@ -142,6 +149,9 @@ export function EvolutionUnlockScreen({
           {/* What changed */}
           <WhatChanged
             diff={diff}
+            currentPlan={currentPlan}
+            pendingPlan={pendingPlan}
+            locale={i18n.language}
             framing={isMotivationalRenewal ? 'renewal' : isLevelPromotion ? 'level' : 'cycle'}
           />
 
@@ -202,15 +212,21 @@ export function EvolutionUnlockScreen({
 
 function WhatChanged({
   diff,
+  currentPlan,
+  pendingPlan,
+  locale,
   framing,
 }: {
   diff: PrescriptionDiffSummary | null;
+  currentPlan: FinalWorkoutPlan | null;
+  pendingPlan: FinalWorkoutPlan | null;
+  locale: string;
   framing: 'level' | 'cycle' | 'renewal' | 'auto';
 }) {
   const { t } = useTranslation('evolution');
+  const { theme } = useTheme();
   if (!diff) return null;
   const rows: { icon: 'swap' | 'check' | 'calendar' | 'list' | 'sparkles'; text: string }[] = [];
-  if (diff.exerciseReplacements.length > 0) rows.push({ icon: 'swap', text: t('diff.replacements', { count: diff.exerciseReplacements.length }) });
   if (diff.addedExerciseCount > 0) rows.push({ icon: 'list', text: t('diff.added', { count: diff.addedExerciseCount }) });
   if (diff.removedExerciseCount > 0) rows.push({ icon: 'list', text: t('diff.removed', { count: diff.removedExerciseCount }) });
   if (diff.reorderedSessionCount > 0) rows.push({ icon: 'swap', text: t('diff.reordered', { count: diff.reorderedSessionCount }) });
@@ -223,9 +239,39 @@ function WhatChanged({
     rows.push({ icon: 'list', text: t('diff.structureChanged') });
   }
   if (!diff.hasObservableChanges) rows.push({ icon: 'check', text: t('diff.noObservableChange') });
+
+  const swapRows = currentPlan && pendingPlan
+    ? diff.exerciseReplacements.map((replacement) => {
+        const oldExercises = workoutExercisesFromPlan(currentPlan, locale, replacement.sessionIndex);
+        const newExercises = workoutExercisesFromPlan(pendingPlan, locale, replacement.sessionIndex);
+        const sessionLetter = String.fromCharCode(65 + replacement.sessionIndex); // A, B, C...
+        return {
+          key: `${replacement.sessionIndex}:${replacement.slotIndex}`,
+          sessionLetter,
+          oldName: oldExercises[replacement.slotIndex]?.name ?? replacement.fromExerciseId,
+          newName: newExercises[replacement.slotIndex]?.name ?? replacement.toExerciseId,
+        };
+      })
+    : [];
+
   return (
     <Card style={{ padding: 20, marginTop: 16 }}>
       <Slash>{t(`diff.title.${framing}`).toUpperCase()}</Slash>
+      {swapRows.length > 0 && (
+        <View style={{ marginTop: 14 }}>
+          {swapRows.map((row) => (
+            <View key={row.key} style={{ flexDirection: 'row', gap: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.07)' }}>
+              <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 15, width: 16, color: 'rgba(255,255,255,0.35)' }}>
+                {row.sessionLetter}
+              </Text>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.38)', textDecorationLine: 'line-through' }}>{row.oldName}</Text>
+                <Text style={{ fontSize: 14, fontFamily: 'Archivo_600SemiBold', color: '#fff', marginTop: 3 }}>{row.newName}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
       <View style={{ marginTop: 12, gap: 8 }}>
         {rows.map((row, index) => <DiffRow key={`${row.text}:${index}`} {...row} />)}
       </View>
