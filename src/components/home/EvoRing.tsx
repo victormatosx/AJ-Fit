@@ -13,7 +13,11 @@ export function EvoRing({
   strokeWidth,
   progress,
   color,
+  // Deliberately a hardcoded dark value, not `theme.colors.progressTrack` —
+  // this redesign is dark-only regardless of the active theme (same
+  // precedent as `HomeScreen.tsx`'s `TODAY_WORKOUT_THEME`).
   trackColor = 'rgba(255,255,255,0.08)',
+  accessibilityLabel,
   children,
 }: {
   size: number;
@@ -22,6 +26,8 @@ export function EvoRing({
   progress: number;
   color: string;
   trackColor?: string;
+  /** Describes what the ring represents, e.g. "56% do ciclo". */
+  accessibilityLabel?: string;
   children?: React.ReactNode;
 }) {
   const radius = (size - strokeWidth) / 2;
@@ -30,7 +36,14 @@ export function EvoRing({
   const dashOffset = circumference * (1 - clamped / 100);
 
   return (
-    <View style={{ width: size, height: size }}>
+    <View
+      style={{ width: size, height: size }}
+      accessibilityRole="progressbar"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityValue={{ min: 0, max: 100, now: clamped }}
+    >
+      {/* -90deg rotation moves the stroke's start point from 3 o'clock
+          (the SVG default) to 12 o'clock. */}
       <Svg width={size} height={size} style={{ position: 'absolute', transform: [{ rotate: '-90deg' }] }}>
         <Circle
           cx={size / 2}
@@ -48,6 +61,10 @@ export function EvoRing({
           stroke={color}
           strokeWidth={strokeWidth}
           strokeLinecap="round"
+          // Both dash segments are set to the full circumference, so the
+          // dash pattern never actually creates a gap on its own — the
+          // visible gap comes entirely from offsetting where that dash
+          // starts via `strokeDashoffset` below.
           strokeDasharray={`${circumference} ${circumference}`}
           strokeDashoffset={dashOffset}
         />
