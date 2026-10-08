@@ -1705,6 +1705,8 @@ git commit -m "Corrige sintaxe dos JSON de i18n do redesign da Home" --allow-emp
 
 ### Task 16: Restyle Home's structure and wire the new sections
 
+**Post-implementation gap found and fixed:** removing the `weekOverview` prop from `HomeScreen`'s own prop type (Step 1) also requires removing the now-stale `weekOverview={...}` prop still being PASSED to `<HomeScreen>` from its call site in `src/screens/AppShell.tsx` (~line 1930) — this plan never mentioned that second call site. Fixed directly as part of this task's commit (one-line removal in `AppShell.tsx`; `activitySnapshot.week`, the value that prop read, is still used elsewhere in `AppShell.tsx` so it was left in place).
+
 **Files:**
 - Modify: `src/screens/HomeScreen.tsx`
 
