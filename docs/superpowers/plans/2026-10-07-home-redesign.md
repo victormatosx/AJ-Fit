@@ -29,20 +29,32 @@ In `src/theme/tokens.ts`, inside the `palette` object (after `blue400: '#7db4ff'
   ink875: '#09071f',
 ```
 
-- [ ] **Step 2: Add semantic aliases**
+- [ ] **Step 2: Do NOT add these to `semanticDarkColors`/`colors`**
 
-Inside `semanticDarkColors` (after `hudCorner: 'rgba(77,163,255,0.65)',`), add:
+`src/theme/lightTokens.ts:216` defines `lightColors` with
+`} as const satisfies { readonly [Key in keyof typeof colors]: string };` — a structural
+mirror contract requiring every key added to `semanticDarkColors` (which `colors` is built
+from) to also get a light-mode value in `lightTokens.ts`. The whole Home redesign (sections
+1-6 of the design spec) is explicitly, exclusively dark/poster-styled — no light-mode
+variant is ever described — matching the existing precedent in `HomeScreen.tsx`
+(`TODAY_WORKOUT_THEME = darkTheme`, with its own comment: "the Today Workout poster keeps
+the official Dark art direction in both app themes"). So these 3 new colors stay as plain
+`palette` primitives only (Step 1) — never promoted into the dynamic `colors`/`theme.colors`
+mirror. Any component that needs them imports `palette` directly:
 
 ```ts
-  evoSheetBackground: palette.ink875,
-  evoLight: palette.blue300,
-  evoPaused: palette.amber500,
+import { palette } from '../../theme/tokens';
+// palette.amber500, palette.blue300, palette.ink875
 ```
+
+(This also means Task 12's `CycleProgressBlock` must reference `palette.amber500` directly
+for the paused-ring/below-70%-adherence color, never a `theme.colors.*` alias — see Task 12's
+code below, which already imports `palette` for this reason.)
 
 - [ ] **Step 3: Verify the app still builds**
 
 Run: `npx tsc --noEmit`
-Expected: no new errors (additive object literals only).
+Expected: no new errors (the palette object itself isn't part of any light/dark structural mirror — only `semanticDarkColors`/`colors` is).
 
 - [ ] **Step 4: Commit**
 
@@ -294,9 +306,19 @@ git commit -m "Estende ProgressingSummary com adherenceRatio, requiredActiveDays
 
 ### Task 5: Thread the new fields through `viewModel.ts`
 
+**Scope note (discovered while implementing Task 4):** extending `ProgressingSummary` breaks more
+call sites than first anticipated — not just `viewModel.ts`. `src/workoutEvolution/presentationCachePolicy.ts`
+builds a `ProgressingSummary` literal directly from the on-disk cache, and three existing test
+files construct `ProgressingSummary`/`EvolutionViewModel` mock literals. All of these are now part
+of this task (added as Steps 3.5/3.6 below) — do not split them into a separate task.
+
 **Files:**
 - Modify: `src/workoutEvolution/viewModel.ts`
+- Modify: `src/workoutEvolution/presentationCachePolicy.ts`
 - Modify: `src/workoutEvolution/__tests__/viewModel.test.ts`
+- Modify: `src/workoutEvolution/__tests__/loadReducer.test.ts`
+- Modify: `src/workoutEvolution/__tests__/tickerItems.test.ts`
+- Modify: `src/lib/__tests__/evolutionSummaryPresentationCache.test.ts`
 
 - [ ] **Step 1: Write the failing test additions**
 
@@ -447,20 +469,64 @@ export function buildEvolutionViewModel(input: EvolutionViewModelInput): Evoluti
 
 Leave every line after `const summary = buildSummary(...)` exactly as it already is — only the call to `buildSummary` itself changes.
 
+- [ ] **Step 3.5: Fix `presentationCachePolicy.ts`'s cache-reconstructed summary**
+
+`src/workoutEvolution/presentationCachePolicy.ts`'s `viewModelFromEvolutionPresentationCache`
+builds a `ProgressingSummary` directly from the on-disk cache (`src/lib/evolutionSummaryPresentationCache.ts`).
+That on-disk schema is a deliberately minimal, allow-listed shape (`hasOnlyKeys` validation) that
+already omits some `ProgressingSummary` fields on purpose — e.g. `earnedLevel: null` and
+`isHistoryComplete: false` are hardcoded there today, with a comment explaining the cached value is
+presentation-only. Follow the exact same pattern for the 4 new fields — **do not** add them to
+`EvolutionSummaryPresentationCache`'s on-disk schema in `src/lib/evolutionSummaryPresentationCache.ts`
+(that file must not be touched by this task at all). Instead, change only the returned object in
+`presentationCachePolicy.ts`:
+
+```ts
+import { requiredActiveDaysForLevel } from '../home/evoRingMetrics';
+
+// ...inside viewModelFromEvolutionPresentationCache's returned `summary`, add:
+      // Also deliberately absent from disk; Home does not render this flag.
+      isHistoryComplete: false,
+      // Deliberately absent from disk, same reasoning as earnedLevel/isHistoryComplete above —
+      // a stale cached entry never claims a numeric adherence ratio, a pause, or a cycle count.
+      adherenceRatio: null,
+      requiredActiveDays: requiredActiveDaysForLevel(cache.summary.activeLevel),
+      pausedAtLocalDate: null,
+      intermediateCyclesEarned: null,
+```
+
+(`requiredActiveDays` is the one exception — it's never persisted either, but since it's a pure
+function of `activeLevel`, which the cache already stores, it can always be freshly derived rather
+than defaulted to a dummy number.)
+
+- [ ] **Step 3.6: Update the three pre-existing test files with `ProgressingSummary`/`EvolutionViewModel` mock literals**
+
+Add the same 4 fields to every mock summary object in:
+- `src/workoutEvolution/__tests__/loadReducer.test.ts`
+- `src/workoutEvolution/__tests__/tickerItems.test.ts`
+- `src/lib/__tests__/evolutionSummaryPresentationCache.test.ts`
+
+None of these tests are about the 4 new fields, so use neutral, inert values consistent with each
+mock's existing scenario — typically `adherenceRatio: null, requiredActiveDays: 28, pausedAtLocalDate: null, intermediateCyclesEarned: null`
+(or `requiredActiveDays: 85` if that particular mock's `activeLevel` is `'INTERMEDIATE'`/`'ADVANCED'`).
+Do not change any other part of these tests' existing assertions or scenarios.
+
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `npx vitest run src/workoutEvolution/__tests__/viewModel.test.ts`
-Expected: PASS (all tests, old and new).
+Run: `npx vitest run src/workoutEvolution/__tests__/viewModel.test.ts src/workoutEvolution/__tests__/loadReducer.test.ts src/workoutEvolution/__tests__/tickerItems.test.ts src/lib/__tests__/evolutionSummaryPresentationCache.test.ts`
+Expected: PASS (all tests, old and new, across all four files).
 
 - [ ] **Step 5: Type-check the whole project**
 
 Run: `npx tsc --noEmit`
-Expected: no errors remaining from Task 4's intentional break.
+Expected: no errors remaining from Task 4's intentional break (across every file, not just `viewModel.ts`).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/workoutEvolution/viewModel.ts src/workoutEvolution/__tests__/viewModel.test.ts
+git add src/workoutEvolution/viewModel.ts src/workoutEvolution/presentationCachePolicy.ts \
+  src/workoutEvolution/__tests__/viewModel.test.ts src/workoutEvolution/__tests__/loadReducer.test.ts \
+  src/workoutEvolution/__tests__/tickerItems.test.ts src/lib/__tests__/evolutionSummaryPresentationCache.test.ts
 git commit -m "Propaga adherenceRatio/requiredActiveDays/pausa/ciclos intermediarios no view model de evolucao"
 ```
 
@@ -1196,6 +1262,7 @@ Spanish:
 import { Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../theme';
+import { palette } from '../../theme/tokens';
 import { EvoRing } from './EvoRing';
 import { LitFlame } from './LitFlame';
 import { CountUp } from './CountUp';
@@ -1229,13 +1296,13 @@ export function CycleProgressBlock({ viewModel, streak }: { viewModel: Evolution
       ? t('evoRing.paused')
       : t('evoRing.daysLeft', { count: daysLeft });
   const adherencePercent = summary.adherenceRatio !== null ? Math.round(summary.adherenceRatio * 100) : null;
-  const adherenceColor = adherencePercent !== null && adherencePercent < 70 ? theme.colors.evoPaused : '#fff';
+  const adherenceColor = adherencePercent !== null && adherencePercent < 70 ? palette.amber500 : '#fff';
   const intermediate = summary.activeLevel === 'INTERMEDIATE';
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 22, marginTop: 32 }}>
       <View style={{ alignItems: 'center', gap: 12 }}>
-        <EvoRing size={150} strokeWidth={11} progress={cyclePct} color={paused ? theme.colors.evoPaused : theme.colors.primaryEmphasis}>
+        <EvoRing size={150} strokeWidth={11} progress={cyclePct} color={paused ? palette.amber500 : theme.colors.primaryEmphasis}>
           <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 40, color: '#fff', lineHeight: 40 }}>
             <CountUp to={cyclePct} style={{ fontFamily: 'Anton_400Regular', fontSize: 40, color: '#fff' }} />
             <Text style={{ fontSize: 18, color: 'rgba(255,255,255,0.45)' }}>%</Text>
@@ -1264,7 +1331,7 @@ export function CycleProgressBlock({ viewModel, streak }: { viewModel: Evolution
           </Text>
           {adherencePercent !== null && (
             <View style={{ height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.08)', marginTop: 10, position: 'relative' }}>
-              <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${adherencePercent}%`, borderRadius: 2, backgroundColor: adherenceColor === theme.colors.evoPaused ? theme.colors.evoPaused : theme.colors.primaryEmphasis }} />
+              <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${adherencePercent}%`, borderRadius: 2, backgroundColor: adherenceColor === palette.amber500 ? palette.amber500 : theme.colors.primaryEmphasis }} />
               <View style={{ position: 'absolute', left: '70%', top: -3, width: 2, height: 10, borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.6)' }} />
             </View>
           )}
