@@ -2,6 +2,14 @@
   "meta": {
     "todayLine": "{{weekday}} · {{month}} {{day}}"
   },
+  "evoTicker": {
+    "streak": "STREAK {{count}} DAYS",
+    "activeDays": "ACTIVE DAYS {{count}}/{{required}}",
+    "adherence": "ADHERENCE {{percent}}%",
+    "cycle": "CYCLE {{number}}",
+    "level": "LEVEL {{level}}",
+    "sessions30d": "{{count}} WORKOUTS IN THE LAST 30 DAYS"
+  },
   "support": {
     "iconLabel": "My support cases",
     "iconLabelUnread": "My support cases, {{count}} with new messages"

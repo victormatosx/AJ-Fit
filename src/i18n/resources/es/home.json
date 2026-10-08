@@ -2,6 +2,14 @@
   "meta": {
     "todayLine": "{{weekday}} · {{day}} {{month}}"
   },
+  "evoTicker": {
+    "streak": "RACHA {{count}} DÍAS",
+    "activeDays": "DÍAS ACTIVOS {{count}}/{{required}}",
+    "adherence": "ADHERENCIA {{percent}}%",
+    "cycle": "CICLO {{number}}",
+    "level": "NIVEL {{level}}",
+    "sessions30d": "{{count}} ENTRENAMIENTOS EN LOS ÚLTIMOS 30 DÍAS"
+  },
   "greeting": {
     "casual": "Hola,"
   },
