@@ -53,7 +53,12 @@ export function LitFlame({ size = 40, lit = true }: { size?: number; lit?: boole
   }));
 
   return (
-    <Animated.View style={[{ width: size, height: size }, lit ? animatedStyle : undefined]}>
+    <Animated.View
+      style={[{ width: size, height: size }, lit ? animatedStyle : undefined]}
+      accessible={false}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    >
       <Svg width={size} height={size} viewBox="0 0 24 24">
         <Defs>
           <LinearGradient id="flame" x1="0" y1="0" x2="0" y2="1">
