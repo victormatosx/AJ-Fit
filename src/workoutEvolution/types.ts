@@ -22,6 +22,14 @@ export interface ProgressingSummary {
   adherenceQuality: EvolutionQuality | null;
   /** False when the account is on an unaugmented V1 baseline — copy must not claim "first cycle"/"lifetime cycles" it cannot prove (docs §78/§79/§111). */
   isHistoryComplete: boolean;
+  /** Same ratio the engine already computed (`ProgressionDecision.adherence.ratio`), 0-1, capped at 1. Null exactly when `adherenceQuality` is null (evaluation blocked). */
+  adherenceRatio: number | null;
+  /** `activeDays` denominator for `activeLevel` — same constant the engine itself uses (`progressionEngineV2/config.ts`), never recomputed as a new rule. Always known (static per level). */
+  requiredActiveDays: number;
+  /** Local date Active Time paused at (3 consecutive missed prescribed opportunities), or `null` when not paused. Sourced from `ProgressionSnapshotV2.activeTime.pausedAt`. */
+  pausedAtLocalDate: string | null;
+  /** Earned INTERMEDIATE cycles completed before the one being evaluated — only meaningful for `activeLevel === 'INTERMEDIATE'`. Null when not computed for this load (e.g. BEGINNER/ADVANCED, or evaluation blocked). */
+  intermediateCyclesEarned: number | null;
 }
 
 export interface PendingEvolutionSummary {
