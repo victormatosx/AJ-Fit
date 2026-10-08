@@ -122,7 +122,12 @@ export function requiredActiveDaysForLevel(level: CurrentTrainingLevel): number 
 
 /** Same cap the engine uses for Intermediate → Advanced ("Rumo ao Avançado X/4"). */
 export const INTERMEDIATE_CYCLES_FOR_ADVANCED = PROGRESSION_V2_CONFIG.intermediateCyclesForPromotion;
+
+/** Same threshold the engine uses to classify adherence as earned-eligible vs. below-target (`PROGRESSION_V2_CONFIG.adherenceEarnedThresholdBp`, basis points). Expressed as a whole percent (70, not 7000) since every consumer renders it as a percent. */
+export const ADHERENCE_EARNED_THRESHOLD_PERCENT = PROGRESSION_V2_CONFIG.adherenceEarnedThresholdBp / 100;
 ```
+
+**Post-review addition:** `ADHERENCE_EARNED_THRESHOLD_PERCENT` was added after Task 12's code review found `CycleProgressBlock.tsx` hardcoding the literal `70` for the same threshold — now Task 12 imports and uses this instead (see Task 12's "post-review fix" note).
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -1200,6 +1205,10 @@ git commit -m "Adiciona HomeEvoTicker, faixa HUD exclusiva da Home com sequencia
 
 ### Task 12: `CycleProgressBlock` — the ring block (section 2.3)
 
+**Post-review fix (already applied to the code below):** code review on the first implementation found the literal `70` (adherence threshold) duplicated a real engine constant without deriving it — fixed by importing the new `ADHERENCE_EARNED_THRESHOLD_PERCENT` from `evoRingMetrics.ts` (see Task 2's post-review addition) in both the color-threshold check and the bar's marker position, and by adding a below-threshold suffix to the adherence row's `accessibilityLabel` (new `evoRing.adherenceBelowThreshold` i18n key) so the color-only signal isn't screen-reader-invisible.
+
+**Known, deliberately deferred issue (not fixed):** `streak.current` is rendered with a flat "days" unit regardless of `Streak.unit` (`'obligations'` vs `'weeks'` — see `src/home/streak.ts`'s own doc comment). A `flexible`-schedule user with e.g. a 3-week streak would see "3 dias" here, which is wrong. This same gap already exists in Task 11's `HomeEvoTicker`. Tracked as a follow-up, not fixed in this plan — see the plan's final summary section.
+
 **Files:**
 - Create: `src/components/home/CycleProgressBlock.tsx`
 
@@ -1216,6 +1225,7 @@ In `src/i18n/resources/pt-BR/home.json`, add (sibling to `evoTicker`):
     "streakLabel": "SEQUÊNCIA",
     "streakUnit": "dias",
     "adherenceLabel": "ADERÊNCIA",
+    "adherenceBelowThreshold": ", abaixo do ideal",
     "towardAdvanced": "RUMO AO AVANÇADO",
     "towardAdvancedUnit": "/ {{count}} ciclos"
   },
@@ -1231,6 +1241,7 @@ English:
     "streakLabel": "STREAK",
     "streakUnit": "days",
     "adherenceLabel": "ADHERENCE",
+    "adherenceBelowThreshold": ", below target",
     "towardAdvanced": "TOWARD ADVANCED",
     "towardAdvancedUnit": "/ {{count}} cycles"
   },
@@ -1246,6 +1257,7 @@ Spanish:
     "streakLabel": "RACHA",
     "streakUnit": "días",
     "adherenceLabel": "ADHERENCIA",
+    "adherenceBelowThreshold": ", por debajo del objetivo",
     "towardAdvanced": "HACIA AVANZADO",
     "towardAdvancedUnit": "/ {{count}} ciclos"
   },
@@ -1260,7 +1272,7 @@ import { palette } from '../../theme/tokens';
 import { EvoRing } from './EvoRing';
 import { LitFlame } from './LitFlame';
 import { CountUp } from './CountUp';
-import { INTERMEDIATE_CYCLES_FOR_ADVANCED } from '../../home/evoRingMetrics';
+import { INTERMEDIATE_CYCLES_FOR_ADVANCED, ADHERENCE_EARNED_THRESHOLD_PERCENT } from '../../home/evoRingMetrics';
 import type { EvolutionViewModel } from '../../workoutEvolution/types';
 import type { Streak } from '../../home/streak';
 
@@ -1293,7 +1305,8 @@ export function CycleProgressBlock({ viewModel, streak }: { viewModel: Evolution
       ? t('evoRing.paused')
       : t('evoRing.daysLeft', { count: daysLeft });
   const adherencePercent = summary.adherenceRatio !== null ? Math.round(summary.adherenceRatio * 100) : null;
-  const adherenceColor = adherencePercent !== null && adherencePercent < 70 ? palette.amber500 : '#fff';
+  const belowAdherenceThreshold = adherencePercent !== null && adherencePercent < ADHERENCE_EARNED_THRESHOLD_PERCENT;
+  const adherenceColor = belowAdherenceThreshold ? palette.amber500 : '#fff';
   const intermediate = summary.activeLevel === 'INTERMEDIATE';
 
   return (
@@ -1326,7 +1339,7 @@ export function CycleProgressBlock({ viewModel, streak }: { viewModel: Evolution
             <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>{t('evoRing.streakUnit')}</Text>
           </View>
         </Row>
-        <Row last={!intermediate} accessibilityLabel={adherencePercent !== null ? `${t('evoRing.adherenceLabel')} ${adherencePercent}%` : t('evoRing.adherenceLabel')}>
+        <Row last={!intermediate} accessibilityLabel={adherencePercent !== null ? `${t('evoRing.adherenceLabel')} ${adherencePercent}%${belowAdherenceThreshold ? t('evoRing.adherenceBelowThreshold') : ''}` : t('evoRing.adherenceLabel')}>
           <Text style={evCap}>{t('evoRing.adherenceLabel')}</Text>
           <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 30, color: adherenceColor, marginTop: 8 }}>
             {adherencePercent !== null ? <CountUp to={adherencePercent} style={{ fontFamily: 'Anton_400Regular', fontSize: 30, color: adherenceColor }} /> : '—'}
@@ -1334,8 +1347,8 @@ export function CycleProgressBlock({ viewModel, streak }: { viewModel: Evolution
           </Text>
           {adherencePercent !== null && (
             <View style={{ height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.08)', marginTop: 10, position: 'relative' }}>
-              <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${adherencePercent}%`, borderRadius: 2, backgroundColor: adherenceColor === palette.amber500 ? palette.amber500 : palette.blue500 }} />
-              <View style={{ position: 'absolute', left: '70%', top: -3, width: 2, height: 10, borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.6)' }} />
+              <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${adherencePercent}%`, borderRadius: 2, backgroundColor: belowAdherenceThreshold ? palette.amber500 : palette.blue500 }} />
+              <View style={{ position: 'absolute', left: `${ADHERENCE_EARNED_THRESHOLD_PERCENT}%`, top: -3, width: 2, height: 10, borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.6)' }} />
             </View>
           )}
         </Row>
@@ -2655,3 +2668,7 @@ Keep this section in the final PR description:
 - Frequency heatmap intensity — binary (2-level), not 5-level; no intensity data source exists.
 - Frequency heatmap window — kept at the existing 30 days, not extended to 18 weeks; reskinned to the GitHub-grid orientation only.
 - `ProgramProgressStrip`, `WeeklyOverview`, `UpcomingWorkouts`/`UpcomingWorkoutDetailModal` — removed from `HomeScreen.tsx`'s render tree only; the components/hooks themselves are untouched and still available if needed elsewhere later.
+
+## Known follow-up (flagged by code review, deliberately deferred)
+
+- **Streak unit mismatch for flexible schedules**: `Streak` (`src/home/streak.ts`) is `{ unit: 'obligations', current } | { unit: 'weeks', current }` — a `flexible`-schedule user's streak is counted in consecutive *weeks*, not days. Both `HomeEvoTicker` (Task 11) and `CycleProgressBlock` (Task 12) render `streak.current` with a flat "dias"/"days"/"días" label regardless of `unit`, so a flexible-schedule user with e.g. a 3-week streak would incorrectly see "3 dias" instead of "3 semanas". Fixing this properly requires: (a) a `streakUnitWeeks` i18n key in both `evoTicker.*` and `evoRing.*` blocks across all 3 locales, and (b) branching on `streak.unit` at both call sites. Not fixed in this plan — flagged here so a follow-up task/PR can address it without having to rediscover it. Low-risk in practice (most users are on `fixed` schedules), but a real correctness gap for `flexible`-schedule users.
