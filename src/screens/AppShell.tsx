@@ -122,6 +122,7 @@ import { clearCardioSession } from '../services/cardioSessionStorage';
 import { useWorkoutEvolution } from '../workoutEvolution/useWorkoutEvolution';
 import { useWorkoutActivitySnapshot } from '../home/useWorkoutActivitySnapshot';
 import { useFrequencyWindow } from '../home/useFrequencyWindow';
+import { useHomeStreak } from '../home/useHomeStreak';
 import { useWidgetSnapshotSync } from '../widgets/useWidgetSnapshotSync';
 import { deriveHomeInitialReadiness } from '../home/homeInitialReadiness';
 import { useHomeInitialVisualReady } from '../home/useHomeInitialVisualReady';
@@ -360,6 +361,14 @@ function AppShellContent({
     sessions: activeProgram?.sessions ?? [],
     scheduleResolution: schedule.matchesActiveProgram ? schedule.resolution : null,
     programIdentity: activeProgram?.programInstanceId ?? activeProgram?.programId ?? null,
+  });
+  const homeStreak = useHomeStreak({
+    timezone: schedule.config?.timezone ?? deviceTimezone(),
+    hasActiveProgram: activeProgram !== null,
+    scheduleMode: schedule.config?.scheduleMode ?? activeProgram?.scheduleMode ?? 'fixed',
+    prescribedTrainingFrequency: activeProgram?.prescribedTrainingFrequency ?? activeProgram?.prescribedStructuredDays,
+    trainingDays: schedule.config?.trainingDays ?? [],
+    activeRecoveryDays: schedule.config?.activeRecoveryDays ?? [],
   });
   const { pendingIntent, consumeIntent } = useDeepLinkIntent();
   const {
@@ -1939,6 +1948,7 @@ function AppShellContent({
             homeInitialDataSettled={homeInitialDataSettled}
             homeInitialVisualReady={homeInitialVisualReady}
             onInitialLayoutCommitted={onInitialLayoutCommitted}
+            streak={homeStreak}
           />
         </PersistentScreen>
         {tab === 'workout' && workoutStartAttempt && (
