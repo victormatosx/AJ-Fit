@@ -1020,7 +1020,9 @@ git commit -m "Adiciona CountUp, texto numerico animado do redesign da Home"
 
 This is a **new, separate** component from `EvolutionTicker.tsx` (never edited — shared with `TreinoScreen.tsx`). It reads the same `EvolutionViewModel` plus the new `Streak | null` prop.
 
-**As actually implemented (post-review), differs from the code below in three ways** — keep these in mind if you ever need to re-read this file's real content instead of this plan: (1) `borderColor` uses `theme.colors.settingsGroupBorder`, not the hardcoded `'rgba(255,255,255,0.06)'` shown below (the hardcoded value was a plan bug — it breaks in light theme); (2) `fontFamily` uses `theme.fonts.mono`, not the hardcoded string literal shown below; (3) the item-building `useMemo` body was extracted into a pure, RN-free sibling module `src/components/home/homeEvoTickerItems.ts` (exporting `buildHomeEvoTickerItems`), with its own test file `src/components/home/__tests__/homeEvoTicker.test.ts` — mirroring the established `tickerItems.ts`/`tickerItems.test.ts` pattern, since a `.tsx` file can't be imported directly into a Vitest test in this project.
+**Final architecture decision (confirmed with the user):** every new Home-redesign surface uses **fixed, always-dark colors**, completely independent of the app's light/dark theme toggle — same as the existing `TODAY_WORKOUT_THEME = darkTheme` precedent on the Today poster card, now extended to the whole new Home top section. Never use `theme.colors.*`/`theme.fonts.*` for colors or fonts anywhere in Tasks 8-20 — use `palette.*` (from `theme/tokens.ts`) or literal hex matching the design spec. (An earlier revision of this task briefly made the border/accent/font theme-reactive after a code review suggestion; that was reverted once the user confirmed the "always dark" intent — don't reintroduce `theme.colors.*`/`theme.fonts.*` here.)
+
+**As actually implemented, differs from the code below in one way:** the item-building `useMemo` body was extracted into a pure, RN-free sibling module `src/components/home/homeEvoTickerItems.ts` (exporting `buildHomeEvoTickerItems`), with its own test file `src/components/home/__tests__/homeEvoTicker.test.ts` — mirroring the established `tickerItems.ts`/`tickerItems.test.ts` pattern, since a `.tsx` file can't be imported directly into a Vitest test in this project.
 
 **Files:**
 - Create: `src/components/home/HomeEvoTicker.tsx`
@@ -1073,13 +1075,15 @@ Spanish (`es/home.json`):
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '../../theme';
 import { useIsScreenActive } from '../../state/ScreenActivity';
 import type { EvolutionViewModel } from '../../workoutEvolution/types';
 import type { Streak } from '../../home/streak';
 
 const LOOP_DURATION_MS = 18000;
 const ITEM_GAP = 36;
+// Fixed-dark "poster" surface, independent of the app's theme setting.
+const ACCENT_COLOR = '#4da3ff';
+const FONT_FAMILY = 'JetBrainsMono_400Regular';
 
 /**
  * Home-only HUD marquee (section 2.2 of the Home redesign). Deliberately a
@@ -1101,7 +1105,6 @@ export function HomeEvoTicker({
   sessionsLast30Days: number | null;
 }) {
   const { t } = useTranslation(['home', 'evolution']);
-  const { theme } = useTheme();
 
   const items = useMemo<string[]>(() => {
     if (viewModel.kind === 'LOADING' || viewModel.kind === 'ERROR' || viewModel.kind === 'UNAVAILABLE') return [];
@@ -1137,12 +1140,12 @@ export function HomeEvoTicker({
         overflow: 'hidden',
       }}
     >
-      <TickerMarquee items={items} accentColor={theme.colors.primaryEmphasis} />
+      <TickerMarquee items={items} accentColor={ACCENT_COLOR} fontFamily={FONT_FAMILY} />
     </View>
   );
 }
 
-function TickerMarquee({ items, accentColor }: { items: string[]; accentColor: string }) {
+function TickerMarquee({ items, accentColor, fontFamily }: { items: string[]; accentColor: string; fontFamily: string }) {
   const [width, setWidth] = useState(0);
   const x = useRef(new Animated.Value(0)).current;
   const isActive = useIsScreenActive();
@@ -1165,7 +1168,7 @@ function TickerMarquee({ items, accentColor }: { items: string[]; accentColor: s
       {items.map((item, i) => (
         <Text
           key={i}
-          style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 10, letterSpacing: 2, color: accentColor }}
+          style={{ fontFamily, fontSize: 10, letterSpacing: 2, color: accentColor }}
         >
           {item}
         </Text>
@@ -1253,7 +1256,6 @@ Spanish:
 ```tsx
 import { Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '../../theme';
 import { palette } from '../../theme/tokens';
 import { EvoRing } from './EvoRing';
 import { LitFlame } from './LitFlame';
@@ -1263,10 +1265,13 @@ import type { EvolutionViewModel } from '../../workoutEvolution/types';
 import type { Streak } from '../../home/streak';
 
 const evCap = { fontFamily: 'JetBrainsMono_400Regular', fontSize: 10, letterSpacing: 1.6, color: 'rgba(255,255,255,0.38)' } as const;
+// This whole redesign is a fixed-dark "poster" surface, independent of the
+// app's light/dark theme setting (same reasoning as `EvoRing.tsx`'s own
+// `trackColor` comment) — colors below are deliberately `palette.*`/literal
+// hex, never `theme.colors.*`.
 
 export function CycleProgressBlock({ viewModel, streak }: { viewModel: EvolutionViewModel; streak: Streak | null }) {
   const { t } = useTranslation('home');
-  const { theme } = useTheme();
 
   if (viewModel.kind === 'LOADING' || viewModel.kind === 'ERROR' || viewModel.kind === 'UNAVAILABLE') return null;
 
@@ -1294,7 +1299,7 @@ export function CycleProgressBlock({ viewModel, streak }: { viewModel: Evolution
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 22, marginTop: 32 }}>
       <View style={{ alignItems: 'center', gap: 12 }}>
-        <EvoRing size={150} strokeWidth={11} progress={cyclePct} color={paused ? palette.amber500 : theme.colors.primaryEmphasis}>
+        <EvoRing size={150} strokeWidth={11} progress={cyclePct} color={paused ? palette.amber500 : palette.blue500}>
           <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 40, color: '#fff', lineHeight: 40 }}>
             <CountUp to={cyclePct} style={{ fontFamily: 'Anton_400Regular', fontSize: 40, color: '#fff' }} />
             <Text style={{ fontSize: 18, color: 'rgba(255,255,255,0.45)' }}>%</Text>
@@ -1323,7 +1328,7 @@ export function CycleProgressBlock({ viewModel, streak }: { viewModel: Evolution
           </Text>
           {adherencePercent !== null && (
             <View style={{ height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.08)', marginTop: 10, position: 'relative' }}>
-              <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${adherencePercent}%`, borderRadius: 2, backgroundColor: adherenceColor === palette.amber500 ? palette.amber500 : theme.colors.primaryEmphasis }} />
+              <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${adherencePercent}%`, borderRadius: 2, backgroundColor: adherenceColor === palette.amber500 ? palette.amber500 : palette.blue500 }} />
               <View style={{ position: 'absolute', left: '70%', top: -3, width: 2, height: 10, borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.6)' }} />
             </View>
           )}
@@ -1347,7 +1352,7 @@ export function CycleProgressBlock({ viewModel, streak }: { viewModel: Evolution
                     flex: 1,
                     height: 4,
                     borderRadius: 2,
-                    backgroundColor: i < (summary.intermediateCyclesEarned ?? 0) ? theme.colors.primaryEmphasis : 'rgba(255,255,255,0.08)',
+                    backgroundColor: i < (summary.intermediateCyclesEarned ?? 0) ? palette.blue500 : 'rgba(255,255,255,0.08)',
                   }}
                 />
               ))}
@@ -1427,10 +1432,14 @@ Spanish:
 ```tsx
 import { Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '../../theme';
+import { palette } from '../../theme/tokens';
 import { Icon } from '../ui/Icon';
 import type { EvolutionViewModel } from '../../workoutEvolution/types';
 import type { PrescriptionDiffSummary } from '../../workoutEvolution/diff';
+
+// Fixed-dark "poster" surface, independent of the app's theme setting —
+// see EvoRing.tsx's trackColor comment for the rationale.
+const ACCENT_COLOR = palette.blue500;
 
 export function PendingEvolutionBanner({
   viewModel,
@@ -1442,7 +1451,6 @@ export function PendingEvolutionBanner({
   onPress: () => void;
 }) {
   const { t } = useTranslation(['home', 'evolution']);
-  const { theme } = useTheme();
   const { pending, summary } = viewModel;
   const isDeferred = viewModel.kind === 'EVOLUTION_DEFERRED';
 
@@ -1455,7 +1463,7 @@ export function PendingEvolutionBanner({
   if (isDeferred) {
     return (
       <Pressable onPress={onPress} style={{ marginTop: 14 }}>
-        <Text style={{ fontSize: 13, color: theme.colors.primaryEmphasis, fontFamily: 'Archivo_600SemiBold' }}>
+        <Text style={{ fontSize: 13, color: ACCENT_COLOR, fontFamily: 'Archivo_600SemiBold' }}>
           {t('home:evoPending.deferredLink')}
         </Text>
       </Pressable>
@@ -1484,7 +1492,7 @@ export function PendingEvolutionBanner({
         <Text style={{ fontSize: 14.5, fontFamily: 'Archivo_600SemiBold', color: '#fff' }}>{title}</Text>
         <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 3 }}>{t('home:evoPending.subtitle')}</Text>
       </View>
-      <Icon name="chevron-right" size={16} color={theme.colors.primaryEmphasis} />
+      <Icon name="chevron-right" size={16} color={ACCENT_COLOR} />
     </Pressable>
   );
 }
@@ -1520,7 +1528,7 @@ Replace the whole block from `<View style={{ paddingHorizontal: 22, ...}}>` (the
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <MonoLabel>{t('activity.frequency.title').toUpperCase()}</MonoLabel>
         <Animated.View style={{ opacity: fade }}>
-          <MonoLabel color={theme.colors.textSecondary}>{summary}</MonoLabel>
+          <MonoLabel color={'rgba(255,255,255,0.5)'}>{summary}</MonoLabel>
         </Animated.View>
       </View>
 
@@ -1532,10 +1540,10 @@ Replace the whole block from `<View style={{ paddingHorizontal: 22, ...}}>` (the
           accessibilityRole="button"
           accessibilityLabel={t('activity.frequency.prev')}
         >
-          <Icon name="arrow-left" size={14} color={theme.colors.textSecondary} />
+          <Icon name="arrow-left" size={14} color={'rgba(255,255,255,0.5)'} />
         </Pressable>
         <Animated.View style={{ opacity: fade }}>
-          <MonoLabel color={theme.colors.textSecondary}>{rangeLabel}</MonoLabel>
+          <MonoLabel color={'rgba(255,255,255,0.5)'}>{rangeLabel}</MonoLabel>
         </Animated.View>
         <Pressable
           onPress={source === 'AUTHORITATIVE' && canGoNext ? onNext : undefined}
@@ -1546,7 +1554,7 @@ Replace the whole block from `<View style={{ paddingHorizontal: 22, ...}}>` (the
           accessibilityState={{ disabled: source !== 'AUTHORITATIVE' || !canGoNext }}
           style={{ opacity: canGoNext ? 1 : 0.25 }}
         >
-          <Icon name="arrow-right" size={14} color={theme.colors.textSecondary} />
+          <Icon name="arrow-right" size={14} color={'rgba(255,255,255,0.5)'} />
         </Pressable>
       </View>
 
@@ -1557,7 +1565,7 @@ Replace the whole block from `<View style={{ paddingHorizontal: 22, ...}}>` (the
               {[0, 1, 2, 3, 4, 5, 6].map((row) => (
                 <View key={row} style={{ height: cellSize, justifyContent: 'center' }}>
                   {(row === 0 || row === 2 || row === 4 || row === 6) && (
-                    <MonoLabel size={8} color={theme.colors.textFaint}>{weekdayLetter(row, locale)}</MonoLabel>
+                    <MonoLabel size={8} color={'rgba(255,255,255,0.32)'}>{weekdayLetter(row, locale)}</MonoLabel>
                   )}
                 </View>
               ))}
@@ -1578,7 +1586,7 @@ Replace the whole block from `<View style={{ paddingHorizontal: 22, ...}}>` (the
                       borderRadius: 3,
                       backgroundColor: source === 'CACHE' && day && knownThroughLocalDate && day.localDate > knownThroughLocalDate
                         ? 'rgba(255,255,255,0.05)'
-                        : day?.completed ? theme.colors.primaryEmphasis : 'rgba(255,255,255,0.05)',
+                        : day?.completed ? '#4da3ff' : 'rgba(255,255,255,0.05)',
                       borderWidth: day?.isToday ? 1 : 0,
                       borderColor: 'rgba(77,163,255,0.8)',
                       opacity: day ? (source === 'CACHE' && knownThroughLocalDate && day.localDate > knownThroughLocalDate ? 0.45 : 1) : 0,
@@ -1592,10 +1600,10 @@ Replace the whole block from `<View style={{ paddingHorizontal: 22, ...}}>` (the
       </Animated.View>
 
       <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 4, marginTop: 12 }}>
-        <MonoLabel size={9} color={theme.colors.textFaint}>{t('activity.frequency.less').toUpperCase()}</MonoLabel>
+        <MonoLabel size={9} color={'rgba(255,255,255,0.32)'}>{t('activity.frequency.less').toUpperCase()}</MonoLabel>
         <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.05)' }} />
-        <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: theme.colors.primaryEmphasis }} />
-        <MonoLabel size={9} color={theme.colors.textFaint}>{t('activity.frequency.more').toUpperCase()}</MonoLabel>
+        <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: '#4da3ff' }} />
+        <MonoLabel size={9} color={'rgba(255,255,255,0.32)'}>{t('activity.frequency.more').toUpperCase()}</MonoLabel>
       </View>
     </View>
   );
@@ -1603,6 +1611,8 @@ Replace the whole block from `<View style={{ paddingHorizontal: 22, ...}}>` (the
 ```
 
 Note: `freqWindow.weeks` is already `GRID_ROWS` rows × `GRID_COLUMNS` columns, where each row = one calendar week and each column = one weekday (Monday-first) — this is unchanged data. The code above indexes it as `freqWindow.weeks[columnIndex][rowIndex]`, i.e. reads `weeks` (an array-of-weeks, each a 7-long weekday array) and draws one `View` column per week, one cell per weekday inside it — the transpose happens purely in iteration order, not in the data itself.
+
+**Theme note:** every color above is a fixed literal, not `theme.colors.*` — this redesign is a fixed-dark "poster" surface regardless of the app's theme setting (see Task 8/12's rationale). The ORIGINAL (pre-redesign) version of this file used `useTheme()`/`theme.colors.*` throughout its return statement. Since this task replaces the whole return statement with the fixed-color version above, check whether `theme/useTheme` is still used ANYWHERE else in the file after this edit (e.g. in a part of the component you're not replacing) — if not, remove the now-unused `const { theme } = useTheme();` line and its import to keep the file lint-clean.
 
 - [ ] **Step 2: Add the two new legend i18n keys**
 
@@ -1922,13 +1932,13 @@ function WhatChanged({
       {swapRows.length > 0 && (
         <View style={{ marginTop: 14 }}>
           {swapRows.map((row) => (
-            <View key={row.key} style={{ flexDirection: 'row', gap: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.colors.border }}>
+            <View key={row.key} style={{ flexDirection: 'row', gap: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.07)' }}>
               <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 15, width: 16, color: 'rgba(255,255,255,0.35)' }}>
                 {row.sessionLetter}
               </Text>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.38)', textDecorationLine: 'line-through' }}>{row.oldName}</Text>
-                <Text style={{ fontSize: 14, fontFamily: 'Archivo_600SemiBold', color: theme.colors.textPrimary, marginTop: 3 }}>{row.newName}</Text>
+                <Text style={{ fontSize: 14, fontFamily: 'Archivo_600SemiBold', color: '#fff', marginTop: 3 }}>{row.newName}</Text>
               </View>
             </View>
           ))}
@@ -2243,11 +2253,14 @@ Spanish:
 import { useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '../theme';
 import { Icon } from '../components/ui/Icon';
 import { workoutExercisesFromPlan } from './workoutScreenPlan';
 import type { FinalWorkoutPlan } from '../workoutPrescription/types';
 import type { PendingEvolutionType } from '../workoutLifecycle/types';
+
+// Fixed-dark "poster" surface, independent of the app's theme setting —
+// see EvoRing.tsx's trackColor comment for the rationale.
+const CTA_BACKGROUND = '#0b70f9';
 
 export function NewPlanRevealScreen({
   type,
@@ -2271,7 +2284,6 @@ export function NewPlanRevealScreen({
   onBegin: () => void;
 }) {
   const { t } = useTranslation('evolution');
-  const { theme } = useTheme();
   const isPromo = type === 'LEVEL_PROMOTION';
   const isRenewal = type === 'MOTIVATIONAL_RENEWAL';
   const [openSession, setOpenSession] = useState(0);
@@ -2388,7 +2400,7 @@ export function NewPlanRevealScreen({
       <View style={{ padding: 24 }}>
         <Pressable
           onPress={onBegin}
-          style={{ height: 58, borderRadius: 12, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center' }}
+          style={{ height: 58, borderRadius: 12, backgroundColor: CTA_BACKGROUND, alignItems: 'center', justifyContent: 'center' }}
         >
           <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 17, letterSpacing: 1.5, color: '#fff' }}>{cta.toUpperCase()}</Text>
         </Pressable>
