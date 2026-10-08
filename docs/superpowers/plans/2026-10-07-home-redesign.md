@@ -798,18 +798,15 @@ None of the files in this phase are imported by `TreinoScreen.tsx` or any screen
 - [ ] **Step 1: Implement**
 
 ```tsx
-import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 
 /**
- * Pure visual primitive — animates its own stroke from 0 to `progress` on
- * mount/prop-change via RN's `Animated` is unnecessary here since
- * `react-native-svg` circles re-render cheaply; a plain state-driven
- * re-render with a CSS-less immediate value is enough because the parent
+ * Pure visual primitive — no internal animation state. The parent
  * (`CycleProgressBlock`/`EvolutionCelebration`) already drives the number
- * with `CountUp`'s own animation loop. This component never recomputes what
- * `progress` means — it only draws it.
+ * with `CountUp`'s own animation loop, so this component never recomputes
+ * what `progress` means or animates its own transition — it only draws the
+ * value it's given, every render.
  */
 export function EvoRing({
   size,
