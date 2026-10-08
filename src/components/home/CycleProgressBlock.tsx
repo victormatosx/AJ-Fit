@@ -4,7 +4,7 @@ import { palette } from '../../theme/tokens';
 import { EvoRing } from './EvoRing';
 import { LitFlame } from './LitFlame';
 import { CountUp } from './CountUp';
-import { INTERMEDIATE_CYCLES_FOR_ADVANCED } from '../../home/evoRingMetrics';
+import { ADHERENCE_EARNED_THRESHOLD_PERCENT, INTERMEDIATE_CYCLES_FOR_ADVANCED } from '../../home/evoRingMetrics';
 import type { EvolutionViewModel } from '../../workoutEvolution/types';
 import type { Streak } from '../../home/streak';
 
@@ -37,7 +37,8 @@ export function CycleProgressBlock({ viewModel, streak }: { viewModel: Evolution
       ? t('evoRing.paused')
       : t('evoRing.daysLeft', { count: daysLeft });
   const adherencePercent = summary.adherenceRatio !== null ? Math.round(summary.adherenceRatio * 100) : null;
-  const adherenceColor = adherencePercent !== null && adherencePercent < 70 ? palette.amber500 : '#fff';
+  const belowAdherenceThreshold = adherencePercent !== null && adherencePercent < ADHERENCE_EARNED_THRESHOLD_PERCENT;
+  const adherenceColor = belowAdherenceThreshold ? palette.amber500 : '#fff';
   const intermediate = summary.activeLevel === 'INTERMEDIATE';
 
   return (
@@ -70,7 +71,7 @@ export function CycleProgressBlock({ viewModel, streak }: { viewModel: Evolution
             <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>{t('evoRing.streakUnit')}</Text>
           </View>
         </Row>
-        <Row last={!intermediate} accessibilityLabel={adherencePercent !== null ? `${t('evoRing.adherenceLabel')} ${adherencePercent}%` : t('evoRing.adherenceLabel')}>
+        <Row last={!intermediate} accessibilityLabel={adherencePercent !== null ? `${t('evoRing.adherenceLabel')} ${adherencePercent}%${belowAdherenceThreshold ? t('evoRing.adherenceBelowThreshold') : ''}` : t('evoRing.adherenceLabel')}>
           <Text style={evCap}>{t('evoRing.adherenceLabel')}</Text>
           <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 30, color: adherenceColor, marginTop: 8 }}>
             {adherencePercent !== null ? <CountUp to={adherencePercent} style={{ fontFamily: 'Anton_400Regular', fontSize: 30, color: adherenceColor }} /> : '—'}
@@ -78,8 +79,8 @@ export function CycleProgressBlock({ viewModel, streak }: { viewModel: Evolution
           </Text>
           {adherencePercent !== null && (
             <View style={{ height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.08)', marginTop: 10, position: 'relative' }}>
-              <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${adherencePercent}%`, borderRadius: 2, backgroundColor: adherenceColor === palette.amber500 ? palette.amber500 : palette.blue500 }} />
-              <View style={{ position: 'absolute', left: '70%', top: -3, width: 2, height: 10, borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.6)' }} />
+              <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${adherencePercent}%`, borderRadius: 2, backgroundColor: belowAdherenceThreshold ? palette.amber500 : palette.blue500 }} />
+              <View style={{ position: 'absolute', left: `${ADHERENCE_EARNED_THRESHOLD_PERCENT}%`, top: -3, width: 2, height: 10, borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.6)' }} />
             </View>
           )}
         </Row>

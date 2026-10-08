@@ -18,6 +18,7 @@
     "streakLabel": "SEQUÊNCIA",
     "streakUnit": "dias",
     "adherenceLabel": "ADERÊNCIA",
+    "adherenceBelowThreshold": ", abaixo do ideal",
     "towardAdvanced": "RUMO AO AVANÇADO",
     "towardAdvancedUnit": "/ {{count}} ciclos"
   },

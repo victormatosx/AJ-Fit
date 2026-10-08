@@ -18,6 +18,7 @@
     "streakLabel": "STREAK",
     "streakUnit": "days",
     "adherenceLabel": "ADHERENCE",
+    "adherenceBelowThreshold": ", below target",
     "towardAdvanced": "TOWARD ADVANCED",
     "towardAdvancedUnit": "/ {{count}} cycles"
   },

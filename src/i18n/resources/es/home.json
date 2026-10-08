@@ -18,6 +18,7 @@
     "streakLabel": "RACHA",
     "streakUnit": "días",
     "adherenceLabel": "ADHERENCIA",
+    "adherenceBelowThreshold": ", por debajo del objetivo",
     "towardAdvanced": "HACIA AVANZADO",
     "towardAdvancedUnit": "/ {{count}} ciclos"
   },
