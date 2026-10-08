@@ -1545,6 +1545,8 @@ git commit -m "Adiciona PendingEvolutionBanner do redesign da Home"
 
 ### Task 14: Restyle `FrequencyHeatmap.tsx` to the GitHub-grid look (section 2.6)
 
+**Post-review fix (already applied to the real file, not reflected in the code block below):** the first pass left `GAP` (4) out of sync with the rendered gap (hardcoded `3`), left `cellSizeForWidth` using the old 7-equal-columns formula against the new 1-fixed-gutter + `GRID_ROWS`-columns layout, used the same color for the "cache future/unknown" cell and the "known, empty" cell (losing a distinction the original `theme.colors.background`-based code had), and dropped a load-bearing comment about positional (not date-based) keys. All fixed directly in `src/components/home/FrequencyHeatmap.tsx` — see that file for the corrected `GAP`/`LABEL_GUTTER`/`cellSizeForWidth`/background-color logic; the code block below is kept as the historical "first pass" reference, not a literal transcription of the final file.
+
 Home-exclusive component (verified by grep — not used by `TreinoScreen.tsx` or anywhere else), safe to edit in place. Same underlying `FrequencyWindowViewModel`/`buildFrequencyWindow` (30-day window, binary `completed`) — this task only transposes the render order (weeks as columns, weekdays as rows, matching the real GitHub contribution-graph orientation the design asks for) and restyles colors/legend. No change to `src/home/frequencyHeatmap.ts`.
 
 **Files:**
