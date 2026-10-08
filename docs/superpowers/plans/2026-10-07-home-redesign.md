@@ -306,9 +306,19 @@ git commit -m "Estende ProgressingSummary com adherenceRatio, requiredActiveDays
 
 ### Task 5: Thread the new fields through `viewModel.ts`
 
+**Scope note (discovered while implementing Task 4):** extending `ProgressingSummary` breaks more
+call sites than first anticipated — not just `viewModel.ts`. `src/workoutEvolution/presentationCachePolicy.ts`
+builds a `ProgressingSummary` literal directly from the on-disk cache, and three existing test
+files construct `ProgressingSummary`/`EvolutionViewModel` mock literals. All of these are now part
+of this task (added as Steps 3.5/3.6 below) — do not split them into a separate task.
+
 **Files:**
 - Modify: `src/workoutEvolution/viewModel.ts`
+- Modify: `src/workoutEvolution/presentationCachePolicy.ts`
 - Modify: `src/workoutEvolution/__tests__/viewModel.test.ts`
+- Modify: `src/workoutEvolution/__tests__/loadReducer.test.ts`
+- Modify: `src/workoutEvolution/__tests__/tickerItems.test.ts`
+- Modify: `src/lib/__tests__/evolutionSummaryPresentationCache.test.ts`
 
 - [ ] **Step 1: Write the failing test additions**
 
@@ -459,20 +469,64 @@ export function buildEvolutionViewModel(input: EvolutionViewModelInput): Evoluti
 
 Leave every line after `const summary = buildSummary(...)` exactly as it already is — only the call to `buildSummary` itself changes.
 
+- [ ] **Step 3.5: Fix `presentationCachePolicy.ts`'s cache-reconstructed summary**
+
+`src/workoutEvolution/presentationCachePolicy.ts`'s `viewModelFromEvolutionPresentationCache`
+builds a `ProgressingSummary` directly from the on-disk cache (`src/lib/evolutionSummaryPresentationCache.ts`).
+That on-disk schema is a deliberately minimal, allow-listed shape (`hasOnlyKeys` validation) that
+already omits some `ProgressingSummary` fields on purpose — e.g. `earnedLevel: null` and
+`isHistoryComplete: false` are hardcoded there today, with a comment explaining the cached value is
+presentation-only. Follow the exact same pattern for the 4 new fields — **do not** add them to
+`EvolutionSummaryPresentationCache`'s on-disk schema in `src/lib/evolutionSummaryPresentationCache.ts`
+(that file must not be touched by this task at all). Instead, change only the returned object in
+`presentationCachePolicy.ts`:
+
+```ts
+import { requiredActiveDaysForLevel } from '../home/evoRingMetrics';
+
+// ...inside viewModelFromEvolutionPresentationCache's returned `summary`, add:
+      // Also deliberately absent from disk; Home does not render this flag.
+      isHistoryComplete: false,
+      // Deliberately absent from disk, same reasoning as earnedLevel/isHistoryComplete above —
+      // a stale cached entry never claims a numeric adherence ratio, a pause, or a cycle count.
+      adherenceRatio: null,
+      requiredActiveDays: requiredActiveDaysForLevel(cache.summary.activeLevel),
+      pausedAtLocalDate: null,
+      intermediateCyclesEarned: null,
+```
+
+(`requiredActiveDays` is the one exception — it's never persisted either, but since it's a pure
+function of `activeLevel`, which the cache already stores, it can always be freshly derived rather
+than defaulted to a dummy number.)
+
+- [ ] **Step 3.6: Update the three pre-existing test files with `ProgressingSummary`/`EvolutionViewModel` mock literals**
+
+Add the same 4 fields to every mock summary object in:
+- `src/workoutEvolution/__tests__/loadReducer.test.ts`
+- `src/workoutEvolution/__tests__/tickerItems.test.ts`
+- `src/lib/__tests__/evolutionSummaryPresentationCache.test.ts`
+
+None of these tests are about the 4 new fields, so use neutral, inert values consistent with each
+mock's existing scenario — typically `adherenceRatio: null, requiredActiveDays: 28, pausedAtLocalDate: null, intermediateCyclesEarned: null`
+(or `requiredActiveDays: 85` if that particular mock's `activeLevel` is `'INTERMEDIATE'`/`'ADVANCED'`).
+Do not change any other part of these tests' existing assertions or scenarios.
+
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `npx vitest run src/workoutEvolution/__tests__/viewModel.test.ts`
-Expected: PASS (all tests, old and new).
+Run: `npx vitest run src/workoutEvolution/__tests__/viewModel.test.ts src/workoutEvolution/__tests__/loadReducer.test.ts src/workoutEvolution/__tests__/tickerItems.test.ts src/lib/__tests__/evolutionSummaryPresentationCache.test.ts`
+Expected: PASS (all tests, old and new, across all four files).
 
 - [ ] **Step 5: Type-check the whole project**
 
 Run: `npx tsc --noEmit`
-Expected: no errors remaining from Task 4's intentional break.
+Expected: no errors remaining from Task 4's intentional break (across every file, not just `viewModel.ts`).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/workoutEvolution/viewModel.ts src/workoutEvolution/__tests__/viewModel.test.ts
+git add src/workoutEvolution/viewModel.ts src/workoutEvolution/presentationCachePolicy.ts \
+  src/workoutEvolution/__tests__/viewModel.test.ts src/workoutEvolution/__tests__/loadReducer.test.ts \
+  src/workoutEvolution/__tests__/tickerItems.test.ts src/lib/__tests__/evolutionSummaryPresentationCache.test.ts
 git commit -m "Propaga adherenceRatio/requiredActiveDays/pausa/ciclos intermediarios no view model de evolucao"
 ```
 
