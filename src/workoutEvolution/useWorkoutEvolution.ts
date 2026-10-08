@@ -201,6 +201,10 @@ export function useWorkoutEvolution(activeProgramInstanceId: string | null = nul
         // `reconcileWorkoutLifecycle`'s own internal evaluation (inside the
         // protected prepare/persist chain) never returns the full snapshot,
         // and this hook must not reach into that chain to get it.
+        // Known cost: this duplicates the reconcile path's read batch on
+        // every load in the common case; avoiding that would require
+        // extending workoutLifecycleApplication.ts's ReconcileResult, which
+        // this plan deliberately does not touch — see Task 6's rationale.
         evaluateProgressionV2ForUserFull(user.uid),
       ]);
       recordPerfMark('evolution_lifecycle_pending_progression_ready');
@@ -286,11 +290,18 @@ export function useWorkoutEvolution(activeProgramInstanceId: string | null = nul
       if (pendingAfter) {
         const currentProgram = await pendingProgramPromise;
         const pendingPlanValue = pendingAfter.plan as FinalWorkoutPlan;
+        // `diff` and `pendingPlan` must rise and fall together — both derived
+        // from the same "is this pending evolution still current for the
+        // active program instance" check, never one populated while the
+        // other is null. A stale pending (source instance moved past) must
+        // blank both, so a future swap-list UI built on `pendingPlan` can
+        // never show exercise names from a plan `diff` has already rejected.
+        const isPendingCurrent = currentProgram?.programInstanceId === pendingAfter.sourceProgramInstanceId;
         if (isCurrent()) {
-          setDiff(currentProgram?.programInstanceId === pendingAfter.sourceProgramInstanceId
+          setDiff(isPendingCurrent
             ? computePrescriptionDiff({ current: currentProgram, pending: pendingPlanValue })
             : null);
-          setPendingPlan(pendingPlanValue);
+          setPendingPlan(isPendingCurrent ? pendingPlanValue : null);
         }
       } else if (autoActivationNotice && lifecycle.programInstance.previousProgramInstanceId) {
         const [currentProgram, previousInstance] = await Promise.all([
