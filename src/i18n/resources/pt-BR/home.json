@@ -22,6 +22,13 @@
     "towardAdvanced": "RUMO AO AVANÇADO",
     "towardAdvancedUnit": "/ {{count}} ciclos"
   },
+  "evoPending": {
+    "cycleTitle": "{{count}} exercícios novos no ciclo {{number}}",
+    "levelTitle": "Novo nível: {{level}}",
+    "renewalTitle": "Renovar ciclo",
+    "subtitle": "Veja o que muda antes de ativar",
+    "deferredLink": "Evolução adiada · ver e ativar"
+  },
   "greeting": {
     "casual": "E aí,"
   },

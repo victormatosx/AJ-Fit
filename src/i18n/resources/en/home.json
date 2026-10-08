@@ -26,6 +26,13 @@
     "iconLabel": "My support cases",
     "iconLabelUnread": "My support cases, {{count}} with new messages"
   },
+  "evoPending": {
+    "cycleTitle": "{{count}} new exercises in cycle {{number}}",
+    "levelTitle": "New level: {{level}}",
+    "renewalTitle": "Renew cycle",
+    "subtitle": "See what changes before activating",
+    "deferredLink": "Evolution deferred · view and activate"
+  },
   "greeting": {
     "casual": "Hey,"
   },
