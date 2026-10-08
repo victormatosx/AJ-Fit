@@ -1079,11 +1079,6 @@ import type { Streak } from '../../home/streak';
 const LOOP_DURATION_MS = 18000;
 const ITEM_GAP = 36;
 
-interface TickerValueItem {
-  label: string;
-  value: string;
-}
-
 /**
  * Home-only HUD marquee (section 2.2 of the Home redesign). Deliberately a
  * separate component from `EvolutionTicker` (shared with `TreinoScreen.tsx`,
@@ -1103,26 +1098,26 @@ export function HomeEvoTicker({
   /** Real count from the already-loaded 30-day frequency window — `null` while unavailable, item omitted. */
   sessionsLast30Days: number | null;
 }) {
-  const { t } = useTranslation('home');
+  const { t } = useTranslation(['home', 'evolution']);
   const { theme } = useTheme();
 
-  const items = useMemo<TickerValueItem[]>(() => {
+  const items = useMemo<string[]>(() => {
     if (viewModel.kind === 'LOADING' || viewModel.kind === 'ERROR' || viewModel.kind === 'UNAVAILABLE') return [];
     const { summary } = viewModel;
-    const result: TickerValueItem[] = [];
+    const result: string[] = [];
     if (streak) {
-      result.push({ label: '', value: t('evoTicker.streak', { count: streak.current }) });
+      result.push(t('home:evoTicker.streak', { count: streak.current }));
     }
     if (summary.activeDays !== null) {
-      result.push({ label: '', value: t('evoTicker.activeDays', { count: summary.activeDays, required: summary.requiredActiveDays }) });
+      result.push(t('home:evoTicker.activeDays', { count: summary.activeDays, required: summary.requiredActiveDays }));
     }
     if (summary.adherenceRatio !== null) {
-      result.push({ label: '', value: t('evoTicker.adherence', { percent: Math.round(summary.adherenceRatio * 100) }) });
+      result.push(t('home:evoTicker.adherence', { percent: Math.round(summary.adherenceRatio * 100) }));
     }
-    result.push({ label: '', value: t('evoTicker.cycle', { number: summary.cycleNumber }) });
-    result.push({ label: '', value: t('evoTicker.level', { level: t(`evolution:level.${summary.activeLevel}`) }) });
+    result.push(t('home:evoTicker.cycle', { number: summary.cycleNumber }));
+    result.push(t('home:evoTicker.level', { level: t(`evolution:level.${summary.activeLevel}`) }));
     if (sessionsLast30Days !== null) {
-      result.push({ label: '', value: t('evoTicker.sessions30d', { count: sessionsLast30Days }) });
+      result.push(t('home:evoTicker.sessions30d', { count: sessionsLast30Days }));
     }
     return result;
   }, [viewModel, streak, sessionsLast30Days, t]);
@@ -1145,7 +1140,7 @@ export function HomeEvoTicker({
   );
 }
 
-function TickerMarquee({ items, accentColor }: { items: TickerValueItem[]; accentColor: string }) {
+function TickerMarquee({ items, accentColor }: { items: string[]; accentColor: string }) {
   const [width, setWidth] = useState(0);
   const x = useRef(new Animated.Value(0)).current;
   const isActive = useIsScreenActive();
@@ -1170,7 +1165,7 @@ function TickerMarquee({ items, accentColor }: { items: TickerValueItem[]; accen
           key={i}
           style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 10, letterSpacing: 2, color: accentColor }}
         >
-          {item.value}
+          {item}
         </Text>
       ))}
     </View>
