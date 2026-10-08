@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Modal, View, Text, ScrollView, Pressable, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -16,18 +16,14 @@ import { ProfileAvatar } from '../components/ui/ProfileAvatar';
 import type { PrescriptionResult } from '../workoutPrescription/types';
 import { prescriptionOutcomeKey } from '../workoutPrescription/uiOutcome';
 import { resolveSessionDisplayName, type LooseTranslate } from '../workoutPrescription/sessionPresentation';
-import { localDateInTimezone, weekdayOfLocalDate, type ScheduleConfig, type ScheduleResolution } from '../scheduleEngine';
-import { EvolutionTicker } from '../components/evolution/EvolutionTicker';
+import { weekdayOfLocalDate, type ScheduleConfig, type ScheduleResolution } from '../scheduleEngine';
+import { HomeEvoTicker } from '../components/home/HomeEvoTicker';
+import { CycleProgressBlock } from '../components/home/CycleProgressBlock';
+import { PendingEvolutionBanner } from '../components/home/PendingEvolutionBanner';
 import type { EvolutionViewModel } from '../workoutEvolution/types';
 import { BodyMuscleMap } from '../components/fitness/BodyMuscleMap';
 import { deriveSessionMuscles } from '../lib/sessionMuscles';
-import { ProgramProgressStrip } from '../components/home/ProgramProgressStrip';
-import { WeeklyOverview } from '../components/home/WeeklyOverview';
 import { FrequencyHeatmap } from '../components/home/FrequencyHeatmap';
-import { UpcomingWorkouts } from '../components/home/UpcomingWorkouts';
-import { UpcomingWorkoutDetailModal } from '../components/home/UpcomingWorkoutDetailModal';
-import { buildUpcomingWorkouts, type UpcomingWorkoutViewModel } from '../home/upcomingWorkouts';
-import type { WeekOverviewViewModel } from '../home/weekOverview';
 import type { FrequencyWindowViewModel } from '../home/frequencyHeatmap';
 import type { InitialSectionStatus } from '../home/homeInitialReadiness';
 import type { ActiveRest } from '../lib/restTimer';
@@ -62,7 +58,7 @@ export function HomeScreen({
   unreadSupportCasesCount = 0,
   evolutionViewModel,
   onOpenEvolution,
-  weekOverview,
+  streak = null,
   frequencyWindow,
   frequencyLoading,
   frequencySource = 'AUTHORITATIVE',
@@ -119,11 +115,11 @@ export function HomeScreen({
   onOpenSupportCases?: () => void;
   /** Sum of unread ADMIN messages across the user's support cases, from `useUnreadSupportCasesCount` (Firestore `unreadByUserCount`, realtime) — never a locally tracked counter. */
   unreadSupportCasesCount?: number;
-  /** Real Training Level/Cycle/progress state, rendered as the compact `EvolutionTicker` marquee — the historical Home ticker's visual identity (commit d24319b) rebuilt on real data instead of its old hardcoded mock stats. Profile renders this same view model through its own card. */
+  /** Real Training Level/Cycle/progress state, rendered as the `HomeEvoTicker` marquee + `CycleProgressBlock` ring — the historical Home ticker's visual identity (commit d24319b) rebuilt on real data instead of its old hardcoded mock stats. Profile renders this same view model through its own card. */
   evolutionViewModel: EvolutionViewModel;
   onOpenEvolution?: () => void;
-  /** Real "esta semana" projection (Schedule Engine config + completed dates) — `null` while the first read is in flight or unavailable; the section is simply omitted rather than showing a fabricated/empty skeleton. */
-  weekOverview?: WeekOverviewViewModel | null;
+  /** Home-only dedicated streak read (`useHomeStreak`) — `null` until the first successful read. */
+  streak?: import('../home/streak').Streak | null;
   /** Real "sua frequência" 30-day window (one block at a time) — `null` only until the very first read ever resolves; the section is simply omitted until then rather than showing a fabricated/empty skeleton. Never goes back to `null` afterward — a newly-selected but not-yet-loaded period keeps showing the previous one (see `frequencyLoading`) so the section's geometry never changes and the surrounding scroll position is never disturbed. */
   frequencyWindow?: FrequencyWindowViewModel | null;
   /** True while a newly-selected period's data isn't available yet — `frequencyWindow` is still the previous period. */
@@ -169,7 +165,6 @@ export function HomeScreen({
   }, [evolutionViewModel]);
   const { t, i18n } = useTranslation(['home', 'profile']);
   const [showMissedPendingInfo, setShowMissedPendingInfo] = useState(false);
-  const [selectedUpcoming, setSelectedUpcoming] = useState<UpcomingWorkoutViewModel | null>(null);
   // Popover renders in a full-screen Modal (so a tap anywhere outside it can
   // close it, unclipped by the poster's `overflow: hidden`) — its position is
   // measured from the icon rather than laid out in-flow alongside it.
@@ -285,30 +280,6 @@ export function HomeScreen({
       })
     : null;
 
-  // "Próximos treinos" — the forward view the Today poster deliberately
-  // doesn't show. It extends `scheduleResolution` (the engine's own answer
-  // for today) over the user's real trainingDays; it never re-decides what
-  // may be trained today, and is simply omitted while there's no schedule
-  // or no ready program. `localDateInTimezone` is cheap and returns a plain
-  // string, so it is a stable `useMemo` dependency across renders.
-  const scheduleTimezone = scheduleConfig?.timezone ?? null;
-  const todayLocalDate = scheduleTimezone
-    ? localDateInTimezone(new Date(), scheduleTimezone)
-    : null;
-  const upcomingWorkouts = useMemo(
-    () => ((todayActionsReady || (!snapshotPresentationActive && programPresentationReady))
-      && todayLocalDate && scheduleConfig && prescription.status === 'SUCCESS'
-      ? buildUpcomingWorkouts({
-          todayLocalDate,
-          scheduleMode: prescription.plan.scheduleMode ?? 'fixed',
-          trainingDays: scheduleConfig.trainingDays,
-          sessions: prescription.plan.sessions,
-          resolution: scheduleResolution,
-        })
-      : []),
-    [todayActionsReady, snapshotPresentationActive, programPresentationReady, todayLocalDate, scheduleConfig, prescription, scheduleResolution],
-  );
-
   // Today's real locale-formatted calendar date. There is no fixed
   // week-of-program countdown because the lifecycle has no such fact.
   const today = new Date();
@@ -330,19 +301,17 @@ export function HomeScreen({
           {/* greeting */}
           <View
             style={{
-              paddingHorizontal: 22,
+              paddingHorizontal: 24,
+              paddingTop: 70 - 10, // screen padding target is 70 total; SafeAreaView already contributes top inset
               paddingBottom: 12,
-              paddingTop: 10,
               flexDirection: 'row',
-              alignItems: 'center',
+              alignItems: 'flex-end',
               justifyContent: 'space-between',
             }}
           >
             <View style={{ flex: 1, marginRight: 12 }}>
-              <MonoLabel>
-                {todayLine.toUpperCase()}
-              </MonoLabel>
-              <Display size={28} style={{ marginTop: 6 }} numberOfLines={1}>
+              <MonoLabel>{todayLine.toUpperCase()}</MonoLabel>
+              <Display size={34} style={{ marginTop: 8 }} numberOfLines={2}>
                 {`${t('home:greeting.casual')} ${localizedFirstName}.`.toUpperCase()}
               </Display>
             </View>
@@ -353,25 +322,34 @@ export function HomeScreen({
               onPress={onStart}
             /> : null}
             {onOpenSupportCases && unreadSupportCasesCount > 0 && (
-              <SupportInboxButton
-                unreadCasesCount={unreadSupportCasesCount}
-                onPress={onOpenSupportCases}
-              />
+              <SupportInboxButton unreadCasesCount={unreadSupportCasesCount} onPress={onOpenSupportCases} />
             )}
             <Pressable onPress={onOpenProfile} hitSlop={8}>
               <ProfileAvatar
                 displayName={profile?.profile.name || firstName}
                 photoURL={profile?.profile.photoURL}
                 photoVersion={profile?.profile.photoVersion}
-                size={40}
+                size={46}
               />
             </Pressable>
           </View>
 
-          {/* Real Training Level/Cycle/progress state from Workout Lifecycle V2,
-              rendered full-bleed like the historical Home ticker. */}
-          <View style={{ marginBottom: 18, minHeight: snapshotFrequencyThrough ? 44 : undefined }}>
-            <EvolutionTicker viewModel={evolutionViewModel} onPress={onOpenEvolution} />
+          {/* Real Training Level/Cycle/progress state from Workout Lifecycle V2 —
+              Home-only HUD marquee + cycle ring (section 2.2/2.3 of the Home
+              redesign). */}
+          <View style={{ marginTop: 22, marginBottom: 18 }}>
+            <HomeEvoTicker
+              viewModel={evolutionViewModel}
+              streak={streak}
+              sessionsLast30Days={frequencyWindow?.completedCount ?? null}
+            />
+          </View>
+
+          <View style={{ paddingHorizontal: 24 }}>
+            <CycleProgressBlock viewModel={evolutionViewModel} streak={streak} />
+            {(evolutionViewModel.kind === 'EVOLUTION_READY' || evolutionViewModel.kind === 'EVOLUTION_DEFERRED') && onOpenEvolution ? (
+              <PendingEvolutionBanner viewModel={evolutionViewModel} diff={null} onPress={onOpenEvolution} />
+            ) : null}
           </View>
 
           {/* TODAY POSTER */}
@@ -640,21 +618,6 @@ export function HomeScreen({
             </LinearGradient>
           </View>
 
-          {/* Below the Today card, in "hoje → progresso → semana →
-              histórico → próximos" order. Each section is a real projection of state
-              Home (or AppShell) already holds — no new claims, no fabricated
-              numbers — and is simply omitted while its data isn't loaded yet
-              instead of showing a fake skeleton (docs task §11/§12). */}
-          <ProgramProgressStrip viewModel={evolutionViewModel} onPress={onOpenEvolution} reserveWhenUnavailable={Boolean(snapshotFrequencyThrough)} />
-
-          {weekOverview ? (
-            <View style={{ marginTop: 4 }}>
-              <WeeklyOverview overview={weekOverview} />
-            </View>
-          ) : snapshotFrequencyThrough ? (
-            <View style={{ marginTop: 4, marginHorizontal: 22, height: 100, borderRadius: 10, backgroundColor: theme.colors.surfaceMuted }} />
-          ) : null}
-
           {(frequencyWindow || snapshotFrequencyWindow) && onFrequencyPrev && onFrequencyNext ? (
             <View style={{ marginTop: 4, marginBottom: 8 }}>
               <FrequencyHeatmap
@@ -668,29 +631,8 @@ export function HomeScreen({
               />
             </View>
           ) : null}
-
-          {/* Last section, after calendário/frequência: what comes NEXT.
-              Tapping a row only ever opens its details — starting a session
-              stays exclusively with the Today card + Schedule Engine. */}
-          {upcomingWorkouts.length > 0 ? (
-            <View style={{ minHeight: snapshotFrequencyThrough ? 284 : undefined }}>
-              <UpcomingWorkouts workouts={upcomingWorkouts} onSelect={setSelectedUpcoming} enabled={todayActionsReady} />
-            </View>
-          ) : snapshotFrequencyThrough ? (
-            <View style={{ marginHorizontal: 22, marginTop: 14, height: 270, gap: 10 }}>
-              {[0, 1, 2].map((index) => (
-                <View key={index} style={{ height: 74, borderRadius: theme.radii.xl, backgroundColor: theme.colors.surfaceMuted }} />
-              ))}
-            </View>
-          ) : null}
         </ScrollView>
       </SafeAreaView>
-
-      <UpcomingWorkoutDetailModal
-        workout={selectedUpcoming}
-        plan={prescription.status === 'SUCCESS' ? prescription.plan : null}
-        onClose={() => setSelectedUpcoming(null)}
-      />
 
       <Modal
         visible={showMissedPendingInfo}

@@ -1927,9 +1927,6 @@ function AppShellContent({
             unreadSupportCasesCount={unreadSupportCases.count}
             evolutionViewModel={evolution.viewModel}
             onOpenEvolution={() => setShowEvolutionUnlock(true)}
-            weekOverview={schedule.matchesActiveProgram && activitySnapshot.initialStatus === 'SUCCESS'
-              && (homeInitialReadiness.today === 'SUCCESS' || authoritativeReadyMarkRef.current)
-              ? activitySnapshot.week : (cachedFrequency ? null : activitySnapshot.week)}
             frequencyWindow={frequencyPresentation.source === 'AUTHORITATIVE' ? frequencyPresentation.value : null}
             frequencyLoading={frequencyWindow.loading}
             frequencySource={frequencyPresentation.source === 'CACHE' ? 'CACHE'
