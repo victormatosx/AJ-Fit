@@ -19,11 +19,13 @@ type Phase = 0 | 1 | 2 | 3;
 export function EvolutionCelebration({
   type,
   cycleNumber,
+  levelLabel,
   swapCount,
   onDone,
 }: {
   type: PendingEvolutionType;
   cycleNumber: number;
+  levelLabel: string;
   swapCount: number;
   onDone: () => void;
 }) {
@@ -93,7 +95,7 @@ export function EvolutionCelebration({
   const isPromo = type === 'LEVEL_PROMOTION';
   const doneLabel = isPromo ? t('celebration.levelDone') : isRenewal ? t('celebration.renewalDone') : t('celebration.cycleDone', { number: cycleNumber });
   const bigTop = isPromo ? t('celebration.levelBigTop') : isRenewal ? t('celebration.renewalBigTop') : t('celebration.cycleBigTop');
-  const bigBottom = isPromo ? t('level.INTERMEDIATE') : isRenewal ? t('celebration.renewalBigBottom') : String(cycleNumber).padStart(2, '0');
+  const bigBottom = isPromo ? levelLabel : isRenewal ? t('celebration.renewalBigBottom') : String(cycleNumber).padStart(2, '0');
   const sub = isPromo ? t('celebration.levelSub') : isRenewal ? t('celebration.renewalSub') : t('celebration.cycleSub', { count: swapCount });
 
   return (

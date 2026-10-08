@@ -135,6 +135,10 @@ import {
 import type { ManualSubstitutionUserContext } from '../services/exerciseSubstitutionCandidates';
 import { workoutExercisesFromPlan, type ManualSubstitutionContextStatus } from './workoutScreenPlan';
 import { EvolutionUnlockScreen } from './EvolutionUnlockScreen';
+import { EvolutionCelebration } from '../components/evolution/EvolutionCelebration';
+import { NewPlanRevealScreen } from './NewPlanRevealScreen';
+import type { PendingEvolutionType } from '../workoutLifecycle/types';
+import type { PrescriptionDiffSummary } from '../workoutEvolution/diff';
 import { errorClass, errorCode, errorReason, logError, logInfo, logWarn } from '../lib/logger';
 import { resolveSessionDisplayName, type LooseTranslate } from '../workoutPrescription/sessionPresentation';
 import { useReducedMotionPreference } from '../lib/reducedMotion';
@@ -261,7 +265,12 @@ function AppShellContent({
   useEffect(() => {
     recordPerfMark('appshell_mount');
   }, []);
-  const { t, i18n } = useTranslation('workout');
+  // 'evolution' is a second declared namespace (not the default) solely so
+  // the typed `t` overload accepts the namespace-qualified
+  // `evolution:level.*` lookup below (celebration/reveal `levelLabel`) —
+  // every existing bare `t(...)` call in this file keeps resolving against
+  // 'workout', the first/default namespace, unchanged.
+  const { t, i18n } = useTranslation(['workout', 'evolution']);
   const reduceMotion = useReducedMotionPreference();
   const { tab, setTab } = useAppState();
   const { user, linkedProviders } = useAuth();
@@ -518,6 +527,21 @@ function AppShellContent({
   const [missedDecisionContext, setMissedDecisionContext] = useState<MissedSessionDecisionIdentity | null>(null);
   const missDecisionTapInFlightRef = useRef(false);
   const [showEvolutionUnlock, setShowEvolutionUnlock] = useState(false);
+  // Fase 5 (Home redesign) — celebration + new-plan reveal flow. A frozen
+  // snapshot of the plan pair at the moment `evolution.start()` was invoked:
+  // once it resolves, `prescription.plan` is already the new plan and
+  // `evolution.pendingPlan` is cleared, so neither of those live values can
+  // drive this UI — only this captured state can.
+  const [evolutionCelebration, setEvolutionCelebration] = useState<{
+    type: PendingEvolutionType;
+    cycleNumber: number;
+    levelLabel: string;
+    currentPlan: FinalWorkoutPlan;
+    newPlan: FinalWorkoutPlan;
+    exerciseReplacements: PrescriptionDiffSummary['exerciseReplacements'];
+    swapCount: number;
+    phase: 'celebrating' | 'reveal';
+  } | null>(null);
   const [supportRoute, setSupportRoute] = useState<SupportRoute | null>(null);
   // Realtime, Firestore-backed unread count for the Home support icon's
   // badge (see useUnreadSupportCasesCount) — no locally tracked counter.
@@ -1925,6 +1949,7 @@ function AppShellContent({
             onOpenSupportCases={() => setSupportRoute({ name: 'cases', origin: 'home' })}
             unreadSupportCasesCount={unreadSupportCases.count}
             evolutionViewModel={evolution.viewModel}
+            evolutionDiff={evolution.diff}
             onOpenEvolution={() => setShowEvolutionUnlock(true)}
             frequencyWindow={frequencyPresentation.source === 'AUTHORITATIVE' ? frequencyPresentation.value : null}
             frequencyLoading={frequencyWindow.loading}
@@ -2219,13 +2244,36 @@ function AppShellContent({
           <EvolutionUnlockScreen
             viewModel={evolution.viewModel}
             diff={evolution.diff}
+            currentPlan={prescription.status === 'SUCCESS' ? prescription.plan : null}
+            pendingPlan={evolution.pendingPlan}
             actionPending={evolution.actionPending}
             actionError={evolution.actionError}
             onStart={() => {
+              // Capture the plan pair BEFORE activating — once `evolution.start()`
+              // resolves, `prescription.plan` will already be the new plan and
+              // `evolution.pendingPlan` will be cleared, so the celebration/reveal
+              // flow needs its own frozen snapshot, not a live read.
+              const capturedCurrentPlan = prescription.status === 'SUCCESS' ? prescription.plan : null;
+              const capturedPendingPlan = evolution.pendingPlan;
+              const capturedDiff = evolution.diff;
+              const capturedViewModel = evolution.viewModel;
               void evolution.start().then(async (activated) => {
                 if (!activated) return;
                 await reloadPrescription();
                 setShowEvolutionUnlock(false);
+                if (capturedCurrentPlan && capturedPendingPlan
+                  && (capturedViewModel.kind === 'EVOLUTION_READY' || capturedViewModel.kind === 'EVOLUTION_DEFERRED')) {
+                  setEvolutionCelebration({
+                    type: capturedViewModel.pending.type,
+                    cycleNumber: capturedViewModel.summary.cycleNumber,
+                    levelLabel: t(`evolution:level.${capturedViewModel.pending.toLevel}`),
+                    currentPlan: capturedCurrentPlan,
+                    newPlan: capturedPendingPlan,
+                    exerciseReplacements: capturedDiff?.exerciseReplacements ?? [],
+                    swapCount: capturedDiff?.exerciseReplacements.length ?? 0,
+                    phase: 'celebrating',
+                  });
+                }
               });
             }}
             onDefer={() => {
@@ -2242,6 +2290,32 @@ function AppShellContent({
           />
         ) : null}
       </Modal>
+      {evolutionCelebration?.phase === 'celebrating' && (
+        <View style={{ position: 'absolute', inset: 0 }}>
+          <EvolutionCelebration
+            type={evolutionCelebration.type}
+            cycleNumber={evolutionCelebration.cycleNumber}
+            levelLabel={evolutionCelebration.levelLabel}
+            swapCount={evolutionCelebration.swapCount}
+            onDone={() => setEvolutionCelebration((current) => current ? { ...current, phase: 'reveal' } : null)}
+          />
+        </View>
+      )}
+      {evolutionCelebration?.phase === 'reveal' && (
+        <View style={{ position: 'absolute', inset: 0 }}>
+          <NewPlanRevealScreen
+            type={evolutionCelebration.type}
+            cycleNumber={evolutionCelebration.cycleNumber}
+            levelLabel={evolutionCelebration.levelLabel}
+            currentPlan={evolutionCelebration.currentPlan}
+            newPlan={evolutionCelebration.newPlan}
+            locale={i18n.language}
+            exerciseReplacements={evolutionCelebration.exerciseReplacements}
+            onClose={() => setEvolutionCelebration(null)}
+            onBegin={() => setEvolutionCelebration(null)}
+          />
+        </View>
+      )}
       {/*
         Settings, Security, Assessment, EditProfile, Consistency, Support
         (help/success halves) and SubscriptionCenter are the secondary

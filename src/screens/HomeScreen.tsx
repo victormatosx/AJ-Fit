@@ -21,6 +21,7 @@ import { HomeEvoTicker } from '../components/home/HomeEvoTicker';
 import { CycleProgressBlock } from '../components/home/CycleProgressBlock';
 import { PendingEvolutionBanner } from '../components/home/PendingEvolutionBanner';
 import type { EvolutionViewModel } from '../workoutEvolution/types';
+import type { PrescriptionDiffSummary } from '../workoutEvolution/diff';
 import { BodyMuscleMap } from '../components/fitness/BodyMuscleMap';
 import { deriveSessionMuscles } from '../lib/sessionMuscles';
 import { FrequencyHeatmap } from '../components/home/FrequencyHeatmap';
@@ -56,6 +57,7 @@ export function HomeScreen({
   onOpenSupportCases,
   unreadSupportCasesCount = 0,
   evolutionViewModel,
+  evolutionDiff = null,
   onOpenEvolution,
   streak = null,
   frequencyWindow,
@@ -108,6 +110,8 @@ export function HomeScreen({
   unreadSupportCasesCount?: number;
   /** Real Training Level/Cycle/progress state, rendered as the `HomeEvoTicker` marquee + `CycleProgressBlock` ring — the historical Home ticker's visual identity (commit d24319b) rebuilt on real data instead of its old hardcoded mock stats. Profile renders this same view model through its own card. */
   evolutionViewModel: EvolutionViewModel;
+  /** Real source-vs-target diff for a pending evolution — powers `PendingEvolutionBanner`'s swap-count copy. `null` while no diff has resolved yet. */
+  evolutionDiff?: PrescriptionDiffSummary | null;
   onOpenEvolution?: () => void;
   /** Home-only dedicated streak read (`useHomeStreak`) — `null` until the first successful read. */
   streak?: import('../home/streak').Streak | null;
@@ -338,7 +342,7 @@ export function HomeScreen({
           <View style={{ paddingHorizontal: 24 }}>
             <CycleProgressBlock viewModel={evolutionViewModel} streak={streak} />
             {(evolutionViewModel.kind === 'EVOLUTION_READY' || evolutionViewModel.kind === 'EVOLUTION_DEFERRED') && onOpenEvolution ? (
-              <PendingEvolutionBanner viewModel={evolutionViewModel} diff={null} onPress={onOpenEvolution} />
+              <PendingEvolutionBanner viewModel={evolutionViewModel} diff={evolutionDiff} onPress={onOpenEvolution} />
             ) : null}
           </View>
 
