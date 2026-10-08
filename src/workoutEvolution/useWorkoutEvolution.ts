@@ -21,7 +21,7 @@ import {
   pendingEvolutionRef,
 } from '../services/workoutLifecycle';
 import { loadActiveWorkoutProgram, loadWorkoutProgramSnapshot } from '../services/workoutPrograms';
-import { evaluateProgressionV2ForUser } from '../services/workoutProgressionV2';
+import { evaluateProgressionV2ForUser, evaluateProgressionV2ForUserFull } from '../services/workoutProgressionV2';
 import {
   activatePendingEvolution,
   deferPendingEvolution,
@@ -65,6 +65,8 @@ export interface WorkoutEvolutionController {
   actionError: string | null;
   /** Real source-vs-target diff for a pending or unacknowledged AUTO activation. */
   diff: PrescriptionDiffSummary | null;
+  /** The pending plan's `FinalWorkoutPlan`, present only while a pending evolution exists — same object `diff` was computed from. Lets the UI resolve real exercise display names for the swap list (Home redesign, section 3/5) without any new fetch. */
+  pendingPlan: FinalWorkoutPlan | null;
   /** Canonical "START NOW" — calls the Fase 4 activation API directly; never a local write (docs §41/§X). */
   start: () => Promise<boolean>;
   /** Canonical "KEEP CURRENT" — calls the Fase 4 defer API directly (docs §42/§Y). */
@@ -94,6 +96,7 @@ export function useWorkoutEvolution(activeProgramInstanceId: string | null = nul
   const [actionPending, setActionPending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [diff, setDiff] = useState<PrescriptionDiffSummary | null>(null);
+  const [pendingPlan, setPendingPlan] = useState<FinalWorkoutPlan | null>(null);
   const hasLoadedOnce = useRef(false);
   const actionInFlight = useRef(false);
   // Mirrors `viewModel` synchronously (state updates are async/batched) so a
@@ -184,7 +187,7 @@ export function useWorkoutEvolution(activeProgramInstanceId: string | null = nul
       }
       recordPerfMark('evolution_reconcile_ready');
 
-      const [lifecycle, pendingAfter, decision] = await Promise.all([
+      const [lifecycle, pendingAfter, decision, progressionFull] = await Promise.all([
         reconciledLifecycle !== undefined
           ? Promise.resolve(reconciledLifecycle)
           : loadWorkoutLifecycleDeduped(user.uid),
@@ -192,8 +195,22 @@ export function useWorkoutEvolution(activeProgramInstanceId: string | null = nul
         reconciledDecision !== undefined
           ? Promise.resolve(reconciledDecision)
           : evaluateProgressionV2ForUser(user.uid),
+        // Home redesign (2026-10-07): the only place that reads
+        // `ProgressionSnapshotV2.activeTime.pausedAt`/`earnedIntermediateCycleCount`
+        // for display. Deliberately a SEPARATE call from `decision` above —
+        // `reconcileWorkoutLifecycle`'s own internal evaluation (inside the
+        // protected prepare/persist chain) never returns the full snapshot,
+        // and this hook must not reach into that chain to get it.
+        evaluateProgressionV2ForUserFull(user.uid),
       ]);
       recordPerfMark('evolution_lifecycle_pending_progression_ready');
+      // `ActiveTime.pausedAt` is typed `unknown` at the shared-types level
+      // (it is persisted as a Firestore Timestamp elsewhere), but the pure
+      // V2 resolver (`computeActiveTimeTrace`) only ever assigns it a
+      // `LocalDate` (a plain `YYYY-MM-DD` string) or `null` — safe to narrow
+      // here, the one place that reads it for display.
+      const pausedAtLocalDate = (progressionFull?.snapshot.activeTime.pausedAt as string | null | undefined) ?? null;
+      const intermediateCyclesEarned = progressionFull?.snapshot.earnedIntermediateCycleCount ?? null;
 
       if (!lifecycle) {
         if (isCurrent()) {
@@ -224,7 +241,7 @@ export function useWorkoutEvolution(activeProgramInstanceId: string | null = nul
       // instead of a bare "loading" label for the remaining events/notice
       // round trip, without ever needing to later correct it.
       if (isCurrent() && isInitialLoad) {
-        commitViewModel(buildProvisionalEvolutionViewModel({ lifecycle: lifecycleContext, decision }));
+        commitViewModel(buildProvisionalEvolutionViewModel({ lifecycle: lifecycleContext, decision, pausedAtLocalDate, intermediateCyclesEarned }));
         recordPerfMark('evolution_first_useful_content');
         recordPerfMark('evolution_current_summary_visible');
         visibleProgramInstanceIdRef.current = lifecycle.programInstance.programInstanceId;
@@ -247,6 +264,8 @@ export function useWorkoutEvolution(activeProgramInstanceId: string | null = nul
           decision,
           pending: pendingAfter ? toPendingSummary(pendingAfter) : null,
           autoActivationNotice,
+          pausedAtLocalDate,
+          intermediateCyclesEarned,
         });
         visibleProgramInstanceIdRef.current = lifecycle.programInstance.programInstanceId;
         commitViewModel(authoritativeViewModel);
@@ -266,11 +285,12 @@ export function useWorkoutEvolution(activeProgramInstanceId: string | null = nul
 
       if (pendingAfter) {
         const currentProgram = await pendingProgramPromise;
-        const pendingPlan = pendingAfter.plan as FinalWorkoutPlan;
+        const pendingPlanValue = pendingAfter.plan as FinalWorkoutPlan;
         if (isCurrent()) {
           setDiff(currentProgram?.programInstanceId === pendingAfter.sourceProgramInstanceId
-            ? computePrescriptionDiff({ current: currentProgram, pending: pendingPlan })
+            ? computePrescriptionDiff({ current: currentProgram, pending: pendingPlanValue })
             : null);
+          setPendingPlan(pendingPlanValue);
         }
       } else if (autoActivationNotice && lifecycle.programInstance.previousProgramInstanceId) {
         const [currentProgram, previousInstance] = await Promise.all([
@@ -284,9 +304,11 @@ export function useWorkoutEvolution(activeProgramInstanceId: string | null = nul
           setDiff(currentProgram?.programInstanceId === lifecycle.programInstance.programInstanceId && previousProgram
             ? computePrescriptionDiff({ current: previousProgram, pending: currentProgram })
             : null);
+          setPendingPlan(null);
         }
       } else if (isCurrent()) {
         setDiff(null);
+        setPendingPlan(null);
       }
     } catch (error) {
       logWarn('workout_evolution', 'load_failed', { error });
@@ -525,7 +547,7 @@ export function useWorkoutEvolution(activeProgramInstanceId: string | null = nul
     : viewModel;
 
   return {
-    viewModel: displayedViewModel, loading, actionPending, actionError, diff, start, defer,
+    viewModel: displayedViewModel, loading, actionPending, actionError, diff, pendingPlan, start, defer,
     acknowledgeAutoActivation, refresh: load, refreshProjection,
   };
 }

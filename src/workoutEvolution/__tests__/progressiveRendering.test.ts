@@ -19,7 +19,7 @@ const card = read('src/components/evolution/EvolutionCard.tsx');
  */
 describe('useWorkoutEvolution — provisional SUMMARY_READY commit ordering', () => {
   it('commits the provisional summary only after lifecycle+pending+decision are known, before the events/notice tail', () => {
-    const promiseAllIndex = hook.indexOf('const [lifecycle, pendingAfter, decision] = await Promise.all(');
+    const promiseAllIndex = hook.indexOf('const [lifecycle, pendingAfter, decision, progressionFull] = await Promise.all(');
     const provisionalCommitIndex = hook.indexOf('buildProvisionalEvolutionViewModel(');
     const eventsIndex = hook.indexOf('listWorkoutLifecycleEventsForProgramInstance(');
     expect(promiseAllIndex).toBeGreaterThan(-1);
