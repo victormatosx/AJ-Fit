@@ -29,20 +29,32 @@ In `src/theme/tokens.ts`, inside the `palette` object (after `blue400: '#7db4ff'
   ink875: '#09071f',
 ```
 
-- [ ] **Step 2: Add semantic aliases**
+- [ ] **Step 2: Do NOT add these to `semanticDarkColors`/`colors`**
 
-Inside `semanticDarkColors` (after `hudCorner: 'rgba(77,163,255,0.65)',`), add:
+`src/theme/lightTokens.ts:216` defines `lightColors` with
+`} as const satisfies { readonly [Key in keyof typeof colors]: string };` — a structural
+mirror contract requiring every key added to `semanticDarkColors` (which `colors` is built
+from) to also get a light-mode value in `lightTokens.ts`. The whole Home redesign (sections
+1-6 of the design spec) is explicitly, exclusively dark/poster-styled — no light-mode
+variant is ever described — matching the existing precedent in `HomeScreen.tsx`
+(`TODAY_WORKOUT_THEME = darkTheme`, with its own comment: "the Today Workout poster keeps
+the official Dark art direction in both app themes"). So these 3 new colors stay as plain
+`palette` primitives only (Step 1) — never promoted into the dynamic `colors`/`theme.colors`
+mirror. Any component that needs them imports `palette` directly:
 
 ```ts
-  evoSheetBackground: palette.ink875,
-  evoLight: palette.blue300,
-  evoPaused: palette.amber500,
+import { palette } from '../../theme/tokens';
+// palette.amber500, palette.blue300, palette.ink875
 ```
+
+(This also means Task 12's `CycleProgressBlock` must reference `palette.amber500` directly
+for the paused-ring/below-70%-adherence color, never a `theme.colors.*` alias — see Task 12's
+code below, which already imports `palette` for this reason.)
 
 - [ ] **Step 3: Verify the app still builds**
 
 Run: `npx tsc --noEmit`
-Expected: no new errors (additive object literals only).
+Expected: no new errors (the palette object itself isn't part of any light/dark structural mirror — only `semanticDarkColors`/`colors` is).
 
 - [ ] **Step 4: Commit**
 
@@ -1196,6 +1208,7 @@ Spanish:
 import { Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../theme';
+import { palette } from '../../theme/tokens';
 import { EvoRing } from './EvoRing';
 import { LitFlame } from './LitFlame';
 import { CountUp } from './CountUp';
@@ -1229,13 +1242,13 @@ export function CycleProgressBlock({ viewModel, streak }: { viewModel: Evolution
       ? t('evoRing.paused')
       : t('evoRing.daysLeft', { count: daysLeft });
   const adherencePercent = summary.adherenceRatio !== null ? Math.round(summary.adherenceRatio * 100) : null;
-  const adherenceColor = adherencePercent !== null && adherencePercent < 70 ? theme.colors.evoPaused : '#fff';
+  const adherenceColor = adherencePercent !== null && adherencePercent < 70 ? palette.amber500 : '#fff';
   const intermediate = summary.activeLevel === 'INTERMEDIATE';
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 22, marginTop: 32 }}>
       <View style={{ alignItems: 'center', gap: 12 }}>
-        <EvoRing size={150} strokeWidth={11} progress={cyclePct} color={paused ? theme.colors.evoPaused : theme.colors.primaryEmphasis}>
+        <EvoRing size={150} strokeWidth={11} progress={cyclePct} color={paused ? palette.amber500 : theme.colors.primaryEmphasis}>
           <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 40, color: '#fff', lineHeight: 40 }}>
             <CountUp to={cyclePct} style={{ fontFamily: 'Anton_400Regular', fontSize: 40, color: '#fff' }} />
             <Text style={{ fontSize: 18, color: 'rgba(255,255,255,0.45)' }}>%</Text>
@@ -1264,7 +1277,7 @@ export function CycleProgressBlock({ viewModel, streak }: { viewModel: Evolution
           </Text>
           {adherencePercent !== null && (
             <View style={{ height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.08)', marginTop: 10, position: 'relative' }}>
-              <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${adherencePercent}%`, borderRadius: 2, backgroundColor: adherenceColor === theme.colors.evoPaused ? theme.colors.evoPaused : theme.colors.primaryEmphasis }} />
+              <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${adherencePercent}%`, borderRadius: 2, backgroundColor: adherenceColor === palette.amber500 ? palette.amber500 : theme.colors.primaryEmphasis }} />
               <View style={{ position: 'absolute', left: '70%', top: -3, width: 2, height: 10, borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.6)' }} />
             </View>
           )}
