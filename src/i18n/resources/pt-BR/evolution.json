@@ -112,7 +112,6 @@
       "renewal": "Mudanças desta versão",
       "auto": "O que foi aplicado"
     },
-    "replacements": "{{count}} exercícios substituídos",
     "added": "{{count}} exercícios adicionados",
     "removed": "{{count}} exercícios removidos",
     "reordered": "Ordem atualizada em {{count}} sessões",

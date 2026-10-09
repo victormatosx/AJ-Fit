@@ -112,7 +112,6 @@
       "renewal": "Changes in this version",
       "auto": "What was applied"
     },
-    "replacements": "{{count}} exercises replaced",
     "added": "{{count}} exercises added",
     "removed": "{{count}} exercises removed",
     "reordered": "Order updated in {{count}} sessions",
