@@ -212,6 +212,7 @@ const FULL_BLEED = StyleSheet.create({
   overlayZ50: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 50 },
   overlayZ60: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 60 },
   overlayZ70: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 70 },
+  overlayZ80: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 80 },
 });
 
 /**
@@ -542,6 +543,13 @@ function AppShellContent({
     swapCount: number;
     phase: 'celebrating' | 'reveal';
   } | null>(null);
+  // Stable identity (matches this file's existing convention, e.g.
+  // `clearWorkoutStartAttempt` above) — not required for correctness once
+  // `EvolutionCelebration` stops depending on `onDone`'s identity, but keeps
+  // this call site consistent with the rest of the file.
+  const handleEvolutionCelebrationDone = useCallback(() => {
+    setEvolutionCelebration((current) => current ? { ...current, phase: 'reveal' } : null);
+  }, []);
   const [supportRoute, setSupportRoute] = useState<SupportRoute | null>(null);
   // Realtime, Firestore-backed unread count for the Home support icon's
   // badge (see useUnreadSupportCasesCount) — no locally tracked counter.
@@ -2291,18 +2299,18 @@ function AppShellContent({
         ) : null}
       </Modal>
       {evolutionCelebration?.phase === 'celebrating' && (
-        <View style={{ position: 'absolute', inset: 0 }}>
+        <View style={{ position: 'absolute', inset: 0, zIndex: FULL_BLEED.overlayZ80.zIndex }}>
           <EvolutionCelebration
             type={evolutionCelebration.type}
             cycleNumber={evolutionCelebration.cycleNumber}
             levelLabel={evolutionCelebration.levelLabel}
             swapCount={evolutionCelebration.swapCount}
-            onDone={() => setEvolutionCelebration((current) => current ? { ...current, phase: 'reveal' } : null)}
+            onDone={handleEvolutionCelebrationDone}
           />
         </View>
       )}
       {evolutionCelebration?.phase === 'reveal' && (
-        <View style={{ position: 'absolute', inset: 0 }}>
+        <View style={{ position: 'absolute', inset: 0, zIndex: FULL_BLEED.overlayZ80.zIndex }}>
           <NewPlanRevealScreen
             type={evolutionCelebration.type}
             cycleNumber={evolutionCelebration.cycleNumber}

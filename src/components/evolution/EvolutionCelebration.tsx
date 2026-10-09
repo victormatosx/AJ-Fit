@@ -36,6 +36,16 @@ export function EvolutionCelebration({
   const toExplosionRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toTitleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toDoneRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Always holds the latest `onDone` without being a dependency of the timer
+  // effect below — the caller (`AppShell.tsx`, a huge component with many
+  // independent realtime listeners/timers) re-renders for reasons that have
+  // nothing to do with this celebration, producing a fresh inline `onDone`
+  // closure each time. If the timer effect depended on `onDone` directly,
+  // every such re-render would tear down and restart the in-flight
+  // 1700/2500/5200ms timeouts, potentially never letting the celebration
+  // reach `finish()`.
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
 
   // Shared, idempotent terminal path: every way this component can finish
   // (tap-to-skip, the 5200ms timeout, or reduce-motion convergence) must
@@ -50,7 +60,7 @@ export function EvolutionCelebration({
     toDoneRef.current = null;
     if (!doneFiredRef.current) {
       doneFiredRef.current = true;
-      onDone();
+      onDoneRef.current();
     }
   };
 
@@ -75,8 +85,11 @@ export function EvolutionCelebration({
       if (toTitleRef.current) clearTimeout(toTitleRef.current);
       if (toDoneRef.current) clearTimeout(toDoneRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reduceMotion, onDone]);
+    // Deliberately NOT depending on `onDone` — see `onDoneRef` above; this
+    // effect (and its in-flight timers) must only re-run when `reduceMotion`
+    // itself resolves, never because the caller re-rendered with a new
+    // `onDone` closure identity.
+  }, [reduceMotion]);
 
   // Reduced-motion shortcut: skip straight to the outcome (Task 19 mounts
   // immediately after `onDone`), per the design's own "respect reduce
@@ -84,7 +97,6 @@ export function EvolutionCelebration({
   // the early return below) so hook order never changes between renders.
   useEffect(() => {
     if (reduceMotion) finish();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reduceMotion]);
 
   if (phase === 3 || reduceMotion) {
