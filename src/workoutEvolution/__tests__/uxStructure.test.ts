@@ -108,9 +108,11 @@ describe('Evolution copy parity and semantic boundaries', () => {
   });
 });
 
-describe('EvolutionTicker replaces EvolutionCard on Home only', () => {
-  it('Home renders EvolutionTicker, not EvolutionCard', () => {
-    expect(home).toContain('<EvolutionTicker');
+describe('Home-only evolution HUD replaces the shared EvolutionTicker/EvolutionCard', () => {
+  it('Home renders its own HomeEvoTicker/CycleProgressBlock, not the shared EvolutionTicker/EvolutionCard', () => {
+    expect(home).toContain('<HomeEvoTicker');
+    expect(home).toContain('<CycleProgressBlock');
+    expect(home).not.toContain('<EvolutionTicker');
     expect(home).not.toContain('EvolutionCard');
   });
 
@@ -158,9 +160,9 @@ describe('EvolutionTicker replaces EvolutionCard on Home only', () => {
     expect(ticker).toContain("content.mode === 'ACTION'");
   });
 
-  it('routes the ACTION press through the same onOpenEvolution/EvolutionUnlockScreen flow', () => {
+  it('routes the pending-evolution press through the same onOpenEvolution/EvolutionUnlockScreen flow', () => {
     expect(shell).toContain('onOpenEvolution={() => setShowEvolutionUnlock(true)}');
-    expect(home).toContain('<EvolutionTicker viewModel={evolutionViewModel} onPress={onOpenEvolution} />');
+    expect(home).toContain('<PendingEvolutionBanner viewModel={evolutionViewModel} diff={evolutionDiff} onPress={onOpenEvolution} />');
   });
 
   it('marquee items keep the historical label(faint)/value(accent) split — every value is accented, not just "good" ones', () => {
