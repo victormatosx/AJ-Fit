@@ -58,6 +58,62 @@ describe('normalizeFoodLogRecord', () => {
     expect(food.barcode).toBe('7891000412855');
     expect(food.provenance.license).toBe('odbl_share_alike');
   });
+  it('fills in a reviewed-generic serving unit for a TACO staple with no provider-declared serving (Fase C6)', () => {
+    const food = normalizeFoodLogRecord(rawTaco(), 'v1'); // name: "Arroz, integral, cru"
+    expect(food.servings).toEqual([
+      { id: 'colher-servir', label: '1 colher de servir (60 g)', quantity: 1, gramEquivalent: 60, provenance: 'reviewed_generic' },
+      { id: 'xicara', label: '1 xícara (150 g)', quantity: 1, gramEquivalent: 150, provenance: 'reviewed_generic' },
+    ]);
+    expect(food.defaultServingId).toBe('colher-servir');
+  });
+  it('ovo normalizes with the reviewed-generic "1 unidade (50 g)" serving (Fase C7)', () => {
+    const rawOvo: RawFoodLogRecord = { ...rawTaco(), name: 'Ovo, de galinha, inteiro, cru' };
+    const food = normalizeFoodLogRecord(rawOvo, 'v1');
+    expect(food.servings).toEqual([{ id: 'unidade', label: '1 unidade (50 g)', quantity: 1, gramEquivalent: 50, provenance: 'reviewed_generic' }]);
+    expect(food.defaultServingId).toBe('unidade');
+  });
+
+  it('fruta (maçã) normalizes with the reviewed-generic "1 unidade" serving (Fase C7)', () => {
+    const rawMaca: RawFoodLogRecord = { ...rawTaco(), name: 'Maçã, Fuji, com casca, crua' };
+    const food = normalizeFoodLogRecord(rawMaca, 'v1');
+    expect(food.servings).toEqual([{ id: 'unidade', label: '1 unidade (130 g)', quantity: 1, gramEquivalent: 130, provenance: 'reviewed_generic' }]);
+  });
+
+  it('mussarela normalizes with the reviewed-generic "1 fatia (30 g)" serving (Fase C7)', () => {
+    const rawMussarela: RawFoodLogRecord = { ...rawTaco(), name: 'Queijo, mussarela' };
+    const food = normalizeFoodLogRecord(rawMussarela, 'v1');
+    expect(food.servings).toEqual([{ id: 'fatia', label: '1 fatia (30 g)', quantity: 1, gramEquivalent: 30, provenance: 'reviewed_generic' }]);
+  });
+
+  it('dry-run false-positive #1: "Banana, maçã, crua" normalizes with the banana unit (90 g), never maçã\'s (130 g)', () => {
+    const rawBananaMaca: RawFoodLogRecord = { ...rawTaco(), name: 'Banana, maçã, crua' };
+    const food = normalizeFoodLogRecord(rawBananaMaca, 'v1');
+    expect(food.servings).toEqual([{ id: 'unidade', label: '1 unidade (90 g)', quantity: 1, gramEquivalent: 90, provenance: 'reviewed_generic' }]);
+  });
+
+  it('dry-run false-positive #2: "Pão, de queijo, assado" normalizes with NO generic serving at all', () => {
+    const rawPaoDeQueijo: RawFoodLogRecord = { ...rawTaco(), name: 'Pão, de queijo, assado' };
+    const food = normalizeFoodLogRecord(rawPaoDeQueijo, 'v1');
+    expect(food.servings).toBeUndefined();
+    expect(food.defaultServingId).toBeUndefined();
+  });
+
+  it('never attaches a reviewed-generic serving to a branded/provider source with no official one (OFF, no serving_quantity)', () => {
+    const food = normalizeFoodLogRecord(rawOff(), 'v1');
+    expect(food.servings).toBeUndefined();
+    expect(food.defaultServingId).toBeUndefined();
+  });
+  it('passes through a provider-declared serving as-is, preferring it over the reviewed-generic table', () => {
+    const withServing: RawFoodLogRecord = { ...rawTaco(), servings: [{ id: 'xicara', label: '1 xícara (150 g)', quantity: 1, gramEquivalent: 150, provenance: 'provider_official' }] };
+    const food = normalizeFoodLogRecord(withServing, 'v1');
+    expect(food.servings).toEqual([{ id: 'xicara', label: '1 xícara (150 g)', quantity: 1, gramEquivalent: 150, provenance: 'provider_official' }]);
+    expect(food.defaultServingId).toBe('xicara');
+  });
+  it('rejects a malformed serving unit rather than persisting it', () => {
+    const bad: RawFoodLogRecord = { ...rawTaco(), servings: [{ id: 'bad id!', label: 'x', quantity: 1, provenance: 'provider_official' }] };
+    expect(() => normalizeFoodLogRecord(bad, 'v1')).toThrow('INVALID_SERVING_UNITS');
+  });
+
   it('requires attributionText when attributionRequired is true', () => {
     const bad = { ...rawOff(), provenance: { license: 'odbl_share_alike' as const, attributionRequired: true } };
     expect(() => normalizeFoodLogRecord(bad, 'v1')).toThrow('ATTRIBUTION_TEXT_REQUIRED');

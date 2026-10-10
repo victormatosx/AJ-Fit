@@ -12,6 +12,10 @@ export interface RawOffProduct {
   countries_tags?: string[];
   lang?: string;
   nutriments?: Record<string, number | string | undefined>;
+  /** OFF's own stated reference serving — e.g. `"30 g"`/`"1 lata (350ml)"`. Fase C6, serving units; purely informational without `serving_quantity`. */
+  serving_size?: string;
+  /** OFF's grams-normalized counterpart to `serving_size`, when it provides one. Fase C6. */
+  serving_quantity?: number | string;
 }
 
 export type OffQualityResult =

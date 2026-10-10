@@ -9,8 +9,8 @@
  * `src/nutrition/catalog/normalize.ts`.
  */
 import {
-  FOOD_LOG_LICENSES, FOOD_LOG_SOURCE_TYPES, FOOD_LOG_STATUSES,
-  type FoodLogEntry, type FoodLogLicense, type FoodLogSourceType, type FoodLogStatus,
+  FOOD_LOG_LICENSES, FOOD_LOG_SERVING_PROVENANCES, FOOD_LOG_SOURCE_TYPES, FOOD_LOG_STATUSES,
+  type FoodLogEntry, type FoodLogLicense, type FoodLogServingUnit, type FoodLogSourceType, type FoodLogStatus,
   type NutritionFoodCategory,
 } from '../../types/nutrition';
 import {
@@ -20,6 +20,7 @@ import {
 import { validateNutritionValues } from '../catalog/math';
 import { deriveHyphenCompoundAliases } from './aliases';
 import { classifyFoodLogSubCategory } from './subCategory';
+import { genericServingUnitsFor } from './genericServingRules';
 
 export interface RawFoodLogRecord {
   source: { type: string; sourceId: string; sourceName: string; sourceVersion?: string };
@@ -28,6 +29,28 @@ export interface RawFoodLogRecord {
   brand?: { name: string; productName?: string } | null;
   barcode?: string | null;
   locale?: string;
+  /**
+   * Federated-provider provenance passthrough (C5) — see
+   * `FoodLogEntry.region`/`servingDescription`. `lastSyncedAt` is
+   * deliberately NOT here: it is set once, at materialization time, by
+   * `src/services/foodLogCatalog.ts`'s `ensureFoodLogEntryMaterialized`
+   * (the Firestore `Timestamp` it needs doesn't exist yet at normalize
+   * time, before the record has ever been written).
+   */
+  region?: string | null;
+  servingDescription?: string | null;
+  /**
+   * Fase C6 ("serving units") — provider-sourced natural units
+   * (`provenance: 'provider_official'`), e.g. OFF's `serving_size`/
+   * `serving_quantity` or FatSecret's stated reference serving. Absent
+   * here means "this source declared none"; `normalizeFoodLogRecord`
+   * then falls back to the reviewed-generic table
+   * (`genericServingRules.ts`) for TACO/TBCA records only — never for a
+   * branded/provider source, where "no official serving" must stay
+   * "grams only", not an invented generic guess.
+   */
+  servings?: FoodLogServingUnit[];
+  defaultServingId?: string | null;
   category: string;
   nutritionPer100g: { kcal: number | string; proteinG: number | string; carbsG: number | string;
     fatG: number | string; fiberG?: number | string | null };
@@ -61,6 +84,28 @@ export function normalizeBarcode(value: string | null | undefined): string | nul
 }
 
 export type FoodLogEntryBody = Omit<FoodLogEntry, 'createdAt' | 'updatedAt'>;
+
+const MAX_SERVING_GRAMS = 10_000;
+const MAX_SERVING_ML = 10_000;
+
+/** Validates a source-declared `servings` list — bounded, well-formed, or the whole record fails closed rather than persisting a malformed unit. */
+function normalizeServingUnits(raw: FoodLogServingUnit[] | undefined): FoodLogServingUnit[] {
+  if (raw == null) return [];
+  if (!Array.isArray(raw) || raw.length > 10) throw new Error('INVALID_SERVING_UNITS');
+  return raw.map((unit) => {
+    if (!unit || typeof unit !== 'object') throw new Error('INVALID_SERVING_UNITS');
+    if (typeof unit.id !== 'string' || !/^[a-z0-9-]{1,40}$/u.test(unit.id)) throw new Error('INVALID_SERVING_UNITS');
+    if (typeof unit.label !== 'string' || !unit.label.trim() || unit.label.length > 60) throw new Error('INVALID_SERVING_UNITS');
+    if (typeof unit.quantity !== 'number' || !Number.isFinite(unit.quantity) || unit.quantity <= 0) throw new Error('INVALID_SERVING_UNITS');
+    if (unit.gramEquivalent != null && (!Number.isFinite(unit.gramEquivalent) || unit.gramEquivalent <= 0 || unit.gramEquivalent > MAX_SERVING_GRAMS)) throw new Error('INVALID_SERVING_UNITS');
+    if (unit.mlEquivalent != null && (!Number.isFinite(unit.mlEquivalent) || unit.mlEquivalent <= 0 || unit.mlEquivalent > MAX_SERVING_ML)) throw new Error('INVALID_SERVING_UNITS');
+    if (!FOOD_LOG_SERVING_PROVENANCES.includes(unit.provenance)) throw new Error('INVALID_SERVING_UNITS');
+    return { id: unit.id, label: unit.label.trim(), quantity: unit.quantity,
+      ...(unit.gramEquivalent != null ? { gramEquivalent: unit.gramEquivalent } : {}),
+      ...(unit.mlEquivalent != null ? { mlEquivalent: unit.mlEquivalent } : {}),
+      provenance: unit.provenance };
+  });
+}
 
 export function normalizeFoodLogRecord(raw: RawFoodLogRecord, catalogVersion: string): FoodLogEntryBody {
   if (!raw || typeof raw !== 'object' || !raw.source || typeof raw.source !== 'object') throw new Error('INVALID_FOOD_SOURCE');
@@ -123,12 +168,24 @@ export function normalizeFoodLogRecord(raw: RawFoodLogRecord, catalogVersion: st
   const subCategory = classifyFoodLogSubCategory(name, category, brand != null);
   const searchSourcePriority = type === 'taco' || type === 'tbca' ? 0 : 1;
 
+  const providerServings = normalizeServingUnits(raw.servings);
+  // Priority 3 (round brief): the reviewed-generic table only ever fills
+  // in for a TACO/TBCA record that declared no provider serving of its
+  // own — a branded/provider source with no official serving stays
+  // grams-only (priority 4), never silently upgraded with a generic guess.
+  const servings = providerServings.length > 0 ? providerServings
+    : (type === 'taco' || type === 'tbca') ? genericServingUnitsFor(name) : [];
+  const defaultServingId = raw.defaultServingId ?? (servings[0]?.id ?? null);
+
   return {
     id: foodLogId(type as FoodLogSourceType, sourceId),
     source: { type: type as FoodLogSourceType, sourceId, sourceName,
       ...(raw.source.sourceVersion ? { sourceVersion: raw.source.sourceVersion.trim() } : {}) },
     name, aliases, ...(brand ? { brand } : {}), ...(barcode ? { barcode } : {}),
     locale, category, subCategory, nutritionPer100g, status, catalogVersion,
+    ...(raw.region ? { region: raw.region } : {}),
+    ...(raw.servingDescription ? { servingDescription: raw.servingDescription } : {}),
+    ...(servings.length > 0 ? { servings, defaultServingId } : {}),
     provenance: { license, attributionRequired: raw.provenance.attributionRequired,
       ...(raw.provenance.attributionText ? { attributionText: raw.provenance.attributionText.trim() } : {}) },
     searchPrefixes: computeSearchPrefixes(name, aliases), searchSourcePriority,

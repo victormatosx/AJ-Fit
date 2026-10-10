@@ -552,6 +552,44 @@ export interface FoodLogProvenance {
 }
 
 /**
+ * Fase C6 ("serving units") — where a `FoodLogServingUnit` came from, in
+ * the exact priority order the round brief specifies: `provider_official`
+ * (the source's own stated reference serving — OFF's `serving_size`/
+ * `serving_quantity`, FatSecret's `food_description` reference serving),
+ * `source_declared` reserved for a future source that declares servings
+ * through a different mechanism than "the one official reference
+ * serving" (e.g. a full servings LIST), and `reviewed_generic` for the
+ * hand-curated staple-food rules in `src/nutrition/foodLog/
+ * genericServingRules.ts` — never a silently-guessed density/unit
+ * conversion.
+ */
+export const FOOD_LOG_SERVING_PROVENANCES = ['provider_official', 'source_declared', 'reviewed_generic'] as const;
+export type FoodLogServingProvenance = (typeof FOOD_LOG_SERVING_PROVENANCES)[number];
+
+/**
+ * One natural logging unit for a food — a quantity/UX layer over
+ * `nutritionPer100g`, never a second source of truth for macros
+ * (`src/nutrition/catalog/servings.ts`'s `nutrientsForServing` always
+ * derives a serving's macros FROM `nutritionPer100g`, this unit only
+ * supplies the gram/ml equivalence). `quantity` is almost always `1`
+ * (e.g. "1 unidade", "1 lata") — kept explicit rather than implied so a
+ * unit like "2 fatias" can exist without a second, redundant entry.
+ * `gramEquivalent`/`mlEquivalent` are deliberately BOTH optional and
+ * independent: a unit with only `mlEquivalent` (no density data) cannot
+ * be converted to grams and is informational/display-only until a gram
+ * equivalent exists — `nutrientsForServing` returns `null` for it rather
+ * than guessing a density.
+ */
+export interface FoodLogServingUnit {
+  id: string;
+  label: string;
+  quantity: number;
+  gramEquivalent?: number | null;
+  mlEquivalent?: number | null;
+  provenance: FoodLogServingProvenance;
+}
+
+/**
  * Finer-grained, logging-only classification (Fase C3 round brief Part 7)
  * — purely additive metadata alongside `category` (which stays the
  * generation taxonomy, untouched). Never read by the Nutrition
@@ -587,6 +625,32 @@ export interface FoodLogEntry<TTimestamp = unknown> {
   searchPrefixes: string[];
   /** Storage-level pre-ranking: generic composition tables before branded sources inside the bounded Firestore candidate pool. */
   searchSourcePriority: 0 | 1;
+  /**
+   * Federated-provider provenance (C5, FatSecret round) — additive, optional:
+   * absent on every TACO/OFF record imported before this round. `region`
+   * is the provider's own localization (e.g. `'BR'`), not `locale` above
+   * (`locale` is the record's language/formatting locale; a provider can
+   * localize data to a region independent of language). `servingDescription`
+   * is the provider's human-readable serving text (e.g. "1 lata (350ml)")
+   * — informational only, `nutritionPer100g` stays the one normalized unit
+   * every source is converted into. `lastSyncedAt` is when this record was
+   * last fetched/confirmed against the external provider; absent means
+   * "materialized once, never re-synced".
+   */
+  region?: string | null;
+  servingDescription?: string | null;
+  lastSyncedAt?: TTimestamp | null;
+  /**
+   * Fase C6 — natural logging units (ovo/unidade, mussarela/fatia, Coca
+   * Zero/lata, ...), additive and optional: absent on every record
+   * imported before this round, and on any record for which no
+   * confidently-sourced unit exists (grams/ml stays the only input then —
+   * the round brief's documented priority-4 fallback). `defaultServingId`
+   * (when set) must reference one of `servings[].id`; absent means "no
+   * unit is pre-selected, grams is the default input."
+   */
+  servings?: FoodLogServingUnit[];
+  defaultServingId?: string | null;
   createdAt: TTimestamp;
   updatedAt: TTimestamp;
 }

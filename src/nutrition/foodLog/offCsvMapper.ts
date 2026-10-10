@@ -31,6 +31,10 @@ export function offCsvRowToProduct(line: string, layout: OffCsvLayout): RawOffPr
     const nutrient = value(key).trim();
     if (nutrient) nutriments[key] = nutrient;
   }
+  // Fase C6 ("serving units") — optional columns: not in `REQUIRED_COLUMNS`
+  // (older exports/fixtures lack them), present in OFF's real bulk export.
+  const servingSize = layout.columns.has('serving_size') ? value('serving_size').trim() : '';
+  const servingQuantity = layout.columns.has('serving_quantity') ? value('serving_quantity').trim() : '';
   return {
     code: value('code').trim(),
     product_name: value('product_name').trim(),
@@ -38,6 +42,8 @@ export function offCsvRowToProduct(line: string, layout: OffCsvLayout): RawOffPr
     categories_tags: splitTags(value('categories_tags')),
     countries_tags: splitTags(value('countries_tags')),
     nutriments,
+    ...(servingSize ? { serving_size: servingSize } : {}),
+    ...(servingQuantity ? { serving_quantity: servingQuantity } : {}),
   };
 }
 

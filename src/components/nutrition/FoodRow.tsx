@@ -8,7 +8,7 @@ import { formatFoodDisplayName } from '../../nutrition/ui/formatFoodDisplayName'
 
 /** Used by FoodSearch, MealDetails and Recipe ingredient rows (`components.md` §7). */
 export function FoodRow({
-  name: rawName, brandName, grams, kcal, proteinG, per100g, origin, raw, onPress, trailing, favorited, onToggleFavorite,
+  name: rawName, brandName, grams, kcal, proteinG, per100g, servingLabel, origin, raw, onPress, trailing, favorited, onToggleFavorite,
 }: {
   /** Canonical catalog name — formatted for display here only; never mutated for storage/search. */
   name: string;
@@ -34,6 +34,15 @@ export function FoodRow({
    * `grams` amount is unambiguous without it.
    */
   per100g?: boolean;
+  /**
+   * Fase C7 ("serving units" UI) — when the caller already resolved a
+   * food's default natural unit, `kcal`/`proteinG` are the macros FOR
+   * THAT SERVING (not per-100g), and this is the unit's own label (e.g.
+   * "1 unidade (50 g)") shown instead of "por 100 g". Takes priority over
+   * `per100g` when both are given; a food with no natural unit keeps the
+   * existing `per100g` behavior unchanged.
+   */
+  servingLabel?: string | null;
   origin?: 'catalog' | 'custom' | 'recipe' | 'food_log';
   onPress?: () => void;
   trailing?: React.ReactNode;
@@ -71,7 +80,7 @@ export function FoodRow({
           {[brandName, grams != null ? `${grams}${t('units.gramsShort')}` : null,
             kcal != null ? `${Math.round(kcal)} ${t('units.kcal')}` : null,
             grams == null && proteinG != null ? `${proteinG} ${t('units.gramsShort')} ${t('registerMeal.proteinShort')}` : null,
-            grams == null && per100g ? t('registerMeal.per100g') : null].filter(Boolean).join(' · ')}
+            grams == null && (servingLabel ?? (per100g ? t('registerMeal.per100g') : null))].filter(Boolean).join(' · ')}
         </Text>
       ) : null}
     </View>

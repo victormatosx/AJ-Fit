@@ -5,6 +5,8 @@ export { requestNutritionMealAlternative } from './nutrition/generation/mealAlte
 export { restoreNutritionPlan } from './nutrition/plans/restore';
 export { onNutritionGenerationCompleted } from './notifications/nutritionNotifications';
 export { monitorNutritionAiOperations } from './nutrition/observability/alerts';
+export { searchExternalFoodFatSecret } from './nutrition/foodLog/searchExternalFood';
+export { materializeExternalFoodFatSecret } from './nutrition/foodLog/materializeExternalFood';
 import {
   handleRevenueCatWebhook,
   REVENUECAT_API_SECRET_KEY,

@@ -15,14 +15,31 @@ import type { RawFoodLogRecord } from './normalize';
 export const OFF_ATTRIBUTION_TEXT = 'Dados de Open Food Facts (openfoodfacts.org), disponiveis sob licenca ODbL. '
   + 'Contribua e saiba mais em https://br.openfoodfacts.org.';
 
+/**
+ * Fase C6 ("serving units") — OFF's `serving_quantity` is already
+ * grams-normalized by OFF itself (unlike `serving_size`, free text like
+ * `"1 lata (350ml)"`), so it needs no density guessing: it IS the gram
+ * equivalent. Returns `null` when OFF didn't provide one — never
+ * fabricated from `serving_size` text alone.
+ */
+function offServingUnit(product: RawOffProduct): RawFoodLogRecord['servings'] {
+  const grams = typeof product.serving_quantity === 'number' ? product.serving_quantity
+    : typeof product.serving_quantity === 'string' ? Number(product.serving_quantity) : null;
+  if (grams == null || !Number.isFinite(grams) || grams <= 0 || grams > 10_000) return undefined;
+  const label = product.serving_size?.trim() || `${grams} g`;
+  return [{ id: 'porcao', label: label.length > 60 ? `${grams} g` : label, quantity: 1, gramEquivalent: grams, provenance: 'provider_official' }];
+}
+
 export function toOffFoodLogRecord(product: RawOffProduct, catalogVersion: string): RawFoodLogRecord {
   const fiber = offNutrientValue(product.nutriments, 'fiber_100g');
   const brand = firstOffBrand(product.brands);
+  const servings = offServingUnit(product);
   return {
     source: { type: 'off', sourceId: product.code!.trim(), sourceName: 'Open Food Facts', sourceVersion: catalogVersion },
     name: product.product_name!.trim(),
     barcode: product.code!.trim(),
     ...(brand ? { brand: { name: brand }, aliases: [brand] } : {}),
+    ...(servings ? { servings } : {}),
     locale: product.lang === 'pt' ? 'pt-BR' : (product.lang ?? 'pt-BR'),
     category: mapOffCategory(product.categories_tags),
     nutritionPer100g: {

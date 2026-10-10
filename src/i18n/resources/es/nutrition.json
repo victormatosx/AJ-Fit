@@ -456,6 +456,8 @@
     "itemsTitle": "ALIMENTOS DE ESTA COMIDA",
     "noFoodsYet": "Todavía no agregaste alimentos.",
     "gramsLabel": "¿Cuántos gramos consumiste?",
+    "unitLabel": "Cantidad",
+    "unitGrams": "Gramos",
     "proteinShort": "proteína",
     "per100g": "por 100 g",
     "close": "Listo",

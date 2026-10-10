@@ -11,7 +11,19 @@ const files = [
     'calculateRmr', 'calculateTdee', 'distributeMeals', 'errors', 'resolveGoalCategory',
     'validateInput'].map((name) => `nutrition/engine/${name}.ts`),
   'nutrition/catalog/math.ts',
+  'nutrition/catalog/normalize.ts',
   'nutrition/analytics/contract.ts',
+  // Fase C8 (security fix: server-side materialization) — the foodLogCatalog
+  // normalization chain, pure/no-firebase, reused as-is by
+  // `functions/src/nutrition/foodLog/materializeExternalFood.ts` so the
+  // backend never re-implements (and risks drifting from) the exact same
+  // validation every other food-log source already goes through.
+  'nutrition/foodLog/normalize.ts',
+  'nutrition/foodLog/aliases.ts',
+  'nutrition/foodLog/subCategory.ts',
+  'nutrition/foodLog/genericServingRules.ts',
+  'nutrition/foodLog/fatsecretMapper.ts',
+  'nutrition/foodLog/fatsecretFoodGetMapper.ts',
 ];
 const shim = `export type Sex = 'm' | 'f';
 export type PrimaryGoal = 'gain_muscle' | 'lose_fat' | 'strength' | 'conditioning' | 'health';

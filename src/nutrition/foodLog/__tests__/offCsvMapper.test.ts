@@ -29,4 +29,23 @@ describe('OFF official CSV mapper', () => {
   it('fails closed when the upstream export loses a required column', () => {
     expect(() => parseOffCsvHeader('code\tproduct_name')).toThrow('OFF_CSV_MISSING_COLUMNS');
   });
+
+  it('reads serving_size/serving_quantity when the export provides them (Fase C6, optional columns)', () => {
+    const headerWithServing = `${header}\tserving_size\tserving_quantity`;
+    const product = offCsvRowToProduct([
+      '7891000412855', 'Achocolatado', 'Nestlé', 'en:beverages', 'en:brazil',
+      '86', '', '', '3.5', '13', '2.1', '0.4', '30 g', '30',
+    ].join('\t'), parseOffCsvHeader(headerWithServing));
+    expect(product.serving_size).toBe('30 g');
+    expect(product.serving_quantity).toBe('30');
+  });
+
+  it('omits serving_size/serving_quantity when the export (or an older fixture) lacks those columns', () => {
+    const product = offCsvRowToProduct([
+      '7891000412855', 'Achocolatado', 'Nestlé', 'en:beverages', 'en:brazil',
+      '86', '', '', '3.5', '13', '2.1', '0.4',
+    ].join('\t'), parseOffCsvHeader(header));
+    expect(product.serving_size).toBeUndefined();
+    expect(product.serving_quantity).toBeUndefined();
+  });
 });

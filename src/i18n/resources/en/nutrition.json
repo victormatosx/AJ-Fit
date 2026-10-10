@@ -456,6 +456,8 @@
     "itemsTitle": "FOODS IN THIS MEAL",
     "noFoodsYet": "No foods added yet.",
     "gramsLabel": "How many grams did you have?",
+    "unitLabel": "Amount",
+    "unitGrams": "Grams",
     "proteinShort": "protein",
     "per100g": "per 100 g",
     "close": "Done",

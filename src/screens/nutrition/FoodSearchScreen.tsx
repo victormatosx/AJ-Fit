@@ -12,9 +12,14 @@ import { SkeletonBlock } from '../../components/nutrition/NutritionPrimitives';
 import { useTheme } from '../../theme';
 import { useAuth } from '../../state/AuthContext';
 import { searchNutritionCatalog, listCustomFoods } from '../../services/nutritionFoods';
-import { createLocalFoodLogSearchProvider } from '../../services/foodLogCatalog';
+import { createLocalFoodLogSearchProvider, ensureFoodLogEntryMaterialized } from '../../services/foodLogCatalog';
+import { createFatSecretSearchProvider } from '../../nutrition/foodLog/fatsecretProvider';
+import { createFederatedFoodLogSearchProvider } from '../../nutrition/foodLog/federatedSearchProvider';
+import { resolveDefaultServingUnit, nutrientsForServing } from '../../nutrition/catalog/servings';
 import { listNutritionRecipes, calculateStoredRecipeNutrition } from '../../services/nutritionRecipes';
-import type { FoodLogSourceType, NutritionCustomFood, NutritionFoodNutritionValues, NutritionFoodSourceType, NutritionRecipe } from '../../types/nutrition';
+import type {
+  FoodLogEntry, FoodLogSourceType, NutritionCustomFood, NutritionFoodNutritionValues, NutritionFoodSourceType, NutritionRecipe,
+} from '../../types/nutrition';
 import { countBucket, durationBucket, trackNutritionEvent } from '../../nutrition/analytics';
 import { CreateCustomFoodScreen } from './CreateCustomFoodScreen';
 
@@ -38,8 +43,16 @@ interface CatalogSearchResult {
 
 const DEBOUNCE_MS = 350;
 
-/** `FoodSearchProvider` (Fase C3 Part 10) — swapping/federating with an external provider later is a change here, not in this screen's render logic. */
-const localFoodLogSearchProvider = createLocalFoodLogSearchProvider();
+/**
+ * `FoodSearchProvider` (Fase C3 Part 10) — swapping/federating with an
+ * external provider later is a change here, not in this screen's render
+ * logic. Fase C5: now the local-first federated provider (local +
+ * FatSecret fallback), same interface as the plain local provider it
+ * replaces.
+ */
+const localFoodLogSearchProvider = createFederatedFoodLogSearchProvider({
+  localProvider: createLocalFoodLogSearchProvider(), externalProvider: createFatSecretSearchProvider(),
+});
 
 /**
  * Reusable full-screen picker (`08_frontend/screens.md` §7) — opened as a
@@ -94,6 +107,9 @@ export function FoodSearchScreen({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchRequestRef = useRef(0);
   const excluded = useMemo(() => new Set(excludeIds), [excludeIds]);
+  /** Fase C5 — `results` only keeps the slim render projection; this holds the full `FoodLogEntry` per id so selecting a row can materialize a fresh external result before resolving `foodId`. */
+  const foodLogEntriesRef = useRef<Map<string, FoodLogEntry<Timestamp>>>(new Map());
+  const [materializingId, setMaterializingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!visible || !user) return;
@@ -109,10 +125,13 @@ export function FoodSearchScreen({
   const recentIdSet = useMemo(() => (recentFoodIds ? new Set(recentFoodIds) : undefined), [recentFoodIds]);
 
   const runCatalogSearch = useCallback((query: string, cursorId?: string) => (catalog === 'logging'
-    ? localFoodLogSearchProvider.search(query, { cursor: cursorId, favoriteIds: favoriteIdSet, recentIds: recentIdSet }).then(({ foods, nextCursor }) => ({
-      results: foods.map((food): CatalogSearchResult => ({ id: food.id, name: food.name, brandName: food.brand?.name, nutritionPer100g: food.nutritionPer100g, sourceType: food.source.type })),
-      nextCursor,
-    }))
+    ? localFoodLogSearchProvider.search(query, { cursor: cursorId, favoriteIds: favoriteIdSet, recentIds: recentIdSet }).then(({ foods, nextCursor }) => {
+      foods.forEach((food) => foodLogEntriesRef.current.set(food.id, food));
+      return {
+        results: foods.map((food): CatalogSearchResult => ({ id: food.id, name: food.name, brandName: food.brand?.name, nutritionPer100g: food.nutritionPer100g, sourceType: food.source.type })),
+        nextCursor,
+      };
+    })
     : searchNutritionCatalog(query, { cursor: cursorId }).then(({ foods, nextCursor }) => ({
       results: foods.map((food): CatalogSearchResult => ({ id: food.id, name: food.name, brandName: food.brand?.name, nutritionPer100g: food.nutritionPer100g, sourceType: food.source.type })),
       nextCursor,
@@ -185,6 +204,20 @@ export function FoodSearchScreen({
       properties: { catalogMode: catalog, origin: pick.origin, ...(pick.sourceType ? { source: pick.sourceType } : {}) } });
     onSelect(pick);
   }, [catalog, onSelect]);
+
+  /** Materializes a possibly-fresh external (`fatsecret`) result into `foodLogCatalog` before resolving its final id — a no-op read for every local-sourced result. */
+  const selectFoodLogResult = async (result: CatalogSearchResult) => {
+    const origin: 'catalog' | 'food_log' = catalog === 'logging' ? 'food_log' : 'catalog';
+    const raw = foodLogEntriesRef.current.get(result.id);
+    if (!raw) { trackedSelect({ foodId: result.id, name: result.name, origin, nutritionPer100g: result.nutritionPer100g, sourceType: result.sourceType }); return; }
+    setMaterializingId(result.id);
+    try {
+      const materialized = await ensureFoodLogEntryMaterialized(raw);
+      trackedSelect({ foodId: materialized.id, name: materialized.name, origin, nutritionPer100g: materialized.nutritionPer100g, sourceType: materialized.source.type });
+    } finally {
+      setMaterializingId(null);
+    }
+  };
 
   const selectRecipe = async (recipe: NutritionRecipe<Timestamp>) => {
     if (!user) return;
@@ -265,12 +298,18 @@ export function FoodSearchScreen({
                 ))}
                 {visibleResults.map((food) => {
                   const origin: 'catalog' | 'food_log' = catalog === 'logging' ? 'food_log' : 'catalog';
+                  // Fase C7 — shows the food's default natural unit (ovo -> "1 unidade", mussarela -> "1 fatia") instead of always "por 100 g", when one exists.
+                  const raw = origin === 'food_log' ? foodLogEntriesRef.current.get(food.id) : undefined;
+                  const defaultUnit = raw ? resolveDefaultServingUnit(raw.servings, raw.defaultServingId) : null;
+                  const servingNutrients = defaultUnit ? nutrientsForServing(food.nutritionPer100g, defaultUnit) : null;
                   return (
                     <FoodRow key={food.id} name={food.name} brandName={food.brandName} origin={origin}
-                      kcal={food.nutritionPer100g.kcal} proteinG={food.nutritionPer100g.proteinG} per100g
+                      kcal={servingNutrients?.kcal ?? food.nutritionPer100g.kcal} proteinG={servingNutrients?.proteinG ?? food.nutritionPer100g.proteinG}
+                      per100g={!servingNutrients} servingLabel={defaultUnit?.label}
                       favorited={favoriteFoodIds?.includes(food.id)}
                       onToggleFavorite={onToggleFavoriteFood ? () => onToggleFavoriteFood(food.id) : undefined}
-                      onPress={() => trackedSelect({ foodId: food.id, name: food.name, origin, nutritionPer100g: food.nutritionPer100g, sourceType: food.sourceType })} />
+                      trailing={materializingId === food.id ? <ActivityIndicator size="small" color={theme.colors.textFaint} /> : undefined}
+                      onPress={() => { void selectFoodLogResult(food); }} />
                   );
                 })}
                 {cursor ? (

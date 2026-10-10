@@ -25,7 +25,7 @@ describe('RegisterMealScreen — single screen, no wizard', () => {
     // Food Facts), not the curated generation catalog — same inline
     // pattern as before, different catalog service.
     expect(source).toMatch(/import \{ listCustomFoods \} from '\.\.\/\.\.\/services\/nutritionFoods'/);
-    expect(source).toMatch(/import \{ createLocalFoodLogSearchProvider \} from '\.\.\/\.\.\/services\/foodLogCatalog'/);
+    expect(source).toMatch(/import \{ createLocalFoodLogSearchProvider, ensureFoodLogEntryMaterialized \} from '\.\.\/\.\.\/services\/foodLogCatalog'/);
     expect(source).toMatch(/localFoodLogSearchProvider\.search\(query/);
     expect(source).toMatch(/recentIds: recentIdSet/);
     expect(source).toMatch(/cursor, favoriteIds: favoriteIdSet, recentIds: recentIdSet/);
@@ -130,6 +130,14 @@ describe('RegisterMealScreen — single screen, no wizard', () => {
   it('each listed item exposes an edit-grams and a remove action', () => {
     expect(source).toMatch(/onPress=\{\(\) => openEditGrams\(item\)\}/);
     expect(source).toMatch(/onPress=\{\(\) => confirmRemove\(item\)\}/);
+  });
+
+  it('offers a natural-unit picker (Fase C6) but keeps manual grams entry always available', () => {
+    expect(source).toMatch(/servableUnits\.map\(\(unit\) => \(/);
+    expect(source).toMatch(/onPress=\{\(\) => selectServingUnit\(unit\)\}/);
+    // The "gramas" chip (manual entry) always renders too, and the grams TextInput is unconditional — never hidden behind the unit picker.
+    expect(source).toMatch(/onPress=\{\(\) => selectServingUnit\(null\)\}/);
+    expect(source).toMatch(/value=\{gramsText\} onChangeText=\{setGramsText\}/);
   });
 
   it('has a clear close action and never breaks layout under the keyboard', () => {

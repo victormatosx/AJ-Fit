@@ -14,19 +14,26 @@ import { SkeletonBlock } from '../../components/nutrition/NutritionPrimitives';
 import { useTheme } from '../../theme';
 import { useAuth } from '../../state/AuthContext';
 import { listCustomFoods } from '../../services/nutritionFoods';
-import { createLocalFoodLogSearchProvider } from '../../services/foodLogCatalog';
+import { createLocalFoodLogSearchProvider, ensureFoodLogEntryMaterialized } from '../../services/foodLogCatalog';
+import { createFatSecretSearchProvider } from '../../nutrition/foodLog/fatsecretProvider';
+import { createFederatedFoodLogSearchProvider } from '../../nutrition/foodLog/federatedSearchProvider';
 import { nutrientsForGrams } from '../../nutrition/catalog/math';
+import { nutrientsForServing, resolveDefaultServingUnit, servingGrams } from '../../nutrition/catalog/servings';
 import { emptyTotals, foodPickOriginToDiarySource, isPositiveGrams } from '../../nutrition/ui/diaryModel';
 import { countBucket, durationBucket, trackNutritionEvent } from '../../nutrition/analytics';
 import { formatFoodDisplayName } from '../../nutrition/ui/formatFoodDisplayName';
 import {
-  NUTRITION_MEAL_SLOTS, type FoodLogEntry, type FoodLogSourceType, type NutritionCustomFood, type NutritionFoodNutritionValues,
-  type NutritionLoggedFoodItem, type NutritionLoggedFoodSource, type NutritionMealSlot, type NutritionPlanFoodItem,
+  NUTRITION_MEAL_SLOTS, type FoodLogEntry, type FoodLogServingUnit, type FoodLogSourceType, type NutritionCustomFood,
+  type NutritionFoodNutritionValues, type NutritionLoggedFoodItem, type NutritionLoggedFoodSource,
+  type NutritionMealSlot, type NutritionPlanFoodItem,
 } from '../../types/nutrition';
 import type { NutritionDailyLogDoc } from '../../services/nutritionDiary';
 
 const DEBOUNCE_MS = 350;
-const localFoodLogSearchProvider = createLocalFoodLogSearchProvider();
+/** Fase C5 — local-first federated provider (local + FatSecret fallback); same `FoodSearchProvider` interface `localFoodLogSearchProvider` had. */
+const localFoodLogSearchProvider = createFederatedFoodLogSearchProvider({
+  localProvider: createLocalFoodLogSearchProvider(), externalProvider: createFatSecretSearchProvider(),
+});
 
 interface FoodPick {
   foodId: string;
@@ -34,6 +41,9 @@ interface FoodPick {
   origin: 'food_log' | 'custom';
   nutritionPer100g: NutritionFoodNutritionValues;
   sourceType?: FoodLogSourceType;
+  /** Fase C6 ("serving units") — absent for custom foods/anything with no confidently-sourced natural unit; grams stays the only input then. */
+  servings?: FoodLogServingUnit[];
+  defaultServingId?: string | null;
 }
 
 type GramsStep = { mode: 'add'; food: FoodPick } | { mode: 'edit'; item: NutritionLoggedFoodItem };
@@ -95,12 +105,16 @@ export function RegisterMealScreen({
 
   const [gramsStep, setGramsStep] = useState<GramsStep | null>(null);
   const [gramsText, setGramsText] = useState('100');
+  /** Fase C6 — which natural unit (if any) is driving `gramsText`; `null` means manual/plain grams. Selecting a unit recomputes `gramsText`, but it stays a normal editable number afterward. */
+  const [selectedServingId, setSelectedServingId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /** Fase C5 — a fresh FatSecret result isn't a real `foodLogCatalog` doc yet; brief inline wait while `ensureFoodLogEntryMaterialized` upserts it before grams entry opens. */
+  const [materializingId, setMaterializingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!visible) {
       setSlot(NUTRITION_MEAL_SLOTS[0]); setSlotMenuOpen(false); setSearchText(''); setCatalogResults([]); setCursor(null);
-      setGramsStep(null); setBusy(false);
+      setGramsStep(null); setBusy(false); setSelectedServingId(null);
       return;
     }
     setSlot(initialSlot ?? NUTRITION_MEAL_SLOTS[0]);
@@ -166,13 +180,39 @@ export function RegisterMealScreen({
       fatG: gramsStep.item.snapshot.fatG / (gramsStep.item.grams / 100),
       fiberG: gramsStep.item.snapshot.fiberG == null ? null : gramsStep.item.snapshot.fiberG / (gramsStep.item.grams / 100) } : null;
   const preview = stepNutritionPer100g && gramsValid ? nutrientsForGrams(stepNutritionPer100g, gramsValue) : null;
+  /** Fase C6 — only units with a confident gram basis are selectable; absent/ml-only units never appear here (grams stays the only input for them). */
+  const servableUnits = gramsStep?.mode === 'add' ? (gramsStep.food.servings ?? []).filter((unit) => servingGrams(unit) != null) : [];
+  const selectServingUnit = (unit: FoodLogServingUnit | null) => {
+    setSelectedServingId(unit?.id ?? null);
+    if (unit) { const grams = servingGrams(unit); if (grams != null) setGramsText(String(grams)); }
+  };
 
   const openAddGrams = (food: FoodPick) => {
     trackNutritionEvent({ name: 'nutrition_catalog_item_selected',
       properties: { catalogMode: 'logging', origin: food.origin, ...(food.sourceType ? { source: food.sourceType } : {}) } });
-    setGramsStep({ mode: 'add', food }); setGramsText('100');
+    // Fase C6 — defaults to the food's natural unit when it has one; `gramsText` is always a plain editable number either way.
+    const defaultUnit = resolveDefaultServingUnit(food.servings, food.defaultServingId);
+    const defaultGrams = defaultUnit ? servingGrams(defaultUnit) : null;
+    setGramsStep({ mode: 'add', food });
+    setSelectedServingId(defaultUnit?.id ?? null);
+    setGramsText(defaultGrams != null ? String(defaultGrams) : '100');
   };
-  const openEditGrams = (item: NutritionLoggedFoodItem) => { setGramsStep({ mode: 'edit', item }); setGramsText(String(item.grams)); };
+  const openEditGrams = (item: NutritionLoggedFoodItem) => {
+    setGramsStep({ mode: 'edit', item }); setSelectedServingId(null); setGramsText(String(item.grams));
+  };
+
+  /** Materializes a possibly-fresh external (`fatsecret`) result into `foodLogCatalog` before grams entry opens — a no-op read for every local-sourced result. */
+  const selectCatalogFood = async (food: FoodLogEntry<Timestamp>) => {
+    setMaterializingId(food.id);
+    try {
+      const materialized = await ensureFoodLogEntryMaterialized(food);
+      openAddGrams({ foodId: materialized.id, name: materialized.name, origin: 'food_log',
+        nutritionPer100g: materialized.nutritionPer100g, sourceType: materialized.source.type,
+        servings: materialized.servings, defaultServingId: materialized.defaultServingId });
+    } finally {
+      setMaterializingId(null);
+    }
+  };
 
   const confirmGrams = async () => {
     if (!gramsStep || !gramsValid || busy) return;
@@ -306,13 +346,20 @@ export function RegisterMealScreen({
                         onToggleFavorite={onToggleFavoriteFood ? () => onToggleFavoriteFood(food.id) : undefined}
                         onPress={() => openAddGrams({ foodId: food.id, name: food.name, origin: 'custom', nutritionPer100g: food.nutritionPer100g })} />
                     ))}
-                    {catalogResults.map((food) => (
-                      <FoodRow key={food.id} name={food.name} brandName={food.brand?.name} origin="food_log"
-                        kcal={food.nutritionPer100g.kcal} proteinG={food.nutritionPer100g.proteinG} per100g
-                        favorited={favoriteFoodIds?.includes(food.id)}
-                        onToggleFavorite={onToggleFavoriteFood ? () => onToggleFavoriteFood(food.id) : undefined}
-                        onPress={() => openAddGrams({ foodId: food.id, name: food.name, origin: 'food_log', nutritionPer100g: food.nutritionPer100g, sourceType: food.source.type })} />
-                    ))}
+                    {catalogResults.map((food) => {
+                      // Fase C7 — shows the food's default natural unit instead of always "por 100 g", when one exists.
+                      const defaultUnit = resolveDefaultServingUnit(food.servings, food.defaultServingId);
+                      const servingNutrients = defaultUnit ? nutrientsForServing(food.nutritionPer100g, defaultUnit) : null;
+                      return (
+                        <FoodRow key={food.id} name={food.name} brandName={food.brand?.name} origin="food_log"
+                          kcal={servingNutrients?.kcal ?? food.nutritionPer100g.kcal} proteinG={servingNutrients?.proteinG ?? food.nutritionPer100g.proteinG}
+                          per100g={!servingNutrients} servingLabel={defaultUnit?.label}
+                          favorited={favoriteFoodIds?.includes(food.id)}
+                          onToggleFavorite={onToggleFavoriteFood ? () => onToggleFavoriteFood(food.id) : undefined}
+                          trailing={materializingId === food.id ? <ActivityIndicator size="small" color={theme.colors.textFaint} /> : undefined}
+                          onPress={() => { void selectCatalogFood(food); }} />
+                      );
+                    })}
                     {cursor ? (
                       <Pressable onPress={loadMore} disabled={loadingMore} style={{ paddingVertical: 14, alignItems: 'center' }}>
                         {loadingMore ? <ActivityIndicator color={theme.colors.primaryEmphasis} /> : (
@@ -383,6 +430,37 @@ export function RegisterMealScreen({
             <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 16, color: theme.colors.textPrimary }}>
               {formatFoodDisplayName(gramsStep.mode === 'add' ? gramsStep.food.name : gramsStep.item.snapshot.name)}
             </Text>
+            {servableUnits.length > 0 ? (
+              <View style={{ gap: 8 }}>
+                <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 13, color: theme.colors.textPrimary }}>{t('registerMeal.unitLabel')}</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {servableUnits.map((unit) => (
+                    <Pressable
+                      key={unit.id} onPress={() => selectServingUnit(unit)} accessibilityRole="button" accessibilityLabel={unit.label}
+                      style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: theme.radii.md,
+                        backgroundColor: selectedServingId === unit.id ? theme.colors.primaryEmphasis : theme.colors.surface,
+                        borderWidth: 1, borderColor: selectedServingId === unit.id ? theme.colors.primaryEmphasis : theme.colors.border }}
+                    >
+                      <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 13,
+                        color: selectedServingId === unit.id ? theme.colors.primaryForeground : theme.colors.textPrimary }}>
+                        {unit.label}
+                      </Text>
+                    </Pressable>
+                  ))}
+                  <Pressable
+                    onPress={() => selectServingUnit(null)} accessibilityRole="button" accessibilityLabel={t('registerMeal.unitGrams')}
+                    style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: theme.radii.md,
+                      backgroundColor: selectedServingId === null ? theme.colors.primaryEmphasis : theme.colors.surface,
+                      borderWidth: 1, borderColor: selectedServingId === null ? theme.colors.primaryEmphasis : theme.colors.border }}
+                  >
+                    <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 13,
+                      color: selectedServingId === null ? theme.colors.primaryForeground : theme.colors.textPrimary }}>
+                      {t('registerMeal.unitGrams')}
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : null}
             <View style={{ gap: 8 }}>
               <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 13, color: theme.colors.textPrimary }}>{t('registerMeal.gramsLabel')}</Text>
               <TextInput

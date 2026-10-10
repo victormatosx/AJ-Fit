@@ -456,6 +456,8 @@
     "itemsTitle": "ALIMENTOS DESTA REFEIÇÃO",
     "noFoodsYet": "Nenhum alimento adicionado ainda.",
     "gramsLabel": "Quantos gramas você consumiu?",
+    "unitLabel": "Quantidade",
+    "unitGrams": "Gramas",
     "proteinShort": "proteína",
     "per100g": "por 100 g",
     "close": "Concluir",

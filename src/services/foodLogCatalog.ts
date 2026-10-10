@@ -1,7 +1,7 @@
 import { collection, doc, documentId, getDoc, getDocs, limit, orderBy,
   query, startAfter, where, type Firestore, type QueryConstraint, type Timestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import type { FoodLogCatalogMeta, FoodLogEntry } from '../types/nutrition';
+import type { FoodLogCatalogMeta, FoodLogEntry, FoodLogSourceType } from '../types/nutrition';
 import { normalizeSearchText } from '../nutrition/foodLog/normalize';
 import { dedupeFoodLogSearchResults, rankFoodLogResults } from '../nutrition/foodLog/rank';
 import { buildFoodLogSearchPlan, matchesRefineWords } from '../nutrition/foodLog/search';
@@ -17,8 +17,8 @@ export { rankFoodLogResults };
  * imported by Nutrition Engine/generation code; see
  * `docs/nutrition/catalog-expansion/03_canonical_model.md`.
  */
-export async function loadFoodLogEntry(foodId: string): Promise<FoodLogEntry<Timestamp> | null> {
-  const snap = await getDoc(doc(db, 'foodLogCatalog', foodId));
+export async function loadFoodLogEntry(foodId: string, firestore: Firestore = db): Promise<FoodLogEntry<Timestamp> | null> {
+  const snap = await getDoc(doc(firestore, 'foodLogCatalog', foodId));
   return snap.exists() ? snap.data() as FoodLogEntry<Timestamp> : null;
 }
 
@@ -157,4 +157,101 @@ export async function loadFoodLogEntryByBarcode(barcode: string, firestore: Fire
   const snap = await getDocs(query(collection(firestore, 'foodLogCatalog'),
     where('barcode', '==', digits), where('status', '==', 'active'), limit(1)));
   return snap.empty ? null : snap.docs[0].data() as FoodLogEntry<Timestamp>;
+}
+
+/** Source types materialized on demand from an external provider (Fase C5) — `createLocalFoodLogSearchProvider` results are already persisted and never need this. */
+const EXTERNAL_FOOD_LOG_SOURCE_TYPES = new Set<FoodLogSourceType>(['fatsecret']);
+
+/**
+ * Pre-write dedup lookup for an external record about to be materialized,
+ * in the exact priority order the C5 round brief specifies:
+ * 1. exact barcode — works ACROSS providers (an OFF item and a FatSecret
+ *    item for the same physical product share a barcode even though their
+ *    deterministic doc ids differ, since the id scheme is per-provider).
+ * 2. provider + sourceId — structurally guaranteed by `foodLogId`, already
+ *    checked by `ensureFoodLogEntryMaterialized`'s direct `getDoc` before
+ *    this function is ever called; not re-checked here.
+ * 3. brand + normalized name — reuses `searchFoodLogCatalog`'s own
+ *    bounded, tested candidate pool rather than a second ad-hoc query.
+ * 4. textual similarity: deliberately not a separate fuzzy scorer here —
+ *    step 3's `normalizeSearchText` comparison already tolerates
+ *    accent/case/punctuation differences; a true similarity fallback is
+ *    future work, not guessed at in this round.
+ */
+async function findExistingFoodLogEntryForExternal(
+  entry: FoodLogEntry<Timestamp>, firestore: Firestore,
+): Promise<FoodLogEntry<Timestamp> | null> {
+  if (entry.barcode) {
+    const byBarcode = await loadFoodLogEntryByBarcode(entry.barcode, firestore);
+    if (byBarcode) return byBarcode;
+  }
+  const { foods: candidates } = await searchFoodLogCatalog(entry.name, { pageSize: 25, firestore });
+  const targetName = normalizeSearchText(entry.name);
+  const targetBrand = entry.brand?.name ? normalizeSearchText(entry.brand.name) : null;
+  return candidates.find((food) => normalizeSearchText(food.name) === targetName
+    && (food.brand?.name ? normalizeSearchText(food.brand.name) : null) === targetBrand) ?? null;
+}
+
+export type MaterializeExternalFood = (sourceId: string) => Promise<FoodLogEntry<Timestamp>>;
+/**
+ * Security fix (Fase C8): `foodLogCatalog`'s own Firestore rules already
+ * deny ALL client writes (`allow write: if false`) — a client `setDoc`
+ * here was dead on arrival in production, and had rules ever been
+ * loosened, would have let a client dictate arbitrary nutrition values
+ * for a shared, global catalog document (broken access control / data
+ * integrity). Materialization is now a backend callable
+ * (`materializeExternalFoodFatSecret`): the client only ever sends a
+ * `sourceId` (a FatSecret `food_id`), never a nutrition value; the
+ * server re-fetches the food from FatSecret with ITS OWN secret, maps +
+ * normalizes it, dedups, and writes with the Admin SDK.
+ *
+ * Dynamically imported, not a top-level `import` — `firebase/functions`
+ * + `lib/firebaseFunctions` initialize a `Functions` client at MODULE
+ * LOAD time. `foodLogCatalog.ts` is imported by far more call sites
+ * (diary/favorites/recipes services) than just the fatsecret path; a
+ * top-level import here would force every one of those to also provide
+ * a working `app` export from their `lib/firebase` mock, even when they
+ * never touch an external provider at all. Deferred until a `fatsecret`
+ * entry is actually materialized.
+ */
+const defaultMaterializeExternalFood: MaterializeExternalFood = async (sourceId) => {
+  const [{ httpsCallable }, { functions }] = await Promise.all([import('firebase/functions'), import('../lib/firebaseFunctions')]);
+  const callable = httpsCallable<{ sourceId: string }, FoodLogEntry<Timestamp>>(functions, 'materializeExternalFoodFatSecret');
+  return (await callable({ sourceId })).data;
+};
+
+async function materializeFoodLogEntry(
+  entry: FoodLogEntry<Timestamp>, firestore: Firestore, materializeExternalFood: MaterializeExternalFood,
+): Promise<FoodLogEntry<Timestamp>> {
+  // Read-only pre-check (Firestore rules allow reads) — saves an RPC round
+  // trip when a duplicate is already visible locally; purely an
+  // optimization now, never the security boundary (the callable dedups
+  // authoritatively server-side regardless of what this finds).
+  const existing = await findExistingFoodLogEntryForExternal(entry, firestore);
+  if (existing) return existing;
+  return materializeExternalFood(entry.source.sourceId);
+}
+
+/**
+ * The ONLY entry point screens call on selecting a search result (Fase C5
+ * — "ao selecionar um item externo, materializar/cachear no
+ * foodLogCatalog com provenance"). Local-sourced entries are already
+ * persisted and returned as-is, with no extra read. External-sourced
+ * entries are checked by their deterministic id first (cheap `getDoc`,
+ * covers "already materialized by an earlier search this session or a
+ * previous one") and only fall through to the dedup-check + backend
+ * `materializeExternalFood` call when truly new.
+ *
+ * Idempotent either way: `entry.id` is already deterministic
+ * (`foodLogId(entry.source.type, entry.source.sourceId)`), so re-selecting
+ * the same external item twice — even concurrently from two devices —
+ * just resolves to the same document, never creates a duplicate.
+ */
+export async function ensureFoodLogEntryMaterialized(
+  entry: FoodLogEntry<Timestamp>, firestore: Firestore = db, materializeExternalFood: MaterializeExternalFood = defaultMaterializeExternalFood,
+): Promise<FoodLogEntry<Timestamp>> {
+  if (!EXTERNAL_FOOD_LOG_SOURCE_TYPES.has(entry.source.type)) return entry;
+  const existing = await loadFoodLogEntry(entry.id, firestore);
+  if (existing) return existing;
+  return materializeFoodLogEntry(entry, firestore, materializeExternalFood);
 }
