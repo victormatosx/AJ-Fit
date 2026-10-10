@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import type { NutritionEngineOutput, NutritionProfile } from '../shared/types/nutrition';
 import { OpenAiNutritionProvider, OPENAI_PLAN_SCHEMA, OPENAI_REQUEST_TIMEOUT_MS, type NutritionAiProvider } from '../ai/provider';
+import { NUTRITION_AI_MODELS } from '../ai/config';
 import { fullPlanContext, mealAlternativeContext } from '../ai/prompt';
 import { validateAndBuildPlan } from '../generation/domain';
 import { generateValidatedPlan, GenerationAttemptsExhausted } from '../generation/attempts';
@@ -38,9 +39,11 @@ function output(breakfastScale = 1, lunchScale = 1) {
     50 * breakfastScale, 10 * breakfastScale, 10 * breakfastScale);
   const lunchItem = item('Frango grelhado com arroz e feijão', 600 * lunchScale, 30 * lunchScale,
     75 * lunchScale, 15 * lunchScale, 15 * lunchScale);
+  // Cost pass (2026-10-10): the full-plan AI output is now exactly one
+  // option per meal — no options array/recommendedOptionIndex wrapper.
   return { meals: [
-    { slot: 'breakfast', recommendedOptionIndex: 0, options: [{ foods: [breakfastItem] }, { foods: [breakfastItem] }] },
-    { slot: 'lunch', recommendedOptionIndex: 1, options: [{ foods: [lunchItem] }, { foods: [lunchItem] }] },
+    { slot: 'breakfast', foods: [breakfastItem] },
+    { slot: 'lunch', foods: [lunchItem] },
   ] };
 }
 function fakeProvider(...outputs: unknown[]): NutritionAiProvider {
@@ -57,22 +60,21 @@ describe('deterministic validator — free-form AI items, no catalog/foodId depe
     const plan = validateAndBuildPlan(output(), profile.mealSlots, engine);
     expect(plan.dailyTotals).toMatchObject({ kcal: 1000, proteinG: 50 });
     expect(plan.meals[0].options[0].foods[0]).toMatchObject({ name: 'Mingau de aveia', quantity: 100, unit: 'g' });
-    expect(plan.meals[1].recommendedOptionId).toBe('lunch-2');
+    expect(plan.meals[1].recommendedOptionId).toBe('lunch-1');
   });
   it('rejects malformed shapes without ever needing a catalog lookup', () => {
     expect(() => validateAndBuildPlan({ ...output(), macros: 999 }, profile.mealSlots, engine)).toThrow('invalid_schema');
     const badQuantity = output();
-    badQuantity.meals[0].options[0].foods[0].quantity = -1;
+    badQuantity.meals[0].foods[0].quantity = -1;
     expect(() => validateAndBuildPlan(badQuantity, profile.mealSlots, engine)).toThrow('invalid_schema');
     const missingAllergens = output();
     // @ts-expect-error — deliberately malformed to prove the shape is enforced without a catalog
-    delete missingAllergens.meals[0].options[0].foods[0].allergens;
+    delete missingAllergens.meals[0].foods[0].allergens;
     expect(() => validateAndBuildPlan(missingAllergens, profile.mealSlots, engine)).toThrow('invalid_schema');
   });
   it('still enforces the one deterministic safety check left — self-declared allergens against excludedAllergens', () => {
     const withMilk = output();
-    withMilk.meals[0].options[0].foods[0] = item('Iogurte', 400, 20, 50, 10, 10, ['milk']);
-    withMilk.meals[0].options[1].foods[0] = item('Iogurte', 400, 20, 50, 10, 10, ['milk']);
+    withMilk.meals[0].foods[0] = item('Iogurte', 400, 20, 50, 10, 10, ['milk']);
     expect(() => validateAndBuildPlan(withMilk, profile.mealSlots, engine, ['milk'])).toThrow('unsafe_allergen');
     expect(() => validateAndBuildPlan(withMilk, profile.mealSlots, engine, [])).not.toThrow();
   });
@@ -88,9 +90,14 @@ describe('deterministic validator — free-form AI items, no catalog/foodId depe
     // anything it builds itself, so a `!` here is sound, not a type-safety hole.
     expect(first.meals[0].options[0].foods[0].estimatedNutrition!.kcal).toBeCloseTo(400, 0);
     const impossible = output();
-    impossible.meals[0].options[0].foods[0] = item('Água', 0, 0, 0, 0, 0);
-    impossible.meals[0].options[1].foods[0] = item('Água', 0, 0, 0, 0, 0);
+    impossible.meals[0].foods[0] = item('Água', 0, 0, 0, 0, 0);
     expect(() => validateAndBuildPlan(impossible, profile.mealSlots, engine)).toThrow('meal_target_deviation');
+  });
+  it('builds exactly one option per meal on the initial full-plan generation (cost pass, 2026-10-10)', () => {
+    const plan = validateAndBuildPlan(output(), profile.mealSlots, engine);
+    expect(plan.meals[0].options).toHaveLength(1);
+    expect(plan.meals[1].options).toHaveLength(1);
+    expect(plan.meals[0].recommendedOptionId).toBe('breakfast-1');
   });
 });
 
@@ -104,7 +111,9 @@ describe('prompt payload — backend sends numbers/safety, AI gets freedom over 
     const payload = JSON.parse(fullPlanContext(richProfile, engine, 'lose_fat', names, undefined));
     expect(payload.mealSlots).toEqual(['breakfast', 'lunch']);
     expect(payload.mealTargets).toHaveLength(2);
-    expect(payload.dailyTargets).toMatchObject({ kcal: 1000, proteinG: 50 });
+    // `dailyTargets` deliberately omitted (cost pass, 2026-10-10) — it's
+    // just the sum of `mealTargets`, already sent above.
+    expect(payload).not.toHaveProperty('dailyTargets');
     expect(payload.goal).toBe('lose_fat');
     expect(payload.dietaryPattern).toBe('vegetarian');
     expect(payload.preferredFoodNames).toEqual(['Arroz']);
@@ -133,6 +142,24 @@ describe('bounded attempts and provider', () => {
     expect(OPENAI_PLAN_SCHEMA.required).toEqual(canonical.required);
     expect(OPENAI_PLAN_SCHEMA.properties.meals.items.properties.slot.enum).toEqual(canonical.properties.meals.items.properties.slot.enum);
   });
+  it('routes to Luna as primary/retry for both operations, Sol only as final fallback, Astra never used (cost pass, 2026-10-10)', async () => {
+    expect(NUTRITION_AI_MODELS.fullPlan).toBe('gpt-6-luna');
+    expect(NUTRITION_AI_MODELS.mealAlternative).toBe('gpt-6-luna');
+    expect(NUTRITION_AI_MODELS.fallback).toBe('gpt-6.1-sol');
+    expect(Object.values(NUTRITION_AI_MODELS)).not.toContain('gpt-6-astra');
+
+    const fetcher = vi.fn().mockImplementation(async () => new Response(JSON.stringify({ status: 'completed', model: 'fake',
+      output: [{ content: [{ type: 'output_text', text: JSON.stringify(output()) }] }],
+      usage: { input_tokens: 1, output_tokens: 1, input_tokens_details: { cached_tokens: 0 } } }), { status: 200 }));
+    const provider = new OpenAiNutritionProvider('test-secret', fetcher);
+    await provider.generatePlan({ profile, engine, goal, foodNames: noNames });
+    expect(JSON.parse(fetcher.mock.calls[0][1].body).model).toBe('gpt-6-luna');
+    await provider.generatePlan({ profile, engine, goal, foodNames: noNames, fallback: true });
+    expect(JSON.parse(fetcher.mock.calls[1][1].body).model).toBe('gpt-6.1-sol');
+    await provider.generateMealAlternative({ profile, target: engine.mealTargets[0], avoidFoodNames: [], goal, foodNames: noNames });
+    expect(JSON.parse(fetcher.mock.calls[2][1].body).model).toBe('gpt-6-luna');
+    expect(JSON.parse(fetcher.mock.calls[0][1].body).reasoning).toEqual({ effort: 'low' });
+  });
   it('uses first valid attempt, correction, retry and strong fallback only for selected failures', async () => {
     const immediate = fakeProvider(output());
     expect((await generateValidatedPlan(immediate, profile, engine, goal, noNames)).attempt).toBe(1);
@@ -146,8 +173,7 @@ describe('bounded attempts and provider', () => {
   });
   it('stops on safety failure and caps exhausted attempts', async () => {
     const unsafeOutput = output();
-    unsafeOutput.meals[0].options[0].foods[0] = item('Amendoim', 400, 20, 50, 10, 10, ['peanut']);
-    unsafeOutput.meals[0].options[1].foods[0] = item('Amendoim', 400, 20, 50, 10, 10, ['peanut']);
+    unsafeOutput.meals[0].foods[0] = item('Amendoim', 400, 20, 50, 10, 10, ['peanut']);
     const unsafeProvider = fakeProvider(unsafeOutput);
     await expect(generateValidatedPlan(unsafeProvider, { ...profile, excludedAllergens: ['peanut'] }, engine, goal, noNames))
       .rejects.toMatchObject({ code: 'AI_SAFETY_VALIDATION_FAILED' });

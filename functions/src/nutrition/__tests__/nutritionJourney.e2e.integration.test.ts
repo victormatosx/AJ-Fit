@@ -79,18 +79,13 @@ function planItem(target: Seed['context']['engine']['mealTargets'][number], name
     allergens: [] };
 }
 
+// Cost pass (2026-10-10): full-plan AI output is one option per meal — no options/recommendedOptionIndex wrapper.
 function validPlanOutput(seed: Seed) {
   const [breakfastTarget, lunchTarget] = seed.context.engine.mealTargets;
   return {
     meals: [
-      { slot: 'breakfast', recommendedOptionIndex: 0, options: [
-        { foods: [planItem(breakfastTarget, 'Mingau de aveia')] },
-        { foods: [planItem(breakfastTarget, 'Pão com ovo')] },
-      ] },
-      { slot: 'lunch', recommendedOptionIndex: 1, options: [
-        { foods: [planItem(lunchTarget, 'Frango grelhado com arroz e feijão')] },
-        { foods: [planItem(lunchTarget, 'Carne moída com arroz e legumes')] },
-      ] },
+      { slot: 'breakfast', foods: [planItem(breakfastTarget, 'Mingau de aveia')] },
+      { slot: 'lunch', foods: [planItem(lunchTarget, 'Frango grelhado com arroz e feijão')] },
     ],
   };
 }
@@ -140,13 +135,13 @@ describe.skipIf(!enabled)('Nutrition complete journey (Firestore Emulator)', () 
     const generatePlan = vi.fn()
       .mockResolvedValueOnce({
         output: { meals: [] },
-        model: 'gpt-6.1-sol',
+        model: 'gpt-6-luna',
         usage: { inputTokens: 120, outputTokens: 20, cachedInputTokens: 10 },
         latencyMs: 11,
       })
       .mockResolvedValueOnce({
         output: validPlanOutput(seed),
-        model: 'gpt-6.1-sol',
+        model: 'gpt-6-luna',
         usage: { inputTokens: 140, outputTokens: 30, cachedInputTokens: 20 },
         latencyMs: 12,
       });
@@ -163,7 +158,7 @@ describe.skipIf(!enabled)('Nutrition complete journey (Firestore Emulator)', () 
     expect(planA.get('profileSnapshot')).toBeTruthy();
     expect(planA.get('physicalSnapshot')).toBeTruthy();
     for (const meal of planA.get('meals')) {
-      expect(meal.options).toHaveLength(2);
+      expect(meal.options).toHaveLength(1);
       expect(meal.options.filter((option: { id: string }) => option.id === meal.recommendedOptionId)).toHaveLength(1);
       for (const option of meal.options) {
         expect(option.foods[0]).toHaveProperty('estimatedNutrition');
@@ -177,7 +172,7 @@ describe.skipIf(!enabled)('Nutrition complete journey (Firestore Emulator)', () 
     expect(await processNutritionGenerationJob(seed.uid, second.generationId, {
       generatePlan: async () => ({
         output: validPlanOutput(seed),
-        model: 'gpt-6.1-sol',
+        model: 'gpt-6-luna',
         usage: { inputTokens: 100, outputTokens: 25, cachedInputTokens: 0 },
         latencyMs: 8,
       }),
@@ -327,9 +322,9 @@ describe.skipIf(!enabled)('Nutrition complete journey (Firestore Emulator)', () 
       callable(fallbackSeed.uid, { requestId: 'fallback-request-0001' }), db,
     );
     const fallbackProvider = vi.fn()
-      .mockResolvedValueOnce({ output: { meals: [] }, model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0 }, latencyMs: 1 })
-      .mockResolvedValueOnce({ output: { meals: [] }, model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0 }, latencyMs: 1 })
-      .mockResolvedValueOnce({ output: validPlanOutput(fallbackSeed), model: 'gpt-6-astra', usage: { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0 }, latencyMs: 1 });
+      .mockResolvedValueOnce({ output: { meals: [] }, model: 'gpt-6-luna', usage: { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0 }, latencyMs: 1 })
+      .mockResolvedValueOnce({ output: { meals: [] }, model: 'gpt-6-luna', usage: { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0 }, latencyMs: 1 })
+      .mockResolvedValueOnce({ output: validPlanOutput(fallbackSeed), model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0 }, latencyMs: 1 });
     expect(await processNutritionGenerationJob(fallbackSeed.uid, fallbackJob.generationId, { generatePlan: fallbackProvider }, db)).toBe(true);
     expect(fallbackProvider.mock.calls.map(([request]) => request.fallback)).toEqual([false, false, true]);
     expect((await fallbackSeed.user.collection('nutritionPlans').doc(fallbackJob.generationId).get())
@@ -340,7 +335,7 @@ describe.skipIf(!enabled)('Nutrition complete journey (Firestore Emulator)', () 
       callable(exhaustedSeed.uid, { requestId: 'exhausted-request-0001' }), db,
     );
     const invalidProvider = vi.fn().mockResolvedValue({
-      output: { meals: [] }, model: 'gpt-6.1-sol',
+      output: { meals: [] }, model: 'gpt-6-luna',
       usage: { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0 }, latencyMs: 1,
     });
     expect(await processNutritionGenerationJob(exhaustedSeed.uid, exhaustedJob.generationId, { generatePlan: invalidProvider }, db)).toBe(false);

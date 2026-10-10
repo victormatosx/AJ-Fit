@@ -36,15 +36,10 @@ describe.skipIf(!process.env.FIRESTORE_EMULATOR_HOST)('nutrition job Firestore t
         carbsG: target.carbsG.target, fatG: target.fatG.target, fiberG: target.fiberG?.target ?? 0 },
       allergens: [],
     });
+    // Cost pass (2026-10-10): full-plan AI output is one option per meal — no options/recommendedOptionIndex wrapper.
     const output = { meals: [
-      { slot: 'breakfast', recommendedOptionIndex: 0, options: [
-        { foods: [itemFor(context.engine.mealTargets[0], 'Mingau de aveia')] },
-        { foods: [itemFor(context.engine.mealTargets[0], 'Pão com ovo')] },
-      ] },
-      { slot: 'lunch', recommendedOptionIndex: 0, options: [
-        { foods: [itemFor(context.engine.mealTargets[1], 'Frango grelhado com arroz e feijão')] },
-        { foods: [itemFor(context.engine.mealTargets[1], 'Carne moída com arroz e legumes')] },
-      ] },
+      { slot: 'breakfast', foods: [itemFor(context.engine.mealTargets[0], 'Mingau de aveia')] },
+      { slot: 'lunch', foods: [itemFor(context.engine.mealTargets[1], 'Frango grelhado com arroz e feijão')] },
     ] };
     const request = (requestId: string) => ({ auth: { uid }, data: { requestId } } as unknown as CallableRequest);
     const first = await requestNutritionPlanGenerationHandler(request('request-0001'), db);

@@ -14,7 +14,8 @@ import {
  * First real smoke test (2026-10-09, ajfit-2f321) hit `AI_TIMEOUT` on all 3
  * attempts at a near-identical ~45.0-45.1s — the previous 45000ms value was
  * consistently too tight for a real full-plan structured-output response
- * from `gpt-6.1-sol`, not a one-off network blip. 90s keeps a ~30s margin
+ * (then on `gpt-6.1-sol`; now primary is the faster/cheaper `gpt-6-luna`,
+ * see config.ts), not a one-off network blip. 90s keeps a ~30s margin
  * under `requestNutritionMealAlternative`'s tighter 120s callable budget
  * (the full-plan worker has a much larger 540s budget, so it was never the
  * binding constraint).
@@ -83,9 +84,10 @@ const FOOD_ITEM_SCHEMA = {
   },
 } as const;
 
-// Shared shape for one meal's set of equivalent options — the structural
-// subset of canonical/ai_output_schema.json reused by both the full-plan
-// schema and the single-meal alternative schema.
+// Shared shape for one meal's set of equivalent options — used only by the
+// single-meal alternative schema now (cost pass, 2026-10-10): the full plan
+// no longer asks for 2-3 options per meal, so it has no need for this
+// options/recommendedOptionIndex wrapper — see FULL_PLAN_MEAL_SCHEMA below.
 const MEAL_OPTIONS_SCHEMA = {
   type: 'array', items: {
     type: 'object', additionalProperties: false, required: ['foods'], properties: {
@@ -94,15 +96,20 @@ const MEAL_OPTIONS_SCHEMA = {
   },
 } as const;
 
+// One recommended option per meal on the initial generation (cost pass,
+// 2026-10-10) — alternatives are generated on demand via
+// OPENAI_MEAL_ALTERNATIVE_SCHEMA when the user asks to swap a meal, so the
+// full plan never pays for options it may never use.
+const FULL_PLAN_MEAL_SCHEMA = {
+  type: 'object', additionalProperties: false, required: ['slot', 'foods'], properties: {
+    slot: { type: 'string', enum: ['breakfast', 'morning_snack', 'lunch', 'afternoon_snack', 'dinner', 'supper'] },
+    foods: { type: 'array', items: FOOD_ITEM_SCHEMA },
+  },
+} as const;
+
 export const OPENAI_PLAN_SCHEMA = {
   type: 'object', additionalProperties: false, required: ['meals'], properties: {
-    meals: { type: 'array', items: { type: 'object', additionalProperties: false,
-      required: ['slot', 'recommendedOptionIndex', 'options'], properties: {
-        slot: { type: 'string', enum: ['breakfast', 'morning_snack', 'lunch', 'afternoon_snack', 'dinner', 'supper'] },
-        recommendedOptionIndex: { type: 'integer' },
-        options: MEAL_OPTIONS_SCHEMA,
-      },
-    } },
+    meals: { type: 'array', items: FULL_PLAN_MEAL_SCHEMA },
   },
 } as const;
 
@@ -134,20 +141,23 @@ export class OpenAiNutritionProvider implements NutritionAiProvider {
       method: 'POST', signal: AbortSignal.timeout(OPENAI_REQUEST_TIMEOUT_MS),
       headers: { Authorization: `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' },
       /**
-       * 4500 (the pre-diet-quality-v3 value) was sized for the old catalog
-       * shape (`{foodId, grams}` per item — a tiny payload). The current
-       * free-form schema repeats `name`+`quantity`+`unit`+`preparationNote`+
-       * `estimatedNutrition` (5 numbers)+`allergens` for every item, across
-       * up to 6 meals x 3 options x 8 foods — real incident `e304516e`
-       * (2026-10-10) showed all 3 attempts (including the fallback model)
-       * failing `AI_SCHEMA_INVALID` with `usage` entirely null, meaning the
-       * Responses API never reached `status: 'completed'` — the response
-       * was being truncated mid-JSON by the old token cap, not actually
-       * violating the schema. 16000 covers the worst-case shape with
-       * headroom; see the `incomplete_details` log below if this ever
-       * needs raising again.
+       * 16000 (sized for 6 meals x 3 options x 8 foods) was right for the
+       * old multi-option-per-meal schema — real incident `e304516e`
+       * (2026-10-10) showed truncation (`status` never `completed`) at the
+       * old 4500 cap under that shape. Cost pass (2026-10-10): the full
+       * plan now asks for exactly ONE option per meal (worst case 6 meals x
+       * 8 foods — a third of the old item count), and a meal alternative
+       * only ever covers 1 meal x up to 3 options x 8 foods — smaller
+       * still. 8000 keeps comfortable headroom over the new worst case
+       * without paying for the old cap; see the `incomplete_details` log
+       * below if this ever needs raising again.
        */
-      body: JSON.stringify({ model, store: false, max_output_tokens: 16000,
+      body: JSON.stringify({ model, store: false, max_output_tokens: 8000,
+        // Minimal reasoning: this is a bounded structured-output
+        // composition task against a strict JSON schema, not an
+        // open-ended reasoning task — a high effort budget would only add
+        // billed reasoning tokens with no quality benefit here.
+        reasoning: { effort: 'low' },
         // `system` carries ONLY the injection-boundary rule (a real safety
         // directive); the task-specific composition rules go in `developer`
         // — see UNTRUSTED_DATA_SYSTEM_PROMPT's comment in prompt.ts.

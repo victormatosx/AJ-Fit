@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "ajfit://nutrition/ai-output-schema/2.0.0",
+  "$id": "ajfit://nutrition/ai-output-schema/3.0.0",
   "title": "AJ Fit Nutrition AI Generation Output",
   "type": "object",
   "additionalProperties": false,
@@ -17,8 +17,7 @@
         "additionalProperties": false,
         "required": [
           "slot",
-          "recommendedOptionIndex",
-          "options"
+          "foods"
         ],
         "properties": {
           "slot": {
@@ -31,76 +30,58 @@
               "supper"
             ]
           },
-          "recommendedOptionIndex": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 2
-          },
-          "options": {
+          "foods": {
             "type": "array",
-            "minItems": 2,
-            "maxItems": 3,
+            "minItems": 1,
+            "maxItems": 8,
             "items": {
               "type": "object",
               "additionalProperties": false,
               "required": [
-                "foods"
+                "name",
+                "quantity",
+                "unit",
+                "preparationNote",
+                "estimatedNutrition",
+                "allergens"
               ],
               "properties": {
-                "foods": {
-                  "type": "array",
-                  "minItems": 1,
-                  "items": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "required": [
-                      "name",
-                      "quantity",
-                      "unit",
-                      "preparationNote",
-                      "estimatedNutrition",
-                      "allergens"
-                    ],
-                    "properties": {
-                      "name": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 120
-                      },
-                      "quantity": {
-                        "type": "number",
-                        "exclusiveMinimum": 0,
-                        "maximum": 5000
-                      },
-                      "unit": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 24
-                      },
-                      "preparationNote": {
-                        "type": "string",
-                        "maxLength": 200
-                      },
-                      "estimatedNutrition": {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "required": ["kcal", "proteinG", "carbsG", "fatG", "fiberG"],
-                        "properties": {
-                          "kcal": { "type": "number", "minimum": 0 },
-                          "proteinG": { "type": "number", "minimum": 0 },
-                          "carbsG": { "type": "number", "minimum": 0 },
-                          "fatG": { "type": "number", "minimum": 0 },
-                          "fiberG": { "type": "number", "minimum": 0 }
-                        }
-                      },
-                      "allergens": {
-                        "type": "array",
-                        "maxItems": 9,
-                        "uniqueItems": true,
-                        "items": { "enum": ["milk", "egg", "peanut", "tree_nuts", "soy", "wheat", "fish", "shellfish", "other"] }
-                      }
-                    }
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120
+                },
+                "quantity": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "maximum": 5000
+                },
+                "unit": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 24
+                },
+                "preparationNote": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "estimatedNutrition": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["kcal", "proteinG", "carbsG", "fatG", "fiberG"],
+                  "properties": {
+                    "kcal": { "type": "number", "minimum": 0 },
+                    "proteinG": { "type": "number", "minimum": 0 },
+                    "carbsG": { "type": "number", "minimum": 0 },
+                    "fatG": { "type": "number", "minimum": 0 },
+                    "fiberG": { "type": "number", "minimum": 0 }
                   }
+                },
+                "allergens": {
+                  "type": "array",
+                  "maxItems": 9,
+                  "uniqueItems": true,
+                  "items": { "enum": ["milk", "egg", "peanut", "tree_nuts", "soy", "wheat", "fish", "shellfish", "other"] }
                 }
               }
             }
@@ -109,6 +90,9 @@
       }
     }
   },
+  "notes": [
+    "v3 (2026-10-10, cost pass): exactly one recommended option per meal on the initial full-plan generation — no options/recommendedOptionIndex wrapper. Alternatives for a single meal are generated on demand via a separate call/schema (OPENAI_MEAL_ALTERNATIVE_SCHEMA in functions/src/nutrition/ai/provider.ts), which still returns 2-3 options + recommendedOptionIndex, unchanged."
+  ],
   "postValidationRequirements": [
     "no_catalog_or_foodid_resolution",
     "self_declared_allergens_must_respect_excluded_allergens",

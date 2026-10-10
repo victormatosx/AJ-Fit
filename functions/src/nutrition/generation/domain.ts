@@ -42,6 +42,9 @@ export interface RawAiFoodItem {
 }
 export interface RawMealOptions { recommendedOptionIndex: number; options: { foods: RawAiFoodItem[] }[] }
 
+/** The AI's raw full-plan output for one meal (cost pass, 2026-10-10) — exactly one option, no options/recommendedOptionIndex wrapper. */
+export interface RawAiFullPlanMeal { slot: NutritionMealSlot; foods: RawAiFoodItem[] }
+
 function validRawFoodItem(value: unknown): value is RawAiFoodItem {
   if (!record(value) || !exactKeys(value, ['name', 'quantity', 'unit', 'preparationNote', 'estimatedNutrition', 'allergens'])) return false;
   if (typeof value.name !== 'string' || value.name.length < 1 || value.name.length > 120) return false;
@@ -72,8 +75,8 @@ function validMealOptionsShape(value: unknown): value is RawMealOptions {
   return true;
 }
 
-/** The AI's raw, parsed plan output — one `RawMealOptions` per slot. Kept local (not the shared `NutritionAiMealPlanOutput` contract type) so this file's own runtime-validated shape is what callers actually get, with no cast gap between the two. */
-export interface ParsedAiMealPlanOutput { meals: ({ slot: NutritionMealSlot } & RawMealOptions)[] }
+/** The AI's raw, parsed plan output — one `RawAiFullPlanMeal` per slot (cost pass, 2026-10-10: exactly one option per meal, no options/recommendedOptionIndex wrapper). Kept local (not the shared `NutritionAiMealPlanOutput` contract type) so this file's own runtime-validated shape is what callers actually get, with no cast gap between the two. */
+export interface ParsedAiMealPlanOutput { meals: RawAiFullPlanMeal[] }
 
 /** Runtime enforcement of the closed canonical AI schema, independently of provider guarantees. */
 export function parseAiOutput(value: unknown): ParsedAiMealPlanOutput {
@@ -81,9 +84,10 @@ export function parseAiOutput(value: unknown): ParsedAiMealPlanOutput {
   if (!record(value) || !exactKeys(value, ['meals']) || !Array.isArray(value.meals)
     || value.meals.length < 2 || value.meals.length > 6) return invalid();
   for (const meal of value.meals) {
-    if (!record(meal) || !exactKeys(meal, ['slot', 'recommendedOptionIndex', 'options'])
+    if (!record(meal) || !exactKeys(meal, ['slot', 'foods'])
       || !NUTRITION_MEAL_SLOTS.includes(meal.slot as NutritionMealSlot)
-      || !validMealOptionsShape({ recommendedOptionIndex: meal.recommendedOptionIndex, options: meal.options })) return invalid();
+      || !Array.isArray(meal.foods) || meal.foods.length < 1 || meal.foods.length > 8
+      || meal.foods.some((food) => !validRawFoodItem(food))) return invalid();
   }
   return value as unknown as ParsedAiMealPlanOutput;
 }
@@ -184,7 +188,12 @@ export function validateAndBuildPlan(
   }
   let corrected = false;
   const meals = output.meals.map((meal, mealIndex): NutritionMeal => {
-    const built = buildMealOptions(meal.slot, meal, engine.mealTargets[mealIndex], excludedAllergens, allowCorrection);
+    // Full-plan output is a single option per meal (cost pass, 2026-10-10)
+    // — wrap it into the shared `RawMealOptions` shape so it reuses the
+    // same macro-correction/validation path as a meal alternative's 2-3
+    // options, with no behavioral difference beyond the option count.
+    const raw: RawMealOptions = { recommendedOptionIndex: 0, options: [{ foods: meal.foods }] };
+    const built = buildMealOptions(meal.slot, raw, engine.mealTargets[mealIndex], excludedAllergens, allowCorrection);
     corrected = corrected || built.corrected;
     return { slot: meal.slot, recommendedOptionId: built.recommendedOptionId, options: built.options };
   });
