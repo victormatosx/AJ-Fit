@@ -68,7 +68,7 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
     }
   });
 
-  it('publishes the intended billing, promotion, health and Photo Vault functions', () => {
+  it('publishes the intended backend functions including Nutrition', () => {
     const source = read('src/index.ts');
 
     // Match the export statements themselves, not prose in the file's JSDoc.
@@ -131,7 +131,10 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       'initializeWorkoutProgramV127',
       'installActiveWorkoutProgram',
       'markSupportMessageRead',
+      'monitorNutritionAiOperations',
       'onAccountDeletionRequested',
+      'onNutritionGenerationCompleted',
+      'onNutritionGenerationJobCreated',
       'onSupportAdminMessageCreated',
       'onTrustedWorkoutLifecycleEventCreated',
       'onUserProvisioned',
@@ -143,7 +146,11 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       'recoverVaultKey',
       'releasePushDevice',
       'requestAccountDeletion',
+      'requestNutritionMealAlternative',
+      'requestNutritionPlanGeneration',
+      'restoreNutritionPlan',
       'retryNotificationDispatches',
+      'retryNutritionGenerationJobs',
       'revenueCatWebhook',
       'sendSupportChatMessage',
       'syncPushDevice',
@@ -266,6 +273,9 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       ['src/photoVault/recoverVaultKey.ts', 'recoverVaultKey'],
       ['src/billing/confirmCommercialGate.ts', 'confirmCommercialGate'],
       ['src/accountDeletion/requestAccountDeletion.ts', 'requestAccountDeletion'],
+      ['src/nutrition/generation/request.ts', 'requestNutritionPlanGeneration'],
+      ['src/nutrition/generation/mealAlternativeRequest.ts', 'requestNutritionMealAlternative'],
+      ['src/nutrition/plans/restore.ts', 'restoreNutritionPlan'],
       ['src/index.ts', 'syncPushDevice'],
       ['src/index.ts', 'releasePushDevice'],
       ['src/index.ts', 'dispatchTestNotification'],
@@ -289,9 +299,12 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       'src/accountDeletion/requestAccountDeletion.ts',
       'src/accountDeletion/immediateDispatch.ts',
       'src/accountDeletion/reconciliation/scheduler.ts',
+      'src/nutrition/generation/request.ts',
+      'src/nutrition/generation/mealAlternativeRequest.ts',
+      'src/nutrition/plans/restore.ts',
     ].map(readCode).join('\n');
 
-    expect(allEndpointSources.match(/enforceAppCheck\s*:\s*true/g)).toHaveLength(22);
+    expect(allEndpointSources.match(/enforceAppCheck\s*:\s*true/g)).toHaveLength(25);
     expect(allEndpointSources).not.toMatch(/consumeAppCheckToken\s*:\s*true/);
   });
 

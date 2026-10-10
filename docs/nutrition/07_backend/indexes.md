@@ -34,6 +34,17 @@ users/{uid}/nutritionGenerationJobs
 orderBy requestedAt desc
 ```
 
+### Resumo semanal do diário
+
+```text
+users/{uid}/nutritionDailyLogs
+orderBy documentId
+startAt YYYY-MM-DD
+endAt YYYY-MM-DD
+```
+
+Os IDs já são datas locais canônicas e ordenáveis. A query lê no máximo os sete documentos da semana e não exige índice composto.
+
 ### Receitas
 
 ```text
@@ -52,6 +63,15 @@ Na V1, usar:
 - estratégia de busca própria/local/indexada.
 
 Se o catálogo crescer a ponto de busca virar gargalo, migrar a busca para engine dedicado sem mover a fonte de verdade.
+
+Implementação da base: `searchPrefixes` contém prefixos normalizados do nome
+e de aliases (mínimo 2, máximo 32 caracteres). A query filtra
+`generationStatus == approved`, usa `array-contains` para um prefixo,
+ordena por ID e pagina com cursor. `firestore.indexes.json` contém o índice
+composto correspondente. Isto cobre busca PT-BR por início de nome, alias e
+palavras; não oferece ranking, tolerância a erros de digitação nem busca
+arbitrária no meio de palavras. O cliente lê no máximo 30 documentos por
+página e nunca baixa o catálogo inteiro.
 
 ---
 

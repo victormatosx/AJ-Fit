@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "ajfit://nutrition/meal-plan-schema/1.0.0",
+  "$id": "ajfit://nutrition/meal-plan-schema/2.0.0",
   "title": "AJ Fit Nutrition Meal Plan",
   "type": "object",
   "additionalProperties": false,
@@ -9,8 +9,11 @@
     "generationId",
     "status",
     "profileSnapshot",
+    "physicalSnapshot",
     "engineSnapshot",
     "meals",
+    "dailyTotals",
+    "generationMetadata",
     "versions"
   ],
   "properties": {
@@ -31,6 +34,7 @@
     "profileSnapshot": {
       "type": "object"
     },
+    "physicalSnapshot": { "type": "object" },
     "engineSnapshot": {
       "type": "object"
     },
@@ -83,56 +87,35 @@
                     "type": "object",
                     "additionalProperties": false,
                     "required": [
-                      "foodId",
-                      "grams",
-                      "snapshot"
+                      "name",
+                      "quantity",
+                      "unit",
+                      "preparationNote",
+                      "estimatedNutrition",
+                      "allergens"
                     ],
                     "properties": {
-                      "foodId": {
-                        "type": "string"
-                      },
-                      "grams": {
-                        "type": "number",
-                        "exclusiveMinimum": 0
-                      },
-                      "snapshot": {
+                      "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+                      "quantity": { "type": "number", "exclusiveMinimum": 0, "maximum": 5000 },
+                      "unit": { "type": "string", "minLength": 1, "maxLength": 24 },
+                      "preparationNote": { "type": "string", "maxLength": 200 },
+                      "estimatedNutrition": {
                         "type": "object",
                         "additionalProperties": false,
-                        "required": [
-                          "name",
-                          "kcal",
-                          "proteinG",
-                          "carbsG",
-                          "fatG"
-                        ],
+                        "required": ["kcal", "proteinG", "carbsG", "fatG", "fiberG"],
                         "properties": {
-                          "name": {
-                            "type": "string"
-                          },
-                          "kcal": {
-                            "type": "number",
-                            "minimum": 0
-                          },
-                          "proteinG": {
-                            "type": "number",
-                            "minimum": 0
-                          },
-                          "carbsG": {
-                            "type": "number",
-                            "minimum": 0
-                          },
-                          "fatG": {
-                            "type": "number",
-                            "minimum": 0
-                          },
-                          "fiberG": {
-                            "type": [
-                              "number",
-                              "null"
-                            ],
-                            "minimum": 0
-                          }
+                          "kcal": { "type": "number", "minimum": 0 },
+                          "proteinG": { "type": "number", "minimum": 0 },
+                          "carbsG": { "type": "number", "minimum": 0 },
+                          "fatG": { "type": "number", "minimum": 0 },
+                          "fiberG": { "type": "number", "minimum": 0 }
                         }
+                      },
+                      "allergens": {
+                        "type": "array",
+                        "maxItems": 9,
+                        "uniqueItems": true,
+                        "items": { "enum": ["milk", "egg", "peanut", "tree_nuts", "soy", "wheat", "fish", "shellfish", "other"] }
                       }
                     }
                   }
@@ -176,6 +159,30 @@
         }
       }
     },
+    "dailyTotals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kcal", "proteinG", "carbsG", "fatG", "fiberG"],
+      "properties": {
+        "kcal": { "type": "number", "minimum": 0 },
+        "proteinG": { "type": "number", "minimum": 0 },
+        "carbsG": { "type": "number", "minimum": 0 },
+        "fatG": { "type": "number", "minimum": 0 },
+        "fiberG": { "type": "number", "minimum": 0 }
+      }
+    },
+    "generationMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "model", "attempts", "corrected", "fallbackUsed"],
+      "properties": {
+        "provider": { "type": "string" },
+        "model": { "type": "string" },
+        "attempts": { "type": "integer", "minimum": 1, "maximum": 3 },
+        "corrected": { "type": "boolean" },
+        "fallbackUsed": { "type": "boolean" }
+      }
+    },
     "versions": {
       "type": "object",
       "additionalProperties": false,
@@ -184,7 +191,8 @@
         "nutritionEngineVersion",
         "questionnaireVersion",
         "foodCatalogVersion",
-        "aiGenerationSchemaVersion"
+        "aiGenerationSchemaVersion",
+        "promptVersion"
       ],
       "properties": {
         "planSchemaVersion": {
@@ -194,13 +202,11 @@
           "type": "string"
         },
         "questionnaireVersion": {
-          "type": [
-            "integer",
-            "string"
-          ]
+          "type": "integer"
         },
         "foodCatalogVersion": {
-          "type": "string"
+          "type": "string",
+          "description": "Vestigial since diet-quality-v3 (2026-10-10) — generation no longer reads nutritionFoods. Kept for schema stability; always a fixed placeholder string now."
         },
         "aiGenerationSchemaVersion": {
           "type": "string"

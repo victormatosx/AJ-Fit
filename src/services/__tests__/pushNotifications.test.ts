@@ -294,6 +294,9 @@ describe('push payload parsing', () => {
     'COMPARE_PROGRESS',
     'WEEK_COMPLETED',
     'WEEK_STREAK',
+    'NUTRITION_DAILY_LOG_REMINDER',
+    'NUTRITION_PLAN_READY',
+    'NUTRITION_WEEKLY_SUMMARY',
   ] as const)(
     'parses the structured payload for current notification type %s',
     (type) => {

@@ -1,4 +1,10 @@
 import { onCall, onRequest } from 'firebase-functions/v2/https';
+export { requestNutritionPlanGeneration } from './nutrition/generation/request';
+export { onNutritionGenerationJobCreated, retryNutritionGenerationJobs } from './nutrition/generation/worker';
+export { requestNutritionMealAlternative } from './nutrition/generation/mealAlternativeRequest';
+export { restoreNutritionPlan } from './nutrition/plans/restore';
+export { onNutritionGenerationCompleted } from './notifications/nutritionNotifications';
+export { monitorNutritionAiOperations } from './nutrition/observability/alerts';
 import {
   handleRevenueCatWebhook,
   REVENUECAT_API_SECRET_KEY,

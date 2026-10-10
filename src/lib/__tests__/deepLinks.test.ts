@@ -55,4 +55,14 @@ describe('pending deep-link intent state', () => {
     expect(consumeDeepLinkIntent(duplicate, ACTIVE_WORKOUT)).toBeNull();
     expect(consumeDeepLinkIntent(null, ACTIVE_WORKOUT)).toBeNull();
   });
+
+  it('keeps nutrition notification destinations distinct and consumes only the matching one', () => {
+    const plan: DeepLinkIntent = { type: 'nutrition-tab', destination: 'plan' };
+    const weekly: DeepLinkIntent = { type: 'nutrition-tab', destination: 'weekly' };
+    expect(enqueueDeepLinkIntent(null, plan)).toEqual(plan);
+    expect(enqueueDeepLinkIntent(plan, { ...plan })).toBe(plan);
+    expect(enqueueDeepLinkIntent(plan, weekly)).toEqual(weekly);
+    expect(consumeDeepLinkIntent(weekly, plan)).toEqual(weekly);
+    expect(consumeDeepLinkIntent(weekly, weekly)).toBeNull();
+  });
 });

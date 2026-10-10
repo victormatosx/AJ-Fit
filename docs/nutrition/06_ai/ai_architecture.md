@@ -1,8 +1,8 @@
 # AJ Fit Nutrition — Arquitetura de IA
 
-## 0. Status real de infraestrutura — greenfield
+## 0. Implementação backend (2026-10-08)
 
-Hoje não existe nenhuma integração com OpenAI (ou qualquer outro provider de IA generativa) no código do AJ Fit: não há dependência, client, secret configurado via `defineSecret`, nem camada de abstração de provider reutilizável. Tudo neste capítulo — `NutritionAIProvider`, orquestração, configuração de modelo versionada — é infraestrutura **inteiramente nova** a ser construída para Nutrição, não uma extensão de algo existente.
+`functions/src/nutrition/ai/` implementa `NutritionAiProvider`, com OpenAI via Responses API REST e `text.format` JSON Schema estrito. O transporte usa `fetch` nativo do Node 22, sem dependência de SDK. A chave é `defineSecret('OPENAI_API_KEY')` e só é vinculada ao worker e ao reparador agendado. Nenhuma chamada de produção é executada por testes.
 
 Isso não muda a decisão já tomada: **OpenAI continua sendo o provider inicial** para a V1 (ADR-001 §5). A ressalva é apenas sobre o que já existe no código vs. o que precisa ser construído do zero — incluindo o secret da API key, que deve seguir o padrão real do projeto (`defineSecret`, como em `functions/src/billing/revenuecat.ts`), não uma env var solta.
 
@@ -41,11 +41,7 @@ Estratégia inicial:
 - tarefas simples, como nova opção de refeição: modelo econômico;
 - fallback: modelo mais forte em falhas específicas.
 
-Configuração inicial recomendada, sujeita a benchmark interno:
-
-- geração completa: `gpt-5.6-terra`;
-- alternativas simples: `gpt-5.6-luna`;
-- fallback: modelo mais forte configurado por backend.
+Configuração atual em `ai/config.ts`, sujeita a evals antes do rollout: full plan `gpt-6.1-sol`, alternativa futura `gpt-6-luna`, fallback seletivo `gpt-6-astra`. Fonte: [modelos oficiais](https://developers.openai.com/api/docs/models) e [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=responses). A recomendação antiga `gpt-5.6-terra`/`gpt-5.6-luna` nesta documentação estava desatualizada e não foi usada.
 
 Os nomes dos modelos não devem ficar espalhados no código. Devem vir de configuração versionada.
 

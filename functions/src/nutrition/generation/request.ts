@@ -1,0 +1,67 @@
+import { randomUUID } from 'node:crypto';
+import { Timestamp, type Firestore } from 'firebase-admin/firestore';
+import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/https';
+import { db as defaultDb } from '../../lib/firebaseAdmin';
+import { requireAuth } from '../../lib/auth';
+import { requireActiveAccount } from '../../accountDeletion/activeAccountGuard';
+import { loadGenerationContext } from './context';
+import { requireNutritionGenerationRollout } from './rollout';
+
+export const FULL_PLAN_COOLDOWN_MS = 15 * 60 * 1000;
+function requestIdFrom(data: unknown): string | null {
+  if (data == null) return null;
+  if (typeof data !== 'object' || Array.isArray(data)) throw new HttpsError('invalid-argument', 'INVALID_REQUEST');
+  const value = data as Record<string, unknown>;
+  if (Object.keys(value).some((key) => key !== 'requestId')
+    || (value.requestId !== undefined && (typeof value.requestId !== 'string'
+      || !/^[A-Za-z0-9_.:-]{8,100}$/.test(value.requestId)))) {
+    throw new HttpsError('invalid-argument', 'INVALID_REQUEST');
+  }
+  return typeof value.requestId === 'string' ? value.requestId : null;
+}
+export async function requestNutritionPlanGenerationHandler(
+  request: CallableRequest, db: Firestore = defaultDb,
+): Promise<{ generationId: string }> {
+  const uid = requireAuth(request);
+  const requestId = requestIdFrom(request.data);
+  try { await requireActiveAccount(uid, db); }
+  catch { throw new HttpsError('failed-precondition', 'ACCOUNT_INACTIVE'); }
+  try { await requireNutritionGenerationRollout(db, uid); }
+  catch { throw new HttpsError('failed-precondition', 'NUTRITION_GENERATION_DISABLED'); }
+  // All safety/context checks happen before the job is queued and again in the worker.
+  await loadGenerationContext(db, uid);
+  const rateRef = db.collection('nutritionRateLimits').doc(uid);
+  const user = db.collection('users').doc(uid);
+  const generationId = randomUUID();
+  const jobRef = user.collection('nutritionGenerationJobs').doc(generationId);
+  const now = Timestamp.now();
+  return db.runTransaction(async (tx) => {
+    const rate = await tx.get(rateRef);
+    const activeId = rate.get('activeGenerationId');
+    const existing = typeof activeId === 'string'
+      ? await tx.get(user.collection('nutritionGenerationJobs').doc(activeId)) : null;
+    if (existing && ['queued', 'running', 'validating'].includes(existing.get('status'))) {
+      return { generationId: activeId as string };
+    }
+    if (requestId && rate.get('lastRequestId') === requestId && typeof rate.get('lastGenerationId') === 'string') {
+      return { generationId: rate.get('lastGenerationId') as string };
+    }
+    const last = rate.get('lastRequestedAt');
+    if (last instanceof Timestamp && now.toMillis() - last.toMillis() < FULL_PLAN_COOLDOWN_MS) {
+      throw new HttpsError('resource-exhausted', 'NUTRITION_GENERATION_COOLDOWN');
+    }
+    const deletionLock = await tx.get(db.collection('accountDeletionLocks').doc(uid));
+    if (deletionLock.exists) throw new HttpsError('failed-precondition', 'ACCOUNT_INACTIVE');
+    tx.create(jobRef, { generationId, operationType: 'full_plan', status: 'queued', requestedAt: now,
+      retryCount: 0, aiAttemptCount: 0, lastFailureCode: null,
+      planId: null, errorCode: null, ownerUid: uid, nextAttemptAt: now, leaseUntil: null });
+    tx.set(rateRef, { ownerUid: uid, activeGenerationId: generationId, activePlanId: rate.get('activePlanId') ?? null,
+      lastGenerationId: generationId, lastRequestId: requestId, lastRequestedAt: now, updatedAt: now }, { merge: true });
+    return { generationId };
+  });
+}
+
+export const requestNutritionPlanGeneration = onCall(
+  { enforceAppCheck: true, timeoutSeconds: 60 },
+  (request) => requestNutritionPlanGenerationHandler(request),
+);

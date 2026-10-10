@@ -181,12 +181,14 @@ service cloud.firestore {
              'workoutsAndReminders',
              'evolutionAndAchievements',
              'progress',
+             'nutrition',
              'subscription',
              'support'
            ])
         && (!('workoutsAndReminders' in data) || data.workoutsAndReminders is bool)
         && (!('evolutionAndAchievements' in data) || data.evolutionAndAchievements is bool)
         && (!('progress' in data) || data.progress is bool)
+        && (!('nutrition' in data) || data.nutrition is bool)
         && (!('subscription' in data) || data.subscription is bool)
         && (!('support' in data) || data.support is bool);
     }
@@ -979,6 +981,213 @@ service cloud.firestore {
         && encryptionMetadataValid(d.encryption);
     }
 
+    // Nutrition client documents: closed shapes at every client-authored level.
+    function nutritionId(value) {
+      return value is string && value.size() > 0 && value.size() <= 120;
+    }
+    function nutritionBoundedId(value) {
+      // Same 1..120 string-id contract as nutritionId, but without the
+      // explicit `is string` check: size() on a non-string throws, which
+      // Firestore Rules resolves as a deny (same fail-closed reasoning as
+      // nutritionBoundedNumber above). Used only in the diary's per-item/
+      // per-meal validators, which are re-evaluated in full on every write
+      // and sit closest to the 1000-expression ceiling at 6 meals x 6 items.
+      return value.size() > 0 && value.size() <= 120;
+    }
+    function nutritionIdList(value) {
+      return value is list && value.size() <= 10 && value.toSet().size() == value.size()
+        && (value.size() < 1 || nutritionId(value[0]))
+        && (value.size() < 2 || nutritionId(value[1]))
+        && (value.size() < 3 || nutritionId(value[2]))
+        && (value.size() < 4 || nutritionId(value[3]))
+        && (value.size() < 5 || nutritionId(value[4]))
+        && (value.size() < 6 || nutritionId(value[5]))
+        && (value.size() < 7 || nutritionId(value[6]))
+        && (value.size() < 8 || nutritionId(value[7]))
+        && (value.size() < 9 || nutritionId(value[8]))
+        && (value.size() < 10 || nutritionId(value[9]));
+    }
+    // Favorites are a personal shortcut collection, not one of the
+    // questionnaire's intentionally-small 10-item answer lists. The
+    // separate 20-item abuse guard plus a 20-item combined cap keeps full
+    // validation under Firestore Rules' expression budget while avoiding the inherited,
+    // product-unmotivated 10-favorite cap.
+    function nutritionFavoriteIdList(value) {
+      return value is list && value.size() <= 20 && value.toSet().size() == value.size()
+        && (value.size() < 1 || nutritionId(value[0]))
+        && (value.size() < 2 || nutritionId(value[1]))
+        && (value.size() < 3 || nutritionId(value[2]))
+        && (value.size() < 4 || nutritionId(value[3]))
+        && (value.size() < 5 || nutritionId(value[4]))
+        && (value.size() < 6 || nutritionId(value[5]))
+        && (value.size() < 7 || nutritionId(value[6]))
+        && (value.size() < 8 || nutritionId(value[7]))
+        && (value.size() < 9 || nutritionId(value[8]))
+        && (value.size() < 10 || nutritionId(value[9]))
+        && (value.size() < 11 || nutritionId(value[10]))
+        && (value.size() < 12 || nutritionId(value[11]))
+        && (value.size() < 13 || nutritionId(value[12]))
+        && (value.size() < 14 || nutritionId(value[13]))
+        && (value.size() < 15 || nutritionId(value[14]))
+        && (value.size() < 16 || nutritionId(value[15]))
+        && (value.size() < 17 || nutritionId(value[16]))
+        && (value.size() < 18 || nutritionId(value[17]))
+        && (value.size() < 19 || nutritionId(value[18]))
+        && (value.size() < 20 || nutritionId(value[19]));
+    }
+    function nutritionNumber(value) {
+      return value is number && value >= 0 && value <= 100000;
+    }
+    function nutritionBoundedNumber(value) {
+      // Range comparisons fail closed for non-numeric values, so this is the
+      // compact equivalent used only inside the heavily repeated diary
+      // validators. It preserves the same 0..100000 contract while keeping
+      // valid six-meal documents below Firestore's expression budget.
+      return value >= 0 && value <= 100000;
+    }
+    function nutritionValues(value) {
+      return value is map
+        && value.keys().hasAll(['kcal', 'proteinG', 'carbsG', 'fatG'])
+        && value.keys().hasOnly(['kcal', 'proteinG', 'carbsG', 'fatG', 'fiberG'])
+        && nutritionNumber(value.kcal) && nutritionNumber(value.proteinG)
+        && nutritionNumber(value.carbsG) && nutritionNumber(value.fatG)
+        && (value.get('fiberG', null) == null || nutritionNumber(value.fiberG));
+    }
+    function nutritionTotals(value) {
+      return value is map
+        && value.keys().hasOnly(['kcal', 'proteinG', 'carbsG', 'fatG', 'fiberG'])
+        && nutritionNumber(value.kcal) && nutritionNumber(value.proteinG)
+        && nutritionNumber(value.carbsG) && nutritionNumber(value.fatG)
+        && nutritionNumber(value.fiberG);
+    }
+    function nutritionLoggedMealTotalsValid(value) {
+      return value.keys().hasOnly(['kcal', 'proteinG', 'carbsG', 'fatG', 'fiberG'])
+        && nutritionBoundedNumber(value.kcal) && nutritionBoundedNumber(value.proteinG)
+        && nutritionBoundedNumber(value.carbsG) && nutritionBoundedNumber(value.fatG)
+        && nutritionBoundedNumber(value.fiberG);
+    }
+    function nutritionProfileValid(d) {
+      return d is map && d.keys().hasAll([
+          'questionnaireVersion', 'nonTrainingActivityLevel', 'mealSlots', 'dietaryPattern',
+          'preferredFoodIds', 'usualFoodIds', 'excludedFoodIds', 'supplements',
+          'pregnant', 'breastfeeding', 'varietyPreference', 'updatedAt'
+        ])
+        && d.keys().hasOnly([
+          'questionnaireVersion', 'progressionPace', 'targetWeightKg', 'nonTrainingActivityLevel',
+          'mealSlots', 'dietaryPattern', 'preferredFoodIds', 'usualFoodIds',
+          'excludedFoodIds', 'supplements', 'pregnant', 'breastfeeding',
+          'varietyPreference', 'nutritionGoalCategory', 'excludedAllergens', 'updatedAt'
+        ])
+        && d.questionnaireVersion is int && d.questionnaireVersion >= 1 && d.questionnaireVersion <= 100
+        && d.get('progressionPace', 'gradual') in ['gradual', 'moderate', 'accelerated']
+        && (d.get('targetWeightKg', null) == null || (d.targetWeightKg is number && d.targetWeightKg > 0 && d.targetWeightKg <= 500))
+        && d.nonTrainingActivityLevel in ['sedentary', 'low_active', 'active', 'very_active']
+        && d.mealSlots is list && d.mealSlots.size() >= 2 && d.mealSlots.size() <= 6
+        && d.mealSlots.toSet().size() == d.mealSlots.size()
+        && d.mealSlots.hasOnly(['breakfast', 'morning_snack', 'lunch', 'afternoon_snack', 'dinner', 'supper'])
+        && d.dietaryPattern in ['omnivore', 'vegetarian', 'vegan', 'pescatarian']
+        && nutritionIdList(d.preferredFoodIds) && nutritionIdList(d.usualFoodIds)
+        && nutritionIdList(d.excludedFoodIds)
+        && d.get('excludedAllergens', []) is list
+        && d.get('excludedAllergens', []).size() <= 9
+        && d.get('excludedAllergens', []).toSet().size() == d.get('excludedAllergens', []).size()
+        && d.get('excludedAllergens', []).hasOnly(['milk', 'egg', 'peanut', 'tree_nuts', 'soy', 'wheat', 'fish', 'shellfish', 'other'])
+        && d.supplements is list && d.supplements.size() <= 6
+        && d.supplements.toSet().size() == d.supplements.size()
+        && d.supplements.hasOnly(['whey_or_protein', 'creatine', 'caffeine_or_preworkout', 'multivitamin', 'omega_3', 'other'])
+        && d.pregnant is bool && d.breastfeeding is bool
+        && d.varietyPreference in ['repeatable', 'variety', 'indifferent']
+        && d.get('nutritionGoalCategory', 'maintenance') in ['weight_loss', 'muscle_gain', 'maintenance', 'body_recomposition']
+        && d.updatedAt == request.time;
+    }
+    function nutritionLogItemValid(item) {
+      return item.keys().hasOnly(['id', 'foodId', 'grams', 'source', 'snapshot', 'loggedAt'])
+        && nutritionBoundedId(item.id) && item.loggedAt is timestamp
+        && nutritionBoundedId(item.foodId) && item.grams > 0 && item.grams <= 10000
+        && item.source in ['catalog_food', 'custom_food', 'recipe', 'food_log_catalog']
+        && item.snapshot.keys().hasOnly(['name', 'kcal', 'proteinG', 'carbsG', 'fatG', 'fiberG'])
+        && item.snapshot.name is string && item.snapshot.name.size() <= 200
+        && nutritionBoundedNumber(item.snapshot.kcal) && nutritionBoundedNumber(item.snapshot.proteinG)
+        && nutritionBoundedNumber(item.snapshot.carbsG) && nutritionBoundedNumber(item.snapshot.fatG)
+        && nutritionBoundedNumber(item.snapshot.get('fiberG', 0));
+    }
+    function nutritionIngredientValid(ingredient) {
+      return ingredient is map && ingredient.keys().hasOnly(['foodId', 'grams'])
+        && ingredient.keys().hasAll(['foodId', 'grams'])
+        && nutritionId(ingredient.foodId)
+        && ingredient.grams is number && ingredient.grams > 0 && ingredient.grams <= 10000;
+    }
+    function nutritionIngredientsValid(ingredients) {
+      return ingredients is list && ingredients.size() >= 1 && ingredients.size() <= 6
+        && (ingredients.size() < 1 || nutritionIngredientValid(ingredients[0]))
+        && (ingredients.size() < 2 || nutritionIngredientValid(ingredients[1]))
+        && (ingredients.size() < 3 || nutritionIngredientValid(ingredients[2]))
+        && (ingredients.size() < 4 || nutritionIngredientValid(ingredients[3]))
+        && (ingredients.size() < 5 || nutritionIngredientValid(ingredients[4]))
+        && (ingredients.size() < 6 || nutritionIngredientValid(ingredients[5]));
+    }
+    // Finished-recipe weight (grams) — may differ from the ingredient sum
+    // due to water loss/gain during preparation; absent means "use the
+    // ingredient sum as an estimate" (client/`calculateRecipeBreakdown`).
+    function nutritionRecipeFinalWeightValid(value) {
+      return value == null || (value is number && value > 0 && value <= 10000);
+    }
+    // How many servings the finished recipe yields; absent means "per serving" is never shown/loggable.
+    function nutritionRecipeServingsValid(value) {
+      return value == null || (value is int && value > 0 && value <= 100);
+    }
+    // Favorites copy a plan/alternative food item verbatim (same shape the
+    // client already read from a backend-authoritative document) — Rules
+    // can't re-derive AI output, but this isn't authoritative for anything
+    // safety-critical, only a personal bookmark (round brief §15).
+    function nutritionFavoriteFoodSourceValid(value) {
+      return value is map && value.keys().hasAll(['type', 'sourceId', 'sourceName'])
+        && value.keys().hasOnly(['type', 'sourceId', 'sourceName', 'sourceVersion'])
+        && value.type in ['tbca', 'taco', 'usda', 'label', 'manual']
+        && value.sourceId is string && value.sourceId.size() > 0 && value.sourceId.size() <= 200
+        && value.sourceName is string && value.sourceName.size() > 0 && value.sourceName.size() <= 200
+        && (value.get('sourceVersion', null) == null || (value.sourceVersion is string && value.sourceVersion.size() <= 50));
+    }
+    function nutritionFavoriteFoodItemValid(item) {
+      return item is map && item.keys().hasOnly(['foodId', 'grams', 'snapshot'])
+        && item.keys().hasAll(['foodId', 'grams', 'snapshot'])
+        && nutritionId(item.foodId) && item.grams is number && item.grams > 0 && item.grams <= 10000
+        && item.snapshot is map
+        && item.snapshot.keys().hasAll(['name', 'kcal', 'proteinG', 'carbsG', 'fatG', 'source', 'catalogVersion'])
+        && item.snapshot.keys().hasOnly(['name', 'kcal', 'proteinG', 'carbsG', 'fatG', 'fiberG', 'source', 'catalogVersion', 'brand'])
+        && item.snapshot.name is string && item.snapshot.name.size() > 0 && item.snapshot.name.size() <= 200
+        && nutritionNumber(item.snapshot.kcal) && nutritionNumber(item.snapshot.proteinG)
+        && nutritionNumber(item.snapshot.carbsG) && nutritionNumber(item.snapshot.fatG)
+        && (item.snapshot.get('fiberG', null) == null || nutritionNumber(item.snapshot.fiberG))
+        && nutritionFavoriteFoodSourceValid(item.snapshot.source)
+        && item.snapshot.catalogVersion is string && item.snapshot.catalogVersion.size() <= 50
+        && (item.snapshot.get('brand', null) == null || (item.snapshot.brand is map
+          && item.snapshot.brand.keys().hasAll(['name']) && item.snapshot.brand.keys().hasOnly(['name', 'productName'])
+          && item.snapshot.brand.name is string && item.snapshot.brand.name.size() > 0 && item.snapshot.brand.name.size() <= 200
+          && (item.snapshot.brand.get('productName', null) == null || (item.snapshot.brand.productName is string
+            && item.snapshot.brand.productName.size() > 0 && item.snapshot.brand.productName.size() <= 200))));
+    }
+    function nutritionFavoriteFoodsValid(foods) {
+      return foods is list && foods.size() >= 1 && foods.size() <= 8
+        && (foods.size() < 1 || nutritionFavoriteFoodItemValid(foods[0]))
+        && (foods.size() < 2 || nutritionFavoriteFoodItemValid(foods[1]))
+        && (foods.size() < 3 || nutritionFavoriteFoodItemValid(foods[2]))
+        && (foods.size() < 4 || nutritionFavoriteFoodItemValid(foods[3]))
+        && (foods.size() < 5 || nutritionFavoriteFoodItemValid(foods[4]))
+        && (foods.size() < 6 || nutritionFavoriteFoodItemValid(foods[5]))
+        && (foods.size() < 7 || nutritionFavoriteFoodItemValid(foods[6]))
+        && (foods.size() < 8 || nutritionFavoriteFoodItemValid(foods[7]));
+    }
+    function nutritionFavoriteMealOptionValid(option) {
+      return option is map && option.keys().hasAll(['id', 'source', 'slot', 'foods', 'totals', 'createdAt'])
+        && option.keys().hasOnly(['id', 'source', 'planId', 'alternativeId', 'slot', 'foods', 'totals', 'createdAt'])
+        && nutritionId(option.id) && option.source in ['plan', 'alternative']
+        && ((option.source == 'plan' && nutritionId(option.planId) && !('alternativeId' in option))
+          || (option.source == 'alternative' && nutritionId(option.alternativeId) && !('planId' in option)))
+        && option.slot in ['breakfast', 'morning_snack', 'lunch', 'afternoon_snack', 'dinner', 'supper']
+        && nutritionFavoriteFoodsValid(option.foods) && nutritionTotals(option.totals)
+        && option.createdAt is timestamp;
+    }
     // ── Users, questionnaires and assessments ─────────────────────────────
     match /users/{userId} {
       // Leitura: apenas o dono do documento, e somente com a conta ativa
@@ -1053,6 +1262,188 @@ service cloud.firestore {
       // Exclusão: negada ao cliente (remoção é processo de backend — 90 dias,
       // docs/12 §10). Somente o Admin SDK pode excluir.
       allow delete: if false;
+
+      match /nutritionProfile/{profileId} {
+        allow read: if profileId == 'current' && isOwner(userId) && accountActive(userId);
+        allow create: if profileId == 'current' && isOwner(userId) && accountActive(userId)
+          && nutritionProfileValid(request.resource.data);
+        allow update: if profileId == 'current' && isOwner(userId) && accountActive(userId)
+          && nutritionProfileValid(request.resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'progressionPace', 'targetWeightKg', 'nonTrainingActivityLevel', 'mealSlots',
+            'dietaryPattern', 'preferredFoodIds', 'usualFoodIds', 'excludedFoodIds',
+            'supplements', 'pregnant', 'breastfeeding', 'varietyPreference',
+            'nutritionGoalCategory', 'excludedAllergens', 'updatedAt'
+          ]);
+        allow delete: if false;
+      }
+      match /nutritionPlans/{planId} {
+        allow read: if isOwner(userId) && accountActive(userId);
+        allow write: if false;
+      }
+      match /nutritionGenerationJobs/{generationId} {
+        allow read: if isOwner(userId) && accountActive(userId);
+        allow write: if false;
+      }
+      // AI-generated meal alternatives go through the same validator/correction
+      // pipeline as a full plan — backend-only, same trust level as nutritionPlans.
+      match /nutritionMealAlternatives/{alternativeId} {
+        allow read: if isOwner(userId) && accountActive(userId);
+        allow write: if false;
+      }
+      // A day's meals live one-per-document in the `meals` subcollection
+      // below, not as an array here — six meals x six items each blew past
+      // Firestore's 1000-expression Rules budget on a single write when
+      // the whole day was one document (round brief part 1 §6). This
+      // top-level doc only carries the day's aggregate totals and a cheap
+      // `loggedItemCount` the client maintains incrementally so the
+      // backend can detect an empty day (see `nutritionNotificationContext.ts`)
+      // without reading every meal/item.
+      match /nutritionDailyLogs/{localDate} {
+        allow read: if isOwner(userId) && accountActive(userId);
+        allow create: if isOwner(userId) && accountActive(userId)
+          && request.resource.data.keys().hasOnly(['localDate', 'timezone', 'totals', 'loggedItemCount', 'createdAt', 'updatedAt'])
+          && request.resource.data.keys().hasAll(['localDate', 'timezone', 'totals', 'loggedItemCount', 'createdAt', 'updatedAt'])
+          && strictLocalDate(localDate)
+          && request.resource.data.localDate == localDate
+          && request.resource.data.timezone is string && request.resource.data.timezone.size() > 0 && request.resource.data.timezone.size() <= 80
+          && nutritionTotals(request.resource.data.totals)
+          && request.resource.data.loggedItemCount is int && request.resource.data.loggedItemCount >= 0 && request.resource.data.loggedItemCount <= 36
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+        allow update: if isOwner(userId) && accountActive(userId)
+          && request.resource.data.keys().hasOnly(['localDate', 'timezone', 'totals', 'loggedItemCount', 'createdAt', 'updatedAt'])
+          && request.resource.data.keys().hasAll(['localDate', 'timezone', 'totals', 'loggedItemCount', 'createdAt', 'updatedAt'])
+          && request.resource.data.localDate == localDate
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.timezone is string && request.resource.data.timezone.size() > 0 && request.resource.data.timezone.size() <= 80
+          && nutritionTotals(request.resource.data.totals)
+          && request.resource.data.loggedItemCount is int && request.resource.data.loggedItemCount >= 0 && request.resource.data.loggedItemCount <= 36
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['timezone', 'totals', 'loggedItemCount', 'updatedAt']);
+        allow delete: if isOwner(userId) && accountActive(userId);
+
+        // One document per meal slot (doc id == slot) — bounds every write
+        // to a single meal's items (<= 6), regardless of how many other
+        // meals exist that day.
+        match /meals/{slotId} {
+          allow read: if isOwner(userId) && accountActive(userId);
+          allow create, update: if isOwner(userId) && accountActive(userId)
+            && slotId in ['breakfast', 'morning_snack', 'lunch', 'afternoon_snack', 'dinner', 'supper']
+            && request.resource.data.keys().hasOnly(['slot', 'totals', 'followedRecommendedOptionId'])
+            && request.resource.data.keys().hasAll(['slot', 'totals'])
+            && request.resource.data.slot == slotId
+            && nutritionLoggedMealTotalsValid(request.resource.data.totals)
+            && (request.resource.data.get('followedRecommendedOptionId', null) == null
+              || nutritionBoundedId(request.resource.data.followedRecommendedOptionId));
+          allow delete: if isOwner(userId) && accountActive(userId);
+
+          // A single logged item costs ~150-200 of the Rules evaluator's
+          // 1000-expression-per-write budget on its own (confirmed
+          // empirically: 5 items in one meal document already exceeded
+          // it) — official guidance for hitting this ceiling is to
+          // shrink what one write validates, so each item is its own
+          // document instead of an array entry. The per-meal item COUNT
+          // cap (<=6, round brief part 1's approved limit) is enforced
+          // client-side only now, same as the already-unbounded
+          // nutritionRecipes/nutritionFoods collections — it was never a
+          // security invariant, just a UX one, and nothing here lets a
+          // user touch anyone else's data or bypass a numeric/shape check.
+          match /items/{itemId} {
+            allow read: if isOwner(userId) && accountActive(userId);
+            allow create, update: if isOwner(userId) && accountActive(userId)
+              && request.resource.data.id == itemId
+              && nutritionLogItemValid(request.resource.data);
+            allow delete: if isOwner(userId) && accountActive(userId);
+          }
+        }
+      }
+      match /nutritionRecipes/{recipeId} {
+        allow read: if isOwner(userId) && accountActive(userId);
+        allow create: if isOwner(userId) && accountActive(userId)
+          && request.resource.data.keys().hasAll(['id', 'name', 'ingredients', 'createdAt', 'updatedAt'])
+          && request.resource.data.keys().hasOnly(['id', 'name', 'description', 'ingredients', 'finalWeightG', 'servings', 'createdAt', 'updatedAt'])
+          && request.resource.data.id == recipeId
+          && nutritionId(recipeId)
+          && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 200
+          && request.resource.data.get('description', '') is string && request.resource.data.get('description', '').size() <= 1000
+          && nutritionIngredientsValid(request.resource.data.ingredients)
+          && nutritionRecipeFinalWeightValid(request.resource.data.get('finalWeightG', null))
+          && nutritionRecipeServingsValid(request.resource.data.get('servings', null))
+          && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+        allow update: if isOwner(userId) && accountActive(userId)
+          && request.resource.data.keys().hasAll(['id', 'name', 'ingredients', 'createdAt', 'updatedAt'])
+          && request.resource.data.keys().hasOnly(['id', 'name', 'description', 'ingredients', 'finalWeightG', 'servings', 'createdAt', 'updatedAt'])
+          && request.resource.data.id == recipeId
+          && nutritionId(recipeId)
+          && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 200
+          && request.resource.data.get('description', '') is string && request.resource.data.get('description', '').size() <= 1000
+          && nutritionIngredientsValid(request.resource.data.ingredients)
+          && nutritionRecipeFinalWeightValid(request.resource.data.get('finalWeightG', null))
+          && nutritionRecipeServingsValid(request.resource.data.get('servings', null))
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+            ['name', 'description', 'ingredients', 'finalWeightG', 'servings', 'calculatedNutrition', 'updatedAt']);
+        allow delete: if isOwner(userId) && accountActive(userId);
+      }
+      match /nutritionFoods/{foodId} {
+        allow read: if isOwner(userId) && accountActive(userId);
+        allow create: if isOwner(userId) && accountActive(userId)
+          && request.resource.data.keys().hasOnly(['id', 'name', 'nutritionPer100g', 'createdAt', 'updatedAt'])
+          && request.resource.data.keys().hasAll(['id', 'name', 'nutritionPer100g', 'createdAt', 'updatedAt'])
+          && request.resource.data.id == foodId
+          && nutritionId(foodId)
+          && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 200
+          && nutritionValues(request.resource.data.nutritionPer100g)
+          && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+        allow update: if isOwner(userId) && accountActive(userId)
+          && request.resource.data.keys().hasOnly(['id', 'name', 'nutritionPer100g', 'createdAt', 'updatedAt'])
+          && request.resource.data.keys().hasAll(['id', 'name', 'nutritionPer100g', 'createdAt', 'updatedAt'])
+          && request.resource.data.id == foodId
+          && nutritionId(foodId)
+          && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 200
+          && nutritionValues(request.resource.data.nutritionPer100g)
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'nutritionPer100g', 'updatedAt']);
+        allow delete: if isOwner(userId) && accountActive(userId);
+      }
+      match /nutritionPreferences/{preferenceId} {
+        allow read: if preferenceId == 'current' && isOwner(userId) && accountActive(userId);
+        // Explicit favorites are user-owned. Backend-learned memory, if added later,
+        // remains outside the mutable key set.
+        allow create: if preferenceId == 'current' && isOwner(userId) && accountActive(userId)
+          && request.resource.data.keys().hasOnly(['favoriteFoodIds', 'favoriteRecipeIds', 'updatedAt'])
+          && request.resource.data.keys().hasAll(['favoriteFoodIds', 'favoriteRecipeIds', 'updatedAt'])
+          && request.resource.data.favoriteFoodIds.size() + request.resource.data.favoriteRecipeIds.size() <= 20
+          && nutritionFavoriteIdList(request.resource.data.favoriteFoodIds)
+          && nutritionFavoriteIdList(request.resource.data.favoriteRecipeIds)
+          && request.resource.data.updatedAt == request.time;
+        allow update: if preferenceId == 'current' && isOwner(userId) && accountActive(userId)
+          && request.resource.data.keys().hasOnly(['favoriteFoodIds', 'favoriteRecipeIds', 'updatedAt'])
+          && request.resource.data.keys().hasAll(['favoriteFoodIds', 'favoriteRecipeIds', 'updatedAt'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['favoriteFoodIds', 'favoriteRecipeIds', 'updatedAt'])
+          && request.resource.data.favoriteFoodIds.size() + request.resource.data.favoriteRecipeIds.size() <= 20
+          && nutritionFavoriteIdList(request.resource.data.favoriteFoodIds)
+          && nutritionFavoriteIdList(request.resource.data.favoriteRecipeIds)
+          && request.resource.data.updatedAt == request.time;
+        allow delete: if false;
+      }
+
+      // Each favorite is isolated so Firestore can validate all nested food
+      // snapshots without expanding a 10 x 8 array past its 1,000-expression
+      // limit. The service still exposes a bounded list to the UI.
+      match /nutritionFavoriteMealOptions/{favoriteId} {
+        allow read: if isOwner(userId) && accountActive(userId);
+        allow create: if isOwner(userId) && accountActive(userId)
+          && request.resource.data.id == favoriteId
+          && nutritionId(favoriteId)
+          && nutritionFavoriteMealOptionValid(request.resource.data)
+          && request.resource.data.createdAt == request.time;
+        allow update: if false;
+        allow delete: if isOwner(userId) && accountActive(userId);
+      }
 
       // Backend-maintained projection. It contains no raw token, but is
       // intentionally not a client API: sync/release happen only through
@@ -2874,6 +3265,37 @@ service cloud.firestore {
       allow read, write: if false;
     }
     match /notificationSchedulerState/{documentId} {
+      allow read, write: if false;
+    }
+
+    match /nutritionFoods/{foodId} {
+      allow read: if isSignedIn() && accountActive(request.auth.uid);
+      allow write: if false;
+    }
+    match /nutritionCatalogMeta/{metaId} {
+      allow read: if metaId == 'current' && isSignedIn() && accountActive(request.auth.uid);
+      allow write: if false;
+    }
+    // Fase C2 — amplo catálogo de registro alimentar (busca/diário), separado
+    // de `nutritionFoods` (geração de dieta/IA). Mesmo padrão: leitura
+    // autenticada, escrita só via Admin SDK/scripts de import
+    // (`docs/nutrition/catalog-expansion/03_canonical_model.md`).
+    match /foodLogCatalog/{foodId} {
+      allow read: if isSignedIn() && accountActive(request.auth.uid);
+      allow write: if false;
+    }
+    match /foodLogCatalogMeta/{metaId} {
+      allow read: if metaId == 'current' && isSignedIn() && accountActive(request.auth.uid);
+      allow write: if false;
+    }
+    match /nutritionRolloutConfig/{configId} {
+      allow read: if configId == 'active' && isSignedIn() && accountActive(request.auth.uid);
+      allow write: if false;
+    }
+    match /nutritionAiOperations/{operationId} {
+      allow read, write: if false;
+    }
+    match /nutritionRateLimits/{limitId} {
       allow read, write: if false;
     }
 

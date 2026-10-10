@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "catalogVersion": "fixture-v1",
+  "records": [
+    {
+      "source": { "type": "manual", "sourceId": "fixture-arroz-001", "sourceName": "TEST FIXTURE ONLY", "sourceVersion": "fixture-v1" },
+      "name": "Arroz de teste",
+      "aliases": ["Arroz fixture"],
+      "category": "cereal",
+      "nutritionPer100g": { "kcal": 100, "proteinG": 2, "carbsG": 20, "fatG": 1, "fiberG": null },
+      "dietaryFlags": { "vegetarian": null, "vegan": null, "pescatarian": null },
+      "allergens": null,
+      "generationStatus": "pending_review"
+    }
+  ]
+}

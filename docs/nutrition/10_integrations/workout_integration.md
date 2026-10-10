@@ -94,6 +94,8 @@ Se não houver programa ativo, usar `Quiz.days` (§2). Se nem isso existir:
 
 - não inventar;
 - usar fallback determinístico definido pelo engine;
+- na base atual, esse fallback é `weeklyTrainingFrequency: 0` (nenhum treino
+  presumido quando não há evidência de programa ou `Quiz.days`);
 - registrar o motivo quando relevante.
 
 ---

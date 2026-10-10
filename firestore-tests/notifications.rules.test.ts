@@ -103,6 +103,7 @@ describe('notification preferences rules', () => {
     'workoutsAndReminders',
     'evolutionAndAchievements',
     'progress',
+    'nutrition',
   ])('allows owner boolean update for %s', async (key) => {
     await assertSucceeds(updateDoc(doc(db(UID), 'users', UID), {
       [`preferences.notificationPreferences.${key}`]: false,

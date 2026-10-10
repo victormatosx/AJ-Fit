@@ -22,7 +22,7 @@
  * symptom, only a shape mismatch.
  *
  * Fix applied: none to `firestore.rules` (already correct) — `firebase
- * deploy --only firestore:rules` to `ajfit-2f321` is required for the five
+ * deploy --only firestore:rules` to `ajfit-2f321` is required for the six
  * categories to work on a real device. See the task report for the deploy
  * command.
  */
@@ -47,12 +47,14 @@ const CURRENT_FUNCTION = `    function notificationPreferencesValid(data) {
              'workoutsAndReminders',
              'evolutionAndAchievements',
              'progress',
+             'nutrition',
              'subscription',
              'support'
            ])
         && (!('workoutsAndReminders' in data) || data.workoutsAndReminders is bool)
         && (!('evolutionAndAchievements' in data) || data.evolutionAndAchievements is bool)
         && (!('progress' in data) || data.progress is bool)
+        && (!('nutrition' in data) || data.nutrition is bool)
         && (!('subscription' in data) || data.subscription is bool)
         && (!('support' in data) || data.support is bool);
     }`;
@@ -93,19 +95,20 @@ async function seedUser(env: RulesTestEnvironment) {
   });
 }
 
-function writeAllFive(env: RulesTestEnvironment) {
+function writeAllSix(env: RulesTestEnvironment) {
   const ownerDb = env.authenticatedContext(UID, { email: 'alice@example.com' }).firestore();
   return updateDoc(doc(ownerDb, 'users', UID), {
     'preferences.notificationPreferences.workoutsAndReminders': false,
     'preferences.notificationPreferences.evolutionAndAchievements': false,
     'preferences.notificationPreferences.progress': false,
+    'preferences.notificationPreferences.nutrition': false,
     'preferences.notificationPreferences.subscription': false,
     'preferences.notificationPreferences.support': false,
     'metadata.updatedAt': serverTimestamp(),
   });
 }
 
-describe('deploy drift: notificationPreferencesValid 3-key vs 5-key', () => {
+describe('deploy drift: notificationPreferencesValid 3-key vs 6-key', () => {
   let staleEnv: RulesTestEnvironment;
   let currentEnv: RulesTestEnvironment;
 
@@ -126,12 +129,12 @@ describe('deploy drift: notificationPreferencesValid 3-key vs 5-key', () => {
 
   it('reproduces the real permission-denied: the stale 3-key ruleset rejects all 5 categories', async () => {
     await seedUser(staleEnv);
-    await assertFails(writeAllFive(staleEnv));
+    await assertFails(writeAllSix(staleEnv));
   });
 
-  it('the current 5-key ruleset (this repo\'s firestore.rules) accepts all 5 categories', async () => {
+  it('the current 6-key ruleset (this repo\'s firestore.rules) accepts all 6 categories', async () => {
     await seedUser(currentEnv);
-    await assertSucceeds(writeAllFive(currentEnv));
+    await assertSucceeds(writeAllSix(currentEnv));
   });
 
   it('the stale ruleset still accepts the 3 original categories alone (why partial toggles looked fine)', async () => {

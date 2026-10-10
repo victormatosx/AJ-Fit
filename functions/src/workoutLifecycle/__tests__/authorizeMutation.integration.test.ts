@@ -599,6 +599,16 @@ describe.skipIf(!enabled)('Workout Lifecycle authority — real Firestore Emulat
       expect(cycle.data()).toMatchObject({ status: 'ACTIVE', cycleNumber: 1 });
     });
 
+    it('accepts intermediate_experienced (diet-quality-audit-session regression, 2026-10-10) — a brand-new account must not get starting_level_unknown for this normal quiz answer', async () => {
+      await seedQuestionnaire('q_v127_intermediate_experienced', { level: 'intermediate_experienced' });
+      const result = await initializeWorkoutProgramV127Handler(
+        { auth: { uid: UID }, data: { questionnaireId: 'q_v127_intermediate_experienced', questionnaireVersion: 1 } } as never, db,
+      );
+      expect(result.status).toBe('SUCCESS');
+      const lifecycle = await db.collection('users').doc(UID).collection('workoutLifecycleState').doc('current').get();
+      expect(lifecycle.data()?.currentTrainingLevel).toBe('INTERMEDIATE');
+    });
+
     it('ignores any client-supplied templateId/versions/trace/sessions/plan — the request shape has no field for them', async () => {
       await seedQuestionnaire('q_v127_forged');
       const forged = {

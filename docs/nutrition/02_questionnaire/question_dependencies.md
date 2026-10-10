@@ -86,6 +86,23 @@ A ordem pode ser refinada pela UX, desde que as dependências abaixo sejam respe
 
 ## 5. Dependências por pergunta
 
+### 5.0 Objetivo nutricional complementar (`nutritionGoalCategory`)
+
+Dependência (decisão final):
+
+```text
+generalGoal in goalCategoryResolution.ambiguousGeneralGoals
+-> require nutritionGoalCategory
+```
+
+Onde `ambiguousGeneralGoals` é exatamente `["strength", "conditioning", "perf", "return_to_training", "recon"]` (`canonical/nutrition_rules.json` `goals.normalization.ambiguous.values`, duplicado para referência em `canonical/questionnaire.json` `goalCategoryResolution.ambiguousGeneralGoals` — mesma fonte, nunca divergente).
+
+Para os demais objetivos gerais (`gain_muscle`/`hyper`, `lose_fat`/`cut`, `body_composition`/`def`, `health`), a pergunta não é exibida — o mapeamento direto (`goals.normalization.mapping`) já resolve a direção nutricional, e não há necessidade de perguntar de novo.
+
+Não oferecer esta pergunta como opcional/"tanto faz" quando ela for exigida — ver §3.2.1 de `nutrition_questionnaire.md` para o motivo (ausência de direção nutricional inequívoca no objetivo geral).
+
+---
+
 ### 5.1 Refeições
 
 Sempre disponível.
@@ -316,6 +333,7 @@ Quando uma versão nova incluir uma pergunta essencial:
 | Peso atual | Evolução AJ Fit | Sim | Não | Não | Sim se ausente |
 | Altura | AJ Fit | Sim | Não | Não | Sim se ausente |
 | Objetivo | AJ Fit | Sim | Não | Não | Sim se ausente/inválido |
+| Objetivo nutricional (`nutritionGoalCategory`) | Nutrição | Somente quando objetivo geral é ambíguo (§5.0) | Não | Não | Sim quando exigida e ausente |
 | Gestação | `nutritionProfile/current` (pré-preenchido 1x por `Quiz.pregnancyScreening`) | Quando aplicável | Não | Sim | Sim |
 | Lactação | `nutritionProfile/current` | Quando aplicável | Não | Sim | Sim |
 | Refeições | Nutrição | Sim | Não | Sim para estrutura | Sim |

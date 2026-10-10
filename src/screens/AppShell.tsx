@@ -21,6 +21,8 @@ import { PASSWORD_PROVIDER_ID } from '../lib/authProviders';
 import { HomeScreen } from './HomeScreen';
 import { WorkoutScreen } from './WorkoutScreen';
 import { ProgressScreen } from './ProgressScreen';
+import { NutritionShell } from './nutrition/NutritionShell';
+import { useNutritionEnabled } from '../nutrition/useNutritionEnabled';
 import { ProfileScreen } from './ProfileScreen';
 import { AssessmentScreen } from './AssessmentScreen';
 import { SettingsScreen } from './SettingsScreen';
@@ -264,6 +266,12 @@ function AppShellContent({
   const reduceMotion = useReducedMotionPreference();
   const { tab, setTab } = useAppState();
   const { user, linkedProviders } = useAuth();
+  // Gates the tab itself, not just its content — an unresolved/off flag
+  // must never show the tab icon at all (round brief §3).
+  const nutritionEnabled = useNutritionEnabled(user?.uid ?? null);
+  useEffect(() => {
+    if (tab === 'nutrition' && nutritionEnabled === false) setTab('home');
+  }, [tab, nutritionEnabled, setTab]);
   const {
     prescription,
     loading: prescriptionLoading,
@@ -362,6 +370,10 @@ function AppShellContent({
     programIdentity: activeProgram?.programInstanceId ?? activeProgram?.programId ?? null,
   });
   const { pendingIntent, consumeIntent } = useDeepLinkIntent();
+  const [nutritionNavigationRequest, setNutritionNavigationRequest] = useState<{
+    destination: 'plan' | 'diary' | 'weekly';
+    nonce: number;
+  } | null>(null);
   const {
     status: restStatus,
     rest: activeRest,
@@ -888,11 +900,21 @@ function AppShellContent({
     } else if (pendingIntent.type === 'campaign-tab') {
       setTab(pendingIntent.tab);
       consumeIntent(pendingIntent);
+    } else if (pendingIntent.type === 'nutrition-tab') {
+      if (nutritionEnabled === true) {
+        setNutritionNavigationRequest((current) => ({
+          destination: pendingIntent.destination,
+          nonce: (current?.nonce ?? 0) + 1,
+        }));
+        setTab('nutrition');
+      }
+      consumeIntent(pendingIntent);
     }
   }, [
     consumeIntent,
     overlayOpen,
     pendingIntent,
+    nutritionEnabled,
     requestStartWorkout,
     showEvolutionUnlock,
     startWorkoutFlow,
@@ -1944,6 +1966,12 @@ function AppShellContent({
             onInitialLayoutCommitted={onInitialLayoutCommitted}
           />
         </PersistentScreen>
+        <PersistentScreen active={tab === 'nutrition' && nutritionEnabled === true} activeStyle={FULL_BLEED.tab} inactiveMode="materialized">
+          <NutritionShell
+            navigationRequest={nutritionNavigationRequest}
+            onOpenProgress={() => setTab('progress')}
+          />
+        </PersistentScreen>
         {tab === 'workout' && workoutStartAttempt && (
           <WorkoutStartVisibilityMetric
             key={workoutStartAttempt.id}
@@ -2119,7 +2147,7 @@ function AppShellContent({
           accessibilityElementsHidden={overlayOpen || !homeInitialVisualReady}
           importantForAccessibility={overlayOpen || !homeInitialVisualReady ? 'no-hide-descendants' : 'auto'}
         >
-          <TabBar tab={tab} setTab={selectTab} />
+          <TabBar tab={tab} setTab={selectTab} nutritionVisible={nutritionEnabled === true} />
         </View>
       )}
       <StartWorkoutConfirmation
@@ -3028,15 +3056,16 @@ function WorkoutTabBlockedState({
   );
 }
 
-function TabBar({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => void }) {
+function TabBar({ tab, setTab, nutritionVisible }: { tab: TabId; setTab: (t: TabId) => void; nutritionVisible: boolean }) {
   const { theme } = useTheme();
   const { t } = useTranslation('common');
   const { profile } = useAuth();
   const profilePhotoURL = profile?.profile.photoURL;
-  const items: { id: TabId; icon: IconName; labelKey: 'home' | 'workout' | 'progress' | 'profile' }[] = [
+  const items: { id: TabId; icon: IconName; labelKey: 'home' | 'workout' | 'progress' | 'profile' | 'nutrition' }[] = [
     { id: 'home', icon: 'home', labelKey: 'home' },
     { id: 'workout', icon: 'dumbbell', labelKey: 'workout' },
     { id: 'progress', icon: 'chart', labelKey: 'progress' },
+    ...(nutritionVisible ? [{ id: 'nutrition' as const, icon: 'apple' as const, labelKey: 'nutrition' as const }] : []),
     { id: 'profile', icon: 'user', labelKey: 'profile' },
   ];
   return (

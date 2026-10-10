@@ -1,5 +1,9 @@
 # AJ Fit Nutrition — Estratégia de Testes
 
+Matriz consolidada da Fase 31: [`e2e_test_matrix.md`](./e2e_test_matrix.md).
+
+Implementação backend V1: `functions/src/nutrition/__tests__/generation.test.ts` usa provider/fetch fake para schema, candidate selection, macro validator, correção e retries. `jobs.integration.test.ts` executa apenas com `FIRESTORE_EMULATOR_HOST`; verifica double tap, job, snapshots, ativação/arquivamento, falha sem plano, safety gates e exclusão de registros globais. Nenhum teste faz chamada real à OpenAI.
+
 ## 1. Objetivo
 
 Garantir que Nutrição seja correta, segura, determinística onde precisa ser, resiliente a falhas de IA e consistente com a arquitetura do AJ Fit.
@@ -203,3 +207,31 @@ Não liberar Nutrição se houver falha em:
 - idempotência;
 - histórico;
 - E2E principal.
+
+---
+
+## Base de catálogo (2026-10-08)
+
+`src/nutrition/catalog/__tests__/catalog.test.ts` cobre escala por gramas,
+arredondamento ao fim da soma, fibra desconhecida, validação, normalização,
+provenance, ID estável e deduplicação. Os testes de serviço validam alimentos
+próprios e receitas sem macros autoritativos do cliente. O Emulator cobre
+Rules, isolamento e busca paginada por nome/alias; nenhum teste usa Firestore
+de produção.
+
+## Resumo semanal (Fase 26)
+
+`src/nutrition/weekly/__tests__/weeklySummary.test.ts` cobre semana completa e parcial, ausência de dia, zero registrado, múltiplas refeições, edição refletida nos totais, fibra desconhecida, opção recomendada, troca de plano no meio da semana, restauração e peso com zero/uma/várias medições. `src/nutrition/ui/__tests__/localDate.test.ts` fixa segunda/domingo e viradas de mês/ano com construtores de data local, sem depender de parsing UTC do ambiente de CI. O wiring da Home, query bounded, tela e CTA para Evolução tem teste estrutural separado, seguindo o padrão Node-only atual do projeto.
+
+## Fases 27–30
+
+- notificações: contrato/copy, preference, daily/weekly, plan-ready somente
+  após plano, dedupe, timezone/janela, diário e account lock;
+- analytics: nomes/autoridade, allowlist, rejeição de dado sensível e no-op;
+- observabilidade: usage, pricing, custo conhecido/desconhecido,
+  retry/fallback/failure e alert codes;
+- Rules/Functions: cross-user, campos extras, arrays/IDs/datas/timezone,
+  backend-only, replay, rate limit, restore/alternative owner-only;
+- account deletion: lista integral parametrizada, isolamento entre usuários e
+  testes que iniciam deletion durante plano/alternativa e provam ausência de
+  persistência tardia.

@@ -2,6 +2,8 @@
 
 ## 1. Princípio central
 
+Implementação backend V1: planos são criados apenas pelo worker depois da validação determinística. Cada item inclui `foodId`, `grams` e snapshot canônico do nome, nutrientes por 100 g, `source`/`sourceId`/`sourceVersion` quando houver e `catalogVersion`. O plano também persiste `physicalSnapshot`, `engineSnapshot`, `dailyTotals`, `generationMetadata` e todas as versões. A versão do schema do plano é `1.1.0`.
+
 Na V1, o plano alimentar gerado pela IA é uma **recomendação**.
 
 Ele não representa o que o usuário efetivamente consumiu.
@@ -69,8 +71,8 @@ O usuário pode escolher outra opção da mesma refeição sem alterar o plano e
 
 ```ts
 interface NutritionMealPlan {
-  id: string;
-  ownerUid: string;
+  planId: string;
+  generationId: string;
 
   status: "active" | "archived";
 
@@ -83,15 +85,22 @@ interface NutritionMealPlan {
   activatedAt: Timestamp;
   archivedAt?: Timestamp | null;
 
+  // Exatamente `canonical/meal_plan_schema.json` ("versions",
+  // additionalProperties: false) — energyRulesVersion/macroRulesVersion/
+  // mealDistributionVersion NÃO entram aqui, vivem em `engineSnapshot`
+  // (ver `07_backend/firestore_schema.md` §3.3).
   versions: {
     planSchemaVersion: string;
     nutritionEngineVersion: string;
-    questionnaireVersion: string;
+    questionnaireVersion: number;
     foodCatalogVersion: string;
     aiGenerationSchemaVersion: string;
+    promptVersion?: string;
   };
 }
 ```
+
+`ownerUid` não aparece no documento — como em `questionnaires`/`assessments`, é implícito pelo path `users/{uid}/nutritionPlans/{planId}`, nunca duplicado no corpo do documento.
 
 ```ts
 interface NutritionMealPlanMeal {

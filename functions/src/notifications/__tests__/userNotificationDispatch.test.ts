@@ -51,9 +51,9 @@ function firestoreFixture(user: Record<string, unknown>, deletionLocked = false)
   };
 }
 
-function dependencies(user: Record<string, unknown>) {
+function dependencies(user: Record<string, unknown>, deletionLocked = false) {
   return {
-    db: firestoreFixture(user),
+    db: firestoreFixture(user, deletionLocked),
     expoClient: {},
     now: () => Timestamp.fromMillis(2_000_000_000_000),
   } as never;
@@ -118,6 +118,18 @@ describe('event-driven notification policy orchestration', () => {
       { status: 'SUPPRESSED_BY_PREFERENCE', terminalReason: 'DISABLED_BY_USER' },
       expect.any(Timestamp),
     );
+  });
+
+  it('does not recreate dispatch history after account deletion starts', async () => {
+    const outcome = await dispatchUserNotificationCandidate(
+      candidate('EVOLUTION_AND_ACHIEVEMENTS'),
+      dependencies({ preferences: { language: 'pt-BR' } }, true),
+    );
+    expect(outcome.status).toBe('SUPPRESSED_BY_PREFERENCE');
+    expect(outcome.dispatchId).toMatch(/^[a-f0-9]{64}$/);
+    expect(mocks.claimDispatch).not.toHaveBeenCalled();
+    expect(mocks.markDispatchOutcome).not.toHaveBeenCalled();
+    expect(mocks.dispatchNotification).not.toHaveBeenCalled();
   });
 
   it('does not let the three product toggles disable OPERATIONAL policy', async () => {

@@ -13,6 +13,7 @@ import {
 import { createExpoPushClient, type ExpoPushClient, type ExpoTicketResult } from './expoPushClient';
 import {
   claimDispatch,
+  dispatchIdFor,
   deferCampaignClaim,
   markDispatchOutcome,
   NotificationIdempotencyConflictError,
@@ -263,6 +264,19 @@ export async function dispatchNotification(
   }
 
   const now = dependencies.now();
+  if (dispatchMode === 'PRODUCT') {
+    const initialEligibility = await (dependencies.eligibility?.(request)
+      ?? resolveNotificationEligibility(
+        { uid: request.uid, category: request.category, type: request.type }, dependencies.db));
+    if (!initialEligibility.allowed
+      && (initialEligibility.reason === 'ACCOUNT_INACTIVE'
+        || initialEligibility.reason === 'USER_NOT_FOUND')) {
+      return {
+        status: 'SUPPRESSED_BY_PREFERENCE',
+        dispatchId: dispatchIdFor(request.idempotencyKey),
+      };
+    }
+  }
   let claim;
   try {
     claim = await claimDispatch(dependencies.db, request, now, dispatchMode);

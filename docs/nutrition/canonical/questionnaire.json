@@ -11,7 +11,27 @@
     "goal"
   ],
   "weightSource": "latest_progress_weight",
+  "goalCategoryResolution": {
+    "directMappingSource": "canonical/nutrition_rules.json goals.normalization.mapping",
+    "ambiguousGeneralGoals": ["strength", "conditioning", "perf", "return_to_training", "recon"],
+    "ambiguousGeneralGoalsNote": "Must always match canonical/nutrition_rules.json goals.normalization.ambiguous.values exactly — single source of truth is that file, duplicated here only so the questionnaire's conditional question below is self-describing.",
+    "note": "The general AJ Fit goal is NEVER replaced. When it has no direct mapping, the nutritionGoalCategory question below is required to resolve the energy-direction input the Nutrition Engine needs."
+  },
   "questions": [
+    {
+      "id": "nutritionGoalCategory",
+      "type": "single_select",
+      "requiredWhen": "generalGoal in goalCategoryResolution.ambiguousGeneralGoals",
+      "required": false,
+      "options": [
+        "muscle_gain",
+        "weight_loss",
+        "maintenance",
+        "body_recomposition"
+      ],
+      "semantics": "resolves_energy_direction_only",
+      "doesNotCreateIndependentGoal": true
+    },
     {
       "id": "progressionPace",
       "type": "single_select",
@@ -80,6 +100,13 @@
       "type": "food_selection",
       "required": false,
       "semantics": "hard_exclusion"
+    },
+    {
+      "id": "excludedAllergens",
+      "type": "multi_select",
+      "required": false,
+      "semantics": "hard_exclusion",
+      "options": ["milk", "egg", "peanut", "tree_nuts", "soy", "wheat", "fish", "shellfish", "other"]
     },
     {
       "id": "supplements",

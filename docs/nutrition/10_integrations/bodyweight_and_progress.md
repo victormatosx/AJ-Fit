@@ -83,3 +83,15 @@ Mudanças posteriores de peso não alteram:
 - dietas antigas;
 - snapshots;
 - diário alimentar já registrado.
+
+---
+
+## 9. Agregação semanal implementada
+
+O resumo usa uma única query limitada pelos IDs `YYYY-MM-DD` entre segunda e domingo. Documento ausente significa `sem registro`; documento existente com totais zero continua sendo um dia registrado com zero. As médias de consumo dividem somente pelos dias registrados.
+
+As metas são resolvidas por dia. Para uma geração normal, `createdAt` abre o primeiro período do plano e o `createdAt` do próximo plano fecha esse período; `activatedAt`/`archivedAt` representam o período atual ou mais recentemente persistido, inclusive restauração. Isso cobre corretamente uma troca A → B no meio da semana e a primeira ativação de um plano restaurado.
+
+O schema atual sobrescreve `activatedAt` e limpa `archivedAt` ao restaurar o mesmo plano. Portanto, múltiplos ciclos antigos de restauração não são completamente reconstruíveis. Quando nenhum período pode ser provado, o dia fica sem meta e a UI informa quantos dos sete dias têm target disponível; ela não aplica a meta atual retroativamente nem inventa um histórico.
+
+O peso é filtrado até o domingo da semana selecionada. A UI mostra a medição mais recente, a anterior, o delta e até oito medições em ordem cronológica. Uma medição não produz tendência; com duas medições o delta é exibido com a limitação explícita; a tendência recente só é classificada a partir de três pontos. `targetWeightKg` é apenas contexto, sem previsão de prazo.

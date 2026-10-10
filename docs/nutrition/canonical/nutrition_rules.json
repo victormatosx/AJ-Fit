@@ -1,18 +1,24 @@
 {
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.1.0",
   "status": "DRAFT",
   "domain": "nutrition",
+  "closedConstantsResearchedAt": "2026-10-08",
+  "closedConstantsNote": "Values marked CLOSED_V1_RESEARCH_BACKED are closed for V1 implementation based on peer-reviewed/consensus sports-nutrition literature (sources inline). They are product guardrails for a generalist consumer app, deliberately on the conservative end of the literature-supported range — not a clinical prescription, and not a substitute for the professional nutrition review still tracked in README.md §21/§24 before a production launch claim.",
   "engine": {
     "version": "1.0.0",
     "deterministic": true,
     "activePlanRecalculationOnWeightChange": false,
     "newGenerationRequiredForRecalculation": true
   },
+  "generation": {
+    "operationTypes": ["full_plan", "meal_alternative"]
+  },
   "energy": {
     "restingEnergyFormula": {
       "id": "mifflin_st_jeor",
       "male": "10*weightKg + 6.25*heightCm - 5*ageYears + 5",
-      "female": "10*weightKg + 6.25*heightCm - 5*ageYears - 161"
+      "female": "10*weightKg + 6.25*heightCm - 5*ageYears - 161",
+      "source": "Mifflin MD, St Jeor ST, et al. 'A new predictive equation for resting energy expenditure in healthy individuals.' Am J Clin Nutr. 1990;51(2):241-247."
     },
     "nonTrainingActivityLevels": [
       "sedentary",
@@ -22,9 +28,23 @@
     ],
     "useAuthoritativeWorkoutFrequency": true,
     "avoidWorkoutActivityDoubleCounting": true,
-    "activityMultipliers": {
-      "status": "PENDING_PROFESSIONAL_VALIDATION",
-      "values": null
+    "tdeeStrategy": {
+      "status": "CLOSED_V1_RESEARCH_BACKED",
+      "formula": "tdeeKcal = rmrKcal * nonTrainingActivityFactor[level] + (weeklyTrainingFrequency * trainingSessionKcal(weightKg) / 7)",
+      "rationale": "Conventional combined PAL multipliers (e.g. Harris-Benedict's sedentary=1.2/light=1.375/moderate=1.55/very_active=1.725) already assume a specific amount of structured EXERCISE at each level, baked into the label itself (e.g. 'light exercise/sports 1-3 days/week'). AJ Fit tracks training frequency separately and authoritatively via the Treino domain (WorkoutNutritionContext.weeklyTrainingFrequency), so reusing those combined multipliers AND adding a training term on top would double count exercise. V1 instead splits the two components: nonTrainingActivityFactor describes ONLY non-exercise daily movement (desk job vs. active job/commute/housework), and the training contribution is computed separately and additively from the real weekly training frequency.",
+      "nonTrainingActivityFactor": {
+        "sedentary": 1.2,
+        "low_active": 1.3,
+        "active": 1.4,
+        "very_active": 1.5,
+        "source": "Adapted from the conventional Harris-Benedict/FAO-WHO-UNU physical activity level (PAL) scale (sedentary=1.2, light=1.375, moderate=1.55, very_active=1.725 — widely published, e.g. McArdle, Katch & Katch, 'Exercise Physiology'; FAO/WHO/UNU 2001 Human Energy Requirements report). Values here are deliberately lower than the conventional light/moderate/very_active tiers (sedentary is unchanged, since it already excludes exercise) to strip out the structured-exercise component the conventional scale implicitly bakes in — see tdeeStrategy.rationale. This specific downward adjustment is engineering judgment calibrated to avoid double counting, not itself a single published number; flagged as a 'V1 blended estimate' per README §21."
+      },
+      "trainingSessionKcal": {
+        "formula": "trainingSessionKcal(weightKg) = trainingMet * 3.5 * weightKg / 200 * trainingSessionMinutes",
+        "trainingMet": 5.0,
+        "trainingSessionMinutes": 50,
+        "source": "kcal/min = METs * 3.5 * weightKg / 200 is the standard ACSM metabolic equation for converting METs to energy expenditure (American College of Sports Medicine, 'ACSM's Guidelines for Exercise Testing and Prescription'). MET value of 5.0 is the midpoint of resistance training intensities in the Compendium of Physical Activities (Ainsworth BE, et al. 'Compendium of Physical Activities.' Med Sci Sports Exerc. 2011;43(8):1575-1581 — lists resistance training at 3.5 METs for moderate effort and 6.0 METs for vigorous effort). 50 minutes is a V1 flat assumption for an average AJ Fit training session (the app's own session duration options are 30/45/60/90 minutes; 50 is a reasonable blended midpoint), since Nutrition's input contract intentionally does not read per-session duration/intensity (10_integrations/workout_integration.md) to avoid coupling to Treino's live state."
+      }
     }
   },
   "goals": {
@@ -36,6 +56,26 @@
     ],
     "objectiveSource": "existing_aj_fit_goal",
     "independentNutritionGoalAllowed": false,
+    "normalization": {
+      "sourceEnum": "PrimaryGoal | DeprecatedGoal | LegacyGoal (src/state/AppState.tsx)",
+      "note": "Deterministic, closed by real i18n copy in src/i18n/resources/pt-BR/quiz.json (quiz.goal.options.*.label/description) as of 2026-10-08. Values below are the only ones closed unambiguously; ambiguous ones are listed separately and must not be guessed.",
+      "mapping": {
+        "gain_muscle": "muscle_gain",
+        "hyper": "muscle_gain",
+        "lose_fat": "weight_loss",
+        "cut": "weight_loss",
+        "body_composition": "body_recomposition",
+        "def": "body_recomposition",
+        "health": "maintenance"
+      },
+      "ambiguous": {
+        "status": "RESOLVED_VIA_NUTRITION_PROFILE_QUESTION",
+        "values": ["strength", "conditioning", "perf", "return_to_training", "recon"],
+        "reason": "These describe a training focus (force production, endurance, resuming training) with no stated body-composition or weight direction in their own copy — mapping any of them to weight_loss/muscle_gain/maintenance/body_recomposition would be an assumption, not a derivation. Confirmed by real code, not just copy similarity: src/workoutPrescription/input.ts's LEGACY_GOAL_MAP normalizes recon -> return_to_training (not body_composition/def, despite the similar-sounding name), and the same file flags perf as LEGACY_PERFORMANCE_GOAL_AMBIGUOUS in the app's own existing (non-nutrition) validation.",
+        "resolution": "Decision approved 2026-10-08: none of these 5 values are mapped automatically, and NEVER default to maintenance or any other category. Instead, `nutritionProfile/current.nutritionGoalCategory` (single_select, values = `goals.allowed` above) is a REQUIRED answer in the Perfil Nutricional whenever the user's general AJ Fit goal is one of these 5 values — see `canonical/questionnaire.json`'s `nutritionGoalCategory` question and `02_questionnaire/nutrition_questionnaire.md`. This does not create an independent nutrition goal for the other, already-mapped values; it only resolves the energy-direction input the Nutrition Engine needs when the general goal alone is insufficient.",
+        "resolutionRule": "if NUTRITION_GOAL_CATEGORY_MAP[goal] != null: use the mapped value. else: require nutritionProfile.nutritionGoalCategory (must not be absent once eligibility/generation is reached)."
+      }
+    },
     "pace": [
       "gradual",
       "moderate",
@@ -44,22 +84,34 @@
     "deficitMethod": "percentage_of_tdee",
     "surplusMethod": "percentage_of_tdee",
     "deficitPercentages": {
-      "status": "PENDING_PROFESSIONAL_VALIDATION",
-      "values": null
+      "status": "CLOSED_V1_RESEARCH_BACKED",
+      "values": { "gradual": 0.10, "moderate": 0.15, "accelerated": 0.20 },
+      "source": "Garthe I, et al. 'Effect of two different weight-loss rates on body composition and strength and power-related performance in elite athletes.' Int J Sport Nutr Exerc Metab. 2011;21(2):97-104 (slow rate ~0.7%BW/week preserved lean mass better than fast ~1.4%BW/week); Helms ER, Aragon AA, Fitschen PJ. 'Evidence-based recommendations for natural bodybuilding contest preparation.' J Int Soc Sports Nutr. 2014;11:20.",
+      "justification": "20-25% deficit is the upper bound commonly cited in the natural-bodybuilding/sports-nutrition literature for preserving lean mass; V1 caps 'accelerated' at 20% (rather than the more extreme rates seen in elite athlete studies) to stay conservative for an unsupervised, generalist consumer product per the product requirement."
     },
     "surplusPercentages": {
-      "status": "PENDING_PROFESSIONAL_VALIDATION",
-      "values": null
+      "status": "CLOSED_V1_RESEARCH_BACKED",
+      "values": { "gradual": 0.05, "moderate": 0.10, "accelerated": 0.15 },
+      "source": "Aragon AA, Schoenfeld BJ. 'Nutrient timing revisited: is there a post-exercise anabolic window?' J Int Soc Sports Nutr. 2013;10:5; general sports-nutrition consensus (Helms/Aragon 'lean bulk' guidance) converging on a ~200-350 kcal/day surplus as the evidence-supported range for muscle gain without disproportionate fat gain.",
+      "justification": "Percentages chosen so that 'moderate' lands close to the commonly cited 200-300 kcal/day sweet spot at typical adult TDEE (~2000-2800 kcal), with 'accelerated' capped at 15% to stay within the upper end of the 'lean bulk' range rather than the larger surpluses associated with disproportionate fat gain."
     },
     "bodyRecompositionRule": {
-      "status": "PENDING_PROFESSIONAL_VALIDATION",
-      "value": null
+      "status": "CLOSED_V1_RESEARCH_BACKED",
+      "value": {
+        "strategy": "fixed_small_deficit",
+        "deficitPercentageOfTdee": 0.10,
+        "paceAffectsMagnitude": false
+      },
+      "source": "Longland TM, et al. 'Higher compared with lower dietary protein during an energy deficit combined with intense exercise promotes greater lean mass gain and fat mass loss.' Am J Clin Nutr. 2016;103(3):738-746; Barakat C, et al. 'Body Recomposition.' Strength Cond J. 2020;42(5):17-23 (narrative review).",
+      "justification": "Literature on simultaneous fat loss + muscle gain ('recomposition') supports a SMALL deficit (roughly 200-500 kcal/day) paired with high protein — larger deficits impair muscle retention without proportionally more fat loss. Unlike weight_loss/muscle_gain, the literature does not support a notion of 'accelerated recomposition' being safe or more effective, so V1 deliberately does NOT scale this by pace — progressionPace is accepted on the questionnaire for UI consistency but does not change the magnitude for this category. 10% of a typical adult TDEE lands within the 200-500 kcal/day range this literature supports."
     }
   },
   "safety": {
     "minimumCaloriesBySex": {
-      "status": "PENDING_PROFESSIONAL_VALIDATION",
-      "values": null
+      "status": "CLOSED_V1_GUARDRAIL",
+      "values": { "male": 1500, "female": 1200 },
+      "source": "Widely published general-population safety guardrail against unsupervised very-low-calorie diets (e.g. commonly cited by medical/clinical patient-education sources such as Mayo Clinic and NHS-affiliated guidance): do not go below ~1200 kcal/day (women) or ~1500 kcal/day (men) without medical supervision.",
+      "justification": "This is explicitly a PRODUCT GUARDRAIL, not a clinical prescription or diagnosis (per task framing) — evidence does not support one single universal number validated by RCT for 'the' safe floor for every individual, so V1 adopts the conservative, broadly-published general-population threshold rather than inventing a more granular number. The engine must clamp to this floor and flag when clamping occurred; it never claims the clamp value is personally optimal, only that it is the safety floor for automatic/unsupervised generation."
     },
     "acceleratedPaceStillSubjectToSafetyLimits": true
   },
@@ -68,26 +120,44 @@
       "basis": "g_per_kg_current_body_weight",
       "mode": "range_with_target_center",
       "rangesByGoal": {
-        "status": "PENDING_PROFESSIONAL_VALIDATION",
-        "values": null
+        "status": "CLOSED_V1_RESEARCH_BACKED",
+        "values": {
+          "weight_loss": { "minGPerKg": 1.8, "targetGPerKg": 2.0, "maxGPerKg": 2.4 },
+          "muscle_gain": { "minGPerKg": 1.6, "targetGPerKg": 1.8, "maxGPerKg": 2.2 },
+          "maintenance": { "minGPerKg": 1.2, "targetGPerKg": 1.6, "maxGPerKg": 2.0 },
+          "body_recomposition": { "minGPerKg": 1.8, "targetGPerKg": 2.0, "maxGPerKg": 2.4 }
+        },
+        "source": "Jäger R, Kerksick CM, Campbell BI, et al. 'International Society of Sports Nutrition Position Stand: protein and exercise.' J Int Soc Sports Nutr. 2017;14:20 — 1.4-2.0 g/kg/day sufficient for most exercising individuals; 2.3-3.1 g/kg/day for maximizing lean-mass retention in resistance-trained individuals during a hypocaloric (deficit) period.",
+        "justification": "weight_loss and body_recomposition (both involve an energy deficit) use the higher end of the ISSN-supported range (1.8-2.4 g/kg) to protect lean mass, short of the most extreme hypocaloric-specific upper bound (2.3-3.1 g/kg) which targets highly resistance-trained athletes rather than a generalist consumer population. muscle_gain uses the ISSN baseline range (1.6-2.2 g/kg). maintenance uses a slightly wider, lower-starting range (1.2-2.0 g/kg) appropriate for a general active population not necessarily in an aggressive training phase."
       }
     },
     "fat": {
       "basis": "minimum_g_per_kg_plus_adjustment",
       "ranges": {
-        "status": "PENDING_PROFESSIONAL_VALIDATION",
-        "values": null
+        "status": "CLOSED_V1_RESEARCH_BACKED",
+        "values": {
+          "minGPerKg": 0.8,
+          "targetPercentOfCalories": 0.25,
+          "maxPercentOfCalories": 0.35
+        },
+        "source": "Minimum: hormonal-health literature on low dietary fat intake and suppressed testosterone/menstrual irregularities during energy restriction supports a floor around 0.5-1.0 g/kg, with 0.8-1.0 g/kg cited as the more optimal (vs. bare-minimum 0.5 g/kg) end of that range. Target/max percent-of-calories: Institute of Medicine Dietary Reference Intakes, Acceptable Macronutrient Distribution Range (AMDR) for fat = 20-35% of total energy (IOM, 'Dietary Reference Intakes for Energy, Carbohydrate, Fiber, Fat, Fatty Acids, Cholesterol, Protein, and Amino Acids.' 2002/2005).",
+        "justification": "0.8 g/kg (rather than the bare 0.5 g/kg floor) is chosen as the safer, more-optimal end of the hormonal-health-supported range for a mainstream consumer product. The 25% target / 35% max sit within the well-established IOM AMDR for fat; fat is computed as the larger of the g/kg floor or the %-of-calories target, then clamped so it never exceeds the AMDR upper bound, so it is never reduced below the g/kg floor just to 'free up' calories for carbohydrates."
       }
     },
     "carbohydrates": {
       "method": "remaining_calories_after_protein_and_fat",
-      "allowNegative": false
+      "allowNegative": false,
+      "infeasibleAllocationBehavior": {
+        "status": "CLOSED_V1",
+        "rule": "If targetKcal - proteinKcal - fatKcal < 0 (protein + fat alone exceed the energy target), the engine does NOT clamp carbohydrates to 0 and silently proceed — it throws an explicit MACRO_ALLOCATION_INFEASIBLE domain error. 0 g carbohydrates is a valid (if unusual) output when the remainder is exactly 0 or a small positive value; only a NEGATIVE remainder is treated as infeasible input, consistent with conflictPriority (safety > calories > protein > fat_minimum > carbohydrates > fiber) — carbohydrates are the first to yield, but cannot yield below zero."
+      }
     },
     "fiber": {
       "basis": "g_per_1000_kcal",
       "target": {
-        "status": "PENDING_PROFESSIONAL_VALIDATION",
-        "value": null
+        "status": "CLOSED_V1_RESEARCH_BACKED",
+        "value": 14,
+        "source": "Institute of Medicine. 'Dietary Reference Intakes for Energy, Carbohydrate, Fiber, Fat, Fatty Acids, Cholesterol, Protein, and Amino Acids.' National Academies Press, 2002/2005 — Adequate Intake (AI) of 14 g fiber per 1000 kcal, derived from fiber-intake/coronary-heart-disease-risk data (equivalent to the commonly cited absolute AI values of 25 g/day for adult women and 38 g/day for adult men at typical reference energy intakes)."
       }
     },
     "calorieConversions": {
@@ -103,17 +173,29 @@
     "engineProducesRanges": true,
     "aiComposesWithinRanges": true,
     "distributionWeights": {
-      "status": "PENDING_PROFESSIONAL_VALIDATION",
-      "values": null
+      "status": "CLOSED_V1",
+      "mealSlotCategory": {
+        "breakfast": "main",
+        "lunch": "main",
+        "dinner": "main",
+        "morning_snack": "snack",
+        "afternoon_snack": "snack",
+        "supper": "snack"
+      },
+      "energyWeightByCategory": { "main": 1.5, "snack": 1.0 },
+      "proteinWeightByCategory": { "main": 1.2, "snack": 1.0 },
+      "justification": "Simple algorithmic rule instead of a per-combination matrix, as required: each selected meal slot gets a weight from its category (main vs. snack), weights are normalized to sum to 1 across the slots the user actually selected, and energy/fat/carbs are distributed proportionally to the normalized energy weight while protein uses its own, gentler weight spread (1.2 vs 1.0, versus energy's 1.5 vs 1.0) so protein stays 'relatively even' per `mealDistribution.proteinRelativelyEven` while energy still reflects that main meals are typically larger than snacks. Not literature-derived (no single paper specifies this split) — an explicit, documented product/engineering choice, flagged as such rather than presented as a research-backed number."
     }
   },
   "tolerances": {
-    "status": "PENDING_PROFESSIONAL_VALIDATION",
-    "calories": null,
-    "protein": null,
-    "carbohydrates": null,
-    "fat": null,
-    "fiber": null
+    "status": "CLOSED_V1_PRODUCT_GUARDRAIL",
+    "calories": { "percent": 0.05 },
+    "protein": { "percent": 0.10 },
+    "carbohydrates": { "percent": 0.10 },
+    "fat": { "percent": 0.10 },
+    "fiber": { "percent": 0.20 },
+    "source": "Not literature-derived (no RCT specifies validator tolerance bands) — these mirror common operational tolerances used in dietary-adherence/macro-tracking tooling and coaching practice. Explicitly flagged as a product/engineering convention, to be revisited once the AI validation pipeline (06_ai) is implemented and produces real acceptance-rate data.",
+    "justification": "Calories get the tightest tolerance (5%) since it's the primary safety-relevant target; fiber gets the widest (20%) since it is the least safety-critical and most variable macro to hit exactly from a constrained food subset."
   },
   "conflictPriority": [
     "safety",

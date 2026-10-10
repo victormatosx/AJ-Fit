@@ -175,8 +175,17 @@ Pode incluir:
 - gordura média;
 - fibra média;
 - refeições registradas;
-- dias próximos das metas;
 - comparação com peso/evolução existente.
+
+Implementação da Fase 26:
+
+- semana local de segunda a domingo, com navegação para semanas anteriores;
+- médias de consumo calculadas somente sobre documentos de diário existentes;
+- dia sem documento aparece como `sem registro`, nunca como zero;
+- meta diária resolvida a partir do plano correspondente a cada data;
+- refeições que seguiram uma opção recomendada aparecem como contagem descritiva, sem score;
+- peso vem exclusivamente de `users/{uid}/assessments`, com gráfico compacto reutilizado da área Evolução;
+- detalhes de histórico, fotos e body map continuam na área Evolução.
 
 ---
 

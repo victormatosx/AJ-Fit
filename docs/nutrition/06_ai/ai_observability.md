@@ -1,8 +1,10 @@
 # AJ Fit Nutrition — Observabilidade da IA
 
-## 0. Status real de infraestrutura — greenfield
+## 0. Implementação técnica inicial
 
-Hoje não existe nenhuma integração com IA generativa (OpenAI ou qualquer outro provider) no AJ Fit, nem pipeline de logging/observabilidade de chamadas de IA. Tudo descrito neste documento — coleta de `generationId`/tokens/custo/latência, dashboards, alertas — é infraestrutura **inteiramente nova**, não uma extensão de algo já existente. Da mesma forma, não há provider de analytics de produto integrado (ver `11_analytics/events.md` §0); as métricas de `11_analytics/ai_metrics.md` derivadas deste log também dependem dessa infraestrutura nova.
+`nutritionAiOperations/{generationId}-{attempt}` registra `ownerUid`, job, operação (`full_plan` ou `meal_alternative`), provider/model, versões de prompt/schema, tentativa/retry, fallback, latência, tokens retornados pela Responses API, resultado e código de falha. Não armazena prompt nem resposta bruta. Quando todos os campos reais de usage e um preço exato existem, também grava `estimatedCostUsd` e `pricingVersion`; campos desconhecidos permanecem ausentes.
+
+`observability/metrics.ts` calcula taxa de sucesso, retry, fallback, latência, tokens, falhas por código e custos totais/médios sem transformar `null` em zero. `monitorNutritionAiOperations` avalia uma janela de uma hora a cada 15 minutos e emite logs estruturados com códigos estáveis para falha, fallback e latência anormais. Esses logs permitem criar alertas do Cloud Logging; esta fase não adiciona PagerDuty, Slack, email nem dashboard administrativo.
 
 ## 1. Objetivo
 
@@ -42,7 +44,7 @@ Não registrar em log operacional:
 - respostas completas por padrão;
 - dados pessoais desnecessários.
 
-Quando payload detalhado for necessário para debugging, usar armazenamento controlado, redigido e com retenção definida.
+Esta implementação não cria armazenamento de payload detalhado. Investigação usa códigos, versões, attempts, latência e usage; qualquer exceção futura exigiria revisão explícita de privacidade e retenção.
 
 ---
 

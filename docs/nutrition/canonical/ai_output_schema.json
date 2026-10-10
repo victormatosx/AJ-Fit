@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "ajfit://nutrition/ai-output-schema/1.0.0",
+  "$id": "ajfit://nutrition/ai-output-schema/2.0.0",
   "title": "AJ Fit Nutrition AI Generation Output",
   "type": "object",
   "additionalProperties": false,
@@ -54,17 +54,50 @@
                     "type": "object",
                     "additionalProperties": false,
                     "required": [
-                      "foodId",
-                      "grams"
+                      "name",
+                      "quantity",
+                      "unit",
+                      "preparationNote",
+                      "estimatedNutrition",
+                      "allergens"
                     ],
                     "properties": {
-                      "foodId": {
+                      "name": {
                         "type": "string",
-                        "minLength": 1
+                        "minLength": 1,
+                        "maxLength": 120
                       },
-                      "grams": {
+                      "quantity": {
                         "type": "number",
-                        "exclusiveMinimum": 0
+                        "exclusiveMinimum": 0,
+                        "maximum": 5000
+                      },
+                      "unit": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 24
+                      },
+                      "preparationNote": {
+                        "type": "string",
+                        "maxLength": 200
+                      },
+                      "estimatedNutrition": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["kcal", "proteinG", "carbsG", "fatG", "fiberG"],
+                        "properties": {
+                          "kcal": { "type": "number", "minimum": 0 },
+                          "proteinG": { "type": "number", "minimum": 0 },
+                          "carbsG": { "type": "number", "minimum": 0 },
+                          "fatG": { "type": "number", "minimum": 0 },
+                          "fiberG": { "type": "number", "minimum": 0 }
+                        }
+                      },
+                      "allergens": {
+                        "type": "array",
+                        "maxItems": 9,
+                        "uniqueItems": true,
+                        "items": { "enum": ["milk", "egg", "peanut", "tree_nuts", "soy", "wheat", "fish", "shellfish", "other"] }
                       }
                     }
                   }
@@ -77,13 +110,8 @@
     }
   },
   "postValidationRequirements": [
-    "all_food_ids_must_exist",
-    "all_food_ids_must_be_in_allowed_subset",
-    "all_foods_must_be_generation_status_approved",
-    "excluded_foods_must_not_appear",
-    "dietary_pattern_must_be_respected",
-    "allergen_constraints_must_be_respected",
-    "nutrition_must_be_recomputed_from_catalog",
+    "no_catalog_or_foodid_resolution",
+    "self_declared_allergens_must_respect_excluded_allergens",
     "meal_targets_must_pass_deterministic_tolerances",
     "daily_targets_must_pass_deterministic_tolerances"
   ]

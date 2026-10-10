@@ -454,9 +454,12 @@ Estrutura principal:
 users/{uid}/nutritionProfile/current
 users/{uid}/nutritionPlans/{planId}
 users/{uid}/nutritionDailyLogs/{YYYY-MM-DD}
+users/{uid}/nutritionDailyLogs/{YYYY-MM-DD}/meals/{slot}
+users/{uid}/nutritionDailyLogs/{YYYY-MM-DD}/meals/{slot}/items/{itemId}
 users/{uid}/nutritionRecipes/{recipeId}
 users/{uid}/nutritionFoods/{foodId}
 users/{uid}/nutritionPreferences/current
+users/{uid}/nutritionFavoriteMealOptions/{favoriteId}
 users/{uid}/nutritionGenerationJobs/{generationId}
 
 nutritionFoods/{foodId}

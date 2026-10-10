@@ -52,7 +52,7 @@ Exemplo ilustrativo, não definitivo:
 interface NutritionProfileAnswers {
   questionnaireVersion: number;
 
-  meals: MealSlot[];
+  mealSlots: MealSlot[];
   progressionPace?: ProgressionPace;
   targetWeightKg?: number | null;
   nonTrainingActivityLevel: NonTrainingActivityLevel;
@@ -63,11 +63,23 @@ interface NutritionProfileAnswers {
   usualFoodIds: string[];
   excludedFoodIds: string[];
 
-  breastfeeding?: boolean | null;
+  // Estado atual, não resposta herdada — ver §7 e `07_backend/firestore_schema.md` §3.1.
+  pregnant: boolean;
+  breastfeeding: boolean;
 
-  supplements: NutritionSupplementPreference[];
+  supplements: NutritionSupplementId[];
 
   varietyPreference: VarietyPreference;
+
+  // Opcional na estrutura do schema, mas OBRIGATÓRIO quando o objetivo
+  // geral do AJ Fit é um dos 5 valores sem mapeamento direto (`strength`,
+  // `conditioning`, `perf`, `return_to_training`, `recon` —
+  // `canonical/nutrition_rules.json` `goals.normalization.ambiguous.values`).
+  // Não cria um objetivo geral independente: resolve apenas a direção
+  // energética que o Nutrition Engine precisa quando o objetivo geral, por
+  // si só, não é suficiente. Ver `03_nutrition_engine/goals_and_adjustments.md`
+  // §1.2/§1.3 e `02_questionnaire/nutrition_questionnaire.md` §3.2.1.
+  nutritionGoalCategory?: NutritionGoalCategory;
 
   completedAt?: TimestampLike;
   updatedAt?: TimestampLike;
@@ -142,11 +154,11 @@ Deve existir um único padrão ativo por perfil.
 
 ### 4.5 VarietyPreference
 
-Valores:
+Fonte final: `canonical/questionnaire.json` (pergunta `varietyPreference`). Valores:
 
-- simple_repeatable;
-- varied;
-- no_preference.
+- repeatable;
+- variety;
+- indifferent.
 
 ---
 
@@ -186,7 +198,7 @@ Regra rígida.
 
 Qualquer alimento listado deve ser excluído de toda geração, substituição e regeneração.
 
-Na V1, o schema não precisa armazenar o motivo da exclusão.
+Na V1, o schema não precisa armazenar o motivo da exclusão. O perfil agora também aceita `excludedAllergens?: NutritionFoodAllergen[]`, lista estruturada de alergênicos conhecidos a bloquear na geração. Ela é opcional para perfis legados; desconhecimento não equivale a declaração de segurança, e o catálogo com `allergens: null` permanece fora da geração.
 
 O comportamento é o mesmo para:
 
@@ -201,27 +213,24 @@ Se futuramente o produto precisar diferenciar razões clínicas e preferências,
 
 ## 6. Suplementos
 
-Modelo conceitual:
+Fonte final (decisão, substitui modelo anterior deste documento): `canonical/questionnaire.json` (pergunta `supplements`) e `07_backend/firestore_schema.md` §3 concordam em modelar suplementos como **lista simples de ids selecionados**, não como lista de objetos `{ supplementType, usesOrAccepts }`. Um id presente no array significa "usa ou aceita usar"; não há booleano separado.
 
 ```ts
-interface NutritionSupplementPreference {
-  supplementType: SupplementType;
-  usesOrAccepts: boolean;
-}
+supplements: NutritionSupplementId[];
 ```
 
-Tipos iniciais podem incluir:
+Valores de `NutritionSupplementId`:
 
-- whey_protein;
+- whey_or_protein;
 - creatine;
-- caffeine_preworkout;
+- caffeine_or_preworkout;
 - multivitamin;
-- omega3;
-- other_supported_common_supplements.
+- omega_3;
+- other.
 
 Na V1:
 
-- apenas whey/proteína pode participar diretamente dos alimentos/macros da dieta;
+- apenas `whey_or_protein` pode participar diretamente dos alimentos/macros da dieta;
 - os demais são dados de perfil;
 - o questionário não coleta marca ou sabor.
 
@@ -239,13 +248,16 @@ Modelo conceitual:
 interface NutritionGenerationProfileSnapshot {
   questionnaireVersion: number;
 
+  // Decisão final: NÃO inclui pregnancyStatus. Gravidez/lactação são estado
+  // atual de `nutritionAnswers` (NutritionProfile.pregnant/.breastfeeding),
+  // nunca um campo herdado de fonte externa — ver §7 e
+  // `07_backend/firestore_schema.md` §3.1.
   inherited: {
     sex: unknown;
     birthDateOrAge: unknown;
     currentWeightKg: number;
     heightCm: number;
     goal: unknown;
-    pregnancyStatus?: unknown;
   };
 
   nutritionAnswers: NutritionProfileAnswers;
@@ -300,6 +312,13 @@ Antes de considerar o perfil completo:
 ### Velocidade
 
 - valor reconhecido quando requerido pelo objetivo.
+
+### Objetivo nutricional complementar (`nutritionGoalCategory`)
+
+- ausente é válido quando o objetivo geral tem mapeamento direto (`canonical/nutrition_rules.json` `goals.normalization.mapping`);
+- obrigatório quando o objetivo geral está em `goals.normalization.ambiguous.values` — perfil não pode ser considerado completo sem essa resposta nesse caso;
+- quando presente, deve ser exatamente um dos 4 valores de `canonical/nutrition_rules.json` `goals.allowed`;
+- nunca inferir/preencher automaticamente — ausência quando exigida bloqueia geração, não é substituída por um padrão.
 
 ### Padrão alimentar
 
@@ -406,4 +425,3 @@ Versão inicial:
 Mudanças que alterem significado, obrigatoriedade ou estrutura de respostas devem avaliar incremento de versão.
 
 Snapshots antigos nunca devem ser reinterpretados como se tivessem sido respondidos em uma versão posterior.
-

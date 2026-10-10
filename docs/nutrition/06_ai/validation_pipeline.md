@@ -67,6 +67,10 @@ Validar:
 
 ## 7. Correção determinística
 
+Implementação V1: o validator escala todas as quantidades de uma opção pelo mesmo fator `targetKcal/actualKcal`, arredonda gramas a 0,1 g e aceita apenas fator entre 0,5 e 2 e cada quantidade entre 5 e 1000 g. Recalcula todos os nutrientes e exige passar as faixas de cada refeição; se a proporção de macros continuar errada, não aceita a correção. O total diário usa somente as opções principais. A fibra desconhecida não vira zero para validação da opção.
+
+A seleção limita 48 candidatos, preserva cobertura por categoria de refeição e considera `varietyPreference`. Suplementos só entram se o perfil aceitar whey/protein e o alimento global aprovado estiver explicitamente entre preferidos ou usuais. Alimentos sem fibra ou revisão de alergênicos não entram na geração V1.
+
 Primeira tentativa:
 
 - ajustar gramas;
@@ -78,6 +82,8 @@ Se a correção produzir plano válido, aceitar.
 ---
 
 ## 8. Retry
+
+São no máximo três chamadas no total: inicial e duas repetições. O terceiro attempt usa `gpt-6-astra` somente quando a falha anterior é `AI_SCHEMA_INVALID` ou `AI_MACRO_VALIDATION_FAILED`. Violações de safety/exclusões param imediatamente. O feedback é somente um código técnico.
 
 Se não for possível corrigir:
 

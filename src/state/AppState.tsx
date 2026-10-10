@@ -131,7 +131,7 @@ export type Quiz = {
   medicalRestrictionScreening: MedicalRestrictionScreening | null;
 };
 
-export type TabId = 'home' | 'workout' | 'progress' | 'profile';
+export type TabId = 'home' | 'workout' | 'progress' | 'profile' | 'nutrition';
 
 type Ctx = {
   quiz: Quiz;

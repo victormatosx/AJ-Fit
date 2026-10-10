@@ -19,9 +19,12 @@ users/{uid}
   nutritionProfile/current
   nutritionPlans/{planId}
   nutritionDailyLogs/{localDate}
+    meals/{slot}
+      items/{itemId}
   nutritionRecipes/{recipeId}
   nutritionFoods/{foodId}
   nutritionPreferences/current
+  nutritionFavoriteMealOptions/{favoriteId}
   nutritionGenerationJobs/{generationId}
 ```
 
@@ -31,6 +34,11 @@ Catálogo global:
 nutritionFoods/{foodId}
 nutritionCatalogMeta/current
 ```
+
+`nutritionCatalogMeta/current` é escrito apenas pelo importador Admin SDK.
+Contém `schemaVersion: 1`, `catalogVersion`, `importedAt`, `sourceVersions`,
+`sourceCounts` e `importedRecordCount` (contagem do lote importado, não do
+catálogo completo). Nenhum write de cliente é permitido.
 
 Observabilidade/backend-only:
 
@@ -153,16 +161,21 @@ interface NutritionPlanDocument {
   status: "active" | "archived";
 
   profileSnapshot: object;
+
+  // Carrega o output do engine (RMR/TDEE/macros/mealTargets) e as versões
+  // internas das regras determinísticas (ver §3.3) — NÃO o objeto `versions`
+  // abaixo. `canonical/meal_plan_schema.json` não restringe o shape de
+  // `engineSnapshot` (`"type": "object"`), por isso é o lugar correto para
+  // essas versões internas, que não podem entrar em `versions` (ver §3.3).
   engineSnapshot: object;
 
   meals: object[];
 
+  // Exatamente os campos de `canonical/meal_plan_schema.json` ("versions",
+  // additionalProperties: false) — nenhum campo além destes é aceito aqui.
   versions: {
     planSchemaVersion: string;
     nutritionEngineVersion: string;
-    energyRulesVersion: string;
-    macroRulesVersion: string;
-    mealDistributionVersion: string;
     questionnaireVersion: number;
     foodCatalogVersion: string;
     aiGenerationSchemaVersion: string;
@@ -174,6 +187,23 @@ interface NutritionPlanDocument {
   archivedAt?: Timestamp | null;
 }
 ```
+
+### 3.3 `versions` vs. versões internas do engine (decisão final)
+
+`canonical/meal_plan_schema.json`'s `versions` é `additionalProperties: false` e só aceita os 6 campos listados acima (todos obrigatórios em planos V1.1). `energyRulesVersion`, `macroRulesVersion` e `mealDistributionVersion` — exigidos por `03_nutrition_engine/nutrition_engine_contract.md` §6 — NÃO pertencem a esse objeto; eles vivem dentro de `engineSnapshot`, num sub-objeto de versões internas do engine (`NutritionEngineRuleVersions` em `src/types/nutrition.ts`):
+
+```ts
+interface NutritionEngineRuleVersions {
+  nutritionEngineVersion: string;
+  energyRulesVersion: string;
+  macroRulesVersion: string;
+  mealDistributionVersion: string;
+  questionnaireVersion: number;
+  foodCatalogVersion: string;
+}
+```
+
+Isso resolve a divergência entre o schema canônico estrito e o §6 do contrato do engine sem relaxar `additionalProperties: false` em `versions`.
 
 Só pode existir um plano `active` por usuário.
 
@@ -197,14 +227,13 @@ Motivos:
 - histórico simples;
 - evita documento único crescendo indefinidamente.
 
-Estrutura conceitual:
+Estrutura conceitual do documento do dia — note que `meals` NÃO é um array
+aninhado aqui (ver nota abaixo):
 
 ```ts
 interface NutritionDailyLogDocument {
   localDate: string;
   timezone: string;
-
-  meals: LoggedMeal[];
 
   totals: {
     kcal: number;
@@ -214,12 +243,55 @@ interface NutritionDailyLogDocument {
     fiberG: number;
   };
 
+  /** Agregado mantido incrementalmente pelo cliente a cada escrita de item — ver nota abaixo. */
+  loggedItemCount: number;
+
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
 ```
 
 Os totais podem ser persistidos como materialização para leitura rápida, mas devem ser recalculáveis a partir dos itens.
+
+**Nota (2026-10-08, achado da Fase 31):** as refeições e seus itens NÃO
+ficam em arrays aninhados neste documento. Seis refeições x seis itens
+cada, revalidados por completo a cada escrita, excediam o orçamento de
+1000 expressões por escrita das Firestore Rules — o mesmo limite que já
+havia motivado isolar `favoriteMealOptions` em subcoleção (seção 8).
+Cada refeição é seu próprio documento, e cada item logado é por sua vez
+um documento dentro da refeição:
+
+```text
+users/{uid}/nutritionDailyLogs/{localDate}/meals/{slot}
+users/{uid}/nutritionDailyLogs/{localDate}/meals/{slot}/items/{itemId}
+```
+
+```ts
+interface NutritionLoggedMealDocument {
+  slot: NutritionMealSlot; // == o id do próprio documento
+  totals: NutritionTotals;
+  followedRecommendedOptionId?: string | null;
+}
+interface NutritionLoggedFoodItemDocument {
+  id: string; // == o id do próprio documento
+  foodId: string;
+  grams: number;
+  source: "catalog_food" | "custom_food" | "recipe";
+  snapshot: { name: string; kcal: number; proteinG: number; carbsG: number; fatG: number; fiberG?: number };
+  loggedAt: Timestamp;
+}
+```
+
+O limite de até seis itens por refeição deixou de ser validado pelas
+Rules (cada item agora é validado isoladamente, sem visibilidade sobre
+quantos outros itens já existem na mesma refeição) e passou a ser apenas
+uma convenção do cliente — não era um invariante de segurança, só um
+limite de produto, igual a `nutritionRecipes`/`nutritionFoods` (que
+também nunca tiveram um limite de contagem aplicado em Rules).
+
+O serviço (`src/services/nutritionDiary.ts`) recompõe a mesma projeção
+`NutritionDailyLogDocument.meals` que o resto do app sempre consumiu —
+telas e o resumo semanal não sabem que o armazenamento é dividido.
 
 ---
 
@@ -234,6 +306,13 @@ Receitas próprias do usuário.
 Cliente pode criar/editar/excluir as próprias receitas dentro de Rules estritas.
 
 Nutrientes derivados devem ser recalculados no backend ou por lógica compartilhada confiável antes de uso autoritativo.
+
+Base de Rules (2026-10-08): o cliente persiste `id`, `name`, `description?`,
+`ingredients`, `createdAt` e `updatedAt`. `calculatedNutrition` fica ausente
+nesse write e só pode ser acrescentado/recalculado pelo backend; as Rules não
+conseguem provar uma soma de nutrientes a partir de ingredientes arbitrários.
+Até existir esse cálculo, receitas próprias são rascunhos e não devem ser
+tratadas como fonte autoritativa de macros.
 
 ---
 
@@ -257,17 +336,41 @@ Não entram automaticamente na geração por IA da V1.
 users/{uid}/nutritionPreferences/current
 ```
 
-Memória estruturada persistente, por exemplo:
+Shape fechado escrito pelo cliente:
 
-- favoritos;
-- alimentos rejeitados;
-- padrões preferidos.
+```ts
+{
+  favoriteFoodIds: string[];   // catálogo global ou nutritionFoods do usuário
+  favoriteRecipeIds: string[]; // somente nutritionRecipes do usuário
+  updatedAt: Timestamp;
+}
+```
+
+As duas listas são independentes, persistem apenas IDs estáveis e têm um
+limite técnico combinado de 20 itens para manter a validação integral abaixo do
+orçamento de expressões das Firestore Rules. Nenhum snapshot nutricional é
+duplicado neste documento; a UI sempre resolve o alimento/receita atual.
 
 Separar do `nutritionProfile` evita reescrever um documento de questionário a cada feedback operacional.
+
+Opções inteiras de refeição favoritas são um terceiro conceito e ficam
+isoladas em:
+
+```text
+users/{uid}/nutritionFavoriteMealOptions/{favoriteId}
+```
+
+Cada documento contém um snapshot fechado de uma única opção (plano ou
+alternativa), com no máximo oito alimentos. O isolamento evita a expansão
+combinatória de validação de arrays aninhados nas Firestore Rules e permite
+validar integralmente shape, enums, strings e números. O serviço limita a
+lista exibida às dez opções mais recentes.
 
 ---
 
 ## 9. nutritionGenerationJobs
+
+Implementação: além dos campos do contrato inicial, o backend mantém `ownerUid`, `leaseUntil`, `nextAttemptAt`, `aiAttemptCount` e `lastFailureCode` para reparo de jobs após perda de processo. `nutritionRateLimits/{uid}` contém locks/cursores de plano e alternativa, janela horária, request IDs e `activePlanId`; não é legível pelo cliente. Cada `nutritionAiOperations/{generationId}-{attempt}` contém `ownerUid`, operation, model/provider, versões, tentativa/retry, fallback, latência, usage real, status/failure e custo versionado somente quando calculável. O registry de account deletion apaga ambos. `nutritionPlans/{planId}` guarda apenas snapshots canônicos aprovados; `physicalSnapshot`, `dailyTotals` e `generationMetadata` completam a versão 1.1.0 do schema.
 
 ```text
 users/{uid}/nutritionGenerationJobs/{generationId}

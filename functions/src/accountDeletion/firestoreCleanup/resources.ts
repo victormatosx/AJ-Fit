@@ -48,6 +48,11 @@ import type { ResourceCleanupResult } from './types';
 const USERS_COLLECTION = 'users';
 const QUESTIONNAIRES_COLLECTION = 'questionnaires';
 const ASSESSMENTS_COLLECTION = 'assessments';
+export const NUTRITION_USER_RESOURCES = [
+  'nutritionProfile', 'nutritionPlans', 'nutritionDailyLogs', 'nutritionRecipes',
+  'nutritionFoods', 'nutritionPreferences', 'nutritionFavoriteMealOptions',
+  'nutritionGenerationJobs', 'nutritionMealAlternatives',
+] as const;
 const PROGRESS_PHOTOS_COLLECTION = 'progressPhotos';
 const WORKOUT_PROGRAMS_COLLECTION = 'workoutPrograms';
 const WORKOUT_PROGRAM_STATE_COLLECTION = 'workoutProgramState';
@@ -135,6 +140,58 @@ export async function deleteUserAssessments(
     userDocRef(db, uid).collection(ASSESSMENTS_COLLECTION),
   );
   return { resource: 'assessments', deletedCount, alreadyAbsent: deletedCount === 0 };
+}
+
+/**
+ * `nutritionDailyLogs/{localDate}` nests `meals/{slot}` and, under each
+ * meal, `meals/{slot}/items/{itemId}` — moved out of a flat array into
+ * subcollections to stay under Firestore Rules' 1000-expression write
+ * budget (round brief part 1 §6). `deleteCollectionDocuments` is
+ * deliberately one-level-only (see this file's top/§349 comments), so it
+ * would delete the day docs but silently orphan every meal/item nested
+ * under them. `db.recursiveDelete` is safe here — unlike `users/{uid}`,
+ * nothing under `nutritionDailyLogs` crosses the `privateSecurity`
+ * ownership boundary — and mirrors `deleteUserDispatchHistory` above.
+ */
+async function deleteNutritionDailyLogsWithDescendants(uid: string, db: Firestore): Promise<number> {
+  const collectionRef = userDocRef(db, uid).collection('nutritionDailyLogs');
+  let deletedCount = 0;
+  let cursor: QueryDocumentSnapshot | undefined;
+  for (;;) {
+    let query: Query = collectionRef.orderBy('__name__').limit(50);
+    if (cursor) query = query.startAfter(cursor);
+    const snapshot = await query.get();
+    if (snapshot.empty) break;
+    await Promise.all(snapshot.docs.map((document) => db.recursiveDelete(document.ref)));
+    deletedCount += snapshot.size;
+    cursor = snapshot.docs[snapshot.docs.length - 1];
+    if (snapshot.size < 50) break;
+  }
+  return deletedCount;
+}
+
+/** All Nutrition documents currently permitted under users/{uid}. */
+export async function deleteUserNutritionResources(
+  uid: string,
+  db: Firestore = defaultDb,
+): Promise<ResourceCleanupResult> {
+  let deletedCount = 0;
+  for (const collectionName of NUTRITION_USER_RESOURCES) {
+    if (collectionName === 'nutritionDailyLogs') {
+      deletedCount += await deleteNutritionDailyLogsWithDescendants(uid, db);
+      continue;
+    }
+    const result = await deleteCollectionDocuments(userDocRef(db, uid).collection(collectionName));
+    deletedCount += result.deletedCount;
+  }
+  deletedCount += await queryOwnedDocuments('nutritionAiOperations', uid, db, async (candidate) => {
+    await candidate.ref.delete();
+    return true;
+  });
+  const rateRef = db.collection('nutritionRateLimits').doc(uid);
+  const rate = await rateRef.get();
+  if (rate.exists) { await rateRef.delete(); deletedCount += 1; }
+  return { resource: 'nutrition', deletedCount, alreadyAbsent: deletedCount === 0 };
 }
 
 /**

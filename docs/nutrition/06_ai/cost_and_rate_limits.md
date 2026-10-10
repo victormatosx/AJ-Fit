@@ -8,11 +8,15 @@ Controlar custo por operação e impedir abuso sem degradar a experiência norma
 
 ## 2. Modelos iniciais
 
-Configuração inicial recomendada:
+Configuração backend atual (`functions/src/nutrition/ai/config.ts`): `gpt-6.1-sol` para plano, `gpt-6-luna` para alternativa, `gpt-6-astra` no último dos três attempts apenas para falha repetida de schema/macros. Ver [modelos oficiais](https://developers.openai.com/api/docs/models). O código limita a saída a 4500 tokens por chamada.
 
-- geração completa: `gpt-5.6-terra`;
-- operações simples: `gpt-5.6-luna`;
-- fallback: modelo forte configurável.
+`observability/modelPricing.ts` centraliza a tabela versionada `openai-standard-2026-10-08`, obtida em 2026-10-08 da [documentação oficial de preços](https://developers.openai.com/api/docs/pricing):
+
+- `gpt-6.1-sol`: US$ 2,00 input, US$ 0,10 cached input e US$ 10,00 output por 1M tokens;
+- `gpt-6-luna`: US$ 0,10 input, US$ 0,01 cached input e US$ 0,50 output por 1M tokens;
+- `gpt-6-astra`: US$ 10,00 input, US$ 1,00 cached input e US$ 50,00 output por 1M tokens.
+
+Modelo desconhecido ou usage parcial produz custo desconhecido. A estimativa não representa cobrança oficial.
 
 Os modelos devem ser alteráveis por configuração remota/backend.
 
@@ -20,7 +24,7 @@ Os modelos devem ser alteráveis por configuração remota/backend.
 
 ## 3. Preços de referência
 
-Valores de referência consultados em outubro de 2026:
+As referências antigas abaixo permanecem como histórico de planejamento; não descrevem os modelos utilizados pelo backend.
 
 ### GPT-5.6 Terra
 - input: aproximadamente US$ 2,00 / 1M tokens;
@@ -70,6 +74,8 @@ A V1 deve limitar:
 - tentativas repetidas após falha.
 
 Os números exatos devem ser definidos após testes de UX e custo.
+
+V1 implementada: `nutritionRateLimits/{uid}` limita novas solicitações de plano completo a uma a cada 15 minutos. Alternativas têm cooldown de 20 segundos, limite de 12 solicitações por hora, lease de 3 minutos e `requestId` UUID idempotente. Double tap/replay converge ao mesmo documento; retries internos de provider não contam como nova solicitação do usuário. Os campos dos dois limites coexistem no mesmo documento e writes usam merge para que um fluxo não apague o limite do outro.
 
 ---
 

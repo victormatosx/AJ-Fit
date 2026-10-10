@@ -179,3 +179,31 @@ Cada dieta deve guardar snapshot suficiente para reconstruir:
 - versão/fonte do alimento.
 
 Alterações futuras no catálogo não devem modificar retroativamente dietas existentes.
+
+---
+
+## 8. Contrato implementado nesta base
+
+`src/types/nutrition.ts` define `NutritionFood` e os enums pequenos de categoria,
+alergênicos e fonte; `canonical/food_catalog_schema.json` fecha o body
+persistido (timestamps Firestore ficam fora do JSON Schema). O nome, aliases,
+categoria, fonte/ID/versão, nutrientes por 100 g, flags, alergênicos, status,
+versão e prefixos de busca são validados em
+`src/nutrition/catalog/normalize.ts` antes de qualquer importação.
+
+`dietaryFlags` usa `boolean | null`; `allergens: null` significa revisão
+incompleta, enquanto `[]` significa revisado sem alergênicos conhecidos.
+Um item com qualquer informação de safety desconhecida não pode ser
+`approved`. `pescatarian` foi acrescentado para cobrir o padrão alimentar já
+existente no Perfil Nutricional.
+
+O ID é `nf_{source}_{sourceId-legível}_{hash16}`. Fonte + ID externo (ou ID
+manual controlado) são a identidade; nome traduzido não é identidade. IDs
+repetidos da mesma fonte são deduplicados. Conflitos de conteúdo dentro do
+mesmo arquivo são erro. Fontes distintas não são fundidas automaticamente:
+equivalência TBCA/TACO exige revisão/crosswalk, nunca média por nome.
+
+Receitas persistem somente referências de ingredientes e gramas. Seu total
+atual é calculado sob demanda a partir dos alimentos atuais, sem aceitar
+`calculatedNutrition` fornecido pelo cliente. Planos futuros continuam
+obrigados a guardar snapshots nutricionais imutáveis no instante da geração.

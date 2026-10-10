@@ -1,7 +1,8 @@
 export type DeepLinkIntent =
   | Readonly<{ type: 'active-workout' }>
   | Readonly<{ type: 'support-case'; caseId: string }>
-  | Readonly<{ type: 'campaign-tab'; tab: 'home' | 'workout' | 'progress' | 'profile' }>;
+  | Readonly<{ type: 'campaign-tab'; tab: 'home' | 'workout' | 'progress' | 'profile' }>
+  | Readonly<{ type: 'nutrition-tab'; destination: 'plan' | 'diary' | 'weekly' }>;
 
 /**
  * Converts an external URL into one of the app's explicitly supported
@@ -36,6 +37,9 @@ export function enqueueDeepLinkIntent(
     return pending.caseId === incoming.caseId ? pending : incoming;
   }
   if (pending.type === 'campaign-tab' && incoming.type === 'campaign-tab') return pending.tab === incoming.tab ? pending : incoming;
+  if (pending.type === 'nutrition-tab' && incoming.type === 'nutrition-tab') {
+    return pending.destination === incoming.destination ? pending : incoming;
+  }
   return pending;
 }
 
@@ -48,5 +52,8 @@ export function consumeDeepLinkIntent(
     return pending.caseId === handled.caseId ? null : pending;
   }
   if (pending.type === 'campaign-tab' && handled.type === 'campaign-tab') return pending.tab === handled.tab ? null : pending;
+  if (pending.type === 'nutrition-tab' && handled.type === 'nutrition-tab') {
+    return pending.destination === handled.destination ? null : pending;
+  }
   return null;
 }

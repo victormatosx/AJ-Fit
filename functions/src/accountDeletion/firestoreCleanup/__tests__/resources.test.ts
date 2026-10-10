@@ -6,6 +6,8 @@ import {
   deleteUserAssessments,
   deleteUserProfileDocument,
   deleteUserQuestionnaires,
+  deleteUserNutritionResources,
+  NUTRITION_USER_RESOURCES,
   deleteUserWorkoutProgramDescendants,
   deleteUserNotificationDispatches,
   deleteUserDailyNotificationRegistration,
@@ -48,6 +50,49 @@ describe('deleteUserQuestionnaires', () => {
     await deleteUserQuestionnaires('uid-A', fs(harness));
 
     expect(harness.exists('users/uid-B/questionnaires/q1')).toBe(true);
+  });
+});
+
+describe('deleteUserNutritionResources', () => {
+  it('deletes every Nutrition subcollection for the account and preserves other users', async () => {
+    const harness = createFakeFirestore();
+    for (const collectionName of NUTRITION_USER_RESOURCES) {
+      harness.seed(`users/uid-1/${collectionName}/one`);
+      harness.seed(`users/uid-2/${collectionName}/one`);
+    }
+    harness.seed('nutritionAiOperations/op-1', { ownerUid: 'uid-1' });
+    harness.seed('nutritionAiOperations/op-2', { ownerUid: 'uid-2' });
+    harness.seed('nutritionRateLimits/uid-1', { ownerUid: 'uid-1' });
+    harness.seed('nutritionRateLimits/uid-2', { ownerUid: 'uid-2' });
+    expect(await deleteUserNutritionResources('uid-1', fs(harness))).toEqual({
+      resource: 'nutrition', deletedCount: NUTRITION_USER_RESOURCES.length + 2, alreadyAbsent: false,
+    });
+    for (const collectionName of NUTRITION_USER_RESOURCES) {
+      expect(harness.exists(`users/uid-1/${collectionName}/one`)).toBe(false);
+      expect(harness.exists(`users/uid-2/${collectionName}/one`)).toBe(true);
+    }
+    expect(harness.exists('nutritionAiOperations/op-1')).toBe(false);
+    expect(harness.exists('nutritionAiOperations/op-2')).toBe(true);
+    expect(harness.exists('nutritionRateLimits/uid-1')).toBe(false);
+    expect(harness.exists('nutritionRateLimits/uid-2')).toBe(true);
+    expect((await deleteUserNutritionResources('uid-1', fs(harness))).alreadyAbsent).toBe(true);
+  });
+
+  it('recursively deletes nutritionDailyLogs meals/items subcollections, not just the day doc', async () => {
+    const harness = createFakeFirestore();
+    harness.seed('users/uid-1/nutritionDailyLogs/2026-10-08');
+    harness.seed('users/uid-1/nutritionDailyLogs/2026-10-08/meals/lunch');
+    harness.seed('users/uid-1/nutritionDailyLogs/2026-10-08/meals/lunch/items/item-1');
+    harness.seed('users/uid-2/nutritionDailyLogs/2026-10-08');
+    harness.seed('users/uid-2/nutritionDailyLogs/2026-10-08/meals/lunch');
+    harness.seed('users/uid-2/nutritionDailyLogs/2026-10-08/meals/lunch/items/item-1');
+
+    await deleteUserNutritionResources('uid-1', fs(harness));
+
+    expect(harness.exists('users/uid-1/nutritionDailyLogs/2026-10-08')).toBe(false);
+    expect(harness.exists('users/uid-1/nutritionDailyLogs/2026-10-08/meals/lunch')).toBe(false);
+    expect(harness.exists('users/uid-1/nutritionDailyLogs/2026-10-08/meals/lunch/items/item-1')).toBe(false);
+    expect(harness.exists('users/uid-2/nutritionDailyLogs/2026-10-08/meals/lunch/items/item-1')).toBe(true);
   });
 });
 

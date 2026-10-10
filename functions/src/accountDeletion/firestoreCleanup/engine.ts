@@ -53,6 +53,7 @@ import {
   deleteUserAssessments,
   deleteUserProfileDocument,
   deleteUserQuestionnaires,
+  deleteUserNutritionResources,
   deleteUserWorkoutExecutions,
   deleteUserWorkoutFinalizationAttempts,
   deleteUserWorkoutExecutionState,
@@ -125,6 +126,7 @@ export async function runFirestoreCleanup(
   const steps: Array<(uid: string, db: Firestore) => Promise<ResourceCleanupResult>> = [
     deleteUserQuestionnaires,
     deleteUserAssessments,
+    deleteUserNutritionResources,
     deleteProgressPhotoDocuments,
     // Disable private raw-token ownership first. Every registry mutation
     // re-checks ownerUid transactionally, preserving concurrent transfers.

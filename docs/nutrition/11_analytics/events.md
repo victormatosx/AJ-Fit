@@ -1,186 +1,48 @@
-# AJ Fit Nutrition — Eventos de Analytics
+# AJ Fit Nutrition — Eventos de produto
 
-## 0. Status real de infraestrutura — greenfield
+## Implementação (Fases 27–30)
 
-Hoje **não existe provider real de analytics de produto** no AJ Fit (nenhum Firebase Analytics, Amplitude, Mixpanel, Segment ou equivalente integrado). O único precedente é `src/onboarding/onboardingAnalytics.ts`, que é explicitamente um logger **no-op** — não deve ser tratado como infraestrutura consolidada nem copiado como padrão de produção.
+O AJ Fit continua sem provider externo de analytics. O contrato puro em
+`src/nutrition/analytics/contract.ts` valida nome, autoridade e propriedades;
+`src/nutrition/analytics/index.ts` é o adaptador de cliente e
+`functions/src/nutrition/analytics.ts` é o adaptador autoritativo do backend.
+Ambos operam como no-op validado enquanto nenhum provider for escolhido.
 
-Os eventos listados abaixo são, por ora, um **contrato conceitual de produto**: definem o que deveria ser medido, não como medir. Implementá-los de fato depende de uma decisão de produto/infra anterior (escolher e integrar um provider real) que está fora do escopo da documentação de Nutrição. Até essa decisão existir, a implementação de Nutrição pode:
+Eventos de cliente:
 
-- registrar estes eventos como no-op, seguindo o mesmo padrão de `onboardingAnalytics.ts`, até um provider real existir; ou
-- aguardar a decisão de provider antes de instrumentar.
+- `nutrition_opened`;
+- `nutrition_profile_started` / `nutrition_profile_completed`;
+- `nutrition_generation_requested`;
+- `nutrition_plan_viewed` / `nutrition_plan_restored`;
+- `nutrition_diary_day_viewed` / `nutrition_diary_item_added`;
+- `nutrition_meal_alternative_requested`;
+- `nutrition_favorite_added`;
+- `nutrition_weekly_summary_viewed`.
 
-Não criar um pipeline de analytics paralelo e específico de Nutrição para contornar essa lacuna.
+Eventos autoritativos do backend:
 
-## 1. Princípio
+- `nutrition_generation_completed` / `nutrition_generation_failed`;
+- `nutrition_meal_alternative_completed` / `nutrition_meal_alternative_failed`.
 
-Analytics deve medir comportamento de produto sem transportar dados nutricionais sensíveis detalhados.
+Conclusão e falha de IA não são emitidas pelo cliente. O contrato rejeita
+eventos backend no adaptador client e vice-versa.
 
-Não enviar como payload de analytics:
-- peso exato;
-- alergias;
-- lista de alimentos consumidos;
-- lista de alimentos excluídos;
-- conteúdo integral da dieta;
-- conteúdo de prompts;
-- respostas brutas da IA;
-- dados clínicos;
-- descrições livres do usuário.
+## Propriedades permitidas
 
-## 2. Convenção
+Somente enums, booleanos e buckets técnicos curtos: tela de origem, modo da
+operação, meal slot, tipo da adição ao diário, categoria estruturada de
+feedback, bucket de duração/retry/quantidade, fallback, status/código estável
+e presença de tendência de peso.
 
-Eventos devem seguir a convenção já existente no AJ Fit.
-Os nomes abaixo são conceituais e devem ser adaptados ao padrão real do projeto.
+## Dados proibidos
 
-## 3. Entrada na Nutrição
+O contrato não aceita propriedades fora da allowlist. Em particular, nunca
+enviar peso, altura, nascimento, gravidez/lactação, alergias, IDs ou nomes de
+alimentos, exclusões, conteúdo do diário, calorias/macros, texto de feedback,
+prompt, resposta bruta ou conteúdo do plano.
 
-### nutrition_tab_opened
+## Provider futuro
 
-Disparado quando o usuário abre a aba Nutrição.
-
-Propriedades possíveis:
-- `hasNutritionProfile`
-- `hasActivePlan`
-- `hasLogToday`
-
-## 4. Perfil Nutricional
-
-### nutrition_profile_started
-### nutrition_profile_completed
-### nutrition_profile_updated
-
-Propriedades permitidas:
-- `questionnaireVersion`
-- `mealCount`
-- `dietaryPattern`
-- `varietyPreference`
-- `hasExclusions`
-- `hasPreferredFoods`
-- `hasUsualFoods`
-
-Não enviar IDs ou nomes dos alimentos.
-
-## 5. Geração de dieta
-
-### nutrition_plan_generation_requested
-### nutrition_plan_generation_completed
-### nutrition_plan_generation_failed
-
-Propriedades:
-- `generationType`
-- `engineVersion`
-- `promptVersion`
-- `modelFamily`
-- `retryCount`
-- `fallbackUsed`
-- `durationBucket`
-- `failureCode`
-
-## 6. Plano
-
-### nutrition_plan_opened
-### nutrition_meal_option_selected
-### nutrition_plan_restored
-### nutrition_plan_history_opened
-
-Não enviar o conteúdo da refeição.
-
-## 7. Diário alimentar
-
-### nutrition_meal_log_started
-### nutrition_meal_log_completed
-### nutrition_meal_log_updated
-
-Propriedades possíveis:
-- `mealSlot`
-- `usedRecommendedOption`
-- `itemCountBucket`
-- `usedCustomFood`
-- `usedRecipe`
-
-Não enviar nomes dos alimentos.
-
-## 8. Frequência de registro
-
-Evento derivado/agregado:
-
-### nutrition_daily_logging_completed
-
-Critério pode ser definido posteriormente como presença de pelo menos um registro válido no dia.
-
-## 9. Troca de refeição
-
-### nutrition_meal_alternative_requested
-### nutrition_meal_alternative_generated
-### nutrition_meal_alternative_accepted
-### nutrition_meal_alternative_rejected
-
-Propriedades:
-- `mealSlot`
-- `reasonCategory`
-- `retryCount`
-- `fallbackUsed`
-
-Motivos devem ser enum estruturado, não texto livre.
-
-## 10. Alimentos próprios
-
-### nutrition_custom_food_created
-### nutrition_custom_food_used
-
-Sem nome ou macros detalhados no analytics.
-
-## 11. Receitas
-
-### nutrition_recipe_created
-### nutrition_recipe_used
-
-Propriedades:
-- `ingredientCountBucket`
-
-## 12. Favoritos
-
-### nutrition_meal_favorited
-### nutrition_meal_unfavorited
-
-Não enviar conteúdo da refeição.
-
-## 13. Visão semanal
-
-### nutrition_weekly_summary_opened
-
-Propriedades possíveis:
-- `loggedDaysBucket`
-- `hasWeightTrend`
-
-## 14. Recomendações de novo plano
-
-### nutrition_regeneration_recommended
-### nutrition_regeneration_cta_clicked
-
-Motivo em enum:
-- `weight_change`
-- `profile_change`
-- `exclusion_conflict`
-- `other_supported_reason`
-
-## 15. Segurança
-
-### nutrition_generation_blocked
-
-Pode registrar somente:
-- `gateType`
-
-Exemplos:
-- `pregnancy`
-- `lactation`
-
-## 16. Erros de produto
-
-### nutrition_error_shown
-
-Propriedades:
-- `screen`
-- `errorCode`
-- `recoverable`
-
-Nunca enviar stack trace para analytics de produto.
+A escolha de Firebase Analytics, Amplitude, Mixpanel, PostHog ou outro SaaS é
+uma decisão separada. A integração futura deve implementar os dois adapters
+existentes sem ampliar a allowlist silenciosamente.

@@ -34,23 +34,36 @@ interface NutritionEngineInput {
     heightCm: number;
     currentWeightKg: number;
     goal: ExistingGoalType;
-    pregnancyStatus?: ExistingPregnancyType;
+  };
+
+  workout: {
+    weeklyTrainingFrequency: number;
   };
 
   nutritionProfile: {
     progressionPace?: ProgressionPace;
     targetWeightKg?: number | null;
     nonTrainingActivityLevel: NonTrainingActivityLevel;
-    meals: MealSlot[];
+    mealSlots: MealSlot[];
     dietaryPattern: DietaryPattern;
     excludedFoodIds: string[];
     preferredFoodIds: string[];
     usualFoodIds: string[];
-    breastfeeding?: boolean | null;
+    pregnant: boolean;
+    breastfeeding: boolean;
     varietyPreference: VarietyPreference;
+    nutritionGoalCategory?: NutritionGoalCategory;
   };
 }
 ```
+
+Nota (decisão final, substitui versão anterior deste documento): `pregnant`/`breastfeeding` **não são** campos herdados (`inherited`) — são estado atual, lido de `nutritionProfile/current.pregnant`/`.breastfeeding` (ver `07_backend/firestore_schema.md` §3.1). Removidos de `inherited.pregnancyStatus`; passam a fazer parte de `nutritionProfile` acima, como qualquer outro campo do Perfil Nutricional.
+
+Nota (ajuste de implementação): `workout.weeklyTrainingFrequency` foi adicionado como campo de topo do input — nenhum documento anterior o havia incluído explicitamente no contrato, apesar de `energy_calculation.md` §3 e `10_integrations/workout_integration.md` exigirem esse dado para o cálculo de TDEE. Reaproveita exatamente `WorkoutNutritionContext` (`src/types/nutrition.ts`), sem duplicar o contrato.
+
+### 3.1 Elegibilidade e erro de domínio (decisão final)
+
+O Engine não produz metas normais quando `nutritionProfile.pregnant === true` ou `nutritionProfile.breastfeeding === true` — gates bloqueadores sem bypass (`09_safety/nutrition_safety_rules.md` §2). Também não produz metas quando o objetivo é ambíguo e `nutritionGoalCategory` está ausente. Em ambos os casos, a função principal do Engine lança um erro de domínio explícito e tipado (`NutritionEngineError`, `src/nutrition/engine/errors.ts`) — nunca um default silencioso nem um resultado parcial/zerado disfarçado de válido.
 
 ## 4. Output conceitual
 
@@ -104,3 +117,5 @@ Persistir no mínimo:
 - `mealDistributionVersion`;
 - `questionnaireVersion`;
 - `foodCatalogVersion`.
+
+Esses seis campos formam `NutritionEngineRuleVersions` e vivem dentro de `engineSnapshot` do plano persistido — **não** dentro do objeto `versions` de nível superior, que segue `canonical/meal_plan_schema.json` (`additionalProperties: false`, 5 campos de base + `promptVersion`, obrigatório nos planos gerados pela implementação V1). Ver `07_backend/firestore_schema.md` §3.3 para a decisão completa.

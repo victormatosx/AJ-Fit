@@ -1,0 +1,504 @@
+{
+  "mealSlots": {
+    "breakfast": "Desayuno",
+    "morning_snack": "Merienda de la mañana",
+    "lunch": "Almuerzo",
+    "afternoon_snack": "Merienda de la tarde",
+    "dinner": "Cena",
+    "supper": "Colación nocturna"
+  },
+  "home": {
+    "title": "Nutrición",
+    "loading": "Cargando tu nutrición…",
+    "noProfile": {
+      "title": "Crea tu Perfil Nutricional",
+      "body": "Responde algunas preguntas rápidas para generar una dieta según tu objetivo.",
+      "cta": "Crear mi Perfil Nutricional"
+    },
+    "noPlan": {
+      "title": "Listo para tu dieta",
+      "body": "Tu Perfil Nutricional está completo. Vamos a crear tu plan de comidas.",
+      "cta": "Crear mi dieta",
+      "editProfile": "Revisar perfil nutricional"
+    },
+    "generating": {
+      "title": "Tu dieta se está preparando",
+      "body": "Esto solo toma un momento.",
+      "cta": "Seguir el progreso"
+    },
+    "errorState": {
+      "title": "No pudimos generar tu dieta ahora",
+      "cta": "Intentar de nuevo"
+    },
+    "summary": {
+      "title": "HOY",
+      "kcalGoal": "META DE KCAL",
+      "protein": "PROTEÍNA",
+      "carbs": "CARBOHIDRATOS",
+      "fat": "GRASA",
+      "fiber": "FIBRA"
+    },
+    "nextMeal": {
+      "title": "PRÓXIMA COMIDA",
+      "recommended": "Recomendado",
+      "openCta": "Ver comida"
+    },
+    "mealsToday": {
+      "title": "COMIDAS DE HOY",
+      "itemCount_one": "{{count}} alimento",
+      "itemCount_other": "{{count}} alimentos",
+      "empty": "Nada registrado",
+      "openDiaryCta": "Ver diario"
+    },
+    "quickAccess": {
+      "title": "MIS ALIMENTOS",
+      "customFood": "Crear alimento",
+      "recipe": "Crear receta",
+      "favorites": "Mis favoritos",
+      "savedMeals": "Comidas guardadas",
+      "history": "Historial de planes"
+    },
+    "pregnancyBlock": {
+      "title": "Se recomienda seguimiento especializado",
+      "body": "Durante el embarazo o la lactancia, la generación automática de dietas no está disponible en AJ Fit. Recomendamos seguimiento con un nutricionista para orientación segura y personalizada.",
+      "ack": "Entendido"
+    },
+    "disabled": {
+      "title": "Nutrición aún no disponible",
+      "body": "Esta función se está habilitando por etapas y todavía no llegó a tu cuenta."
+    }
+  },
+  "weekly": {
+    "title": "Resumen semanal",
+    "thisWeek": "Esta semana",
+    "open": "Ver resumen",
+    "back": "Volver a Nutrición",
+    "previousWeek": "Semana anterior",
+    "nextWeek": "Semana siguiente",
+    "loadError": "No pudimos cargar el resumen semanal ahora.",
+    "overview": "Vista general",
+    "average": "Promedio",
+    "averageConsumed": "Promedio consumido",
+    "calories": "Calorías",
+    "macros": "Macronutrientes",
+    "protein": "Proteína",
+    "carbs": "Carbohidratos",
+    "fat": "Grasa",
+    "fiber": "Fibra",
+    "weight": "Peso",
+    "records": "Registros",
+    "days": "días",
+    "kcalPerDay": "kcal/día",
+    "gramsPerDay": "g/día",
+    "loggedDays": "Días con registro",
+    "daysOfSeven": "{{count}} de 7",
+    "meals": "Comidas registradas",
+    "partial": "Los promedios usan solo los {{count}} días con registros.",
+    "complete": "Los 7 días tienen registros.",
+    "empty": "Todavía no registraste comidas esta semana.",
+    "followedRecommended_one": "{{count}} comida siguió una opción del plan.",
+    "followedRecommended_other": "{{count}} comidas siguieron una opción del plan.",
+    "consumed": "Consumido",
+    "target": "Meta",
+    "targetCoverage": "Meta planificada disponible para {{count}} de 7 días.",
+    "fiberCoverage": "La fibra usa los {{count}} días con datos completos de este nutriente.",
+    "daysChart": "Días de la semana",
+    "weekdays": [
+      "Lun",
+      "Mar",
+      "Mié",
+      "Jue",
+      "Vie",
+      "Sáb",
+      "Dom"
+    ],
+    "consumedLegend": "Consumo registrado",
+    "targetLegend": "Meta diaria",
+    "noDataLegend": "El guion indica un día sin registro; no se cuenta como cero.",
+    "currentWeight": "Peso más reciente",
+    "previousWeight": "Medición anterior",
+    "variation": "Variación",
+    "targetWeight": "Peso objetivo",
+    "weightTrend": "Tendencia reciente de peso",
+    "weightChartHint": "Toca o recorre los puntos para consultar las mediciones.",
+    "noWeight": "No hay una medición de peso disponible. El resumen nutricional sigue visible.",
+    "oneWeight": "Una sola medición no permite mostrar una tendencia.",
+    "trendLimited": "No se muestra tendencia con solo {{count}} medición(es).",
+    "trendBasedOn": "Tendencia observada en las últimas {{count}} mediciones; no es una previsión.",
+    "openProgress": "Ver detalles en Evolución"
+  },
+  "profile": {
+    "title": "Perfil Nutricional",
+    "stepOf": "Paso {{current}} de {{total}}",
+    "actions": {
+      "next": "Continuar",
+      "back": "Volver",
+      "skip": "Omitir",
+      "save": "Guardar cambios",
+      "cancel": "Cancelar"
+    },
+    "questions": {
+      "nutritionGoalCategory": {
+        "title": "¿Cuál es tu objetivo principal con la alimentación?",
+        "subtitle": "Esto complementa tu objetivo de entrenamiento y define la dirección de tu dieta.",
+        "options": {
+          "muscle_gain": "Ganar masa muscular",
+          "weight_loss": "Perder grasa",
+          "maintenance": "Mantener mi peso",
+          "body_recomposition": "Mejorar mi composición corporal"
+        }
+      },
+      "progressionPace": {
+        "title": "¿Qué ritmo prefieres?",
+        "options": {
+          "gradual": "Gradual",
+          "moderate": "Moderado",
+          "accelerated": "Acelerado"
+        }
+      },
+      "targetWeightKg": {
+        "title": "¿Tienes un peso objetivo en mente?",
+        "subtitle": "Este campo es opcional.",
+        "placeholder": "Peso objetivo (kg)",
+        "skip": "Prefiero no decirlo"
+      },
+      "nonTrainingActivityLevel": {
+        "title": "¿Cómo es tu actividad fuera del entrenamiento?",
+        "options": {
+          "sedentary": "Sedentario(a)",
+          "low_active": "Poco activo(a)",
+          "active": "Activo(a)",
+          "very_active": "Muy activo(a)"
+        }
+      },
+      "mealSlots": {
+        "title": "¿Cuántas comidas por día quieres en tu plan?",
+        "subtitle": "Elige entre 2 y 6 comidas."
+      },
+      "dietaryPattern": {
+        "title": "¿Cuál es tu patrón alimentario?",
+        "options": {
+          "omnivore": "Omnívoro",
+          "vegetarian": "Vegetariano",
+          "vegan": "Vegano",
+          "pescatarian": "Pescetariano"
+        }
+      },
+      "preferredFoodIds": {
+        "title": "Alimentos que prefieres",
+        "subtitle": "Priorizaremos estos alimentos en tus comidas.",
+        "addCta": "Agregar alimento",
+        "empty": "Todavía no agregaste alimentos."
+      },
+      "usualFoodIds": {
+        "title": "Alimentos que sueles comer",
+        "subtitle": "Esto ayuda a armar un plan más fácil de seguir.",
+        "addCta": "Agregar alimento",
+        "empty": "Todavía no agregaste alimentos."
+      },
+      "excludedFoodIds": {
+        "title": "Alimentos que quieres excluir",
+        "subtitle": "Estos alimentos nunca aparecerán en tu plan.",
+        "addCta": "Agregar alimento",
+        "empty": "Ningún alimento excluido."
+      },
+      "excludedAllergens": {
+        "title": "¿Tienes alguna alergia o restricción alimentaria?",
+        "subtitle": "Selecciona todas las que correspondan.",
+        "options": {
+          "milk": "Leche",
+          "egg": "Huevo",
+          "peanut": "Cacahuate",
+          "tree_nuts": "Frutos secos",
+          "soy": "Soja",
+          "wheat": "Trigo",
+          "fish": "Pescado",
+          "shellfish": "Mariscos",
+          "other": "Otra"
+        }
+      },
+      "supplements": {
+        "title": "¿Usas o aceptarías usar suplementos?",
+        "options": {
+          "whey_or_protein": "Whey o suplemento proteico",
+          "creatine": "Creatina",
+          "caffeine_or_preworkout": "Cafeína o pre-entreno",
+          "multivitamin": "Multivitamínico",
+          "omega_3": "Omega 3",
+          "other": "Otro"
+        }
+      },
+      "pregnant": {
+        "title": "¿Estás embarazada?",
+        "yes": "Sí",
+        "no": "No"
+      },
+      "breastfeeding": {
+        "title": "¿Estás amamantando?",
+        "yes": "Sí",
+        "no": "No"
+      },
+      "varietyPreference": {
+        "title": "¿Prefieres variedad o repetir las mismas comidas?",
+        "options": {
+          "variety": "Me gusta variar",
+          "repeatable": "Prefiero repetir",
+          "indifferent": "Me da igual"
+        }
+      }
+    },
+    "review": {
+      "title": "Revisa tu perfil",
+      "subtitle": "Revisa todo antes de crear tu dieta.",
+      "goal": "Objetivo",
+      "activity": "Actividad fuera del entrenamiento",
+      "meals": "Comidas por día",
+      "dietaryPattern": "Patrón alimentario",
+      "preferred": "Preferidos",
+      "usual": "Habituales",
+      "excluded": "Excluidos",
+      "allergens": "Alergias/restricciones",
+      "supplements": "Suplementos",
+      "variety": "Variedad",
+      "none": "Ninguno",
+      "cta": "Crear mi dieta",
+      "safetyBlocked": "Generación bloqueada — mira el aviso de arriba."
+    },
+    "errors": {
+      "invalid": "Revisa las respuestas marcadas antes de continuar.",
+      "saveFailed": "No pudimos guardar tu perfil ahora. Intenta de nuevo."
+    }
+  },
+  "generating": {
+    "title": "Preparando tu dieta",
+    "stages": {
+      "queued": "Preparando tus datos",
+      "running": "Seleccionando alimentos y armando tus comidas",
+      "validating": "Validando tu dieta",
+      "completing": "Finalizando tu plan"
+    },
+    "failed": {
+      "title": "No pudimos generar tu dieta",
+      "body": "Algo no funcionó como se esperaba. Puedes intentar de nuevo.",
+      "retry": "Intentar de nuevo",
+      "back": "Volver"
+    },
+    "cooldown": {
+      "title": "Espera un momento",
+      "body": "Solicitaste una generación hace poco. Intenta de nuevo en unos minutos."
+    },
+    "disabled": {
+      "title": "Función no disponible",
+      "body": "La generación de dietas no está disponible temporalmente."
+    },
+    "safetyBlocked": {
+      "title": "Generación no disponible",
+      "body": "Durante el embarazo o la lactancia, recomendamos seguimiento profesional en lugar de la generación automática."
+    },
+    "accountInactive": {
+      "title": "Cuenta inactiva",
+      "body": "No pudimos continuar con esta cuenta ahora."
+    },
+    "missingPhysicalContext": {
+      "title": "Necesitamos un dato más para calcular tu plan",
+      "body": "Registra tu peso más reciente para que podamos calcular tus metas nutricionales."
+    },
+    "genericError": {
+      "title": "Algo salió mal",
+      "body": "Intenta de nuevo en un momento."
+    }
+  },
+  "plan": {
+    "title": "Tu plan",
+    "back": "Volver",
+    "dailyGoal": "META DIARIA",
+    "recommended": "RECOMENDADA",
+    "alternative": "ALTERNATIVA",
+    "viewMeal": "Ver comida",
+    "disclaimer": "Este plan es una recomendación, no una obligación.",
+    "empty": "Todavía no hay un plan activo.",
+    "notFound": {
+      "title": "Plan no encontrado",
+      "body": "Volviendo a tu plan activo."
+    }
+  },
+  "mealDetails": {
+    "title": "Detalles de la comida",
+    "options": "OPCIONES EQUIVALENTES",
+    "recommendedBadge": "Recomendada",
+    "foods": "ALIMENTOS",
+    "totals": "TOTALES DE LA OPCIÓN",
+    "register": "Registrar esta opción",
+    "registering": "Registrando…",
+    "registered": "Registrado en tu diario de hoy.",
+    "registerError": "No pudimos registrar esto ahora.",
+    "swap": "Cambiar esta comida",
+    "favorite": "Favorito",
+    "favorited": "Agregado a favoritos.",
+    "favoriteError": "No pudimos marcar como favorito ahora."
+  },
+  "feedback": {
+    "title": "¿Por qué quieres cambiarla?",
+    "subtitle": "Esto nos ayuda a armar una mejor opción para ti.",
+    "reasons": {
+      "dislike_foods": "No me gustaron estos alimentos",
+      "simpler": "Quiero algo más simple",
+      "more_variety": "Quiero más variedad",
+      "missing_ingredients": "No tengo estos alimentos"
+    },
+    "dislikedFoodsPrompt": "¿Qué alimentos no te gustaron?",
+    "cancel": "Cancelar",
+    "confirm": "Generar alternativa"
+  },
+  "alternative": {
+    "title": "Alternativa generada",
+    "loading": "Armando una nueva opción para ti…",
+    "error": {
+      "title": "No pudimos generar una alternativa",
+      "body": "Intenta de nuevo en un momento.",
+      "retry": "Intentar de nuevo"
+    },
+    "cooldown": {
+      "title": "Espera un momento",
+      "body": "Solicitaste un cambio hace poco. Intenta de nuevo en breve."
+    },
+    "excludePrompt": {
+      "title": "¿Excluir estos alimentos de tu plan?",
+      "body": "Dejarán de aparecer en tus próximas comidas.",
+      "confirm": "Excluir permanentemente",
+      "skip": "No excluir"
+    },
+    "backToPlan": "Volver al plan"
+  },
+  "foodSearch": {
+    "title": "Buscar alimento",
+    "placeholder": "Buscar por nombre…",
+    "catalogBadge": "Catálogo AJ Fit",
+    "customBadge": "Mi alimento",
+    "empty": "No se encontraron alimentos.",
+    "emptyCta": "Crear alimento",
+    "typeMore": "Escribe al menos 2 letras para buscar.",
+    "loadMore": "Cargar más",
+    "offline": "Sin conexión. Mostrando alimentos recientes.",
+    "error": "No pudimos buscar ahora.",
+    "recipeBadge": "Receta"
+  },
+  "customFood": {
+    "title": "Crear alimento",
+    "name": "Nombre del alimento",
+    "namePlaceholder": "Ej.: Tapioca casera",
+    "per100g": "Valores por 100 g",
+    "kcal": "Calorías (kcal)",
+    "protein": "Proteína (g)",
+    "carbs": "Carbohidratos (g)",
+    "fat": "Grasa (g)",
+    "fiber": "Fibra (g) — opcional",
+    "save": "Guardar alimento",
+    "errors": {
+      "name": "Ingresa un nombre.",
+      "number": "Ingresa un número válido (0 o mayor)."
+    }
+  },
+  "recipe": {
+    "title": "Crear receta",
+    "name": "Nombre de la receta",
+    "namePlaceholder": "Ej.: Tortilla de claras",
+    "description": "Descripción (opcional)",
+    "ingredients": "INGREDIENTES",
+    "removeIngredient": "Eliminar ingrediente",
+    "maxIngredients": "Máximo {{count}} ingredientes por receta.",
+    "grams": "Gramos",
+    "totalWeight": "PESO TOTAL DE LOS INGREDIENTES",
+    "calculatedMacros": "TOTAL DE LA RECETA",
+    "finalWeightLabel": "Peso final de la receta lista (g)",
+    "finalWeightPlaceholder": "Opcional",
+    "finalWeightFallback": "Sin peso final indicado — usando la suma de los ingredientes ({{grams}} g) como estimación.",
+    "per100g": "POR 100 G",
+    "servingsLabel": "¿Cuántas porciones rinde?",
+    "servingsPlaceholder": "Opcional",
+    "perServing": "POR PORCIÓN",
+    "quantityByGrams": "Gramos",
+    "quantityByPortion": "Porción",
+    "gramsHint": "¿Cuántos gramos consumiste?",
+    "portionsHint": "¿Cuántas porciones consumiste?",
+    "save": "Guardar receta",
+    "empty": "Agrega al menos un ingrediente.",
+    "errors": {
+      "name": "Ingresa un nombre.",
+      "ingredients": "Agrega al menos un ingrediente válido."
+    }
+  },
+  "units": {
+    "kcal": "kcal",
+    "gramsShort": "g"
+  },
+  "diary": {
+    "title": "Diario alimentario",
+    "today": "Hoy",
+    "yesterday": "Ayer",
+    "futureBlocked": "Todavía no puedes registrar una fecha futura.",
+    "dailyGoal": "META DIARIA",
+    "addFood": "Agregar alimento",
+    "empty": "Ninguna comida registrada este día.",
+    "followedBadge": "Siguió la recomendación",
+    "moveMeal": "Mover a otra comida",
+    "removeConfirm": "¿Eliminar este elemento del diario?",
+    "remove": "Eliminar",
+    "cancel": "Cancelar",
+    "editGrams": "Editar gramos",
+    "save": "Guardar",
+    "loadError": "No pudimos cargar el diario ahora."
+  },
+  "registerMeal": {
+    "fab": "Registrar comida",
+    "title": "Registrar comida",
+    "selectSlot": "¿Qué comida quieres registrar?",
+    "itemsTitle": "ALIMENTOS DE ESTA COMIDA",
+    "noFoodsYet": "Todavía no agregaste alimentos.",
+    "gramsLabel": "¿Cuántos gramos consumiste?",
+    "proteinShort": "proteína",
+    "per100g": "por 100 g",
+    "close": "Listo",
+    "referenceTitle": "OPCIÓN RECOMENDADA (REFERENCIA)"
+  },
+  "favorites": {
+    "title": "Comidas guardadas",
+    "add": "Agregar a favoritos",
+    "empty": "Todavía no tienes comidas favoritas.",
+    "emptyBody": "Marca una opción recomendada o una alternativa como favorita para usarla de nuevo más rápido.",
+    "use": "Registrar en el diario",
+    "remove": "Quitar de favoritos",
+    "removeConfirm": "¿Quitar este favorito?"
+  },
+  "favoriteItems": {
+    "title": "Mis favoritos",
+    "tabFoods": "Alimentos",
+    "tabRecipes": "Recetas",
+    "emptyFoods": "Todavía no marcaste alimentos como favoritos.",
+    "emptyFoodsBody": "Toca el corazón de cualquier alimento para guardarlo aquí.",
+    "emptyRecipes": "Todavía no marcaste recetas como favoritas.",
+    "emptyRecipesBody": "Toca el corazón de cualquier receta para guardarla aquí.",
+    "unavailable": "No disponible en el catálogo — quítalo de favoritos",
+    "unavailableName": "Alimento no disponible",
+    "updateErrorTitle": "No se pudo actualizar",
+    "updateErrorBody": "Tu favorito volvió a su estado anterior. Inténtalo de nuevo."
+  },
+  "history": {
+    "title": "Historial de planes",
+    "activeBadge": "Activo",
+    "archivedBadge": "Archivado",
+    "view": "Ver plan",
+    "restore": "Restaurar este plan",
+    "restoring": "Restaurando…",
+    "restoreConfirm": {
+      "title": "¿Restaurar este plan?",
+      "body": "Tu plan activo actual se archivará y este pasará a estar activo.",
+      "confirm": "Restaurar",
+      "cancel": "Cancelar"
+    },
+    "restoreError": "No pudimos restaurar este plan ahora.",
+    "readOnlyBanner": "Viendo un plan archivado — solo lectura.",
+    "empty": "Todavía no hay planes.",
+    "createdAt": "Creado el"
+  }
+}

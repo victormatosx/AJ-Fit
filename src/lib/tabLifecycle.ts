@@ -6,7 +6,7 @@ import type { TabId } from '../state/AppState';
  * `workout` is deliberately excluded — see that doc's "Exceções" section for
  * why a session/timer-driven screen isn't a safe default fit.
  */
-export const PERSISTENT_TAB_IDS = ['home', 'progress', 'profile'] as const;
+export const PERSISTENT_TAB_IDS = ['home', 'progress', 'profile', 'nutrition'] as const;
 export type PersistentTabId = (typeof PERSISTENT_TAB_IDS)[number];
 
 export function isPersistentTab(tab: TabId): tab is PersistentTabId {

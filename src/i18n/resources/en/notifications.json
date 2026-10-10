@@ -18,6 +18,10 @@
       "title": "Progress",
       "description": "Get reminders to log and track your progress."
     },
+    "nutrition": {
+      "title": "Nutrition",
+      "description": "Get updates about your plan, diary and weekly summary."
+    },
     "subscription": {
       "title": "Subscription",
       "description": "Get updates about your Premium subscription."

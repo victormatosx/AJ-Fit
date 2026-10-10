@@ -131,3 +131,30 @@ Itens críticos:
 A V1 é Brasil-first.
 
 Não tentar resolver catálogo global nesta fase.
+
+---
+
+## 11. Pipeline reproduzível inicial
+
+Nenhum dataset oficial está versionado neste repositório. O adaptador de
+entrada é um arquivo JSON `{ "schemaVersion": 1, "catalogVersion": "v1",
+"records": [...] }`, com registros `RawFoodRecord` de
+`src/nutrition/catalog/normalize.ts`. Adaptadores específicos para arquivos
+oficiais TBCA/TACO/USDA podem produzir esse JSON sem mudar o schema canônico.
+Cada registro informa fonte e `sourceId`, nome PT-BR, categoria e nutrientes
+por 100 g; rótulos podem informar `nutritionPerServing` + `servingGrams`.
+Unidades explícitas `mg` e `kJ` são convertidas; ausência de fibra continua
+`null`. Dados nutricionais não são inventados.
+
+Dry-run local, sem conexão Firebase ou escrita remota:
+
+```bash
+npx tsx scripts/nutrition/importCatalog.ts --input /caminho/arquivo.json --output /tmp/catalog-preview.json
+```
+
+Escrita Admin exige `--confirm --project ID_EXPLICITO` e credenciais ADC;
+não foi executada nesta rodada. O script cria/atualiza por ID estável, nunca
+apaga documentos, e grava `nutritionCatalogMeta/current` com schemaVersion,
+catalogVersion, importedAt, versões de fonte e contagem **do lote**. O arquivo
+de entrada deve ser revisto antes de publicar; a hierarquia TBCA/TACO/USDA
+não faz fusão automática de alimentos potencialmente equivalentes.

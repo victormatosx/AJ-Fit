@@ -8,11 +8,12 @@ import {
 } from '../notificationPreferences';
 
 describe('notification master preference', () => {
-  it('defaults legacy and missing subscription/support fields to enabled', () => {
+  it('defaults legacy and missing nutrition/subscription/support fields to enabled', () => {
     expect(allNotificationPreferencesEnabled(undefined)).toBe(true);
     expect(allNotificationPreferencesEnabled({ progress: true })).toBe(true);
     expect(resolveNotificationPreference({}, 'subscription')).toBe(true);
     expect(resolveNotificationPreference({}, 'support')).toBe(true);
+    expect(resolveNotificationPreference({}, 'nutrition')).toBe(true);
   });
 
   it('derives the master from every individual choice', () => {
@@ -23,9 +24,9 @@ describe('notification master preference', () => {
     expect(allNotificationPreferencesEnabled(values)).toBe(true);
   });
 
-  it('changes exactly five categories together', () => {
-    expect(NOTIFICATION_PREFERENCE_KEYS).toHaveLength(5);
-    expect(Object.values(setAllNotificationPreferences(false))).toEqual([false, false, false, false, false]);
-    expect(Object.values(setAllNotificationPreferences(true))).toEqual([true, true, true, true, true]);
+  it('changes exactly six categories together', () => {
+    expect(NOTIFICATION_PREFERENCE_KEYS).toHaveLength(6);
+    expect(Object.values(setAllNotificationPreferences(false))).toEqual([false, false, false, false, false, false]);
+    expect(Object.values(setAllNotificationPreferences(true))).toEqual([true, true, true, true, true, true]);
   });
 });

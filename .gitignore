@@ -56,3 +56,10 @@ modules/ajfit-app-check/ios/AJFitAppCheckDebugTokenLocal.swift
 
 # Home bootstrap perf audit — local cold-start capture artifacts, not source.
 perf-runs/
+
+# Generated Open Food Facts bulk exports and resumable-import state.
+# Curated source fixtures in this directory remain versionable.
+/scripts/nutrition/sources/openfoodfacts-products.csv.gz
+/scripts/nutrition/sources/off-brazil-bulk.jsonl
+/scripts/nutrition/sources/off-brazil-csv.jsonl
+/scripts/nutrition/sources/*.checkpoint.json

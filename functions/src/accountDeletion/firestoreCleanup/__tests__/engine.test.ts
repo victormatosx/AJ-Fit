@@ -193,7 +193,7 @@ describe('runFirestoreCleanup — ordering (Fase 6 §10)', () => {
     });
 
     expect(order).toEqual([
-      'questionnaires', 'assessments', 'progressPhotos',
+      'questionnaires', 'assessments', 'nutrition', 'progressPhotos',
       'pushTokenOwners', 'pushInstallations', 'pushDevices', 'notificationDispatches',
       'notificationProductWindows', 'notificationAchievementMilestones', 'dailyNotificationRegistration', 'entitlementSignal',
       'workoutProgramDescendants',

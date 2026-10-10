@@ -67,12 +67,12 @@ describe('notification preference policy', () => {
       { uid: 'uid', category: 'OPERATIONAL', type: 'QA_TEST' },
       firestoreFixture({ user: { preferences: { notificationPreferences: {
         workoutsAndReminders: false, evolutionAndAchievements: false,
-        progress: false, subscription: false, support: false,
+        progress: false, nutrition: false, subscription: false, support: false,
       } } } }) as never,
     )).resolves.toEqual({ allowed: true, reason: 'ALLOWED' });
   });
 
-  it.each(['WORKOUTS_AND_REMINDERS', 'EVOLUTION_AND_ACHIEVEMENTS', 'PROGRESS'])
+  it.each(['WORKOUTS_AND_REMINDERS', 'EVOLUTION_AND_ACHIEVEMENTS', 'PROGRESS', 'NUTRITION'])
   ('QA preview ignores the product preference OFF without weakening account checks (%s)', async (field) => {
     await expect(resolveQaPreviewNotificationPolicy(
       'uid',
@@ -84,6 +84,7 @@ describe('notification preference policy', () => {
               workoutsAndReminders: false,
               evolutionAndAchievements: false,
               progress: false,
+              nutrition: false,
               selectedForProof: field,
             },
           },
@@ -109,6 +110,13 @@ describe('notification preference policy', () => {
           },
         },
       }) as never,
+    )).resolves.toEqual({ allowed: false, reason: 'DISABLED_BY_USER' });
+  });
+
+  it('honors the nutrition category preference', async () => {
+    await expect(resolveNotificationEligibility(
+      { uid: 'uid', category: 'NUTRITION', type: 'NUTRITION_DAILY_LOG_REMINDER' },
+      firestoreFixture({ user: { preferences: { notificationPreferences: { nutrition: false } } } }) as never,
     )).resolves.toEqual({ allowed: false, reason: 'DISABLED_BY_USER' });
   });
 

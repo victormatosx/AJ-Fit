@@ -43,15 +43,38 @@ Esses níveis descrevem somente a rotina fora das sessões de treino.
 
 A implementação deve evitar dupla contagem entre atividade cotidiana e treino.
 
-O mapeamento numérico final entre atividade, treino e gasto total deve existir em configuração canônica versionada e ser validado antes da produção.
+### Decisão final (fechada, `canonical/nutrition_rules.json` `energy.tdeeStrategy`)
+
+```text
+tdeeKcal = rmrKcal × nonTrainingActivityFactor[level] + (weeklyTrainingFrequency × trainingSessionKcal(weightKg) / 7)
+```
+
+Multiplicadores de atividade NÃO-treino (deliberadamente mais baixos que a escala PAL convencional, que já embute exercício nos próprios rótulos — ver justificativa completa em `canonical/nutrition_rules.json`):
+
+| Nível | Fator |
+|---|---|
+| sedentary | 1.2 |
+| low_active | 1.3 |
+| active | 1.4 |
+| very_active | 1.5 |
+
+Contribuição do treino, por sessão, em função do peso:
+
+```text
+trainingSessionKcal(weightKg) = 5.0 × 3.5 × weightKg / 200 × 50
+```
+
+(fórmula padrão ACSM METs→kcal/min; MET 5.0 = ponto médio de treino resistido no Compendium of Physical Activities; 50 minutos = suposição plana de sessão média da V1.)
+
+Fontes completas em `canonical/nutrition_rules.json` `energy.tdeeStrategy`.
 
 ## 5. TDEE
 
-Fluxo conceitual:
+Fluxo conceitual (fechado):
 
-`RMR -> atividade cotidiana -> componente de treino quando aplicável -> TDEE estimado`
+`RMR × fator de atividade fora do treino + contribuição do treino (via weeklyTrainingFrequency) -> TDEE estimado`
 
-O valor final deve ser determinístico e auditável.
+O valor final é determinístico e auditável — mesma entrada produz sempre o mesmo TDEE.
 
 ## 6. Meta calórica por objetivo
 
@@ -77,13 +100,26 @@ Valores:
 
 A velocidade modifica a magnitude do déficit ou superávit.
 
-Os percentuais exatos devem ficar em `canonical/nutrition_rules.json`, não espalhados em frontend, prompt ou Function.
+Percentuais fechados (`canonical/nutrition_rules.json` `goals.deficitPercentages`/`surplusPercentages`, fontes: Garthe et al. 2011; Helms, Aragon & Fitschen 2014; Aragon & Schoenfeld 2013):
+
+| Pace | Déficit (perda de peso) | Superávit (ganho de massa) |
+|---|---|---|
+| gradual | 10% | 5% |
+| moderate | 15% | 10% |
+| accelerated | 20% | 15% |
+
+`body_recomposition` não varia por pace: déficit fixo de 10% do TDEE, independente da velocidade escolhida — a literatura sobre recomposição simultânea não sustenta um "recomp acelerado" mais agressivo (ver `goals_and_adjustments.md` §2.1).
 
 ## 8. Limites mínimos
 
-A V1 terá limites mínimos determinísticos de ingestão energética.
+A V1 tem limites mínimos determinísticos de ingestão energética (guardrail de produto, não prescrição clínica):
 
-Os limites podem diferir por sexo.
+| Sexo | Piso calórico |
+|---|---|
+| Masculino | 1500 kcal |
+| Feminino | 1200 kcal |
+
+Fonte: piso de segurança amplamente publicado contra dietas muito baixas em calorias sem supervisão médica (ver `canonical/nutrition_rules.json` `safety.minimumCaloriesBySex` para a citação completa).
 
 Se a meta calculada ficar abaixo do mínimo:
 
@@ -91,7 +127,7 @@ Se a meta calculada ficar abaixo do mínimo:
 2. registrar o clamp;
 3. impedir a IA de contornar o limite.
 
-Os valores numéricos finais devem ser validados por profissional de nutrição antes da produção.
+Revisão profissional de nutrição continua recomendada antes de qualquer alegação clínica/de produção — estes valores são um guardrail conservador, não uma prescrição individualizada.
 
 ## 9. Versionamento
 

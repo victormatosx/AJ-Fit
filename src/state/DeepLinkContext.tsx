@@ -109,6 +109,13 @@ export function DeepLinkProvider({ children }: { children: React.ReactNode }) {
             .catch(() => logWarn('deepLinks', 'campaign_open_persist_failed'));
         }
       }
+      if (payload?.type === 'NUTRITION_DAILY_LOG_REMINDER') {
+        enqueueIntent({ type: 'nutrition-tab', destination: 'diary' }, 'notification');
+      } else if (payload?.type === 'NUTRITION_PLAN_READY') {
+        enqueueIntent({ type: 'nutrition-tab', destination: 'plan' }, 'notification');
+      } else if (payload?.type === 'NUTRITION_WEEKLY_SUMMARY') {
+        enqueueIntent({ type: 'nutrition-tab', destination: 'weekly' }, 'notification');
+      }
     };
     const unsubscribe = subscribeToNotificationOpens(handleNotification);
     const initial = getLastNotificationOpenEvent();

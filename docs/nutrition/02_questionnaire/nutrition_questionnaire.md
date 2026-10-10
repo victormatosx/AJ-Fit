@@ -56,6 +56,36 @@ Objetivos suportados para a experiência de nutrição:
 
 A alteração do objetivo geral do AJ Fit deve refletir no contexto nutricional. A dieta atual, porém, não deve ser alterada silenciosamente; o sistema deve sugerir a criação de uma nova dieta quando apropriado.
 
+#### 3.2.1 Pergunta complementar para objetivos ambíguos (decisão final)
+
+Cinco objetivos gerais do AJ Fit não têm direção nutricional inequívoca, confirmado por auditoria do código real (não por suposição a partir do nome):
+
+- `strength` ("Aumentar minha força");
+- `conditioning` ("Melhorar meu condicionamento físico");
+- `perf` ("Performance") — o próprio AJ Fit já trata como ambíguo hoje (`LEGACY_PERFORMANCE_GOAL_AMBIGUOUS` em `src/workoutPrescription/input.ts`);
+- `return_to_training` ("Voltar a treinar depois de um período parado");
+- `recon` ("Recondicionamento") — normalizado para `return_to_training` pelo próprio `LEGACY_GOAL_MAP` do app, não para `body_composition`/`def` apesar do nome parecido.
+
+Nenhum dos cinco pode ser mapeado automaticamente para `weight_loss`/`muscle_gain`/`maintenance`/`body_recomposition` — isso seria uma suposição do produto, não uma derivação do dado real. Nenhum default silencioso (ex. `maintenance`) é aceitável.
+
+**Por que a pergunta existe**: quando o objetivo geral não é suficiente para o Nutrition Engine decidir a estratégia energética (déficit, superávit, manutenção ou recomposição), o Perfil Nutricional pergunta diretamente qual é a direção nutricional desejada.
+
+**Quando aparece**: somente quando o objetivo geral do usuário for um dos cinco valores acima. Para os demais objetivos (`gain_muscle`/`hyper`, `lose_fat`/`cut`, `body_composition`/`def`, `health`), a pergunta não aparece — o mapeamento direto já resolve a direção.
+
+**O que ela NÃO faz**: não substitui nem cria um segundo objetivo geral do AJ Fit. `nutritionGoalCategory` é um campo só do Perfil Nutricional, usado exclusivamente para resolver a direção energética quando o objetivo geral não a define. O objetivo geral do usuário continua sendo lido normalmente de onde já é lido hoje.
+
+**Copy final aprovada:**
+
+- Título: **"Qual é o seu principal objetivo com a alimentação?"**
+- Subtítulo: **"Isso complementa seu objetivo de treino e define a direção da sua dieta."**
+- Opções:
+  - "Ganhar massa muscular" → `muscle_gain`
+  - "Perder gordura" → `weight_loss`
+  - "Manter meu peso" → `maintenance`
+  - "Melhorar minha composição corporal" → `body_recomposition`
+
+Contrato machine-readable em `canonical/questionnaire.json` (pergunta `nutritionGoalCategory`); lista dos cinco objetivos ambíguos em `canonical/nutrition_rules.json` `goals.normalization.ambiguous.values`.
+
 ### 3.3 Gestação
 
 `Quiz.pregnancyScreening` é um snapshot imutável do onboarding e não pode ser tratado como autoridade eterna. Ele serve apenas para **pré-preencher** `nutritionProfile/current.pregnant` na primeira vez que o Perfil Nutricional é criado.
@@ -375,6 +405,7 @@ Obrigatórias:
 - padrão alimentar;
 - estrutura/quantidade de refeições (2 a 6);
 - velocidade de evolução quando aplicável ao objetivo;
+- `nutritionGoalCategory`, **somente quando** o objetivo geral for um dos cinco ambíguos (`strength`, `conditioning`, `perf`, `return_to_training`, `recon`) — ver §3.2.1;
 - confirmação/revisão final do perfil.
 
 Alimentos preferidos podem ficar vazios através de **Tanto faz**.
