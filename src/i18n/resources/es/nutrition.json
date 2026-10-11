@@ -370,6 +370,20 @@
     },
     "backToPlan": "Volver al plan"
   },
+  "barcodeScan": {
+    "title": "Escanear código de barras",
+    "scanButtonLabel": "Escanear código de barras",
+    "permissionExplanation": "Necesitamos la cámara para leer el código de barras del producto.",
+    "permissionRequest": "Permitir cámara",
+    "permissionOpenSettings": "Abrir configuración",
+    "resolving": "Buscando producto…",
+    "notFoundTitle": "Producto aún no encontrado",
+    "notFoundBody": "No encontramos este código de barras en ninguna fuente disponible.",
+    "errorTitle": "No se pudo buscar ahora",
+    "errorBody": "Verifica tu conexión e intenta de nuevo.",
+    "tryAgain": "Intentar de nuevo",
+    "createManually": "Crear manualmente"
+  },
   "foodSearch": {
     "title": "Buscar alimento",
     "placeholder": "Buscar por nombre…",

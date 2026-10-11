@@ -22,6 +22,8 @@ import { nutrientsForServing, resolveDefaultServingUnit, servingGrams } from '..
 import { emptyTotals, foodPickOriginToDiarySource, isPositiveGrams } from '../../nutrition/ui/diaryModel';
 import { countBucket, durationBucket, trackNutritionEvent } from '../../nutrition/analytics';
 import { formatFoodDisplayName } from '../../nutrition/ui/formatFoodDisplayName';
+import { BarcodeScannerModal } from './BarcodeScannerModal';
+import { CreateCustomFoodScreen } from './CreateCustomFoodScreen';
 import {
   NUTRITION_MEAL_SLOTS, type FoodLogEntry, type FoodLogServingUnit, type FoodLogSourceType, type NutritionCustomFood,
   type NutritionFoodNutritionValues, type NutritionLoggedFoodItem, type NutritionLoggedFoodSource,
@@ -110,11 +112,14 @@ export function RegisterMealScreen({
   const [busy, setBusy] = useState(false);
   /** Fase C5 — a fresh FatSecret result isn't a real `foodLogCatalog` doc yet; brief inline wait while `ensureFoodLogEntryMaterialized` upserts it before grams entry opens. */
   const [materializingId, setMaterializingId] = useState<string | null>(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [creatingFoodFromScan, setCreatingFoodFromScan] = useState(false);
 
   useEffect(() => {
     if (!visible) {
       setSlot(NUTRITION_MEAL_SLOTS[0]); setSlotMenuOpen(false); setSearchText(''); setCatalogResults([]); setCursor(null);
       setGramsStep(null); setBusy(false); setSelectedServingId(null);
+      setScannerOpen(false); setCreatingFoodFromScan(false);
       return;
     }
     setSlot(initialSlot ?? NUTRITION_MEAL_SLOTS[0]);
@@ -197,6 +202,16 @@ export function RegisterMealScreen({
     setSelectedServingId(defaultUnit?.id ?? null);
     setGramsText(defaultGrams != null ? String(defaultGrams) : '100');
   };
+
+  /** Barcode scan already resolved AND materialized this entry server-side (`resolveFoodByBarcode`) — opens the SAME grams/serving-unit confirmation step a text-search selection would, never a second confirmation UI. */
+  const handleBarcodeResolved = (entry: FoodLogEntry<Timestamp>) => {
+    setScannerOpen(false);
+    openAddGrams({
+      foodId: entry.id, name: entry.name, origin: 'food_log', nutritionPer100g: entry.nutritionPer100g,
+      sourceType: entry.source.type, servings: entry.servings, defaultServingId: entry.defaultServingId,
+    });
+  };
+
   const openEditGrams = (item: NutritionLoggedFoodItem) => {
     setGramsStep({ mode: 'edit', item }); setSelectedServingId(null); setGramsText(String(item.grams));
   };
@@ -313,17 +328,26 @@ export function RegisterMealScreen({
                 </View>
               ) : null}
 
-              <View
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, height: 48,
-                  borderRadius: theme.radii.lg, backgroundColor: theme.colors.inputBackground,
-                  borderWidth: 1, borderColor: theme.colors.inputBorder }}
-              >
-                <Icon name="search" size={16} color={theme.colors.inputIcon} />
-                <TextInput
-                  value={searchText} onChangeText={setSearchText} placeholder={t('foodSearch.placeholder')}
-                  placeholderTextColor={theme.colors.inputPlaceholder} returnKeyType="search"
-                  style={{ flex: 1, fontFamily: theme.fonts.ui, fontSize: 15, color: theme.colors.inputText }}
-                />
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View
+                  style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, height: 48,
+                    borderRadius: theme.radii.lg, backgroundColor: theme.colors.inputBackground,
+                    borderWidth: 1, borderColor: theme.colors.inputBorder }}
+                >
+                  <Icon name="search" size={16} color={theme.colors.inputIcon} />
+                  <TextInput
+                    value={searchText} onChangeText={setSearchText} placeholder={t('foodSearch.placeholder')}
+                    placeholderTextColor={theme.colors.inputPlaceholder} returnKeyType="search"
+                    style={{ flex: 1, fontFamily: theme.fonts.ui, fontSize: 15, color: theme.colors.inputText }}
+                  />
+                </View>
+                <Pressable
+                  onPress={() => setScannerOpen(true)} accessibilityRole="button" accessibilityLabel={t('barcodeScan.scanButtonLabel')}
+                  style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderRadius: theme.radii.lg,
+                    backgroundColor: theme.colors.inputBackground, borderWidth: 1, borderColor: theme.colors.inputBorder }}
+                >
+                  <Icon name="camera" size={18} color={theme.colors.inputIcon} />
+                </Pressable>
               </View>
 
               {searchText.trim().length >= 2 ? (
@@ -483,6 +507,23 @@ export function RegisterMealScreen({
           </View>
         </View>
       ) : null}
+
+      <BarcodeScannerModal
+        visible={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onResolved={handleBarcodeResolved}
+        onNotFound={() => setCreatingFoodFromScan(true)}
+      />
+      <CreateCustomFoodScreen
+        visible={creatingFoodFromScan}
+        onClose={() => setCreatingFoodFromScan(false)}
+        onCreated={(food) => {
+          setCreatingFoodFromScan(false);
+          setCustomFoods((prev) => [...prev, food]);
+          trackNutritionEvent({ name: 'nutrition_custom_item_created_after_search', properties: { catalogMode: 'logging', afterZeroResults: true } });
+          openAddGrams({ foodId: food.id, name: food.name, origin: 'custom', nutritionPer100g: food.nutritionPer100g });
+        }}
+      />
     </Modal>
   );
 }

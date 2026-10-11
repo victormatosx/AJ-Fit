@@ -21,6 +21,14 @@ export const NUTRITION_ANALYTICS_EVENTS = [
   'nutrition_catalog_search_zero_results',
   'nutrition_catalog_item_selected',
   'nutrition_custom_item_created_after_search',
+  // Barcode scan (round brief §8) — never carries the raw barcode digits
+  // themselves, only closed-vocabulary provider/failure labels.
+  'barcode_scan_started',
+  'barcode_scan_resolved_local',
+  'barcode_scan_resolved_external',
+  'barcode_scan_materialized',
+  'barcode_scan_not_found',
+  'barcode_scan_failed',
 ] as const;
 
 export type NutritionAnalyticsEventName = typeof NUTRITION_ANALYTICS_EVENTS[number];
@@ -62,6 +70,14 @@ const ALLOWED_PROPERTIES: Readonly<Record<NutritionAnalyticsEventName, readonly 
   // `afterZeroResults` (Fase C3 "custom_food_created_after_zero_result")
   // — true when the most recent search before this creation had 0 results.
   nutrition_custom_item_created_after_search: ['catalogMode', 'afterZeroResults'],
+  // `source`/`reason` are closed-vocabulary provider/failure labels only —
+  // never the scanned barcode digits or any product identifier.
+  barcode_scan_started: [],
+  barcode_scan_resolved_local: [],
+  barcode_scan_resolved_external: ['source'],
+  barcode_scan_materialized: ['source'],
+  barcode_scan_not_found: [],
+  barcode_scan_failed: ['reason'],
 };
 
 const SENSITIVE_PROPERTY = /weight|height|birth|pregnan|breast|allerg|food|diary|macro|calorie|feedback|prompt|output|planContent/i;
@@ -84,6 +100,9 @@ const CLOSED_STRING_VALUES: Readonly<Partial<Record<NutritionAnalyticsEventName,
     source: ['taco', 'tbca', 'usda', 'label', 'off', 'fatsecret', 'manual'],
   },
   nutrition_custom_item_created_after_search: { catalogMode: ['generation', 'logging'] },
+  barcode_scan_resolved_external: { source: ['off', 'fatsecret'] },
+  barcode_scan_materialized: { source: ['off', 'fatsecret'] },
+  barcode_scan_failed: { reason: ['permission_denied', 'network', 'invalid_barcode', 'unknown'] },
 };
 
 export interface NutritionAnalyticsEvent {

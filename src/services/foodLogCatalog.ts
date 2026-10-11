@@ -255,3 +255,46 @@ export async function ensureFoodLogEntryMaterialized(
   if (existing) return existing;
   return materializeFoodLogEntry(entry, firestore, materializeExternalFood);
 }
+
+export type ResolveFoodByBarcodeStatus = 'local' | 'materialized' | 'not_found' | 'error';
+export interface ResolveFoodByBarcodeResult { status: ResolveFoodByBarcodeStatus; entry?: FoodLogEntry<Timestamp> }
+export type ResolveFoodByBarcodeCallable = (
+  barcode: string,
+) => Promise<{ status: 'local' | 'materialized' | 'not_found'; entry?: FoodLogEntry<Timestamp> }>;
+
+/**
+ * Same deferred-import reasoning as `defaultMaterializeExternalFood` above
+ * — `foodLogCatalog.ts` has far more call sites than the barcode-scan path
+ * alone, so a top-level `firebase/functions` import here would force every
+ * one of them to provide a working `app` export too.
+ */
+const defaultResolveFoodByBarcodeCallable: ResolveFoodByBarcodeCallable = async (barcode) => {
+  const [{ httpsCallable }, { functions }] = await Promise.all([import('firebase/functions'), import('../lib/firebaseFunctions')]);
+  const callable = httpsCallable<{ barcode: string }, { status: 'local' | 'materialized' | 'not_found'; entry?: FoodLogEntry<Timestamp> }>(
+    functions, 'resolveFoodByBarcode',
+  );
+  return (await callable({ barcode })).data;
+};
+
+/**
+ * Entry point the barcode scanner calls for EVERY decoded barcode (round
+ * brief §2 "resolução local-first"). Checks `foodLogCatalog` by barcode
+ * client-side first — a cheap read that skips the backend call (and its
+ * rate-limit charge) entirely when the product is already cataloged, the
+ * same optimization `ensureFoodLogEntryMaterialized` already applies for
+ * search-result materialization. Anything not found locally goes to the
+ * `resolveFoodByBarcode` callable, which owns the OFF-then-FatSecret
+ * federated lookup AND the server-side materialization (Firestore rules
+ * deny client writes to `foodLogCatalog`, same security boundary as
+ * `materializeExternalFoodFatSecret`). Never throws: a transport failure
+ * resolves to `{ status: 'error' }` so the scanner can show a retry state
+ * instead of crashing mid-scan.
+ */
+export async function resolveFoodLogEntryByBarcode(
+  barcode: string, firestore: Firestore = db, resolveCallable: ResolveFoodByBarcodeCallable = defaultResolveFoodByBarcodeCallable,
+): Promise<ResolveFoodByBarcodeResult> {
+  const local = await loadFoodLogEntryByBarcode(barcode, firestore);
+  if (local) return { status: 'local', entry: local };
+  try { return await resolveCallable(barcode); }
+  catch { return { status: 'error' }; }
+}

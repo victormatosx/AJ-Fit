@@ -370,6 +370,20 @@
     },
     "backToPlan": "Back to plan"
   },
+  "barcodeScan": {
+    "title": "Scan barcode",
+    "scanButtonLabel": "Scan barcode",
+    "permissionExplanation": "We need camera access to read the product's barcode.",
+    "permissionRequest": "Allow camera",
+    "permissionOpenSettings": "Open settings",
+    "resolving": "Looking up product…",
+    "notFoundTitle": "Product not found yet",
+    "notFoundBody": "We couldn't find this barcode in any available source.",
+    "errorTitle": "Couldn't search right now",
+    "errorBody": "Check your connection and try again.",
+    "tryAgain": "Try again",
+    "createManually": "Create manually"
+  },
   "foodSearch": {
     "title": "Search food",
     "placeholder": "Search by name…",

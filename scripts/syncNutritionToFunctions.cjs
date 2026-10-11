@@ -24,6 +24,14 @@ const files = [
   'nutrition/foodLog/genericServingRules.ts',
   'nutrition/foodLog/fatsecretMapper.ts',
   'nutrition/foodLog/fatsecretFoodGetMapper.ts',
+  // Barcode scan (live single-product OFF lookup, round brief
+  // "Reaproveitar a arquitetura federada atual") — the SAME mapping/quality
+  // gate the bulk OFF importer uses, reused as-is for a live single-barcode
+  // fetch so the backend never re-implements (and risks drifting from) the
+  // validation every other OFF-sourced record already goes through.
+  'nutrition/foodLog/offMapper.ts',
+  'nutrition/foodLog/offCategoryMap.ts',
+  'nutrition/foodLog/offQualityFilter.ts',
 ];
 const shim = `export type Sex = 'm' | 'f';
 export type PrimaryGoal = 'gain_muscle' | 'lose_fat' | 'strength' | 'conditioning' | 'health';

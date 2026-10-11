@@ -7,6 +7,7 @@ export { onNutritionGenerationCompleted } from './notifications/nutritionNotific
 export { monitorNutritionAiOperations } from './nutrition/observability/alerts';
 export { searchExternalFoodFatSecret } from './nutrition/foodLog/searchExternalFood';
 export { materializeExternalFoodFatSecret } from './nutrition/foodLog/materializeExternalFood';
+export { resolveFoodByBarcode } from './nutrition/foodLog/resolveFoodByBarcode';
 import {
   handleRevenueCatWebhook,
   REVENUECAT_API_SECRET_KEY,

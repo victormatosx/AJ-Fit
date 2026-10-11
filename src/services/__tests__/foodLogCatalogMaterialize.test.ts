@@ -33,7 +33,7 @@ vi.mock('firebase/firestore', () => ({
   },
 }));
 
-import { ensureFoodLogEntryMaterialized } from '../foodLogCatalog';
+import { ensureFoodLogEntryMaterialized, resolveFoodLogEntryByBarcode } from '../foodLogCatalog';
 import type { FoodLogEntry } from '../../types/nutrition';
 import type { Timestamp } from 'firebase/firestore';
 
@@ -96,4 +96,36 @@ describe('ensureFoodLogEntryMaterialized (Fase C8 — server-side materializatio
     await expect(ensureFoodLogEntryMaterialized(entry, fakeFirestore, materializeExternalFood)).rejects.toThrow('EXTERNAL_FOOD_PROVIDER_UNAVAILABLE');
   });
 
+});
+
+describe('resolveFoodLogEntryByBarcode (barcode scan)', () => {
+  beforeEach(() => { barcodeDocs = []; byIdDocs = {}; });
+
+  it('a local catalog hit never calls the resolve callable at all', async () => {
+    barcodeDocs = [{ id: 'flc_off_x', data: { id: 'flc_off_x', barcode: '7891000100103', name: 'Already cataloged' } }];
+    const resolveCallable = vi.fn();
+    const result = await resolveFoodLogEntryByBarcode('7891000100103', fakeFirestore, resolveCallable);
+    expect(result).toMatchObject({ status: 'local', entry: { name: 'Already cataloged' } });
+    expect(resolveCallable).not.toHaveBeenCalled();
+  });
+
+  it('a local miss calls the backend callable and returns its materialized result', async () => {
+    const materialized = externalFood({ source: { type: 'off', sourceId: '7891000100103', sourceName: 'Open Food Facts' } });
+    const resolveCallable = vi.fn().mockResolvedValue({ status: 'materialized', entry: materialized });
+    const result = await resolveFoodLogEntryByBarcode('7891000100103', fakeFirestore, resolveCallable);
+    expect(resolveCallable).toHaveBeenCalledWith('7891000100103');
+    expect(result).toEqual({ status: 'materialized', entry: materialized });
+  });
+
+  it('a local miss with no provider match returns not_found', async () => {
+    const resolveCallable = vi.fn().mockResolvedValue({ status: 'not_found' });
+    const result = await resolveFoodLogEntryByBarcode('0000000000000', fakeFirestore, resolveCallable);
+    expect(result).toEqual({ status: 'not_found' });
+  });
+
+  it('a transport/callable failure degrades to status "error" rather than throwing — the scanner must never crash mid-scan', async () => {
+    const resolveCallable = vi.fn().mockRejectedValue(new Error('UNAVAILABLE'));
+    const result = await resolveFoodLogEntryByBarcode('7891000100103', fakeFirestore, resolveCallable);
+    expect(result).toEqual({ status: 'error' });
+  });
 });

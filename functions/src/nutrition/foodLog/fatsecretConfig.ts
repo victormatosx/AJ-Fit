@@ -37,3 +37,20 @@ export const EXTERNAL_FOOD_SEARCH_WINDOW_MS = 60 * 60 * 1000;
  */
 export const EXTERNAL_FOOD_DETAILS_HOURLY_LIMIT = 30;
 export const EXTERNAL_FOOD_DETAILS_WINDOW_MS = 60 * 60 * 1000;
+
+/**
+ * Open Food Facts' public v2 product-by-barcode endpoint — no credentials,
+ * no scraping, same public read access `scripts/nutrition/foodLog/fetchOff.ts`
+ * already documents for the bulk importer. A live per-scan lookup (unlike
+ * that script's own per-keystroke-search caveat) is the intended use of
+ * this specific endpoint: one request per user-initiated barcode scan, not
+ * a background crawl.
+ */
+export const OFF_PRODUCT_URL = 'https://world.openfoodfacts.org/api/v2/product';
+export const OFF_PRODUCT_FIELDS = 'code,product_name,brands,categories_tags,countries_tags,nutriments,lang,serving_size,serving_quantity';
+export const OFF_USER_AGENT = 'AJFit-FoodLogCatalog/1.0 (+contact: victor.matos3112@gmail.com; barcode scan live lookup)';
+export const OFF_DEFAULT_TIMEOUT_MS = 5_000;
+
+/** Barcode-scan resolution budget — one call covers BOTH the OFF live lookup and (on an OFF miss) the FatSecret barcode+food.get round trip, so it stays its own, separate budget from search/details above. */
+export const EXTERNAL_FOOD_BARCODE_HOURLY_LIMIT = 60;
+export const EXTERNAL_FOOD_BARCODE_WINDOW_MS = 60 * 60 * 1000;

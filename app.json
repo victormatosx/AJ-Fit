@@ -89,6 +89,12 @@
         }
       ],
       "expo-image",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "O AJ Fit usa a câmera para escanear o código de barras de alimentos na Dieta."
+        }
+      ],
       "@react-native-community/datetimepicker",
       "expo-localization",
       "expo-sharing",
