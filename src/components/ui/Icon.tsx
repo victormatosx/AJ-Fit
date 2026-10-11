@@ -6,7 +6,7 @@ export type IconName =
   | 'bolt' | 'dumbbell' | 'home' | 'chart' | 'user' | 'play'
   | 'arrow-right' | 'arrow-left' | 'check' | 'plus' | 'minus'
   | 'calendar' | 'sparkles' | 'target' | 'flame' | 'timer'
-  | 'heart' | 'apple' | 'lock' | 'lock-open' | 'mail' | 'eye' | 'settings'
+  | 'heart' | 'apple' | 'utensils' | 'lock' | 'lock-open' | 'mail' | 'eye' | 'settings'
   | 'crown' | 'chevron-right' | 'chevron-down' | 'x' | 'swap' | 'list' | 'shield'
   | 'trophy' | 'camera' | 'google' | 'instagram' | 'share'
   | 'bell' | 'moon' | 'globe' | 'ruler' | 'download' | 'trash' | 'help-circle'
@@ -74,6 +74,8 @@ export function Icon({ name, size = 22, color: colorProp, stroke = 1.7, filled =
       return <Svg {...common}><Path {...p} fill={filled ? color : 'none'} d="M20.4 5.6a5.5 5.5 0 00-7.8 0L12 6.2l-.6-.6a5.5 5.5 0 00-7.8 7.8l.6.6L12 22l7.8-8 .6-.6a5.5 5.5 0 000-7.8z" /></Svg>;
     case 'apple':
       return <Svg {...common}><Path d="M16.5 12.3c0-2.4 2-3.6 2-3.6-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.8.8-3.5.8-.7 0-1.9-.8-3.1-.8-1.6 0-3.1.9-3.9 2.4-1.7 2.9-.4 7.1 1.2 9.4.8 1.1 1.8 2.4 3 2.4 1.2 0 1.7-.8 3.1-.8 1.5 0 1.9.8 3.1.8 1.3 0 2.1-1.2 2.9-2.3.9-1.3 1.3-2.6 1.3-2.7-.1-.1-2.7-1-2.7-3.8zM14.4 5.4c.7-.8 1.1-1.9 1-3-1 0-2.2.6-2.9 1.5-.6.7-1.2 1.9-1 2.9 1.1.1 2.2-.5 2.9-1.4z" fill={color} /></Svg>;
+    case 'utensils':
+      return <Svg {...common}><Path {...p} d="M3 2v7a2 2 0 002 2h4a2 2 0 002-2V2M7 2v20M21 15V2a5 5 0 00-5 5v6a2 2 0 002 2h3zM21 15v7" /></Svg>;
     case 'google':
       return (
         <Svg {...common}>

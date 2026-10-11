@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Modal, Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { CtaButton } from '../../components/ui/CtaButton';
 import { useTheme } from '../../theme';
@@ -13,6 +13,16 @@ import type { NutritionRecipe } from '../../types/nutrition';
  * converts a portion count to grams (honoring `finalWeightG` when
  * present), then the caller logs that resolved gram amount through the
  * SAME `addDiaryFood` every other diary entry already uses.
+ *
+ * Renders as a plain absolutely-positioned overlay, not its own
+ * `<Modal>` — picking a recipe inside `FoodSearchScreen` opens this
+ * WHILE `FoodSearchScreen`'s own `pageSheet` Modal is still `visible`
+ * (`diaryFoodTarget` intentionally stays set so the slot survives until
+ * the quantity is confirmed). Two independent native `<Modal>`s both
+ * `visible` at once is unreliable (same class of bug fixed for
+ * `MealDetailsScreen` + `MealFeedbackSheet`) — hosted as a plain View
+ * inside `FoodSearchScreen`'s `overlay` slot instead, there is nothing
+ * left to stack.
  */
 export function RecipeQuantityModal({
   visible, recipeName, recipe, onClose, onConfirm,
@@ -38,8 +48,10 @@ export function RecipeQuantityModal({
   const grams = mode === 'grams' ? amount : (recipe ? recipePortionToGrams(recipe, amount) : null);
   const valid = grams != null && isPositiveGrams(grams);
 
+  if (!visible) return null;
+
   return (
-    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50, elevation: 50 }}>
       <View style={{ flex: 1, backgroundColor: theme.colors.loadingOverlay, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
         <View style={{ width: '100%', borderRadius: theme.radii.xl, backgroundColor: theme.colors.sheetBackground,
           borderWidth: 1, borderColor: theme.colors.border, padding: 22, gap: 16 }}>
@@ -83,6 +95,6 @@ export function RecipeQuantityModal({
           </View>
         </View>
       </View>
-    </Modal>
+    </View>
   );
 }

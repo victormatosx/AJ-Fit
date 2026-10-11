@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScreenBg } from '../../components/ui/ScreenBg';
@@ -18,6 +18,20 @@ export interface MealSwapFeedback { reason: NutritionMealFeedbackReason; dislike
  * flags foods for review; it never excludes anything by itself (round
  * brief §14 — "quero variar" must never read as "odeio esses alimentos").
  */
+/**
+ * Renders as a plain absolutely-positioned overlay, not its own `<Modal>`
+ * — the caller (`MealDetailsScreen`) hosts this inside its single
+ * `pageSheet` Modal. Stacking a second independent native `<Modal>` on
+ * top of that one is unreliable (same class of bug already worked around
+ * in `RegisterMealScreen`'s grams step): dismissing the inner Modal can
+ * leave the outer one's native presentation/touch-responder chain
+ * corrupted — the screen behind looks "frozen", and an unrelated later
+ * re-render (e.g. switching tabs) can flush the stale native state and
+ * pop the "already closed" sheet back open on its own. Returning `null`
+ * while `!visible` (rather than keeping the Modal mounted with
+ * `visible={false}`) also fully unmounts `reason`/`dislikedFoodIds` on
+ * close, so every reopen starts from clean state with no manual reset.
+ */
 export function MealFeedbackSheet({
   visible, currentOption, onClose, onSubmit,
 }: {
@@ -31,17 +45,18 @@ export function MealFeedbackSheet({
   const [reason, setReason] = useState<NutritionMealFeedbackReason | null>(null);
   const [dislikedFoodIds, setDislikedFoodIds] = useState<string[]>([]);
 
-  const reset = () => { setReason(null); setDislikedFoodIds([]); };
   const toggleDisliked = (foodId: string) => setDislikedFoodIds((prev) =>
     (prev.includes(foodId) ? prev.filter((id) => id !== foodId) : [...prev, foodId]));
 
+  if (!visible) return null;
+
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={() => { reset(); onClose(); }} presentationStyle="pageSheet">
+    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50, elevation: 50 }}>
       <ScreenBg>
         <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 22, paddingTop: 10 }}>
             <Display size={18}>{t('feedback.title')}</Display>
-            <Pressable accessibilityRole="button" accessibilityLabel={t('feedback.cancel')} onPress={() => { reset(); onClose(); }} style={{ padding: 6 }}>
+            <Pressable accessibilityRole="button" accessibilityLabel={t('feedback.cancel')} onPress={onClose} style={{ padding: 6 }}>
               <Icon name="x" size={20} color={theme.colors.textFaint} />
             </Pressable>
           </View>
@@ -72,7 +87,6 @@ export function MealFeedbackSheet({
               onPress={() => {
                 if (!reason) return;
                 onSubmit({ reason, ...(dislikedFoodIds.length > 0 ? { dislikedFoodIds } : {}) });
-                reset();
               }}
               disabled={!reason}
               style={{ marginTop: 8 }}
@@ -82,6 +96,6 @@ export function MealFeedbackSheet({
           </ScrollView>
         </SafeAreaView>
       </ScreenBg>
-    </Modal>
+    </View>
   );
 }

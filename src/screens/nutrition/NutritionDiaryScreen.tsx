@@ -34,14 +34,29 @@ function DateNav({ localDate, onPrev, onNext }: { localDate: string; onPrev: () 
   );
 }
 
+/**
+ * Renders as a plain absolutely-positioned overlay, not its own
+ * `<Modal>` — it (and the "move meal" overlay below) used to be a
+ * `<Modal transparent>` nested inside `NutritionDiaryScreen`'s own
+ * `pageSheet` Modal. Two independent native Modals both `visible` at
+ * once is unreliable (the same class of bug fixed for
+ * `MealDetailsScreen` + `MealFeedbackSheet`): dismissing the inner one
+ * can corrupt the outer one's native presentation/touch chain. Returning
+ * `null` while `!visible` also fully unmounts `value`, so reopening for
+ * a different item always starts from that item's own `initialGrams`
+ * instead of whatever was last typed.
+ */
 function EditGramsSheet({
   visible, initialGrams, onClose, onSave,
 }: { visible: boolean; initialGrams: number; onClose: () => void; onSave: (grams: number) => void }) {
   const { theme } = useTheme();
   const { t } = useTranslation('nutrition');
   const [value, setValue] = useState(String(initialGrams));
+
+  if (!visible) return null;
+
   return (
-    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50, elevation: 50 }}>
       <View style={{ flex: 1, backgroundColor: theme.colors.loadingOverlay, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
         <View style={{ width: '100%', borderRadius: theme.radii.xl, backgroundColor: theme.colors.surfaceElevated, padding: 20, gap: 14 }}>
           <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 15, color: theme.colors.textPrimary }}>{t('diary.editGrams')}</Text>
@@ -58,7 +73,7 @@ function EditGramsSheet({
           </View>
         </View>
       </View>
-    </Modal>
+    </View>
   );
 }
 
@@ -172,23 +187,28 @@ export function NutritionDiaryScreen({
         onSave={(grams) => { if (editing) onEditGrams(editing.slot, editing.item, grams); setEditing(null); }}
       />
 
-      <Modal visible={moving != null} animationType="fade" transparent onRequestClose={() => setMoving(null)}>
-        <View style={{ flex: 1, backgroundColor: theme.colors.loadingOverlay, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
-          <View style={{ width: '100%', borderRadius: theme.radii.xl, backgroundColor: theme.colors.surfaceElevated, padding: 20, gap: 10 }}>
-            <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 15, color: theme.colors.textPrimary }}>{t('diary.moveMeal')}</Text>
-            {mealSlots.filter((slot) => slot !== moving?.slot).map((slot) => (
-              <Pressable
-                key={slot}
-                onPress={() => { if (moving) onMove(moving.slot, moving.itemId, slot); setMoving(null); }}
-                style={{ paddingVertical: 12 }}
-              >
-                <Text style={{ fontFamily: theme.fonts.ui, fontSize: 14, color: theme.colors.textPrimary }}>{t(`mealSlots.${slot}`)}</Text>
-              </Pressable>
-            ))}
-            <CtaButton ghost onPress={() => setMoving(null)}>{t('diary.cancel')}</CtaButton>
+      {moving != null ? (
+        // Plain overlay, not its own `<Modal>` — see the comment on
+        // `EditGramsSheet` above for why nesting a second native Modal
+        // here is unreliable.
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50, elevation: 50 }}>
+          <View style={{ flex: 1, backgroundColor: theme.colors.loadingOverlay, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+            <View style={{ width: '100%', borderRadius: theme.radii.xl, backgroundColor: theme.colors.surfaceElevated, padding: 20, gap: 10 }}>
+              <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 15, color: theme.colors.textPrimary }}>{t('diary.moveMeal')}</Text>
+              {mealSlots.filter((slot) => slot !== moving?.slot).map((slot) => (
+                <Pressable
+                  key={slot}
+                  onPress={() => { if (moving) onMove(moving.slot, moving.itemId, slot); setMoving(null); }}
+                  style={{ paddingVertical: 12 }}
+                >
+                  <Text style={{ fontFamily: theme.fonts.ui, fontSize: 14, color: theme.colors.textPrimary }}>{t(`mealSlots.${slot}`)}</Text>
+                </Pressable>
+              ))}
+              <CtaButton ghost onPress={() => setMoving(null)}>{t('diary.cancel')}</CtaButton>
+            </View>
           </View>
         </View>
-      </Modal>
+      ) : null}
     </Modal>
   );
 }

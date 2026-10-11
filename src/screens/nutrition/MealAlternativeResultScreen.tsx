@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScreenBg } from '../../components/ui/ScreenBg';
@@ -17,6 +17,15 @@ export type MealAlternativeViewState =
   | { kind: 'error'; retryable: boolean; copyKey: 'error' | 'cooldown' }
   | { kind: 'result'; options: NutritionMealOption[]; recommendedOptionId: string };
 
+/**
+ * Renders as a plain absolutely-positioned overlay, not its own `<Modal>`
+ * — see the identical note on `MealFeedbackSheet`. Stacked on top of
+ * `MealDetailsScreen`'s single Modal, same as the feedback sheet; the two
+ * never show at once in practice (`handleRequestAlternative` flips
+ * `feedbackVisible` off in the same tick it turns this on), but both are
+ * plain views now, so even if that ever changed it couldn't trigger the
+ * native multi-Modal stacking bug.
+ */
 export function MealAlternativeResultScreen({
   visible, state, registeringOptionId, favoritingOptionId, favoritedOptionIds = [],
   onClose, onRetry, onRegister, onFavorite,
@@ -34,8 +43,10 @@ export function MealAlternativeResultScreen({
   const { theme } = useTheme();
   const { t } = useTranslation('nutrition');
 
+  if (!visible) return null;
+
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose} presentationStyle="pageSheet">
+    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50, elevation: 50 }}>
       <ScreenBg>
         <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 22, paddingTop: 10 }}>
@@ -79,6 +90,6 @@ export function MealAlternativeResultScreen({
           ) : null}
         </SafeAreaView>
       </ScreenBg>
-    </Modal>
+    </View>
   );
 }

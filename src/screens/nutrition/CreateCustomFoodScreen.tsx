@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScreenBg } from '../../components/ui/ScreenBg';
@@ -39,7 +39,22 @@ function Field({ label, value, onChangeText, placeholder, error, numeric = false
   );
 }
 
-/** `08_frontend/screens.md` §8. Saved foods become usable immediately — caller re-fetches/selects right after `onCreated`. */
+/**
+ * `08_frontend/screens.md` §8. Saved foods become usable immediately —
+ * caller re-fetches/selects right after `onCreated`.
+ *
+ * Renders as a plain absolutely-positioned overlay, not its own
+ * `<Modal>` — this is opened both standalone (NutritionShell's "create
+ * custom food" sibling) AND nested inside `FoodSearchScreen`'s own
+ * `pageSheet` Modal (its "no results, cadastrar alimento" CTA). Two
+ * independent native `<Modal>`s stacked on top of each other is
+ * unreliable (the same class of bug fixed for `MealDetailsScreen` +
+ * `MealFeedbackSheet`): dismissing the inner one can corrupt the outer
+ * one's native presentation/touch chain. A plain View has no such
+ * ambiguity in either position. Returning `null` while `!visible` also
+ * fully unmounts the form fields on close, so `reset()` only needs to
+ * run for the in-session "save" path.
+ */
 export function CreateCustomFoodScreen({
   visible, onClose, onCreated,
 }: {
@@ -78,8 +93,10 @@ export function CreateCustomFoodScreen({
     }
   };
 
+  if (!visible) return null;
+
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose} presentationStyle="pageSheet">
+    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50, elevation: 50 }}>
       <ScreenBg>
         <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 22, paddingTop: 10 }}>
@@ -108,6 +125,6 @@ export function CreateCustomFoodScreen({
           </ScrollView>
         </SafeAreaView>
       </ScreenBg>
-    </Modal>
+    </View>
   );
 }

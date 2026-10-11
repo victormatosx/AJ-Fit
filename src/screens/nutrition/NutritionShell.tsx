@@ -536,8 +536,24 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
 
   const safetyBlocked = profile ? isSafetyBlocked(profile) : false;
 
+  // Every route branch below renders only the route-specific screen as
+  // `routeContent` — it never `return`s directly. All overlay modals
+  // (meal details/feedback/alternative, register meal, diary, food
+  // search, recipe quantity, create food/recipe, history, favorites) are
+  // assembled once, further down, and rendered as siblings of
+  // `routeContent` on every route. Routing used to `return` a
+  // route-specific tree straight away, which unmounted whichever modals
+  // live outside that branch's JSX without ever calling their `onClose`
+  // — the modal's own `visible` flag in this component's state stayed
+  // `true`, so the moment the user navigated back to a branch that does
+  // render that modal, React Native's `Modal` mounted already-open,
+  // popping up a screen the user never tapped to open (reported as the
+  // feedback sheet or "Registrar alimento" appearing unprompted after the
+  // app felt "stuck").
+  let routeContent: React.ReactNode;
+
   if (route.name === 'profile') {
-    return (
+    routeContent = (
       <NutritionProfileScreen
         profile={profile}
         inheritedGoal={goal ?? 'health'}
@@ -550,10 +566,8 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
         onToggleFavoriteFood={handleToggleFavoriteFood}
       />
     );
-  }
-
-  if (route.name === 'generating') {
-    return (
+  } else if (route.name === 'generating') {
+    routeContent = (
       <NutritionGeneratingScreen
         job={job ?? activeJob}
         retrying={requesting}
@@ -561,19 +575,15 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
         onBack={() => setRoute({ name: 'home' })}
       />
     );
-  }
-
-  if (route.name === 'historicalPlan') {
-    return (
+  } else if (route.name === 'historicalPlan') {
+    routeContent = (
       <NutritionPlanScreen
         plan={route.plan} historical onOpenMeal={() => {}}
         onBack={() => { setRoute({ name: 'home' }); setHistoryVisible(true); }}
       />
     );
-  }
-
-  if (route.name === 'weekly') {
-    return (
+  } else if (route.name === 'weekly') {
+    routeContent = (
       <NutritionWeeklySummaryScreen
         summary={weeklySummary}
         weight={weeklyWeight}
@@ -598,52 +608,56 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
 
   const currentMeal = plan?.meals.find((meal) => meal.slot === mealDetailsSlot) ?? null;
 
+  // Both overlays below render as plain absolutely-positioned views (no
+  // `<Modal>` of their own) inside MealDetailsScreen's single `overlay`
+  // slot — see the comment on that prop for why stacking independent
+  // native Modals here caused the "frozen screen, sheet reopens on tab
+  // switch" bug.
   const mealDetailsAndModals = plan ? (
-    <>
-      <MealDetailsScreen
-        meal={currentMeal}
-        registeringOptionId={registeringOptionId}
-        favoritingOptionId={favoritingOptionId}
-        favoritedOptionIds={favoritedOptionIds}
-        registerError={registerError}
-        favoriteError={favoriteError}
-        onClose={() => setMealDetailsSlot(null)}
-        onRegister={handleRegisterOption}
-        onFavorite={(option) => { if (mealDetailsSlot) handleFavoriteOption(option, mealDetailsSlot, 'plan', plan.planId); }}
-        onSwap={() => setFeedbackVisible(true)}
-      />
-      <MealFeedbackSheet
-        visible={feedbackVisible}
-        currentOption={currentMeal ? currentMeal.options.find((option) => option.id === currentMeal.recommendedOptionId) ?? null : null}
-        onClose={() => setFeedbackVisible(false)}
-        onSubmit={(feedback) => { setFeedbackVisible(false); handleRequestAlternative(feedback); }}
-      />
-      <MealAlternativeResultScreen
-        visible={alternativeVisible}
-        state={alternativeState}
-        registeringOptionId={registeringOptionId}
-        favoritingOptionId={favoritingOptionId}
-        favoritedOptionIds={favoritedOptionIds}
-        onClose={() => { setAlternativeVisible(false); setAlternativeState(null); }}
-        onRetry={() => handleRequestAlternative(lastFeedback ?? undefined)}
-        onRegister={(option) => {
-          if (!mealDetailsSlot) return;
-          openRegisterMealForOption(mealDetailsSlot, option);
-        }}
-        onFavorite={(option) => {
-          if (!mealDetailsSlot) return;
-          handleFavoriteOption(option, mealDetailsSlot, 'alternative', alternativeIdRef.current ?? '');
-        }}
-      />
-    </>
+    <MealDetailsScreen
+      meal={currentMeal}
+      registeringOptionId={registeringOptionId}
+      favoritingOptionId={favoritingOptionId}
+      favoritedOptionIds={favoritedOptionIds}
+      registerError={registerError}
+      favoriteError={favoriteError}
+      onClose={() => setMealDetailsSlot(null)}
+      onRegister={handleRegisterOption}
+      onFavorite={(option) => { if (mealDetailsSlot) handleFavoriteOption(option, mealDetailsSlot, 'plan', plan.planId); }}
+      onSwap={() => setFeedbackVisible(true)}
+      overlay={(
+        <>
+          <MealFeedbackSheet
+            visible={feedbackVisible}
+            currentOption={currentMeal ? currentMeal.options.find((option) => option.id === currentMeal.recommendedOptionId) ?? null : null}
+            onClose={() => setFeedbackVisible(false)}
+            onSubmit={(feedback) => { setFeedbackVisible(false); handleRequestAlternative(feedback); }}
+          />
+          <MealAlternativeResultScreen
+            visible={alternativeVisible}
+            state={alternativeState}
+            registeringOptionId={registeringOptionId}
+            favoritingOptionId={favoritingOptionId}
+            favoritedOptionIds={favoritedOptionIds}
+            onClose={() => { setAlternativeVisible(false); setAlternativeState(null); }}
+            onRetry={() => handleRequestAlternative(lastFeedback ?? undefined)}
+            onRegister={(option) => {
+              if (!mealDetailsSlot) return;
+              openRegisterMealForOption(mealDetailsSlot, option);
+            }}
+            onFavorite={(option) => {
+              if (!mealDetailsSlot) return;
+              handleFavoriteOption(option, mealDetailsSlot, 'alternative', alternativeIdRef.current ?? '');
+            }}
+          />
+        </>
+      )}
+    />
   ) : null;
 
   if (route.name === 'plan' && plan) {
-    return (
-      <>
-        <NutritionPlanScreen plan={plan} onOpenMeal={setMealDetailsSlot} onBack={() => setRoute({ name: 'home' })} />
-        {mealDetailsAndModals}
-      </>
+    routeContent = (
+      <NutritionPlanScreen plan={plan} onOpenMeal={setMealDetailsSlot} onBack={() => setRoute({ name: 'home' })} />
     );
   }
 
@@ -669,13 +683,22 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
           onRegisterMeal: () => setRegisteringMealVisible(true),
         };
 
-  return (
-    <>
+  // Falls through here for `route.name === 'home'` and for `'plan'`
+  // without a loaded `plan` yet (same as the pre-refactor behavior,
+  // which rendered the home screen in both cases).
+  if (routeContent === undefined) {
+    routeContent = (
       <NutritionHomeScreen
         state={homeState}
         onCreateCustomFood={() => setCreatingCustomFood(true)}
         onCreateRecipe={() => setCreatingRecipe(true)}
       />
+    );
+  }
+
+  return (
+    <>
+      {routeContent}
       {mealDetailsAndModals}
       <CreateCustomFoodScreen visible={creatingCustomFood} onClose={() => setCreatingCustomFood(false)} onCreated={() => setCreatingCustomFood(false)} />
       <CreateRecipeScreen
@@ -739,21 +762,23 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
           }
           setDiaryFoodTarget(null);
         }}
-      />
-      <RecipeQuantityModal
-        visible={recipeQuantityPick != null}
-        recipeName={recipeQuantityPick?.name ?? ''}
-        recipe={recipeQuantityRecipe}
-        onClose={() => { setRecipeQuantityPick(null); setRecipeQuantityRecipe(null); setDiaryFoodTarget(null); }}
-        onConfirm={(grams) => {
-          if (uid && diaryFoodTarget && recipeQuantityPick) {
-            void addDiaryFood(uid, diaryDate, diaryFoodTarget, 'recipe', recipeQuantityPick.foodId, grams)
-              .then(() => trackNutritionEvent({ name: 'nutrition_diary_item_added', properties: {
-                mealSlot: diaryFoodTarget, operation: 'recipe',
-              } }));
-          }
-          setRecipeQuantityPick(null); setRecipeQuantityRecipe(null); setDiaryFoodTarget(null);
-        }}
+        overlay={(
+          <RecipeQuantityModal
+            visible={recipeQuantityPick != null}
+            recipeName={recipeQuantityPick?.name ?? ''}
+            recipe={recipeQuantityRecipe}
+            onClose={() => { setRecipeQuantityPick(null); setRecipeQuantityRecipe(null); setDiaryFoodTarget(null); }}
+            onConfirm={(grams) => {
+              if (uid && diaryFoodTarget && recipeQuantityPick) {
+                void addDiaryFood(uid, diaryDate, diaryFoodTarget, 'recipe', recipeQuantityPick.foodId, grams)
+                  .then(() => trackNutritionEvent({ name: 'nutrition_diary_item_added', properties: {
+                    mealSlot: diaryFoodTarget, operation: 'recipe',
+                  } }));
+              }
+              setRecipeQuantityPick(null); setRecipeQuantityRecipe(null); setDiaryFoodTarget(null);
+            }}
+          />
+        )}
       />
 
       <RegisterMealScreen

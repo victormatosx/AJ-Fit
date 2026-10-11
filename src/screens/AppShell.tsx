@@ -3065,7 +3065,7 @@ function TabBar({ tab, setTab, nutritionVisible }: { tab: TabId; setTab: (t: Tab
     { id: 'home', icon: 'home', labelKey: 'home' },
     { id: 'workout', icon: 'dumbbell', labelKey: 'workout' },
     { id: 'progress', icon: 'chart', labelKey: 'progress' },
-    ...(nutritionVisible ? [{ id: 'nutrition' as const, icon: 'apple' as const, labelKey: 'nutrition' as const }] : []),
+    ...(nutritionVisible ? [{ id: 'nutrition' as const, icon: 'utensils' as const, labelKey: 'nutrition' as const }] : []),
     { id: 'profile', icon: 'user', labelKey: 'profile' },
   ];
   return (

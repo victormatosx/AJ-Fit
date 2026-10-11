@@ -72,7 +72,7 @@ const localFoodLogSearchProvider = createFederatedFoodLogSearchProvider({
  */
 export function FoodSearchScreen({
   visible, onClose, onSelect, excludeIds = [], includeRecipes = false, catalog = 'generation',
-  favoriteFoodIds, recentFoodIds, favoriteRecipeIds, onToggleFavoriteFood, onToggleFavoriteRecipe,
+  favoriteFoodIds, recentFoodIds, favoriteRecipeIds, onToggleFavoriteFood, onToggleFavoriteRecipe, overlay,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -89,6 +89,16 @@ export function FoodSearchScreen({
   favoriteRecipeIds?: readonly string[];
   onToggleFavoriteFood?: (foodId: string) => void;
   onToggleFavoriteRecipe?: (recipeId: string) => void;
+  /**
+   * A caller-owned overlay (e.g. the Diary's `RecipeQuantityModal`) that
+   * needs to appear on top of this screen while it stays open — rendered
+   * as a plain View alongside `CreateCustomFoodScreen` inside this
+   * screen's single `Modal`, never as the caller's own separate
+   * `<Modal>`. Two independent native Modals both `visible` at once is
+   * unreliable; see the comment on `CreateCustomFoodScreen` for the
+   * concrete failure this avoids.
+   */
+  overlay?: React.ReactNode;
 }) {
   const { theme } = useTheme();
   const { t } = useTranslation('nutrition');
@@ -338,6 +348,7 @@ export function FoodSearchScreen({
           trackedSelect({ foodId: food.id, name: food.name, origin: 'custom', nutritionPer100g: food.nutritionPer100g });
         }}
       />
+      {overlay}
     </Modal>
   );
 }

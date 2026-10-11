@@ -103,4 +103,45 @@ describe('NutritionShell integration regressions', () => {
     expect(source).toContain('setDiaryVisible(true)');
     expect(source).not.toContain('setRoute(navigationRequest');
   });
+
+  it('assigns every route-specific screen to routeContent instead of returning early, so overlay modals never unmount on navigation', () => {
+    // Regression: `profile`/`generating`/`historicalPlan`/`weekly` used to
+    // `return` their screen directly. That unmounted every sibling modal
+    // (MealFeedbackSheet, RegisterMealScreen, ...) without ever calling the
+    // modal's own `onClose` — their `visible` flag stayed `true` in this
+    // component's state. The next time navigation landed back on a branch
+    // that renders that modal, React Native's `Modal` mounted
+    // already-open, popping up "Por que você quer trocar?" or "Registrar
+    // alimento" with no new tap from the user. Assigning to `routeContent`
+    // (rendered as a sibling of every modal in the single return below)
+    // instead of `return`-ing keeps the modals mounted across every route,
+    // so their own `visible` prop is always what controls them.
+    const start = source.indexOf('let routeContent: React.ReactNode;');
+    const end = source.indexOf('const currentMeal =', start);
+    expect(start).toBeGreaterThan(-1);
+    const body = source.slice(start, end);
+    expect(body).not.toMatch(/\breturn\s*[(<]/);
+    expect(body.match(/routeContent = /g)?.length).toBe(4);
+  });
+
+  it('renders routeContent together with every overlay modal in one return, so none of them can unmount independently of its own visible flag', () => {
+    const finalReturnStart = source.lastIndexOf('return (');
+    const body = source.slice(finalReturnStart);
+    expect(body).toMatch(/\{routeContent\}/);
+    expect(body).toMatch(/\{mealDetailsAndModals\}/);
+    for (const tag of [
+      '<RegisterMealScreen', '<NutritionDiaryScreen', '<FoodSearchScreen', '<RecipeQuantityModal',
+      '<NutritionPlanHistoryScreen', '<NutritionFoodFavoritesScreen', '<NutritionFavoritesScreen',
+      '<CreateCustomFoodScreen', '<CreateRecipeScreen',
+    ]) {
+      expect(body).toContain(tag);
+    }
+    // `mealDetailsAndModals` (MealDetailsScreen/MealFeedbackSheet/
+    // MealAlternativeResultScreen) must itself be built unconditionally on
+    // `plan`, never on `route.name` — otherwise it would still vanish on
+    // routes other than 'home'/'plan'.
+    const modalsStart = source.indexOf('const mealDetailsAndModals = plan ?');
+    expect(modalsStart).toBeGreaterThan(-1);
+    expect(modalsStart).toBeLessThan(finalReturnStart);
+  });
 });

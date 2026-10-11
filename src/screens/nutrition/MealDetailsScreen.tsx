@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,7 +11,7 @@ import type { NutritionMeal, NutritionMealOption } from '../../types/nutrition';
 
 export function MealDetailsScreen({
   meal, readOnly, registeringOptionId, favoritedOptionIds = [], favoritingOptionId, registerError, favoriteError,
-  onClose, onRegister, onFavorite, onSwap,
+  onClose, onRegister, onFavorite, onSwap, overlay,
 }: {
   meal: NutritionMeal | null;
   readOnly?: boolean;
@@ -24,10 +24,32 @@ export function MealDetailsScreen({
   onRegister?: (option: NutritionMealOption) => void;
   onFavorite?: (option: NutritionMealOption) => void;
   onSwap?: () => void;
+  /**
+   * The swap feedback sheet and the alternative-result screen render here,
+   * as plain absolutely-positioned overlays inside this single `Modal`,
+   * instead of each owning its own `<Modal>`. Two independent native
+   * `<Modal>`s stacked on top of each other (this screen's `pageSheet`
+   * plus a second one presented over it) is unreliable: dismissing the
+   * inner one can leave this screen's own presentation/touch-responder
+   * chain corrupted — it looks "frozen" to the next tap — and a later,
+   * unrelated re-render (e.g. switching tabs) can flush that stale native
+   * state and pop the "already closed" inner modal back open on its own.
+   */
+  overlay?: React.ReactNode;
 }) {
   const { theme } = useTheme();
   const { t } = useTranslation('nutrition');
   const [confirmation, setConfirmation] = useState<string | null>(null);
+
+  // Local confirmation text belongs to one open session of this screen —
+  // without this, closing (meal -> null) and reopening the same or a
+  // different slot showed the PREVIOUS session's leftover "Registrado..."
+  // / "Adicionado aos favoritos." text immediately, because this
+  // component never unmounts (it's a permanent sibling in NutritionShell)
+  // so `confirmation` survived across opens.
+  useEffect(() => {
+    setConfirmation(null);
+  }, [meal?.slot]);
 
   return (
     <Modal visible={meal != null} animationType="slide" onRequestClose={onClose} presentationStyle="pageSheet">
@@ -94,6 +116,7 @@ export function MealDetailsScreen({
           ) : null}
         </SafeAreaView>
       </ScreenBg>
+      {overlay}
     </Modal>
   );
 }
