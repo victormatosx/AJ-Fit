@@ -41,7 +41,7 @@ import { logError } from '../lib/logError';
 /**
  * A device's OS permission and a user's category preference are two
  * independent axes (Fase 4 §10/§24): this banner reflects the FORMER only.
- * The three toggles below always reflect the latter, even while the OS
+ * The category toggles below always reflect the latter, even while the OS
  * permission is denied — the user is stating what they'd want to receive
  * once/if the platform allows it, not toggling the OS permission itself.
  */
@@ -547,7 +547,7 @@ export function NotificationSettingsScreen({ onBack }: { onBack?: () => void }) 
           {/* Master control — its own card, tinted and bordered with the
               brand accent instead of the neutral settings-group styling
               below, so it reads as superior to (not just first among) the
-              5 individual categories. */}
+              individual categories. */}
           <View style={{ paddingHorizontal: 22, paddingBottom: spacing[7] }}>
             <View
               style={{

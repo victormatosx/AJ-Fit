@@ -40,7 +40,7 @@ describe('evolution chart interaction', () => {
     expect(bodyView.match(/<EvolutionAreaChart/g)).toHaveLength(2);
     expect(bodyView.match(/accessibilityHint=\{t\('progress\.chartInteractionHint'\)\}/g))
       .toHaveLength(2);
-    expect(bodyView).toContain('displayValue: `${formatWeightFromKg(entry.weight, resolvedUnits)}');
+    expect(bodyView).toContain('displayValue: `${formatWeightFromKg(entry.weightKg, resolvedUnits)}');
     expect(bodyView).toContain('displayValue: `${formatMeasurement(point.value)}');
 
     expect(loadsView.match(/<EvolutionAreaChart/g)).toHaveLength(1);

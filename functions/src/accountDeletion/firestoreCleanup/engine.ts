@@ -2,7 +2,7 @@
  * `FIRESTORE_CLEANUP` step executor — Fase 6.
  *
  * Runs user-resource deletes in dependency order (Fase 6 §10):
- * questionnaires → assessments → progressPhotos → workoutPrograms/state → the `users/{uid}`
+ * questionnaires → assessments → imported weights → progressPhotos → workoutPrograms/state → the `users/{uid}`
  * document itself, last. Reports the same `AccountDeletionStepOutcome`
  * shape every other step already reports through (Fase 1's `errors.ts`) —
  * no parallel result contract.
@@ -51,8 +51,10 @@ import {
   deleteUserPushDevices,
   deleteUserPushTokenOwners,
   deleteUserAssessments,
+  deleteUserHealthWeightSamples,
   deleteUserProfileDocument,
   deleteUserQuestionnaires,
+  deleteUserNutritionResources,
   deleteUserWorkoutExecutions,
   deleteUserWorkoutFinalizationAttempts,
   deleteUserWorkoutExecutionState,
@@ -125,6 +127,8 @@ export async function runFirestoreCleanup(
   const steps: Array<(uid: string, db: Firestore) => Promise<ResourceCleanupResult>> = [
     deleteUserQuestionnaires,
     deleteUserAssessments,
+    deleteUserHealthWeightSamples,
+    deleteUserNutritionResources,
     deleteProgressPhotoDocuments,
     // Disable private raw-token ownership first. Every registry mutation
     // re-checks ownerUid transactionally, preserving concurrent transfers.

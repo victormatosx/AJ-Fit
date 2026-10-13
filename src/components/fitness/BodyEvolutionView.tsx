@@ -8,6 +8,7 @@ import { Icon } from '../ui/Icon';
 import { sizes, spacing } from '../../theme/tokens';
 import { useTheme } from '../../theme';
 import type { AssessmentDelta, AssessmentView } from '../../hooks/useAssessments';
+import type { HealthWeightSampleDoc } from '../../types/healthWeightSync';
 import type { SiteKey } from '../../lib/skinfoldCalculator';
 import { useUnits } from '../../state/UnitsContext';
 import { formatWeightFromKg, weightFromKg, weightUnit } from '../../units/weightConversions';
@@ -43,6 +44,9 @@ interface Props {
   error: Error | null;
   latest: AssessmentView | null;
   evolutionSincePrevious: AssessmentDelta | null;
+  importedWeights: HealthWeightSampleDoc[];
+  importedWeightsLoading: boolean;
+  importedWeightsError: Error | null;
   onRetry: () => void;
   /** Opens the full assessment area. Absent when the host cannot navigate. */
   onOpenAssessment?: () => void;
@@ -124,6 +128,60 @@ function CenteredState({ children }: { children: React.ReactNode }) {
       }}
     >
       {children}
+    </View>
+  );
+}
+
+function ImportedWeightsHistory({ samples }: { samples: HealthWeightSampleDoc[] }) {
+  const { theme } = useTheme();
+  const { t } = useTranslation('home');
+  const { resolvedUnits } = useUnits();
+  const unit = weightUnit(resolvedUnits);
+  const formatter = useMemo(
+    () => new Intl.DateTimeFormat(undefined, {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }),
+    [],
+  );
+  if (samples.length === 0) return null;
+  return (
+    <View>
+      <View style={{ paddingHorizontal: GUTTER, marginBottom: spacing[2] }}>
+        <Slash>{t('progress.body.imported.title').toUpperCase()}</Slash>
+        <Text style={[theme.typography.bodySmall, { color: theme.colors.textFaint, marginTop: spacing[2] }]}>
+          {t('progress.body.imported.description')}
+        </Text>
+      </View>
+      {samples.map((sample, index) => (
+        <View
+          key={sample.id}
+          style={{
+            minHeight: 52,
+            marginHorizontal: GUTTER,
+            paddingVertical: spacing[2.5],
+            flexDirection: 'row',
+            alignItems: 'center',
+            borderTopWidth: index ? sizes.hairline : 0,
+            borderTopColor: theme.colors.border,
+          }}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 13, color: theme.colors.textPrimary }}>
+              {formatter.format(sample.measuredAt)}
+            </Text>
+            <MonoLabel size={8} style={{ marginTop: spacing[1] }}>
+              {t(`progress.body.imported.source.${sample.platform}`)}
+            </MonoLabel>
+          </View>
+          <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 15, color: theme.colors.textPrimary }}>
+            {formatWeightFromKg(sample.weightKg, resolvedUnits)} {unit.toUpperCase()}
+          </Text>
+        </View>
+      ))}
     </View>
   );
 }
@@ -317,6 +375,9 @@ export function BodyEvolutionView({
   error,
   latest,
   evolutionSincePrevious,
+  importedWeights,
+  importedWeightsLoading,
+  importedWeightsError,
   onRetry,
   onOpenAssessment,
 }: Props) {
@@ -329,31 +390,61 @@ export function BodyEvolutionView({
     () => new Intl.DateTimeFormat(undefined, { day: '2-digit', month: 'short', year: 'numeric' }),
     [],
   );
+  const dateTimeFormatter = useMemo(
+    () => new Intl.DateTimeFormat(undefined, {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }),
+    [],
+  );
 
-  // The hook returns newest first; a chart reads oldest to newest.
+  const weightEntries = useMemo(() => [
+    ...assessments.map((entry) => ({
+      id: `assessment:${entry.id}`,
+      source: 'assessment' as const,
+      measuredAt: entry.measuredAt.toDate(),
+      weightKg: entry.weight,
+    })),
+    ...importedWeights.map((entry) => ({
+      id: `health:${entry.id}`,
+      source: entry.platform,
+      measuredAt: entry.measuredAt,
+      weightKg: entry.weightKg,
+    })),
+  ].sort((a, b) => {
+    const byTime = a.measuredAt.getTime() - b.measuredAt.getTime();
+    return byTime || a.id.localeCompare(b.id);
+  }), [assessments, importedWeights]);
+
   const weightPoints = useMemo(
-    () =>
-      [...assessments]
-        .reverse()
-        .map((entry) => ({
-          value: weightFromKg(entry.weight, resolvedUnits),
-          displayValue: `${formatWeightFromKg(entry.weight, resolvedUnits)} ${unit.toUpperCase()}`,
-          label: dateFormatter.format(entry.measuredAt.toDate()),
-        })),
-    [assessments, dateFormatter, resolvedUnits, unit],
+    () => weightEntries.map((entry) => ({
+      value: weightFromKg(entry.weightKg, resolvedUnits),
+      displayValue: `${formatWeightFromKg(entry.weightKg, resolvedUnits)} ${unit.toUpperCase()}`,
+      label: dateTimeFormatter.format(entry.measuredAt),
+    })),
+    [dateTimeFormatter, resolvedUnits, unit, weightEntries],
   );
 
   const bounds = useMemo(() => {
-    if (assessments.length < 2) return null;
-    const oldest = assessments[assessments.length - 1]!;
-    const newest = assessments[0]!;
+    if (weightEntries.length < 2) return null;
+    const oldest = weightEntries[0]!;
+    const newest = weightEntries[weightEntries.length - 1]!;
     return {
-      from: dateFormatter.format(oldest.measuredAt.toDate()),
-      to: dateFormatter.format(newest.measuredAt.toDate()),
+      from: dateFormatter.format(oldest.measuredAt),
+      to: dateFormatter.format(newest.measuredAt),
     };
-  }, [assessments, dateFormatter]);
+  }, [dateFormatter, weightEntries]);
 
-  if (loading) {
+  const latestWeight = weightEntries[weightEntries.length - 1] ?? null;
+  const previousWeight = weightEntries[weightEntries.length - 2] ?? null;
+  const combinedWeightDelta = latestWeight && previousWeight
+    ? latestWeight.weightKg - previousWeight.weightKg
+    : null;
+
+  if (loading && importedWeightsLoading) {
     return (
       <CenteredState>
         <ActivityIndicator color={theme.colors.textFaint} />
@@ -364,7 +455,7 @@ export function BodyEvolutionView({
     );
   }
 
-  if (error) {
+  if (error && importedWeightsError) {
     return (
       <CenteredState>
         <Text
@@ -391,7 +482,7 @@ export function BodyEvolutionView({
     );
   }
 
-  if (!latest) {
+  if (!latestWeight) {
     return (
       <CenteredState>
         <Icon name="chart" size={26} color={theme.colors.textFaint} />
@@ -433,7 +524,7 @@ export function BodyEvolutionView({
     );
   }
 
-  const measuredAt = dateFormatter.format(latest.measuredAt.toDate());
+  const measuredAt = dateTimeFormatter.format(latestWeight.measuredAt);
 
   return (
     <View>
@@ -443,16 +534,21 @@ export function BodyEvolutionView({
           {t('progress.body.currentWeight').toUpperCase()}
         </Slash>
         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: spacing[2] }}>
-          <Display size={54}>{formatWeightFromKg(latest.weight, resolvedUnits)}</Display>
+          <Display size={54}>{formatWeightFromKg(latestWeight.weightKg, resolvedUnits)}</Display>
           <MonoLabel size={12}>{unit.toUpperCase()}</MonoLabel>
-          {evolutionSincePrevious ? (
+          {combinedWeightDelta != null ? (
             <View style={{ marginLeft: spacing[1] }}>
-              <Delta value={weightFromKg(evolutionSincePrevious.weightDelta, resolvedUnits)} />
+              <Delta value={weightFromKg(combinedWeightDelta, resolvedUnits)} />
             </View>
           ) : null}
         </View>
         <MonoLabel size={9} style={{ marginTop: spacing[1.5] }}>
           {t('progress.body.measuredAt', { date: measuredAt })}
+        </MonoLabel>
+        <MonoLabel size={8} style={{ marginTop: spacing[1] }}>
+          {latestWeight.source === 'assessment'
+            ? t('progress.body.weightSource.assessment')
+            : t(`progress.body.imported.source.${latestWeight.source}`)}
         </MonoLabel>
       </View>
 
@@ -497,53 +593,81 @@ export function BodyEvolutionView({
 
       <Rule />
 
+      {importedWeightsError ? (
+        <Text
+          accessibilityRole="alert"
+          style={{
+            paddingHorizontal: GUTTER,
+            marginBottom: spacing[4],
+            fontFamily: theme.fonts.ui,
+            fontSize: 12.5,
+            color: theme.colors.textFaint,
+          }}
+        >
+          {t('progress.body.imported.error')}
+        </Text>
+      ) : null}
+      <ImportedWeightsHistory samples={importedWeights} />
+      {importedWeights.length > 0 ? <Rule /> : null}
+
       {/* Composition. Only what the domain actually reports for this entry. */}
-      <View style={{ paddingHorizontal: GUTTER, marginBottom: spacing[1] }}>
-        <Slash>{t('progress.body.composition').toUpperCase()}</Slash>
-      </View>
+      {latest ? (
+        <>
+          <View style={{ paddingHorizontal: GUTTER, marginBottom: spacing[1] }}>
+            <Slash>{t('progress.body.composition').toUpperCase()}</Slash>
+          </View>
 
-      {latest.bodyFat != null ? (
-        <MetricRow
-          label={t('progress.body.metrics.bodyFat')}
-          value={latest.bodyFat.toFixed(1)}
-          unit="%"
-          delta={evolutionSincePrevious?.bodyFatDelta ?? null}
-        />
-      ) : null}
-      {latest.leanMass != null ? (
-        <MetricRow
-          label={t('progress.body.metrics.leanMass')}
-          value={formatWeightFromKg(latest.leanMass, resolvedUnits)}
-          unit={unit}
-          delta={
-            evolutionSincePrevious?.leanMassDelta != null
-              ? weightFromKg(evolutionSincePrevious.leanMassDelta, resolvedUnits)
-              : null
-          }
-        />
-      ) : null}
-      {latest.fatMass != null ? (
-        <MetricRow
-          label={t('progress.body.metrics.fatMass')}
-          value={formatWeightFromKg(latest.fatMass, resolvedUnits)}
-          unit={unit}
-          delta={
-            evolutionSincePrevious?.fatMassDelta != null
-              ? weightFromKg(evolutionSincePrevious.fatMassDelta, resolvedUnits)
-              : null
-          }
-        />
-      ) : null}
-      {latest.bmi != null ? (
-        <MetricRow
-          label={t('progress.body.metrics.bmi')}
-          value={latest.bmi.toFixed(1)}
-          unit=""
-        />
-      ) : null}
+          {latest.bodyFat != null ? (
+            <MetricRow
+              label={t('progress.body.metrics.bodyFat')}
+              value={latest.bodyFat.toFixed(1)}
+              unit="%"
+              delta={evolutionSincePrevious?.bodyFatDelta ?? null}
+            />
+          ) : null}
+          {latest.leanMass != null ? (
+            <MetricRow
+              label={t('progress.body.metrics.leanMass')}
+              value={formatWeightFromKg(latest.leanMass, resolvedUnits)}
+              unit={unit}
+              delta={
+                evolutionSincePrevious?.leanMassDelta != null
+                  ? weightFromKg(evolutionSincePrevious.leanMassDelta, resolvedUnits)
+                  : null
+              }
+            />
+          ) : null}
+          {latest.fatMass != null ? (
+            <MetricRow
+              label={t('progress.body.metrics.fatMass')}
+              value={formatWeightFromKg(latest.fatMass, resolvedUnits)}
+              unit={unit}
+              delta={
+                evolutionSincePrevious?.fatMassDelta != null
+                  ? weightFromKg(evolutionSincePrevious.fatMassDelta, resolvedUnits)
+                  : null
+              }
+            />
+          ) : null}
+          {latest.bmi != null ? (
+            <MetricRow
+              label={t('progress.body.metrics.bmi')}
+              value={latest.bmi.toFixed(1)}
+              unit=""
+            />
+          ) : null}
 
-      <Rule />
-      <BodyMeasurementsChart assessments={assessments} />
+          <Rule />
+          <BodyMeasurementsChart assessments={assessments} />
+        </>
+      ) : (
+        <View style={{ paddingHorizontal: GUTTER, alignItems: 'center', gap: spacing[2] }}>
+          <Display size={18} style={{ textAlign: 'center' }}>{t('progress.body.empty.title')}</Display>
+          <Text style={[theme.typography.bodySmall, { color: theme.colors.textMuted, textAlign: 'center' }]}>
+            {t('progress.body.imported.noAssessment')}
+          </Text>
+        </View>
+      )}
 
       {onOpenAssessment ? (
         <>

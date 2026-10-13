@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, ScrollView, Pressable, Modal, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
@@ -8,6 +8,7 @@ import { MonoLabel } from '../components/ui/Display';
 import { Icon } from '../components/ui/Icon';
 import { SettingsSection } from '../components/ui/SettingsSection';
 import { useAuth } from '../state/AuthContext';
+import { useScreenFocusEffect } from '../state/ScreenActivity';
 import { THEME_MODES, useTheme, type ThemeMode } from '../theme';
 import { SUPPORTED_LANGUAGES, type SupportedLanguage } from '../types/language';
 import { normalizeLanguage } from '../i18n/normalizeLanguage';
@@ -31,6 +32,15 @@ import { isWorkoutLifecycleQaPanelAllowed } from '../dev/workoutLifecycle/qaPane
 import { WorkoutLifecycleQaSheet } from '../dev/workoutLifecycle/WorkoutLifecycleQaSheet';
 import { isPushNotificationQaPanelAllowed } from '../dev/pushNotifications/qaPanelGate';
 import { PushNotificationQaSheet } from '../dev/pushNotifications/PushNotificationQaSheet';
+import { isHealthSpikeQaPanelAllowed } from '../dev/health/healthSpikeGate';
+import { HealthSpikeQaSheet } from '../dev/health/HealthSpikeQaSheet';
+import { isHealthIntegrationQaPanelAllowed } from '../dev/health/healthIntegrationQaGate';
+import { HealthIntegrationQaSheet } from '../dev/health/HealthIntegrationQaSheet';
+import {
+  getLastKnownHealthIntegrationIntent,
+  readHealthIntegrationIntent,
+} from '../services/healthIntegrationPreferences';
+import type { HealthConnectionIntent } from '../types/healthIntegration';
 import { useSubscription } from '../hooks/useSubscription';
 import { PREMIUM_ENTITLEMENT_ID } from '../lib/subscriptionConstants';
 import type { CustomerInfo } from 'react-native-purchases';
@@ -46,6 +56,7 @@ export function SettingsScreen({
   onOpenEditProfile,
   onOpenSecurity,
   onOpenNotifications,
+  onOpenConnectedApps,
   onOpenAccount,
   onOpenHelpCenter,
   onReportProblem,
@@ -55,6 +66,7 @@ export function SettingsScreen({
   onOpenEditProfile?: () => void;
   onOpenSecurity?: () => void;
   onOpenNotifications?: () => void;
+  onOpenConnectedApps?: () => void;
   onOpenAccount?: () => void;
   onOpenHelpCenter?: () => void;
   onReportProblem?: () => void;
@@ -63,6 +75,52 @@ export function SettingsScreen({
   const { theme, mode: currentTheme, setTheme } = useTheme();
   const { user } = useAuth();
   const { t, i18n } = useTranslation(['common', 'settings']);
+  // Seeded from the synchronous in-memory hint (correct whenever the health
+  // screen has already been opened this session) and then always confirmed
+  // against the persisted value — a cold app start has no warm hint, so
+  // without this the row would flash "not configured" for a user whose real,
+  // persisted preference is "enabled" until the health screen happened to be
+  // opened. `healthIntegrationUidRef` guards the async confirmation: if the
+  // account changes before `readHealthIntegrationIntent` resolves, the stale
+  // read for the outgoing uid is dropped instead of overwriting the new
+  // account's row.
+  const [healthIntegrationIntent, setHealthIntegrationIntent] = useState<HealthConnectionIntent | 'loading'>(
+    () => (user ? getLastKnownHealthIntegrationIntent(user.uid) ?? 'loading' : 'not_configured'),
+  );
+  const healthIntegrationUidRef = useRef<string | null>(null);
+  const uid = user?.uid ?? null;
+
+  const refreshHealthIntegrationIntent = useCallback(() => {
+    healthIntegrationUidRef.current = uid;
+    if (!uid) {
+      setHealthIntegrationIntent('not_configured');
+      return;
+    }
+    setHealthIntegrationIntent(getLastKnownHealthIntegrationIntent(uid) ?? 'loading');
+    void readHealthIntegrationIntent(uid).then((intent) => {
+      if (healthIntegrationUidRef.current !== uid) return;
+      setHealthIntegrationIntent(intent);
+    });
+  }, [uid]);
+
+  // Covers both triggers, same convention as NotificationSettingsScreen:
+  // a cold mount / account switch (this effect) and this already-mounted
+  // screen (PersistentScreen, AppShell.tsx) regaining focus after the user
+  // returns from connecting/disconnecting on the dedicated health screen.
+  useEffect(() => {
+    refreshHealthIntegrationIntent();
+  }, [refreshHealthIntegrationIntent]);
+  useScreenFocusEffect(() => {
+    refreshHealthIntegrationIntent();
+  });
+
+  const healthIntegrationStatusLabel = healthIntegrationIntent === 'loading'
+    ? t('settings:values.healthIntegrationLoading')
+    : healthIntegrationIntent === 'enabled'
+      ? t('settings:values.healthIntegrationEnabled')
+      : healthIntegrationIntent === 'disabled'
+        ? t('settings:values.healthIntegrationDisabled')
+        : t('settings:values.healthIntegrationNotConfigured');
   const [themePickerOpen, setThemePickerOpen] = useState(false);
   const [langPickerOpen, setLangPickerOpen] = useState(false);
   const [langError, setLangError] = useState<string | null>(null);
@@ -89,6 +147,10 @@ export function SettingsScreen({
   const [legalDocument, setLegalDocument] = useState<LegalDocumentKind | null>(null);
   const pushNotificationQaPanelAllowed = isPushNotificationQaPanelAllowed();
   const [pushNotificationQaSheetOpen, setPushNotificationQaSheetOpen] = useState(false);
+  const healthSpikeQaPanelAllowed = isHealthSpikeQaPanelAllowed();
+  const [healthSpikeQaSheetOpen, setHealthSpikeQaSheetOpen] = useState(false);
+  const healthIntegrationQaPanelAllowed = isHealthIntegrationQaPanelAllowed();
+  const [healthIntegrationQaSheetOpen, setHealthIntegrationQaSheetOpen] = useState(false);
 
   // `i18n.language` is the runtime source of truth — DO NOT read
   // `profile.preferences.language` here. That field will diverge from the
@@ -298,6 +360,18 @@ export function SettingsScreen({
           />
 
           <SettingsSection
+            title={t('settings:sections.healthIntegration').toUpperCase()}
+            items={[
+              {
+                icon: 'heart',
+                label: t('settings:items.healthIntegration'),
+                value: healthIntegrationStatusLabel,
+                onPress: onOpenConnectedApps,
+              },
+            ]}
+          />
+
+          <SettingsSection
             title={t('settings:sections.preferences').toUpperCase()}
             items={[
               {
@@ -357,7 +431,7 @@ export function SettingsScreen({
 
           {/* Dev/QA only — never rendered outside a development build (see
               `useDevSubscriptionOverrideContext`'s `allowed`). */}
-          {devOverrideAllowed || workoutLifecycleQaPanelAllowed || pushNotificationQaPanelAllowed ? (
+          {devOverrideAllowed || workoutLifecycleQaPanelAllowed || pushNotificationQaPanelAllowed || healthSpikeQaPanelAllowed || healthIntegrationQaPanelAllowed ? (
             <SettingsSection
               title="DEVELOPER"
               items={[
@@ -391,6 +465,18 @@ export function SettingsScreen({
                   icon: 'bell' as const,
                   label: 'Push Notifications',
                   onPress: () => setPushNotificationQaSheetOpen(true),
+                }] : []),
+                ...(healthSpikeQaPanelAllowed ? [{
+                  icon: 'heart' as const,
+                  label: 'Health Spike (Fase 0)',
+                  description: 'Validação técnica Apple Health / Health Connect',
+                  onPress: () => setHealthSpikeQaSheetOpen(true),
+                }] : []),
+                ...(healthIntegrationQaPanelAllowed ? [{
+                  icon: 'heart' as const,
+                  label: 'Health Integration (Fase 1)',
+                  description: 'Serviço de produção: disponibilidade, permissões, intenção',
+                  onPress: () => setHealthIntegrationQaSheetOpen(true),
                 }] : []),
               ]}
             />
@@ -454,6 +540,19 @@ export function SettingsScreen({
           visible={pushNotificationQaSheetOpen}
           uid={user.uid}
           onDismiss={() => setPushNotificationQaSheetOpen(false)}
+        />
+      ) : null}
+      {healthSpikeQaPanelAllowed ? (
+        <HealthSpikeQaSheet
+          visible={healthSpikeQaSheetOpen}
+          onDismiss={() => setHealthSpikeQaSheetOpen(false)}
+        />
+      ) : null}
+      {healthIntegrationQaPanelAllowed ? (
+        <HealthIntegrationQaSheet
+          visible={healthIntegrationQaSheetOpen}
+          uid={user?.uid ?? null}
+          onDismiss={() => setHealthIntegrationQaSheetOpen(false)}
         />
       ) : null}
     </ScreenBg>

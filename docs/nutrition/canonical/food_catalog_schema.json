@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ajfit:nutrition:food-catalog:1",
+  "title": "AJ Fit global food body (Firestore timestamps excluded)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "name", "aliases", "category", "source", "nutritionPer100g", "dietaryFlags", "allergens", "preparation", "mealContexts", "generationStatus", "catalogVersion", "searchPrefixes"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^nf_(tbca|taco|usda|label|manual)_[a-z0-9-]+_[a-f0-9]{16}$" },
+    "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "aliases": { "type": "array", "maxItems": 12, "items": { "type": "string", "minLength": 1, "maxLength": 200 }, "uniqueItems": true },
+    "category": { "enum": ["protein_source", "carbohydrate_source", "fruit", "vegetable", "dairy", "fat_source", "legume", "cereal", "beverage", "supplement", "other"] },
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["type", "sourceId", "sourceName"],
+      "properties": {
+        "type": { "enum": ["tbca", "taco", "usda", "label", "manual"] },
+        "sourceId": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "sourceName": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "sourceVersion": { "type": "string", "minLength": 1, "maxLength": 80 }
+      }
+    },
+    "nutritionPer100g": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kcal", "proteinG", "carbsG", "fatG"],
+      "properties": {
+        "kcal": { "type": "number", "minimum": 0, "maximum": 100000 },
+        "proteinG": { "type": "number", "minimum": 0, "maximum": 100000 },
+        "carbsG": { "type": "number", "minimum": 0, "maximum": 100000 },
+        "fatG": { "type": "number", "minimum": 0, "maximum": 100000 },
+        "fiberG": { "type": ["number", "null"], "minimum": 0, "maximum": 100000 }
+      }
+    },
+    "dietaryFlags": {
+      "type": "object", "additionalProperties": false,
+      "required": ["vegetarian", "vegan", "pescatarian"],
+      "properties": {
+        "vegetarian": { "type": ["boolean", "null"] },
+        "vegan": { "type": ["boolean", "null"] },
+        "pescatarian": { "type": ["boolean", "null"] }
+      }
+    },
+    "allergens": { "type": ["array", "null"], "maxItems": 9, "uniqueItems": true,
+      "items": { "enum": ["milk", "egg", "peanut", "tree_nuts", "soy", "wheat", "fish", "shellfish", "other"] } },
+    "preparation": { "enum": ["raw", "cooked", "grilled", "roasted", "none", "composite", null] },
+    "mealContexts": { "type": ["array", "null"], "maxItems": 4, "uniqueItems": true,
+      "items": { "enum": ["breakfast", "snack", "main_meal", "supper"] } },
+    "generationStatus": { "enum": ["approved", "pending_review", "blocked"] },
+    "brand": { "type": ["object", "null"], "additionalProperties": false,
+      "required": ["name"], "properties": { "name": { "type": "string" }, "productName": { "type": "string" } } },
+    "catalogVersion": { "type": "string", "minLength": 1, "maxLength": 80 },
+    "searchPrefixes": { "type": "array", "maxItems": 200, "uniqueItems": true,
+      "items": { "type": "string", "minLength": 2, "maxLength": 32 } }
+  }
+}

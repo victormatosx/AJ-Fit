@@ -2057,12 +2057,18 @@ export async function initializeWorkoutProgramV127Handler(
   if (!questionnaireSnapshot.exists || !plainObject(answers) || questionnaireSnapshot.data()?.version !== questionnaireVersion) {
     throw new HttpsError('failed-precondition', 'questionnaire_missing');
   }
-  const rawLevel = answers.level;
-  const currentTrainingLevel: CurrentTrainingLevel =
-    rawLevel === 'never_or_starting' || rawLevel === 'beginner' || rawLevel === 'beg' ? 'BEGINNER'
-      : rawLevel === 'intermediate' || rawLevel === 'int' ? 'INTERMEDIATE'
-        : rawLevel === 'advanced' || rawLevel === 'adv' || rawLevel === 'elite' ? 'ADVANCED'
-          : (() => { throw new HttpsError('failed-precondition', 'starting_level_unknown'); })();
+  // Diet-quality-audit-session bug fix (2026-10-10): this used to duplicate
+  // `levelFromAnswers`'s alias mapping inline and the duplicate drifted —
+  // it never accepted `intermediate_experienced` (a completely normal quiz
+  // answer, "Intermediário experiente"), so every brand-new account that
+  // picked it failed INITIALIZE here with `starting_level_unknown`, which
+  // surfaced to the user as Home's generic "Não foi possível preparar seu
+  // treino". Delegating to the one already-correct mapping (line ~697)
+  // makes this endpoint impossible to drift from it again.
+  const currentTrainingLevel: CurrentTrainingLevel = (() => {
+    try { return levelFromAnswers(answers) as CurrentTrainingLevel; }
+    catch { throw new HttpsError('failed-precondition', 'starting_level_unknown'); }
+  })();
 
   // Same Admin-SDK-write-safe `undefined`-stripping `generateAuthoritativePlan`
   // already applies to the plan itself (its own doc comment) — built

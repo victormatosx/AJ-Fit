@@ -1,6 +1,115 @@
 {
   "indexes": [
     {
+      "collectionGroup": "nutritionFoods",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "generationStatus", "order": "ASCENDING" },
+        { "fieldPath": "category", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "nutritionGenerationJobs",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "nextAttemptAt", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "nutritionFoods",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "generationStatus", "order": "ASCENDING" },
+        { "fieldPath": "searchPrefixes", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "foodLogCatalog",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "searchPrefixes", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "searchSourcePriority", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "foodLogCatalog",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barcode", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "runs",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "scheduledAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "notificationCampaigns",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "nextRunAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "recipients",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "state", "order": "ASCENDING" },
+        { "fieldPath": "dueAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "recipients",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "state", "order": "ASCENDING" },
+        { "fieldPath": "leaseUntil", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "notificationDispatches",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "campaignRunId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "notificationDispatches",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "campaignRunId", "order": "ASCENDING" },
+        { "fieldPath": "everAccepted", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "notificationDispatches",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "campaignRunId", "order": "ASCENDING" },
+        { "fieldPath": "confirmedCount", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "notificationDispatches",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "campaignRunId", "order": "ASCENDING" },
+        { "fieldPath": "deviceCount", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "assessments",
       "queryScope": "COLLECTION",
       "fields": [
@@ -114,6 +223,18 @@
     }
   ],
   "fieldOverrides": [
+    {
+      "collectionGroup": "runs",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "recipients",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    },
     {
       "collectionGroup": "workoutLifecycleTrustedTelemetryReceipts",
       "fieldPath": "expireAt",

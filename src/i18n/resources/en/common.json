@@ -35,7 +35,8 @@
     "home": "Home",
     "workout": "Workout",
     "progress": "Progress",
-    "profile": "Profile"
+    "profile": "Profile",
+    "nutrition": "Diet"
   },
   "paywall": {
     "header": {

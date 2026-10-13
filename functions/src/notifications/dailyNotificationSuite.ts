@@ -3,6 +3,7 @@ import { evaluateDailyWorkoutNotification } from './dailyWorkoutNotifications';
 import { evaluateReEngagementNotification } from './reengagementNotification';
 import { evaluateProgressNotification } from './progressNotification';
 import { evaluateWeeklyAchievementNotification } from './weeklyAchievementNotification';
+import { evaluateNutritionNotification } from './nutritionNotifications';
 
 interface DailyNotificationSuiteResultContext {
   timezone?: string;
@@ -31,6 +32,7 @@ export interface DailyNotificationSuiteDependencies {
   evaluateReEngagement(uid: string): ReturnType<typeof evaluateReEngagementNotification>;
   evaluateProgress(uid: string): ReturnType<typeof evaluateProgressNotification>;
   evaluateWeeklyAchievement(uid: string): ReturnType<typeof evaluateWeeklyAchievementNotification>;
+  evaluateNutrition?(uid: string): ReturnType<typeof evaluateNutritionNotification>;
 }
 
 const defaultDependencies: DailyNotificationSuiteDependencies = {
@@ -39,6 +41,7 @@ const defaultDependencies: DailyNotificationSuiteDependencies = {
   evaluateReEngagement: evaluateReEngagementNotification,
   evaluateProgress: evaluateProgressNotification,
   evaluateWeeklyAchievement: evaluateWeeklyAchievementNotification,
+  evaluateNutrition: evaluateNutritionNotification,
 };
 
 function reportsUserNotFound(
@@ -130,12 +133,24 @@ export async function evaluateDailyNotificationSuite(
   if (progress.status === 'DISPATCHED') {
     return { status: 'DISPATCHED', timezone: resolvedTimezone, localDate: resolvedLocalDate };
   }
+  const nutrition = await (dependencies.evaluateNutrition?.(uid)
+    ?? Promise.resolve({ status: 'SUPPRESSED' as const, reason: 'NOT_EVALUATED',
+      timezone: undefined, localDate: undefined }));
+  const finalTimezone = resolvedTimezone ?? nutrition.timezone;
+  const finalLocalDate = resolvedLocalDate ?? nutrition.localDate;
+  if (nutrition.status === 'FAILED') {
+    return { status: 'FAILED', timezone: finalTimezone, localDate: finalLocalDate };
+  }
+  if (nutrition.status === 'DISPATCHED') {
+    return { status: 'DISPATCHED', timezone: finalTimezone, localDate: finalLocalDate };
+  }
   const terminalCondition = [
     reengagement,
     weeklyAchievement,
     approaching,
     workout,
     progress,
+    nutrition,
   ].some(reportsUserNotFound)
     ? 'USER_NOT_FOUND' as const
     : undefined;
@@ -145,9 +160,10 @@ export async function evaluateDailyNotificationSuite(
       `REENGAGEMENT:${reengagement.reason}`
       + `|WEEKLY_ACHIEVEMENT:${weeklyAchievement.reason}`
       + `|WORKOUT:${workout.reason}|APPROACHING:${approaching.reason}`
-      + `|PROGRESS:${progress.reason}`,
+      + `|PROGRESS:${progress.reason}`
+      + (nutrition.reason === 'NOT_EVALUATED' ? '' : `|NUTRITION:${nutrition.reason}`),
     ...(terminalCondition ? { terminalCondition } : {}),
-    timezone: resolvedTimezone,
-    localDate: resolvedLocalDate,
+    timezone: finalTimezone,
+    localDate: finalLocalDate,
   };
 }

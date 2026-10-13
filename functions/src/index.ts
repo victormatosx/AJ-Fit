@@ -1,4 +1,13 @@
 import { onCall, onRequest } from 'firebase-functions/v2/https';
+export { requestNutritionPlanGeneration } from './nutrition/generation/request';
+export { onNutritionGenerationJobCreated, retryNutritionGenerationJobs } from './nutrition/generation/worker';
+export { requestNutritionMealAlternative } from './nutrition/generation/mealAlternativeRequest';
+export { restoreNutritionPlan } from './nutrition/plans/restore';
+export { onNutritionGenerationCompleted } from './notifications/nutritionNotifications';
+export { monitorNutritionAiOperations } from './nutrition/observability/alerts';
+export { searchExternalFoodFatSecret } from './nutrition/foodLog/searchExternalFood';
+export { materializeExternalFoodFatSecret } from './nutrition/foodLog/materializeExternalFood';
+export { resolveFoodByBarcode } from './nutrition/foodLog/resolveFoodByBarcode';
 import {
   handleRevenueCatWebhook,
   REVENUECAT_API_SECRET_KEY,
@@ -40,6 +49,12 @@ import { dispatchTestNotificationHandler } from './notifications/qaDispatch';
 import { reconcileNotificationReceipts } from './notifications/receiptsReconciler';
 import { retryNotificationDispatches } from './notifications/retryScheduler';
 import { evaluateDailyWorkoutNotifications } from './notifications/dailyScheduler';
+import {
+  adminSaveCampaignHandler, adminEstimateCampaignHandler, adminScheduleCampaignHandler,
+  adminCampaignActionHandler, adminDuplicateCampaignHandler, adminListCampaignsHandler,
+  adminGetCampaignHandler, adminGetCampaignRunHandler, adminTestCampaignHandler,
+  recordCampaignOpenHandler, processNotificationCampaigns,
+} from './notifications/campaigns';
 import {
   adminCloseSupportChatHandler,
   adminGetSupportAttachmentAccessHandler,
@@ -345,6 +360,17 @@ export const dispatchTestNotification = onCall(
   { enforceAppCheck: true },
   dispatchTestNotificationHandler,
 );
+export const adminSaveCampaign = onCall(adminSaveCampaignHandler);
+export const adminEstimateCampaign = onCall(adminEstimateCampaignHandler);
+export const adminScheduleCampaign = onCall(adminScheduleCampaignHandler);
+export const adminCampaignAction = onCall(adminCampaignActionHandler);
+export const adminDuplicateCampaign = onCall(adminDuplicateCampaignHandler);
+export const adminListCampaigns = onCall(adminListCampaignsHandler);
+export const adminGetCampaign = onCall(adminGetCampaignHandler);
+export const adminGetCampaignRun = onCall(adminGetCampaignRunHandler);
+export const adminTestCampaign = onCall(adminTestCampaignHandler);
+export const recordCampaignOpen = onCall({ enforceAppCheck: true }, recordCampaignOpenHandler);
+export { processNotificationCampaigns };
 
 /** Support V2: client mutations are authenticated, attested and backend-authoritative. */
 export const prepareSupportAttachmentUpload = onCall(

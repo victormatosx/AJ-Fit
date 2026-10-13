@@ -10,15 +10,23 @@ import {
   buildReEngagementLateNotification,
   buildWeekCompletedNotification,
   buildWeekStreakNotification,
+  buildNutritionDailyLogReminder,
+  buildNutritionWeeklySummaryNotification,
 } from './contentPolicy';
 import { readProgressNotificationContext } from './progressNotificationContext';
 import { readReEngagementContext } from './reengagementContext';
 import { readWeeklyAchievementContext } from './weeklyAchievementContext';
 import type { NotificationDispatchRequest } from './schema';
+import { dailyLocalClock } from './dailyTime';
+import { readNutritionNotificationContext } from './nutritionNotificationContext';
+import { isValidNutritionRolloutConfig, nutritionFlagEnabled } from '../nutrition/shared/nutrition/rolloutCore';
+
+const EVENT_NOTIFICATION_START_MINUTE = 8 * 60;
+const EVENT_NOTIFICATION_END_MINUTE = 22 * 60;
 
 export type NotificationPreflightResult =
   | { allowed: true }
-  | { allowed: false; reason: string };
+  | { allowed: false; reason: string; defer?: boolean };
 
 const TERMINAL_EVOLUTION_EVENTS = new Set([
   'EVOLUTION_EARNED',
@@ -68,6 +76,69 @@ export async function runNotificationPreflight(
   request: NotificationDispatchRequest,
   now: Timestamp,
 ): Promise<NotificationPreflightResult> {
+  if (request.type === 'NUTRITION_DAILY_LOG_REMINDER'
+    || request.type === 'NUTRITION_WEEKLY_SUMMARY') {
+    const context = await readNutritionNotificationContext(db, request.uid, now, {
+      requireDailyWindow: false,
+    });
+    if (!context.allowed) return { allowed: false, reason: context.reason };
+    const current = context.candidate.notificationType === 'NUTRITION_DAILY_LOG_REMINDER'
+      ? buildNutritionDailyLogReminder({
+          uid: request.uid,
+          localDate: context.candidate.localDate,
+          locale: 'pt-BR',
+        })
+      : buildNutritionWeeklySummaryNotification({
+          uid: request.uid,
+          weekStart: context.candidate.weekStart,
+          locale: 'pt-BR',
+        });
+    return current.type === request.type && current.sourceIdentity === request.sourceIdentity
+      ? { allowed: true }
+      : { allowed: false, reason: 'NUTRITION_CONTEXT_CHANGED' };
+  }
+  if (request.type === 'NUTRITION_PLAN_READY') {
+    const generationId = request.data?.generationId;
+    if (typeof generationId !== 'string') return { allowed: false, reason: 'PLAN_READY_INVALID' };
+    const root = db.collection('users').doc(request.uid);
+    const [user, lock, schedule, job, plan, rollout] = await Promise.all([
+      root.get(),
+      db.collection('accountDeletionLocks').doc(request.uid).get(),
+      root.collection('workoutProgramState').doc('scheduleConfig').get(),
+      root.collection('nutritionGenerationJobs').doc(generationId).get(),
+      root.collection('nutritionPlans').doc(generationId).get(),
+      db.collection('nutritionRolloutConfig').doc('active').get(),
+    ]);
+    if (!user.exists) return { allowed: false, reason: 'USER_NOT_FOUND' };
+    if (lock.exists) return { allowed: false, reason: 'ACCOUNT_INACTIVE' };
+    const config = rollout.data();
+    if (!isValidNutritionRolloutConfig(config)
+      || !nutritionFlagEnabled(request.uid, 'nutritionEnabled', config)) {
+      return { allowed: false, reason: 'NUTRITION_DISABLED' };
+    }
+    if (job.get('status') !== 'completed' || job.get('planId') !== generationId
+      || !plan.exists || plan.get('status') !== 'active' || plan.get('generationId') !== generationId) {
+      return { allowed: false, reason: 'PLAN_NOT_ACTIVE' };
+    }
+    const clock = dailyLocalClock(now.toDate(), schedule.data()?.timezone);
+    if (!clock || clock.minuteOfDay < EVENT_NOTIFICATION_START_MINUTE
+      || clock.minuteOfDay >= EVENT_NOTIFICATION_END_MINUTE) {
+      return { allowed: false, reason: 'QUIET_HOURS' };
+    }
+    return { allowed: true };
+  }
+  if (request.type === 'CAMPAIGN') {
+    const campaignId = request.data?.campaignId;
+    const campaignRunId = request.data?.campaignRunId;
+    if (typeof campaignId !== 'string' || typeof campaignRunId !== 'string') return { allowed: false, reason: 'CAMPAIGN_INVALID' };
+    const [campaign, run] = await Promise.all([
+      db.collection('notificationCampaigns').doc(campaignId).get(),
+      db.collection('notificationCampaigns').doc(campaignId).collection('runs').doc(campaignRunId).get(),
+    ]);
+    if (!campaign.exists || campaign.get('status') === 'canceled' || !run.exists || run.get('status') === 'canceled') return { allowed: false, reason: 'CAMPAIGN_CANCELED' };
+    if (campaign.get('status') === 'paused') return { allowed: false, reason: 'CAMPAIGN_PAUSED', defer: true };
+    return { allowed: true };
+  }
   if (
     request.type === 'WORKOUT_DAY'
     || request.type === 'RECOVERY_DAY'

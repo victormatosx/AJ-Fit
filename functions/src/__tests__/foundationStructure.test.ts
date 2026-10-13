@@ -68,7 +68,7 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
     }
   });
 
-  it('publishes the intended billing, promotion, health and Photo Vault functions', () => {
+  it('publishes the intended backend functions including Nutrition', () => {
     const source = read('src/index.ts');
 
     // Match the export statements themselves, not prose in the file's JSDoc.
@@ -83,13 +83,19 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       .sort();
 
     expect(exported).toEqual([
+      'adminCampaignAction',
       'adminClaimSupportCase',
       'adminCloseSupportChat',
       'adminCreatePromoCode',
+      'adminDuplicateCampaign',
+      'adminEstimateCampaign',
+      'adminGetCampaign',
+      'adminGetCampaignRun',
       'adminGetCoupon',
       'adminGetSupportAttachmentAccess',
       'adminGetUser',
       'adminGrantFreeAccess',
+      'adminListCampaigns',
       'adminListCoupons',
       'adminListPromoCodes',
       'adminListSupportAgents',
@@ -98,10 +104,13 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       'adminReleaseSupportCase',
       'adminReplyAndCloseSupportCase',
       'adminRevokeFreeAccess',
+      'adminSaveCampaign',
+      'adminScheduleCampaign',
       'adminSendSupportChatMessage',
       'adminSetAccountClass',
       'adminSetPromoCodeActive',
       'adminStartSupportChat',
+      'adminTestCampaign',
       'adminTransferSupportCase',
       'adminUpdatePromoCode',
       'applyExerciseSubstitution',
@@ -122,18 +131,30 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       'initializeWorkoutProgramV127',
       'installActiveWorkoutProgram',
       'markSupportMessageRead',
+      'materializeExternalFoodFatSecret',
+      'monitorNutritionAiOperations',
       'onAccountDeletionRequested',
+      'onNutritionGenerationCompleted',
+      'onNutritionGenerationJobCreated',
       'onSupportAdminMessageCreated',
       'onTrustedWorkoutLifecycleEventCreated',
       'onUserProvisioned',
       'prepareSupportAttachmentUpload',
+      'processNotificationCampaigns',
       'reconcileNotificationReceipts',
+      'recordCampaignOpen',
       'recordWorkoutLifecycleTelemetry',
       'recoverVaultKey',
       'releasePushDevice',
       'requestAccountDeletion',
+      'requestNutritionMealAlternative',
+      'requestNutritionPlanGeneration',
+      'resolveFoodByBarcode',
+      'restoreNutritionPlan',
       'retryNotificationDispatches',
+      'retryNutritionGenerationJobs',
       'revenueCatWebhook',
+      'searchExternalFoodFatSecret',
       'sendSupportChatMessage',
       'syncPushDevice',
       'validatePromoCode',
@@ -255,6 +276,10 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       ['src/photoVault/recoverVaultKey.ts', 'recoverVaultKey'],
       ['src/billing/confirmCommercialGate.ts', 'confirmCommercialGate'],
       ['src/accountDeletion/requestAccountDeletion.ts', 'requestAccountDeletion'],
+      ['src/nutrition/generation/request.ts', 'requestNutritionPlanGeneration'],
+      ['src/nutrition/generation/mealAlternativeRequest.ts', 'requestNutritionMealAlternative'],
+      ['src/nutrition/plans/restore.ts', 'restoreNutritionPlan'],
+      ['src/nutrition/foodLog/resolveFoodByBarcode.ts', 'resolveFoodByBarcode'],
       ['src/index.ts', 'syncPushDevice'],
       ['src/index.ts', 'releasePushDevice'],
       ['src/index.ts', 'dispatchTestNotification'],
@@ -278,9 +303,12 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       'src/accountDeletion/requestAccountDeletion.ts',
       'src/accountDeletion/immediateDispatch.ts',
       'src/accountDeletion/reconciliation/scheduler.ts',
+      'src/nutrition/generation/request.ts',
+      'src/nutrition/generation/mealAlternativeRequest.ts',
+      'src/nutrition/plans/restore.ts',
     ].map(readCode).join('\n');
 
-    expect(allEndpointSources.match(/enforceAppCheck\s*:\s*true/g)).toHaveLength(21);
+    expect(allEndpointSources.match(/enforceAppCheck\s*:\s*true/g)).toHaveLength(25);
     expect(allEndpointSources).not.toMatch(/consumeAppCheckToken\s*:\s*true/);
   });
 

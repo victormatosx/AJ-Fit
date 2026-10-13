@@ -103,6 +103,7 @@ describe('notification preferences rules', () => {
     'workoutsAndReminders',
     'evolutionAndAchievements',
     'progress',
+    'nutrition',
   ])('allows owner boolean update for %s', async (key) => {
     await assertSucceeds(updateDoc(doc(db(UID), 'users', UID), {
       [`preferences.notificationPreferences.${key}`]: false,
@@ -180,6 +181,11 @@ describe('private push registries', () => {
     ['users/notification-owner/devices', 'installation'],
     ['notificationDispatches', 'dispatch'],
     ['notificationDispatches/dispatch/deliveries', 'installation'],
+    ['notificationCampaigns', 'campaign'],
+    ['notificationCampaigns/campaign/runs', 'run'],
+    ['notificationCampaigns/campaign/runs/run/recipients', UID],
+    ['notificationCampaignScheduler', 'workCursors'],
+    ['notificationSchedulerState', 'retryCursor'],
     ['notificationDailyUsers', UID],
     ['notificationProductWindows', 'window'],
     ['notificationAchievementMilestones', 'milestone'],

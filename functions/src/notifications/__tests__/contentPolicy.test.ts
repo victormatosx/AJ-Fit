@@ -109,6 +109,9 @@ describe('notification content policy', () => {
       'buildWorkoutDayNotification',
       'buildRecoveryDayNotification',
       'buildMissedWorkoutNotification',
+      'buildNutritionDailyLogReminder',
+      'buildNutritionPlanReadyNotification',
+      'buildNutritionWeeklySummaryNotification',
       'buildWeekCompletedNotification',
       'buildWeekStreakNotification',
     ].sort());

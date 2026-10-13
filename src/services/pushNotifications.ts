@@ -48,8 +48,12 @@ export const PUSH_NOTIFICATION_TYPES = [
   'COMPARE_PROGRESS',
   'WEEK_COMPLETED',
   'WEEK_STREAK',
+  'NUTRITION_DAILY_LOG_REMINDER',
+  'NUTRITION_PLAN_READY',
+  'NUTRITION_WEEKLY_SUMMARY',
   'SUPPORT_SINGLE_REPLY',
   'SUPPORT_CHAT_MESSAGE',
+  'CAMPAIGN',
 ] as const;
 export type PushNotificationType = (typeof PUSH_NOTIFICATION_TYPES)[number];
 
@@ -58,6 +62,10 @@ export interface PushPayload {
   notificationId: string;
   caseId?: string;
   messageId?: string;
+  campaignId?: string;
+  campaignRunId?: string;
+  recipientUid?: string;
+  destination?: 'home' | 'workout' | 'progress' | 'profile';
 }
 
 export interface PushMessageEvent {
@@ -149,6 +157,15 @@ export function parsePushPayload(value: unknown): PushPayload | null {
   const support = type === 'SUPPORT_SINGLE_REPLY' || type === 'SUPPORT_CHAT_MESSAGE';
   const caseId = nonEmptyString(value.caseId);
   const messageId = nonEmptyString(value.messageId);
+  if (type === 'CAMPAIGN') {
+    const campaignId = nonEmptyString(value.campaignId);
+    const campaignRunId = nonEmptyString(value.campaignRunId);
+    const destination = value.destination;
+    if (!campaignId || !campaignRunId || !['home', 'workout', 'progress', 'profile'].includes(String(destination))) return null;
+    const recipientUid = nonEmptyString(value.recipientUid);
+    if (value.recipientUid !== undefined && (!recipientUid || !/^[A-Za-z0-9_.:-]{1,128}$/.test(recipientUid))) return null;
+    return { type: 'CAMPAIGN', notificationId, campaignId, campaignRunId, destination: destination as 'home' | 'workout' | 'progress' | 'profile', ...(recipientUid ? { recipientUid } : {}) };
+  }
   if (support && (!caseId || !messageId)) return null;
   return support
     ? { type: type as PushNotificationType, notificationId, caseId, messageId }

@@ -50,6 +50,7 @@ describe.skipIf(!enabled)('Firestore Cleanup Engine — real Emulator integratio
     await Promise.all([
       wipeCollectionGroup('questionnaires'),
       wipeCollectionGroup('assessments'),
+      wipeCollectionGroup('healthWeightSamples'),
       wipeCollectionGroup('progressPhotos'),
       wipeCollectionGroup('workoutPrograms'),
       wipeCollectionGroup('progressionEvents'),
@@ -103,6 +104,9 @@ describe.skipIf(!enabled)('Firestore Cleanup Engine — real Emulator integratio
         .collection('assessments')
         .doc(`a${i}`)
         .set({ weight: 80 });
+    }
+    for (let i = 0; i < 20; i++) {
+      await db.collection('users').doc(uid).collection('healthWeightSamples').doc(`w${i}`).set({ weightKg: 80 });
     }
     for (let i = 0; i < 30; i++) {
       await db
@@ -237,6 +241,13 @@ describe.skipIf(!enabled)('Firestore Cleanup Engine — real Emulator integratio
         .get();
       expect(assessments.empty).toBe(true);
 
+      const healthWeights = await db
+        .collection('users')
+        .doc('test-uid-cleanup-A')
+        .collection('healthWeightSamples')
+        .get();
+      expect(healthWeights.empty).toBe(true);
+
       const progressPhotos = await db
         .collection('users')
         .doc('test-uid-cleanup-A')
@@ -316,6 +327,12 @@ describe.skipIf(!enabled)('Firestore Cleanup Engine — real Emulator integratio
         .collection('assessments')
         .get();
       expect(otherAssessments.size).toBe(120);
+      const otherHealthWeights = await db
+        .collection('users')
+        .doc('test-uid-cleanup-B')
+        .collection('healthWeightSamples')
+        .get();
+      expect(otherHealthWeights.size).toBe(20);
       const otherLifecycle = await db
         .collection('users')
         .doc('test-uid-cleanup-B')

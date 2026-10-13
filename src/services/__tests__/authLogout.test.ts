@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   deleteVaultKey: vi.fn(),
   queueNotificationDeviceRelease: vi.fn(),
   clearNotificationAccountPreferenceState: vi.fn(),
+  clearHealthIntegrationSessionState: vi.fn(),
+  clearHealthIntegrationOnboardingStepSessionState: vi.fn(),
 }));
 
 vi.mock('firebase/auth', () => ({
@@ -32,6 +34,14 @@ vi.mock('../notificationAccountLifecycle', () => ({
   clearNotificationAccountPreferenceState: mocks.clearNotificationAccountPreferenceState,
 }));
 
+vi.mock('../healthIntegrationPreferences', () => ({
+  clearHealthIntegrationSessionState: mocks.clearHealthIntegrationSessionState,
+}));
+
+vi.mock('../healthIntegrationOnboardingStep', () => ({
+  clearHealthIntegrationOnboardingStepSessionState: mocks.clearHealthIntegrationOnboardingStepSessionState,
+}));
+
 import { signOutUser } from '../auth';
 
 describe('verification-screen logout compatibility', () => {
@@ -42,6 +52,8 @@ describe('verification-screen logout compatibility', () => {
     mocks.deleteVaultKey.mockResolvedValue(undefined);
     mocks.queueNotificationDeviceRelease.mockResolvedValue(undefined);
     mocks.clearNotificationAccountPreferenceState.mockResolvedValue(undefined);
+    mocks.clearHealthIntegrationSessionState.mockReturnValue(undefined);
+    mocks.clearHealthIntegrationOnboardingStepSessionState.mockReturnValue(undefined);
   });
 
   it('signs out from Firebase before clearing secure session persistence', async () => {
@@ -74,6 +86,38 @@ describe('verification-screen logout compatibility', () => {
     await expect(signOutUser()).resolves.toBeUndefined();
 
     expect(mocks.queueNotificationDeviceRelease).toHaveBeenCalledWith('alice');
+    expect(mocks.signOut).toHaveBeenCalledTimes(1);
+  });
+
+  it('forgets the in-memory health-integration hint for the outgoing uid on logout', async () => {
+    await signOutUser();
+
+    expect(mocks.clearHealthIntegrationSessionState).toHaveBeenCalledWith('alice');
+    expect(mocks.clearHealthIntegrationSessionState).toHaveBeenCalledTimes(1);
+  });
+
+  it('still completes logout if clearing the health-integration hint throws', async () => {
+    mocks.clearHealthIntegrationSessionState.mockImplementation(() => {
+      throw new Error('unexpected map error');
+    });
+
+    await expect(signOutUser()).resolves.toBeUndefined();
+    expect(mocks.signOut).toHaveBeenCalledTimes(1);
+  });
+
+  it('forgets the in-memory health-onboarding-step hint for the outgoing uid on logout', async () => {
+    await signOutUser();
+
+    expect(mocks.clearHealthIntegrationOnboardingStepSessionState).toHaveBeenCalledWith('alice');
+    expect(mocks.clearHealthIntegrationOnboardingStepSessionState).toHaveBeenCalledTimes(1);
+  });
+
+  it('still completes logout if clearing the health-onboarding-step hint throws', async () => {
+    mocks.clearHealthIntegrationOnboardingStepSessionState.mockImplementation(() => {
+      throw new Error('unexpected map error');
+    });
+
+    await expect(signOutUser()).resolves.toBeUndefined();
     expect(mocks.signOut).toHaveBeenCalledTimes(1);
   });
 

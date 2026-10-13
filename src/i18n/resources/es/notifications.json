@@ -18,6 +18,10 @@
       "title": "Progreso",
       "description": "Recibe recordatorios para registrar y seguir tu progreso."
     },
+    "nutrition": {
+      "title": "Nutrición",
+      "description": "Recibe avisos sobre tu plan, diario y resumen semanal."
+    },
     "subscription": {
       "title": "Suscripción",
       "description": "Recibe avisos sobre tu suscripción Premium."

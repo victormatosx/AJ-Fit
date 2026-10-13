@@ -4,6 +4,7 @@
     "account": "Cuenta",
     "workout": "Entrenamiento",
     "notifications": "Notificaciones",
+    "healthIntegration": "Apps conectadas",
     "preferences": "Preferencias",
     "privacyAndData": "Privacidad y datos",
     "support": "Soporte",
@@ -18,6 +19,7 @@
     "workoutPreferences": "Preferencias de entrenamiento",
     "timersAndSounds": "Temporizadores y sonidos",
     "notifications": "Notificaciones",
+    "healthIntegration": "Apps conectadas",
     "theme": "Tema",
     "units": "Unidades",
     "privacyPolicy": "Política de Privacidad",
@@ -33,7 +35,11 @@
     "licenses": "Licencias Open Source"
   },
   "values": {
-    "darkTheme": "Oscuro"
+    "darkTheme": "Oscuro",
+    "healthIntegrationEnabled": "Conectado",
+    "healthIntegrationDisabled": "Desconectado",
+    "healthIntegrationNotConfigured": "No configurado",
+    "healthIntegrationLoading": "Cargando..."
   },
   "security": {
     "screenTitle": "Seguridad",
@@ -213,5 +219,8 @@
       "dark": "Oscuro",
       "light": "Claro"
     }
+  },
+  "connectedApps": {
+    "screenTitle": "Apps conectadas"
   }
 }

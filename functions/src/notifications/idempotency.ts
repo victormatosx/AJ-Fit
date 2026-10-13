@@ -53,6 +53,7 @@ export function contractHashFor(
     notificationId: request.notificationId,
     intent: request.intent ?? null,
     data: request.data ?? null,
+    ...(request.type === 'CAMPAIGN' ? { title: request.title, body: request.body, imageUrl: request.imageUrl ?? null } : {}),
   };
   // Product copy is presentation selected from a strict allowlist using the
   // user's current locale. A replay after a language change is still the same
@@ -116,6 +117,7 @@ export async function claimDispatch(
         type: request.type,
         category: request.category,
         sourceIdentity: request.sourceIdentity,
+        ...(request.type === 'CAMPAIGN' ? { campaignId: request.data?.campaignId, campaignRunId: request.data?.campaignRunId } : {}),
         contractHash: expectedContractHash,
         idempotencyKeyHash: dispatchId,
         dispatchMode,
@@ -127,6 +129,7 @@ export async function claimDispatch(
           sourceIdentity: request.sourceIdentity,
           title: request.title,
           body: request.body,
+          ...(request.imageUrl ? { imageUrl: request.imageUrl } : {}),
           intent: request.intent ?? null,
           data: request.data ?? {},
           idempotencyKey: request.idempotencyKey,
@@ -239,6 +242,24 @@ export async function markDispatchOutcome(
   });
 }
 
+/** A pause is not a failed attempt. Keep the same logical dispatch and retry budget. */
+export async function deferCampaignClaim(
+  db: Firestore, dispatchId: string, claimToken: string, now: Timestamp,
+): Promise<boolean> {
+  const ref = dispatchRef(db, dispatchId);
+  return db.runTransaction(async (tx) => {
+    const snapshot = await tx.get(ref);
+    const data = snapshot.data();
+    if (!data || data.type !== 'CAMPAIGN' || data.status !== 'CLAIMED' || data.claimToken !== claimToken) return false;
+    tx.update(ref, {
+      status: 'RETRY_SCHEDULED', claimToken: null,
+      attemptCount: Math.max(0, Number(data.attemptCount ?? 1) - 1),
+      nextAttemptAt: now, lastErrorClass: 'CAMPAIGN_PAUSED', terminalReason: null, updatedAt: now,
+    });
+    return true;
+  });
+}
+
 export function persistedDispatchRequest(
   value: FirebaseFirestore.DocumentData,
   expectedDispatchId: string,
@@ -272,6 +293,7 @@ export function persistedDispatchRequest(
     sourceIdentity: record.sourceIdentity,
     title: record.title,
     body: record.body,
+    ...(typeof record.imageUrl === 'string' ? { imageUrl: record.imageUrl } : {}),
     ...(intent ? { intent } : {}),
     ...(data ? { data } : {}),
     idempotencyKey: record.idempotencyKey,

@@ -1,0 +1,112 @@
+{
+  "disconnected": {
+    "heroTitle": "Connect with {{provider}}",
+    "benefitsTitle": "What happens when you connect",
+    "benefitWeight": "AJ Fit will be able to read your body weight recorded in {{provider}}.",
+    "benefitWorkouts": "AJ Fit will be able to record your completed workouts in {{provider}}.",
+    "privacyNote": "Connecting is optional. You can disconnect at any time, and you can also manage permissions directly from the system.",
+    "connectAction": "Connect with {{provider}}",
+    "connectingAction": "Connecting..."
+  },
+  "connected": {
+    "statusTitle": "Connected",
+    "statusDescription": "Your health data is connected to AJ Fit and syncs automatically.",
+    "weightTitle": "Body weight",
+    "weightSubtitle": "Automatic read",
+    "workoutsTitle": "Completed workouts",
+    "workoutsSubtitle": "Automatic write",
+    "activeLabel": "Active",
+    "iosPermissionNotice": "iOS does not tell AJ Fit which read permissions were granted. This is a limitation of the system itself, not an app error.",
+    "androidImportantNotice": "Health Connect controls which permissions AJ Fit receives. You can review or revoke access at any time directly in the Health Connect app.",
+    "androidPermissionGranted": "Permission granted",
+    "androidPermissionNotGranted": "Permission not granted",
+    "lastSyncSectionTitle": "Last sync",
+    "lastSyncToday": "Today, {{date}}",
+    "actionsSectionTitle": "Actions",
+    "importantSectionTitle": "Important",
+    "manageAction": "Manage permissions",
+    "disconnectAction": "Disconnect {{provider}}",
+    "disconnectingAction": "Disconnecting..."
+  },
+  "disconnectConfirm": {
+    "title": "Disconnect from {{provider}}?",
+    "body": "AJ Fit will stop using {{provider}}. This does not revoke access at the system level — you can do that from native settings — and it does not delete any record already written to {{provider}}.",
+    "confirm": "Disconnect",
+    "cancel": "Cancel"
+  },
+  "sync": {
+    "title": "Weight sync",
+    "lastSuccessful": "Last sync: {{date}}",
+    "never": "not synced yet",
+    "manualAction": "Sync now",
+    "syncing": "Syncing...",
+    "deleting": "Deleting...",
+    "importedCount_one": "{{count}} new weight imported",
+    "importedCount_other": "{{count}} new weights imported",
+    "status": {
+      "idle": "Waiting to sync",
+      "syncing": "Syncing weights",
+      "success": "Sync complete",
+      "no_data": "No new weights found",
+      "permission_required": "Weight permission required",
+      "unavailable": "Health service unavailable",
+      "error": "Could not sync right now"
+    }
+  },
+  "export": {
+    "title": "Workout export",
+    "lastSuccessful": "Last workout exported: {{date}}",
+    "never": "not exported yet",
+    "retryAction": "Retry exports now",
+    "retrying": "Exporting...",
+    "pendingCount_one": "{{count}} workout waiting to export",
+    "pendingCount_other": "{{count}} workouts waiting to export",
+    "exportedCount_one": "{{count}} workout exported in this attempt",
+    "exportedCount_other": "{{count}} workouts exported in this attempt",
+    "status": {
+      "idle": "Automatic export enabled",
+      "exporting": "Exporting completed workouts",
+      "success": "Workouts exported successfully",
+      "no_data": "No workouts pending",
+      "permission_required": "Workout permission required",
+      "unavailable": "Health service unavailable",
+      "error": "Could not export right now"
+    }
+  },
+  "data": {
+    "title": "Imported data",
+    "description": "Deletes only weights imported from the health app. Physical assessments, manual data, and nutrition information will not change.",
+    "deleteAction": "Delete imported weights"
+  },
+  "deleteImportedConfirm": {
+    "title": "Delete imported weights?",
+    "body": "This removes only imported weights from AJ Fit. Physical assessments and manual data remain intact. The health app connection will stay active.",
+    "confirm": "Delete weights",
+    "cancel": "Cancel"
+  },
+  "unavailable": {
+    "title": "Unavailable on this device",
+    "reason": {
+      "provider_missing": "{{provider}} is not available on this device.",
+      "provider_update_required": "Update {{provider}} to continue.",
+      "check_failed": "Could not check availability right now.",
+      "platform_unsupported": "This device does not support this integration."
+    },
+    "retryAction": "Try again",
+    "openSettingsAction": "Open system settings"
+  },
+  "errors": {
+    "unavailable": "This integration is unavailable right now.",
+    "permission_request_failed": "Could not complete the permission request. Try again.",
+    "provider_not_installed": "{{provider}} is not available on this device.",
+    "unknown": "Could not complete the operation right now. Try again."
+  },
+  "loading": "Loading...",
+  "backAccessibility": "Back",
+  "onboardingConfirmation": {
+    "title": "Connect {{provider}}?",
+    "body": "You asked to connect during setup. Tap Connect to open the permission request, or Not now to skip — you can always connect later in Settings.",
+    "connectAction": "Connect {{provider}}",
+    "skipAction": "Not now"
+  }
+}

@@ -21,8 +21,12 @@ export const NOTIFICATION_TYPES = [
   'COMPARE_PROGRESS',
   'WEEK_COMPLETED',
   'WEEK_STREAK',
+  'NUTRITION_DAILY_LOG_REMINDER',
+  'NUTRITION_PLAN_READY',
+  'NUTRITION_WEEKLY_SUMMARY',
   'SUPPORT_SINGLE_REPLY',
   'SUPPORT_CHAT_MESSAGE',
+  'CAMPAIGN',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -33,6 +37,7 @@ export const NOTIFICATION_CATEGORIES = [
   'WORKOUTS_AND_REMINDERS',
   'EVOLUTION_AND_ACHIEVEMENTS',
   'PROGRESS',
+  'NUTRITION',
   'OPERATIONAL',
 ] as const;
 export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
@@ -85,6 +90,7 @@ export interface NotificationDispatchRequest {
   body: string;
   intent?: string;
   data?: Record<string, string | number | boolean>;
+  imageUrl?: string;
   idempotencyKey: string;
 }
 

@@ -26,6 +26,8 @@ import type ptBRMyPlan from './resources/pt-BR/myPlan.json';
 import type ptBREvolution from './resources/pt-BR/evolution.json';
 import type ptBRNotifications from './resources/pt-BR/notifications.json';
 import type ptBRTreino from './resources/pt-BR/treino.json';
+import type ptBRNutrition from './resources/pt-BR/nutrition.json';
+import type ptBRHealth from './resources/pt-BR/health.json';
 
 declare module 'i18next' {
   interface CustomTypeOptions {
@@ -47,6 +49,8 @@ declare module 'i18next' {
       evolution: typeof ptBREvolution;
       notifications: typeof ptBRNotifications;
       treino: typeof ptBRTreino;
+      nutrition: typeof ptBRNutrition;
+      health: typeof ptBRHealth;
     };
     returnNull: false;
   }

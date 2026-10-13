@@ -11,6 +11,7 @@ export const NOTIFICATION_PREFERENCE_CATEGORIES = [
   'WORKOUTS_AND_REMINDERS',
   'EVOLUTION_AND_ACHIEVEMENTS',
   'PROGRESS',
+  'NUTRITION',
   'OPERATIONAL',
 ] as const satisfies readonly NotificationCategory[];
 
@@ -22,6 +23,7 @@ export const NOTIFICATION_PREFERENCE_FIELDS: Readonly<
   WORKOUTS_AND_REMINDERS: 'workoutsAndReminders',
   EVOLUTION_AND_ACHIEVEMENTS: 'evolutionAndAchievements',
   PROGRESS: 'progress',
+  NUTRITION: 'nutrition',
 };
 
 /** Keep the persisted OPERATIONAL dispatch category for historical idempotency hashes. */

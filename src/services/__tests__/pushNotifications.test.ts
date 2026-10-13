@@ -94,6 +94,14 @@ function fixture(overrides: Partial<PushNotificationsDependencies> = {}) {
 }
 
 describe('push notification runtime', () => {
+  it('accepts only campaign payloads with known destinations', () => {
+    const payload = { type: 'CAMPAIGN', notificationId: 'CAMPAIGN:run', campaignId: 'campaign', campaignRunId: 'run', destination: 'progress' };
+    expect(parsePushPayload(payload)).toEqual(payload);
+    expect(parsePushPayload({ ...payload, destination: '/admin' })).toBeNull();
+    expect(parsePushPayload({ ...payload, campaignRunId: '' })).toBeNull();
+    expect(parsePushPayload({ ...payload, recipientUid: 'bad/uid' })).toBeNull();
+    expect(parsePushPayload({ ...payload, recipientUid: 'recipient-1' })).toEqual({ ...payload, recipientUid: 'recipient-1' });
+  });
   it('does not misclassify a development-client manifest as Expo Go', () => {
     expect(isDefaultPushSupported()).toBe(true);
   });
@@ -286,6 +294,9 @@ describe('push payload parsing', () => {
     'COMPARE_PROGRESS',
     'WEEK_COMPLETED',
     'WEEK_STREAK',
+    'NUTRITION_DAILY_LOG_REMINDER',
+    'NUTRITION_PLAN_READY',
+    'NUTRITION_WEEKLY_SUMMARY',
   ] as const)(
     'parses the structured payload for current notification type %s',
     (type) => {

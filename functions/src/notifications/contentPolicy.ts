@@ -280,6 +280,51 @@ export const COMPARE_PROGRESS_COPIES = {
   },
 } as const satisfies Readonly<Record<NotificationLocale, NotificationCopy>>;
 
+export const NUTRITION_DAILY_LOG_REMINDER_COPIES = {
+  'pt-BR': {
+    title: 'Seu diário alimentar está disponível',
+    body: 'Você ainda pode registrar suas refeições de hoje.',
+  },
+  en: {
+    title: 'Your food diary is available',
+    body: 'You can still log today\'s meals.',
+  },
+  es: {
+    title: 'Tu diario de alimentación está disponible',
+    body: 'Todavía puedes registrar las comidas de hoy.',
+  },
+} as const satisfies Readonly<Record<NotificationLocale, NotificationCopy>>;
+
+export const NUTRITION_PLAN_READY_COPIES = {
+  'pt-BR': {
+    title: 'Seu plano alimentar está pronto',
+    body: 'Abra a Nutrição para conferir suas refeições.',
+  },
+  en: {
+    title: 'Your meal plan is ready',
+    body: 'Open Nutrition to see your meals.',
+  },
+  es: {
+    title: 'Tu plan de alimentación está listo',
+    body: 'Abre Nutrición para ver tus comidas.',
+  },
+} as const satisfies Readonly<Record<NotificationLocale, NotificationCopy>>;
+
+export const NUTRITION_WEEKLY_SUMMARY_COPIES = {
+  'pt-BR': {
+    title: 'Seu resumo da semana está disponível',
+    body: 'Veja seus registros de alimentação e a evolução do período.',
+  },
+  en: {
+    title: 'Your weekly summary is available',
+    body: 'See your food logs and progress for the period.',
+  },
+  es: {
+    title: 'Tu resumen semanal está disponible',
+    body: 'Consulta tus registros de alimentación y la evolución del período.',
+  },
+} as const satisfies Readonly<Record<NotificationLocale, NotificationCopy>>;
+
 export const WEEK_COMPLETED_COPIES = {
   'pt-BR': {
     title: 'Semana concluída 🏆',
@@ -327,6 +372,12 @@ function copies<T extends Record<NotificationLocale, NotificationCopy>>(localize
 }
 
 const TYPE_POLICIES: Readonly<Record<NotificationType, TypePolicy>> = {
+  CAMPAIGN: {
+    category: 'WORKOUTS_AND_REMINDERS',
+    allowedDataKeys: ['campaignId', 'campaignRunId', 'destination', 'recipientUid'],
+    allowedIntents: ['campaign'],
+    allowedCopies: [],
+  },
   EVOLUTION_APPROACHING: {
     category: 'EVOLUTION_AND_ACHIEVEMENTS',
     allowedDataKeys: [],
@@ -427,6 +478,24 @@ const TYPE_POLICIES: Readonly<Record<NotificationType, TypePolicy>> = {
     allowedCopies: NOTIFICATION_LOCALES.flatMap((locale) =>
       STREAK_MILESTONES.map((milestone) => weekStreakCopy(locale, milestone))),
   },
+  NUTRITION_DAILY_LOG_REMINDER: {
+    category: 'NUTRITION',
+    allowedDataKeys: ['localDate'],
+    allowedIntents: ['nutrition-diary'],
+    allowedCopies: copies(NUTRITION_DAILY_LOG_REMINDER_COPIES),
+  },
+  NUTRITION_PLAN_READY: {
+    category: 'NUTRITION',
+    allowedDataKeys: ['generationId'],
+    allowedIntents: ['nutrition-plan'],
+    allowedCopies: copies(NUTRITION_PLAN_READY_COPIES),
+  },
+  NUTRITION_WEEKLY_SUMMARY: {
+    category: 'NUTRITION',
+    allowedDataKeys: ['weekStart'],
+    allowedIntents: ['nutrition-weekly-summary'],
+    allowedCopies: copies(NUTRITION_WEEKLY_SUMMARY_COPIES),
+  },
   SUPPORT_SINGLE_REPLY: {
     category: 'OPERATIONAL',
     allowedDataKeys: ['caseId', 'messageId'],
@@ -515,7 +584,7 @@ export function assertValidDispatchRequest(
 
   assertDisplayString(request.title, 'title', MAX_TITLE_LENGTH);
   assertDisplayString(request.body, 'body', MAX_BODY_LENGTH);
-  if (!policy.allowedCopies.some(
+  if (request.type !== 'CAMPAIGN' && !policy.allowedCopies.some(
     (copy) => copy.title === request.title && copy.body === request.body,
   )) {
     fail('copy_not_allowed');
@@ -525,6 +594,16 @@ export function assertValidDispatchRequest(
     fail('intent_not_allowed');
   }
   assertAllowedData(request.data, policy.allowedDataKeys);
+  if (request.type === 'CAMPAIGN') {
+    if (request.intent !== 'campaign' || !request.data
+      || !['home', 'workout', 'progress', 'profile'].includes(String(request.data.destination))
+      || typeof request.data.campaignId !== 'string'
+      || typeof request.data.campaignRunId !== 'string'
+      || (request.data.recipientUid !== undefined && request.data.recipientUid !== request.uid)) fail('campaign_payload_invalid');
+    assertSafeId(request.data.campaignId, 'campaignId');
+    assertSafeId(request.data.campaignRunId, 'campaignRunId');
+    if (request.imageUrl !== undefined && (!/^https:\/\//.test(request.imageUrl) || request.imageUrl.length > 500)) fail('image_url_invalid');
+  } else if (request.imageUrl !== undefined) fail('image_not_allowed');
 }
 
 export function buildQaTestNotification(params: {
@@ -878,6 +957,77 @@ export function buildWeekStreakNotification(params: {
     ...params,
     type: 'WEEK_STREAK',
     copy: weekStreakCopy(params.locale, params.weeks),
+  });
+}
+
+function buildNutritionNotification(params: {
+  uid: string;
+  type: 'NUTRITION_DAILY_LOG_REMINDER' | 'NUTRITION_PLAN_READY' | 'NUTRITION_WEEKLY_SUMMARY';
+  sourceIdentity: string;
+  locale: NotificationLocale;
+  intent: 'nutrition-diary' | 'nutrition-plan' | 'nutrition-weekly-summary';
+  data: Record<string, string>;
+}): NotificationDispatchRequest {
+  const sourceHash = createHash('sha256').update(params.sourceIdentity, 'utf8').digest('hex');
+  const copy = params.type === 'NUTRITION_DAILY_LOG_REMINDER'
+    ? NUTRITION_DAILY_LOG_REMINDER_COPIES[params.locale]
+    : params.type === 'NUTRITION_PLAN_READY'
+      ? NUTRITION_PLAN_READY_COPIES[params.locale]
+      : NUTRITION_WEEKLY_SUMMARY_COPIES[params.locale];
+  const request: NotificationDispatchRequest = {
+    uid: params.uid,
+    type: params.type,
+    category: 'NUTRITION',
+    notificationId: `${params.type}:${sourceHash}`,
+    sourceIdentity: `nutrition:${sourceHash}`,
+    idempotencyKey: `notification:${params.uid}:${params.type}:${sourceHash}`,
+    ...copy,
+    intent: params.intent,
+    data: params.data,
+  };
+  assertValidDispatchRequest(request);
+  return request;
+}
+
+export function buildNutritionDailyLogReminder(params: {
+  uid: string;
+  localDate: string;
+  locale: NotificationLocale;
+}): NotificationDispatchRequest {
+  return buildNutritionNotification({
+    ...params,
+    type: 'NUTRITION_DAILY_LOG_REMINDER',
+    sourceIdentity: `daily-log:${params.localDate}`,
+    intent: 'nutrition-diary',
+    data: { localDate: params.localDate },
+  });
+}
+
+export function buildNutritionPlanReadyNotification(params: {
+  uid: string;
+  generationId: string;
+  locale: NotificationLocale;
+}): NotificationDispatchRequest {
+  return buildNutritionNotification({
+    ...params,
+    type: 'NUTRITION_PLAN_READY',
+    sourceIdentity: `plan-ready:${params.generationId}`,
+    intent: 'nutrition-plan',
+    data: { generationId: params.generationId },
+  });
+}
+
+export function buildNutritionWeeklySummaryNotification(params: {
+  uid: string;
+  weekStart: string;
+  locale: NotificationLocale;
+}): NotificationDispatchRequest {
+  return buildNutritionNotification({
+    ...params,
+    type: 'NUTRITION_WEEKLY_SUMMARY',
+    sourceIdentity: `weekly-summary:${params.weekStart}`,
+    intent: 'nutrition-weekly-summary',
+    data: { weekStart: params.weekStart },
   });
 }
 

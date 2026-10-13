@@ -12,6 +12,7 @@ import { motion, sizes, spacing } from '../theme/tokens';
 import { useTheme } from '../theme';
 import { useAuth } from '../state/AuthContext';
 import { useAssessments } from '../hooks/useAssessments';
+import { useHealthWeightSamples } from '../hooks/useHealthWeightSamples';
 import { useLoadProgressState } from '../loadProgress/LoadProgressContext';
 import { useScreenFocusEffect } from '../state/ScreenActivity';
 
@@ -55,6 +56,12 @@ export function ProgressScreen({
     refresh: refreshAssessments,
   } = useAssessments(user?.uid ?? null);
   const {
+    samples: importedWeights,
+    loading: importedWeightsLoading,
+    error: importedWeightsError,
+    refresh: refreshImportedWeights,
+  } = useHealthWeightSamples(user?.uid ?? null);
+  const {
     exercises: loadExercises,
     recordsLast90Days,
     todayLocalDate,
@@ -71,7 +78,8 @@ export function ProgressScreen({
 
   const handleRetry = useCallback(() => {
     void refreshAssessments();
-  }, [refreshAssessments]);
+    void refreshImportedWeights();
+  }, [refreshAssessments, refreshImportedWeights]);
 
   const handleLoadsRetry = useCallback(() => {
     void refreshLoads();
@@ -83,6 +91,7 @@ export function ProgressScreen({
   // assessment/load refresh buses used by their respective hooks.
   useScreenFocusEffect(() => {
     void refreshAssessments();
+    void refreshImportedWeights();
     void refreshLoads();
   });
 
@@ -168,6 +177,9 @@ export function ProgressScreen({
                   error={error}
                   latest={latest}
                   evolutionSincePrevious={evolutionSincePrevious}
+                  importedWeights={importedWeights}
+                  importedWeightsLoading={importedWeightsLoading}
+                  importedWeightsError={importedWeightsError}
                   onRetry={handleRetry}
                   onOpenAssessment={onOpenAssessment}
                 />

@@ -11,6 +11,7 @@ export const NOTIFICATION_PREFERENCE_KEYS = [
   'workoutsAndReminders',
   'evolutionAndAchievements',
   'progress',
+  'nutrition',
   'subscription',
   'support',
 ] as const;

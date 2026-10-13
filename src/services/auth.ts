@@ -23,6 +23,13 @@ import {
   clearNotificationAccountPreferenceState,
   queueNotificationDeviceRelease,
 } from './notificationAccountLifecycle';
+// Direct import, not an account-lifecycle indirection: this module is a pure
+// storage-layer wrapper (AsyncStorage only, like photoVaultKeyStorage above),
+// not a feature service with its own heavy dependency graph — the indirection
+// exists to keep auth.ts decoupled from push/notification-specific runtime
+// deps, which doesn't apply here.
+import { clearHealthIntegrationSessionState } from './healthIntegrationPreferences';
+import { clearHealthIntegrationOnboardingStepSessionState } from './healthIntegrationOnboardingStep';
 
 /**
  * Reusable, typed authentication service.
@@ -200,6 +207,21 @@ export function signOutUser(): Promise<void> {
         logError('auth:push-release', err, { uid });
       });
       void clearNotificationAccountPreferenceState(uid);
+      // In-memory only — the persisted intent deliberately survives logout
+      // so this uid finds its previous choice on its next sign-in (see
+      // `healthIntegrationPreferences.ts`). Synchronous today (a plain
+      // `Map.delete`), but still guarded like every other entry here so it
+      // can never be the thing that blocks a logout.
+      try {
+        clearHealthIntegrationSessionState(uid);
+      } catch (err) {
+        logError('auth:health-integration-cleanup', err, { uid });
+      }
+      try {
+        clearHealthIntegrationOnboardingStepSessionState(uid);
+      } catch (err) {
+        logError('auth:health-integration-onboarding-cleanup', err, { uid });
+      }
     }
 
     try {

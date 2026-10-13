@@ -33,13 +33,14 @@ beforeEach(() => {
 describe('draft round-trip', () => {
   it('persists and restores step id, name and answers (including birthDate)', async () => {
     const quiz = { ...defaultQuiz, goal: 'hyper' as const, days: 5, birthDate: new Date('1998-03-15') };
-    const draft = buildDraft({ currentStepId: 'weight', name: 'Ana', quiz });
+    const draft = buildDraft({ currentStepId: 'weight', name: 'Ana', healthIntegrationChoice: 'connect', quiz });
 
     await writeOnboardingDraft(draft);
     const restored = await readOnboardingDraft();
 
     expect(restored?.currentStepId).toBe('weight');
     expect(restored?.name).toBe('Ana');
+    expect(restored?.healthIntegrationChoice).toBe('connect');
     const restoredQuiz = draftToQuiz(restored!);
     expect(restoredQuiz.goal).toBe('hyper');
     expect(restoredQuiz.days).toBe(5);
@@ -47,7 +48,7 @@ describe('draft round-trip', () => {
   });
 
   it('round-trips a null birthDate without crashing', async () => {
-    const draft = buildDraft({ currentStepId: 'sex', name: null, quiz: defaultQuiz });
+    const draft = buildDraft({ currentStepId: 'sex', name: null, healthIntegrationChoice: null, quiz: defaultQuiz });
     await writeOnboardingDraft(draft);
     const restored = await readOnboardingDraft();
     expect(draftToQuiz(restored!).birthDate).toBeNull();
@@ -143,11 +144,31 @@ describe('missing/corrupted/future-versioned draft', () => {
     vi.mocked(AsyncStorage.getItem).mockRejectedValueOnce(new Error('offline'));
     await expect(readOnboardingDraft()).resolves.toBeNull();
   });
+
+  it('Fase 5: a draft written before healthIntegrationChoice existed migrates to null, not a fabricated choice', async () => {
+    localStore.set(
+      ONBOARDING_DRAFT_STORAGE_KEY,
+      JSON.stringify({ version: 1, currentStepId: 'goal', name: null, answers: { goal: 'cut' } }),
+    );
+    const restored = await readOnboardingDraft();
+    expect(restored?.healthIntegrationChoice).toBeNull();
+  });
+
+  it('Fase 5: discards a bogus healthIntegrationChoice value instead of trusting it', async () => {
+    localStore.set(
+      ONBOARDING_DRAFT_STORAGE_KEY,
+      JSON.stringify({
+        version: 1, currentStepId: 'goal', name: null, healthIntegrationChoice: 'yes please', answers: {},
+      }),
+    );
+    const restored = await readOnboardingDraft();
+    expect(restored?.healthIntegrationChoice).toBeNull();
+  });
 });
 
 describe('clearOnboardingDraft', () => {
   it('removes the stored draft and is idempotent', async () => {
-    await writeOnboardingDraft(buildDraft({ currentStepId: 'goal', name: 'Ana', quiz: defaultQuiz }));
+    await writeOnboardingDraft(buildDraft({ currentStepId: 'goal', name: 'Ana', healthIntegrationChoice: null, quiz: defaultQuiz }));
     await clearOnboardingDraft();
     await expect(readOnboardingDraft()).resolves.toBeNull();
     // Calling again on an already-absent key must not throw.

@@ -147,18 +147,19 @@ describe('other allowed updates continue to work', () => {
 describe('notification preferences', () => {
   beforeEach(seedUser);
 
-  it('allows the owner to update all five boolean categories atomically', async () => {
+  it('allows the owner to update all six boolean categories atomically', async () => {
     await assertSucceeds(updateDoc(doc(ownerDb(), 'users', UID), {
       'preferences.notificationPreferences.workoutsAndReminders': false,
       'preferences.notificationPreferences.evolutionAndAchievements': false,
       'preferences.notificationPreferences.progress': false,
+      'preferences.notificationPreferences.nutrition': false,
       'preferences.notificationPreferences.subscription': false,
       'preferences.notificationPreferences.support': false,
       'metadata.updatedAt': serverTimestamp(),
     }));
     expect((await getDoc(doc(ownerDb(), 'users', UID))).data()?.preferences.notificationPreferences)
       .toEqual({ workoutsAndReminders: false, evolutionAndAchievements: false,
-        progress: false, subscription: false, support: false });
+        progress: false, nutrition: false, subscription: false, support: false });
   });
 
   it('rejects unknown keys and nonboolean category values', async () => {
@@ -218,7 +219,7 @@ describe('notification preferences', () => {
       });
   });
 
-  it('allows toggling one category on a user who already has all five keys stored', async () => {
+  it('allows toggling one category on a user who already has all six keys stored', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'users', UID), {
         profile: { name: 'Alice', email: 'alice@example.com' },
@@ -226,7 +227,7 @@ describe('notification preferences', () => {
           language: 'pt-BR', units: 'system', theme: 'dark',
           notificationPreferences: {
             workoutsAndReminders: true, evolutionAndAchievements: true, progress: true,
-            subscription: true, support: true,
+            nutrition: true, subscription: true, support: true,
           },
         },
         subscription: {},
@@ -241,7 +242,7 @@ describe('notification preferences', () => {
     expect((await getDoc(doc(ownerDb(), 'users', UID))).data()?.preferences.notificationPreferences)
       .toEqual({
         workoutsAndReminders: true, evolutionAndAchievements: true, progress: false,
-        subscription: true, support: true,
+        nutrition: true, subscription: true, support: true,
       });
   });
 });

@@ -1,0 +1,2907 @@
+{
+  "schemaVersion": 1,
+  "enrichmentVersion": "taco-v1-curated-subset-2026-10-08",
+  "reviewSource": "Manual, per-item deterministic review for Fase 33's test-environment curated subset. Not a substitute for the professional/clinical allergen review still required before any production claim (see docs/nutrition/09_safety/professional_review_checklist.md). Items are single whole/minimally-processed ingredients except sourceId 401, a deliberately documented prepared-food exception whose conservative allergen tags follow directly from the named breaded preparation.",
+  "allergenScope": "NUTRITION_FOOD_ALLERGENS = milk, egg, peanut, tree_nuts, soy, wheat, fish, shellfish, other. An empty allergens array means 'reviewed, none of these 9 tracked categories apply' — it is never a default; every item lists its own rationale.",
+  "items": [
+    {
+      "sourceId": "1",
+      "name": "Arroz, integral, cozido",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole cooked rice grain, single ingredient. No tracked allergen.",
+      "preparation": "cooked",
+      "mealContexts": [
+        "main_meal"
+      ]
+    },
+    {
+      "sourceId": "3",
+      "name": "Arroz, tipo 1, cozido",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole cooked white rice, single ingredient.",
+      "preparation": "cooked",
+      "mealContexts": [
+        "main_meal"
+      ]
+    },
+    {
+      "sourceId": "7",
+      "name": "Aveia, flocos, crua",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Raw oat flakes. Oat itself carries no tracked allergen; gluten cross-contamination during milling is a real-world concern but is not one of the 9 tracked categories and TACO does not report it — left out of allergens rather than invented.",
+      "preparation": "raw",
+      "mealContexts": [
+        "breakfast",
+        "snack"
+      ]
+    },
+    {
+      "sourceId": "40",
+      "name": "Macarrão, trigo, cru",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [
+        "wheat"
+      ],
+      "rationale": "Plain wheat pasta, no egg per TACO's own 'sem ovos' distinct entry — wheat is explicit in the name.",
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ]
+    },
+    {
+      "sourceId": "53",
+      "name": "Pão, trigo, francês",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [
+        "wheat"
+      ],
+      "rationale": "Standard Brazilian French bread — wheat flour based.",
+      "preparation": "none",
+      "mealContexts": [
+        "breakfast",
+        "snack"
+      ]
+    },
+    {
+      "sourceId": "52",
+      "name": "Pão, trigo, forma, integral",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [
+        "wheat"
+      ],
+      "rationale": "Whole-wheat sliced bread — wheat flour based.",
+      "preparation": "none",
+      "mealContexts": [
+        "breakfast",
+        "snack"
+      ]
+    },
+    {
+      "sourceId": "44",
+      "name": "Milho, verde, cru",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Raw corn kernel, single ingredient. Corn is not one of the 9 tracked categories.",
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ]
+    },
+    {
+      "sourceId": "35",
+      "name": "Farinha, de trigo",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [
+        "wheat"
+      ],
+      "rationale": "Wheat flour, named ingredient is the allergen itself.",
+      "preparation": "none",
+      "mealContexts": [
+        "main_meal"
+      ]
+    },
+    {
+      "sourceId": "33",
+      "name": "Farinha, de milho, amarela",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Corn flour, single ingredient.",
+      "preparation": "none",
+      "mealContexts": [
+        "main_meal"
+      ]
+    },
+    {
+      "sourceId": "121",
+      "name": "Farinha, de mandioca, crua",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Cassava flour, single ingredient, gluten-free root starch.",
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ]
+    },
+    {
+      "sourceId": "561",
+      "name": "Feijão, carioca, cozido",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole cooked common bean. Peanut (Arachis hypogaea) is a distinct species from Phaseolus beans; peanut allergy does not broadly generalize to all legumes in the tracked-allergen framework.",
+      "preparation": "cooked",
+      "mealContexts": [
+        "main_meal"
+      ]
+    },
+    {
+      "sourceId": "567",
+      "name": "Feijão, preto, cozido",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole cooked black bean, same reasoning as carioca bean above.",
+      "preparation": "cooked",
+      "mealContexts": [
+        "main_meal"
+      ]
+    },
+    {
+      "sourceId": "577",
+      "name": "Lentilha, cozida",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole cooked lentil, single ingredient.",
+      "preparation": "cooked",
+      "mealContexts": [
+        "main_meal"
+      ]
+    },
+    {
+      "sourceId": "575",
+      "name": "Grão-de-bico, cru",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole raw chickpea, single ingredient.",
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ]
+    },
+    {
+      "sourceId": "559",
+      "name": "Ervilha, em vagem",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole green pea in pod, single ingredient.",
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ]
+    },
+    {
+      "sourceId": "581",
+      "name": "Soja, farinha",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [
+        "soy"
+      ],
+      "rationale": "Soy flour — soy is the ingredient itself.",
+      "preparation": "none",
+      "mealContexts": [
+        "main_meal"
+      ]
+    },
+    {
+      "sourceId": "182",
+      "name": "Banana, prata, crua",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole raw fruit, single ingredient.",
+      "preparation": "raw",
+      "mealContexts": [
+        "breakfast",
+        "snack"
+      ]
+    },
+    {
+      "sourceId": "179",
+      "name": "Banana, nanica, crua",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole raw fruit, single ingredient.",
+      "preparation": "raw",
+      "mealContexts": [
+        "breakfast",
+        "snack"
+      ]
+    },
+    {
+      "sourceId": "221",
+      "name": "Maçã, Argentina, com casca, crua",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole raw fruit, single ingredient.",
+      "preparation": "raw",
+      "mealContexts": [
+        "breakfast",
+        "snack"
+      ]
+    },
+    {
+      "sourceId": "225",
+      "name": "Mamão, Formosa, cru",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole raw fruit, single ingredient.",
+      "preparation": "raw",
+      "mealContexts": [
+        "breakfast",
+        "snack"
+      ]
+    },
+    {
+      "sourceId": "226",
+      "name": "Mamão, Papaia, cru",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole raw fruit, single ingredient.",
+      "preparation": "raw",
+      "mealContexts": [
+        "breakfast",
+        "snack"
+      ]
+    },
+    {
+      "sourceId": "208",
+      "name": "Laranja, baía, crua",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole raw fruit, single ingredient.",
+      "preparation": "raw",
+      "mealContexts": [
+        "breakfast",
+        "snack"
+      ]
+    },
+    {
+      "sourceId": "214",
+      "name": "Laranja, pêra, crua",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole raw fruit, single ingredient.",
+      "preparation": "raw",
+      "mealContexts": [
+        "breakfast",
+        "snack"
+      ]
+    },
+    {
+      "sourceId": "231",
+      "name": "Manga, Tommy Atkins, crua",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole raw fruit, single ingredient.",
+      "preparation": "raw",
+      "mealContexts": [
+        "breakfast",
+        "snack"
+      ]
+    },
+    {
+      "sourceId": "164",
+      "name": "Abacaxi, cru",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole raw fruit, single ingredient.",
+      "preparation": "raw",
+      "mealContexts": [
+        "breakfast",
+        "snack"
+      ]
+    },
+    {
+      "sourceId": "256",
+      "name": "Uva, Itália, crua",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole raw fruit, single ingredient.",
+      "preparation": "raw",
+      "mealContexts": [
+        "breakfast",
+        "snack"
+      ]
+    },
+    {
+      "sourceId": "239",
+      "name": "Morango, cru",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole raw fruit, single ingredient.",
+      "preparation": "raw",
+      "mealContexts": [
+        "breakfast",
+        "snack"
+      ]
+    },
+    {
+      "sourceId": "197",
+      "name": "Goiaba, branca, com casca, crua",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole raw fruit, single ingredient.",
+      "preparation": "raw",
+      "mealContexts": [
+        "breakfast",
+        "snack"
+      ]
+    },
+    {
+      "sourceId": "207",
+      "name": "Kiwi, cru",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole raw fruit, single ingredient.",
+      "preparation": "raw",
+      "mealContexts": [
+        "breakfast",
+        "snack"
+      ]
+    },
+    {
+      "sourceId": "232",
+      "name": "Maracujá, cru",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole raw fruit, single ingredient.",
+      "preparation": "raw",
+      "mealContexts": [
+        "breakfast",
+        "snack"
+      ]
+    },
+    {
+      "sourceId": "163",
+      "name": "Abacate, cru",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole raw fruit, single ingredient.",
+      "preparation": "raw",
+      "mealContexts": [
+        "breakfast",
+        "snack"
+      ]
+    },
+    {
+      "sourceId": "110",
+      "name": "Cenoura, crua",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole raw vegetable, single ingredient.",
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal",
+        "snack"
+      ]
+    },
+    {
+      "sourceId": "109",
+      "name": "Cenoura, cozida",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole cooked vegetable, single ingredient (water-cooked, per TACO methodology).",
+      "preparation": "cooked",
+      "mealContexts": [
+        "main_meal"
+      ]
+    },
+    {
+      "sourceId": "77",
+      "name": "Alface, americana, crua",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole raw leaf vegetable, single ingredient.",
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ]
+    },
+    {
+      "sourceId": "79",
+      "name": "Alface, lisa, crua",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole raw leaf vegetable, single ingredient.",
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ]
+    },
+    {
+      "sourceId": "115",
+      "name": "Couve, manteiga, crua",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole raw leaf vegetable, single ingredient — 'manteiga' names the cultivar, not an added ingredient.",
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ]
+    },
+    {
+      "sourceId": "70",
+      "name": "Abobrinha, italiana, cozida",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole cooked vegetable, single ingredient.",
+      "preparation": "cooked",
+      "mealContexts": [
+        "main_meal"
+      ]
+    },
+    {
+      "sourceId": "98",
+      "name": "Beterraba, crua",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole raw vegetable, single ingredient.",
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ]
+    },
+    {
+      "sourceId": "107",
+      "name": "Cebola, crua",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole raw vegetable, single ingredient.",
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ]
+    },
+    {
+      "sourceId": "157",
+      "name": "Tomate, com semente, cru",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole raw vegetable, single ingredient.",
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ]
+    },
+    {
+      "sourceId": "100",
+      "name": "Brócolis, cozido",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole cooked vegetable, single ingredient.",
+      "preparation": "cooked",
+      "mealContexts": [
+        "main_meal"
+      ]
+    },
+    {
+      "sourceId": "88",
+      "name": "Batata, doce, cozida",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole cooked tuber, single ingredient.",
+      "preparation": "cooked",
+      "mealContexts": [
+        "main_meal",
+        "snack"
+      ]
+    },
+    {
+      "sourceId": "86",
+      "name": "Batata, baroa, cozida",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole cooked tuber (arracacha), single ingredient.",
+      "preparation": "cooked",
+      "mealContexts": [
+        "main_meal"
+      ]
+    },
+    {
+      "sourceId": "129",
+      "name": "Mandioca, cozida",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole cooked cassava root, single ingredient.",
+      "preparation": "cooked",
+      "mealContexts": [
+        "main_meal"
+      ]
+    },
+    {
+      "sourceId": "149",
+      "name": "Repolho, branco, cru",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole raw vegetable, single ingredient.",
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ]
+    },
+    {
+      "sourceId": "113",
+      "name": "Chuchu, cru",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole raw vegetable (chayote), single ingredient.",
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ]
+    },
+    {
+      "sourceId": "162",
+      "name": "Vagem, crua",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole raw green bean pod, single ingredient.",
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ]
+    },
+    {
+      "sourceId": "95",
+      "name": "Berinjela, cozida",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole cooked vegetable, single ingredient.",
+      "preparation": "cooked",
+      "mealContexts": [
+        "main_meal"
+      ]
+    },
+    {
+      "sourceId": "144",
+      "name": "Pimentão, verde, cru",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole raw vegetable, single ingredient.",
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ]
+    },
+    {
+      "sourceId": "147",
+      "name": "Quiabo, cru",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Whole raw vegetable (okra), single ingredient.",
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ]
+    },
+    {
+      "sourceId": "589",
+      "name": "Castanha-do-Brasil, crua",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [
+        "tree_nuts"
+      ],
+      "rationale": "Brazil nut — tree nut by definition.",
+      "preparation": "raw",
+      "mealContexts": [
+        "breakfast",
+        "snack"
+      ]
+    },
+    {
+      "sourceId": "588",
+      "name": "Castanha-de-caju, torrada, salgada",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [
+        "tree_nuts"
+      ],
+      "rationale": "Cashew — tree nut; 'torrada, salgada' is roasting/salting, no added allergen ingredient.",
+      "preparation": "roasted",
+      "mealContexts": [
+        "snack"
+      ]
+    },
+    {
+      "sourceId": "587",
+      "name": "Amêndoa, torrada, salgada",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [
+        "tree_nuts"
+      ],
+      "rationale": "Almond — tree nut.",
+      "preparation": "roasted",
+      "mealContexts": [
+        "snack"
+      ]
+    },
+    {
+      "sourceId": "597",
+      "name": "Noz, crua",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [
+        "tree_nuts"
+      ],
+      "rationale": "Walnut — tree nut.",
+      "preparation": "raw",
+      "mealContexts": [
+        "breakfast",
+        "snack"
+      ]
+    },
+    {
+      "sourceId": "594",
+      "name": "Linhaça, semente",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [],
+      "rationale": "Flaxseed — not one of the 9 tracked categories.",
+      "preparation": "raw",
+      "mealContexts": [
+        "breakfast",
+        "snack"
+      ]
+    },
+    {
+      "sourceId": "593",
+      "name": "Gergelim, semente",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [
+        "other"
+      ],
+      "rationale": "Sesame seed — a recognized major allergen in several jurisdictions (e.g. added to the US FDA major-allergen list in 2023); not one of this schema's 8 named categories, so tagged 'other' rather than left unflagged.",
+      "preparation": "raw",
+      "mealContexts": [
+        "breakfast",
+        "snack"
+      ]
+    },
+    {
+      "sourceId": "590",
+      "name": "Coco, cru",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": true,
+        "pescatarian": true
+      },
+      "allergens": [
+        "other"
+      ],
+      "rationale": "Coconut — botanically a drupe, not a tree nut, but some regulatory frameworks (e.g. US FDA labeling) treat it as a tree nut for allergen-disclosure purposes; tagged 'other' conservatively rather than left unflagged.",
+      "preparation": "raw",
+      "mealContexts": [
+        "breakfast",
+        "snack"
+      ]
+    },
+    {
+      "sourceId": "401",
+      "name": "Frango, filé, à milanesa",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [
+        "egg",
+        "wheat"
+      ],
+      "rationale": "TACO prepared-food entry with measured, non-null fiber and explicit breaded-chicken naming. Chicken makes all non-omnivore flags false; a milanesa breading is conservatively tagged for egg and wheat. No nutrient value is overridden by this review. CORRECTED 2026-10-10 (diet-quality audit): breaded/fried preparation is `composite`, which is never eligible for AI generation regardless of allergen/dietary review — applyEnrichment.ts now resolves generationStatus to `blocked` for any composite preparation instead of unconditionally `approved`.",
+      "preparation": "composite",
+      "mealContexts": []
+    },
+    {
+      "sourceId": "273",
+      "name": "Abadejo, filé, congelado, assado",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "fish"
+      ],
+      "preparation": "roasted",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Whole fish/fillet, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/canned/cured) — not vegetarian, pescatarian-compatible; fish allergen. fiberG inferred 0: fish flesh contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "274",
+      "name": "Abadejo, filé, congelado,cozido",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "fish"
+      ],
+      "preparation": "cooked",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Whole fish/fillet, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/canned/cured) — not vegetarian, pescatarian-compatible; fish allergen. fiberG inferred 0: fish flesh contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "275",
+      "name": "Abadejo, filé, congelado, cru",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "fish"
+      ],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Whole fish/fillet, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/canned/cured) — not vegetarian, pescatarian-compatible; fish allergen. fiberG inferred 0: fish flesh contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "276",
+      "name": "Abadejo, filé, congelado, grelhado",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "fish"
+      ],
+      "preparation": "grilled",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Whole fish/fillet, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/canned/cured) — not vegetarian, pescatarian-compatible; fish allergen. fiberG inferred 0: fish flesh contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "278",
+      "name": "Atum, fresco, cru",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "fish"
+      ],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Whole fish/fillet, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/canned/cured) — not vegetarian, pescatarian-compatible; fish allergen. fiberG inferred 0: fish flesh contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "282",
+      "name": "Cação, posta, cozida",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "fish"
+      ],
+      "preparation": "cooked",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Whole fish/fillet, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/canned/cured) — not vegetarian, pescatarian-compatible; fish allergen. fiberG inferred 0: fish flesh contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "283",
+      "name": "Cação, posta, crua",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "fish"
+      ],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Whole fish/fillet, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/canned/cured) — not vegetarian, pescatarian-compatible; fish allergen. fiberG inferred 0: fish flesh contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "284",
+      "name": "Camarão, Rio Grande, grande, cozido",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "shellfish"
+      ],
+      "preparation": "cooked",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Simple shellfish, raw or cooked only — not vegetarian, pescatarian-compatible; shellfish allergen. fiberG inferred 0: shellfish flesh contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "285",
+      "name": "Camarão, Rio Grande, grande, cru",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "shellfish"
+      ],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Simple shellfish, raw or cooked only — not vegetarian, pescatarian-compatible; shellfish allergen. fiberG inferred 0: shellfish flesh contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "287",
+      "name": "Caranguejo, cozido",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "shellfish"
+      ],
+      "preparation": "cooked",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Simple shellfish, raw or cooked only — not vegetarian, pescatarian-compatible; shellfish allergen. fiberG inferred 0: shellfish flesh contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "288",
+      "name": "Corimba, cru",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "fish"
+      ],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Whole fish/fillet, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/canned/cured) — not vegetarian, pescatarian-compatible; fish allergen. fiberG inferred 0: fish flesh contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "289",
+      "name": "Corimbatá, assado",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "fish"
+      ],
+      "preparation": "roasted",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Whole fish/fillet, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/canned/cured) — not vegetarian, pescatarian-compatible; fish allergen. fiberG inferred 0: fish flesh contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "290",
+      "name": "Corimbatá, cozido",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "fish"
+      ],
+      "preparation": "cooked",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Whole fish/fillet, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/canned/cured) — not vegetarian, pescatarian-compatible; fish allergen. fiberG inferred 0: fish flesh contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "291",
+      "name": "Corvina de água doce, crua",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "fish"
+      ],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Whole fish/fillet, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/canned/cured) — not vegetarian, pescatarian-compatible; fish allergen. fiberG inferred 0: fish flesh contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "292",
+      "name": "Corvina do mar, crua",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "fish"
+      ],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Whole fish/fillet, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/canned/cured) — not vegetarian, pescatarian-compatible; fish allergen. fiberG inferred 0: fish flesh contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "293",
+      "name": "Corvina grande, assada",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "fish"
+      ],
+      "preparation": "roasted",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Whole fish/fillet, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/canned/cured) — not vegetarian, pescatarian-compatible; fish allergen. fiberG inferred 0: fish flesh contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "294",
+      "name": "Corvina grande, cozida",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "fish"
+      ],
+      "preparation": "cooked",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Whole fish/fillet, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/canned/cured) — not vegetarian, pescatarian-compatible; fish allergen. fiberG inferred 0: fish flesh contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "296",
+      "name": "Lambari, congelado, cru",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "fish"
+      ],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Whole fish/fillet, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/canned/cured) — not vegetarian, pescatarian-compatible; fish allergen. fiberG inferred 0: fish flesh contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "298",
+      "name": "Lambari, fresco, cru",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "fish"
+      ],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Whole fish/fillet, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/canned/cured) — not vegetarian, pescatarian-compatible; fish allergen. fiberG inferred 0: fish flesh contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "301",
+      "name": "Merluza, filé, assado",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "fish"
+      ],
+      "preparation": "roasted",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Whole fish/fillet, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/canned/cured) — not vegetarian, pescatarian-compatible; fish allergen. fiberG inferred 0: fish flesh contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "302",
+      "name": "Merluza, filé, cru",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "fish"
+      ],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Whole fish/fillet, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/canned/cured) — not vegetarian, pescatarian-compatible; fish allergen. fiberG inferred 0: fish flesh contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "304",
+      "name": "Pescada, branca, crua",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "fish"
+      ],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Whole fish/fillet, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/canned/cured) — not vegetarian, pescatarian-compatible; fish allergen. fiberG inferred 0: fish flesh contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "307",
+      "name": "Pescada, filé, cru",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "fish"
+      ],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Whole fish/fillet, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/canned/cured) — not vegetarian, pescatarian-compatible; fish allergen. fiberG inferred 0: fish flesh contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "310",
+      "name": "Pescadinha, crua",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "fish"
+      ],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Whole fish/fillet, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/canned/cured) — not vegetarian, pescatarian-compatible; fish allergen. fiberG inferred 0: fish flesh contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "311",
+      "name": "Pintado, assado",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "fish"
+      ],
+      "preparation": "roasted",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Whole fish/fillet, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/canned/cured) — not vegetarian, pescatarian-compatible; fish allergen. fiberG inferred 0: fish flesh contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "312",
+      "name": "Pintado, cru",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "fish"
+      ],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Whole fish/fillet, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/canned/cured) — not vegetarian, pescatarian-compatible; fish allergen. fiberG inferred 0: fish flesh contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "313",
+      "name": "Pintado, grelhado",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "fish"
+      ],
+      "preparation": "grilled",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Whole fish/fillet, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/canned/cured) — not vegetarian, pescatarian-compatible; fish allergen. fiberG inferred 0: fish flesh contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "315",
+      "name": "Salmão, filé, com pele, fresco, grelhado",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "fish"
+      ],
+      "preparation": "grilled",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Whole fish/fillet, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/canned/cured) — not vegetarian, pescatarian-compatible; fish allergen. fiberG inferred 0: fish flesh contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "316",
+      "name": "Salmão, sem pele, fresco, cru",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "fish"
+      ],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Whole fish/fillet, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/canned/cured) — not vegetarian, pescatarian-compatible; fish allergen. fiberG inferred 0: fish flesh contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "317",
+      "name": "Salmão, sem pele, fresco, grelhado",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "fish"
+      ],
+      "preparation": "grilled",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Whole fish/fillet, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/canned/cured) — not vegetarian, pescatarian-compatible; fish allergen. fiberG inferred 0: fish flesh contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "318",
+      "name": "Sardinha, assada",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "fish"
+      ],
+      "preparation": "roasted",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Whole fish/fillet, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/canned/cured) — not vegetarian, pescatarian-compatible; fish allergen. fiberG inferred 0: fish flesh contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "321",
+      "name": "Sardinha, inteira, crua",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "fish"
+      ],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Whole fish/fillet, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/canned/cured) — not vegetarian, pescatarian-compatible; fish allergen. fiberG inferred 0: fish flesh contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "322",
+      "name": "Tucunaré, filé, congelado, cru",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "fish"
+      ],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Whole fish/fillet, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/canned/cured) — not vegetarian, pescatarian-compatible; fish allergen. fiberG inferred 0: fish flesh contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "326",
+      "name": "Carne, bovina, acém, moído, cozido",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "cooked",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Beef cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed/ground-shaped) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: beef contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "327",
+      "name": "Carne, bovina, acém, moído, cru",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Beef cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed/ground-shaped) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: beef contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "328",
+      "name": "Carne, bovina, acém, sem gordura, cozido",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "cooked",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Beef cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed/ground-shaped) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: beef contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "329",
+      "name": "Carne, bovina, acém, sem gordura, cru",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Beef cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed/ground-shaped) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: beef contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "334",
+      "name": "Carne, bovina, capa de contra-filé, com gordura , crua",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Beef cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed/ground-shaped) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: beef contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "335",
+      "name": "Carne, bovina, capa de contra-filé, com gordura , grelhada",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "grilled",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Beef cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed/ground-shaped) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: beef contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "336",
+      "name": "Carne, bovina, capa de contra-filé, sem gordura , crua",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Beef cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed/ground-shaped) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: beef contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "337",
+      "name": "Carne, bovina, capa de contra-filé, sem gordura , grelhada",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "grilled",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Beef cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed/ground-shaped) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: beef contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "341",
+      "name": "Carne, bovina, contra-filé de costela, cru",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Beef cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed/ground-shaped) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: beef contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "342",
+      "name": "Carne, bovina, contra-filé de costela, grelhado",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "grilled",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Beef cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed/ground-shaped) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: beef contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "347",
+      "name": "Carne, bovina, costela, assada",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "roasted",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Beef cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed/ground-shaped) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: beef contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "348",
+      "name": "Carne, bovina, costela, crua",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Beef cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed/ground-shaped) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: beef contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "349",
+      "name": "Carne, bovina, coxão duro, sem gordura, cozido",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "cooked",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Beef cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed/ground-shaped) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: beef contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "350",
+      "name": "Carne, bovina, coxão duro, sem gordura, cru 69",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Beef cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed/ground-shaped) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: beef contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "351",
+      "name": "Carne, bovina, coxão mole, sem gordura, cozido",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "cooked",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Beef cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed/ground-shaped) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: beef contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "352",
+      "name": "Carne, bovina, coxão mole, sem gordura, cru 68",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Beef cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed/ground-shaped) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: beef contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "353",
+      "name": "Carne, bovina, cupim, assado",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "roasted",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Beef cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed/ground-shaped) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: beef contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "354",
+      "name": "Carne, bovina, cupim, cru",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Beef cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed/ground-shaped) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: beef contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "359",
+      "name": "Carne, bovina, flanco, sem gordura, cozido",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "cooked",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Beef cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed/ground-shaped) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: beef contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "360",
+      "name": "Carne, bovina, flanco, sem gordura, cru",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Beef cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed/ground-shaped) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: beef contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "362",
+      "name": "Carne, bovina, fraldinha, com gordura, crua 65",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Beef cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed/ground-shaped) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: beef contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "363",
+      "name": "Carne, bovina, lagarto, cozido",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "cooked",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Beef cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed/ground-shaped) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: beef contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "364",
+      "name": "Carne, bovina, lagarto, cru",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Beef cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed/ground-shaped) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: beef contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "367",
+      "name": "Carne, bovina, maminha, crua",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Beef cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed/ground-shaped) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: beef contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "368",
+      "name": "Carne, bovina, maminha, grelhada",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "grilled",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Beef cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed/ground-shaped) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: beef contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "371",
+      "name": "Carne, bovina, músculo, sem gordura, cozido 62",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "cooked",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Beef cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed/ground-shaped) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: beef contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "372",
+      "name": "Carne, bovina, músculo, sem gordura, cru",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Beef cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed/ground-shaped) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: beef contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "373",
+      "name": "Carne, bovina, paleta, com gordura, crua",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Beef cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed/ground-shaped) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: beef contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "374",
+      "name": "Carne, bovina, paleta, sem gordura, cozida",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "cooked",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Beef cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed/ground-shaped) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: beef contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "375",
+      "name": "Carne, bovina, paleta, sem gordura, crua",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Beef cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed/ground-shaped) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: beef contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "376",
+      "name": "Carne, bovina, patinho, sem gordura, cru",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Beef cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed/ground-shaped) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: beef contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "378",
+      "name": "Carne, bovina, peito, sem gordura, cozido",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "cooked",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Beef cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed/ground-shaped) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: beef contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "379",
+      "name": "Carne, bovina, peito, sem gordura, cru",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Beef cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed/ground-shaped) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: beef contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "380",
+      "name": "Carne, bovina, picanha, com gordura, crua",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Beef cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed/ground-shaped) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: beef contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "382",
+      "name": "Carne, bovina, picanha, sem gordura, crua",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Beef cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed/ground-shaped) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: beef contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "391",
+      "name": "Frango, asa, com pele, crua",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Chicken/turkey cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: poultry meat contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "392",
+      "name": "Frango, caipira, inteiro, com pele, cozido",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "cooked",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Chicken/turkey cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: poultry meat contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "393",
+      "name": "Frango, caipira, inteiro, sem pele, cozido",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "cooked",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Chicken/turkey cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: poultry meat contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "396",
+      "name": "Frango, coxa, com pele, assada",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "roasted",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Chicken/turkey cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: poultry meat contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "397",
+      "name": "Frango, coxa, com pele, crua",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Chicken/turkey cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: poultry meat contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "398",
+      "name": "Frango, coxa, sem pele, cozida",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "cooked",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Chicken/turkey cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: poultry meat contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "399",
+      "name": "Frango, coxa, sem pele, crua",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Chicken/turkey cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: poultry meat contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "402",
+      "name": "Frango, inteiro, com pele, cru",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Chicken/turkey cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: poultry meat contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "403",
+      "name": "Frango, inteiro, sem pele, assado",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "roasted",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Chicken/turkey cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: poultry meat contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "404",
+      "name": "Frango, inteiro, sem pele, cozido",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "cooked",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Chicken/turkey cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: poultry meat contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "405",
+      "name": "Frango, inteiro, sem pele, cru",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Chicken/turkey cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: poultry meat contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "406",
+      "name": "Frango, peito, com pele, assado",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "roasted",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Chicken/turkey cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: poultry meat contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "407",
+      "name": "Frango, peito, com pele, cru",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Chicken/turkey cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: poultry meat contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "408",
+      "name": "Frango, peito, sem pele, cozido",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "cooked",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Chicken/turkey cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: poultry meat contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "409",
+      "name": "Frango, peito, sem pele, cru",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Chicken/turkey cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: poultry meat contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "410",
+      "name": "Frango, peito, sem pele, grelhado",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "grilled",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Chicken/turkey cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: poultry meat contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "411",
+      "name": "Frango, sobrecoxa, com pele, assada",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "roasted",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Chicken/turkey cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: poultry meat contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "412",
+      "name": "Frango, sobrecoxa, com pele, crua",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Chicken/turkey cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: poultry meat contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "413",
+      "name": "Frango, sobrecoxa, sem pele, assada",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "roasted",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Chicken/turkey cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: poultry meat contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "414",
+      "name": "Frango, sobrecoxa, sem pele, crua",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Chicken/turkey cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: poultry meat contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "425",
+      "name": "Peru, congelado, assado",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "roasted",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Chicken/turkey cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: poultry meat contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "426",
+      "name": "Peru, congelado, cru",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Chicken/turkey cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/processed) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: poultry meat contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "427",
+      "name": "Porco, bisteca, crua",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Pork cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/salted) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: pork contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "429",
+      "name": "Porco, bisteca, grelhada",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "grilled",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Pork cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/salted) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: pork contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "430",
+      "name": "Porco, costela, assada",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "roasted",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Pork cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/salted) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: pork contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "431",
+      "name": "Porco, costela, crua",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Pork cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/salted) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: pork contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "432",
+      "name": "Porco, lombo, assado",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "roasted",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Pork cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/salted) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: pork contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "433",
+      "name": "Porco, lombo, cru",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Pork cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/salted) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: pork contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "435",
+      "name": "Porco, pernil, assado",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "roasted",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Pork cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/salted) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: pork contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "436",
+      "name": "Porco, pernil, cru",
+      "dietaryFlags": {
+        "vegetarian": false,
+        "vegan": false,
+        "pescatarian": false
+      },
+      "allergens": [],
+      "preparation": "raw",
+      "mealContexts": [
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Pork cut, simple preparation only (raw/cooked/grilled/roasted — never fried/breaded/cured/salted) — not vegetarian/vegan/pescatarian; no major allergen. fiberG inferred 0: pork contains no dietary fiber by definition."
+    },
+    {
+      "sourceId": "485",
+      "name": "Ovo, de codorna, inteiro, cru",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "egg"
+      ],
+      "preparation": "raw",
+      "mealContexts": [
+        "breakfast",
+        "snack",
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Whole/part egg, raw or cooked (never fried/omelete) — vegetarian, not vegan, pescatarian-compatible; egg allergen. fiberG inferred 0: eggs contain no dietary fiber by definition."
+    },
+    {
+      "sourceId": "486",
+      "name": "Ovo, de galinha, clara, cozida/10minutos",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "egg"
+      ],
+      "preparation": "cooked",
+      "mealContexts": [
+        "breakfast",
+        "snack",
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Whole/part egg, raw or cooked (never fried/omelete) — vegetarian, not vegan, pescatarian-compatible; egg allergen. fiberG inferred 0: eggs contain no dietary fiber by definition."
+    },
+    {
+      "sourceId": "487",
+      "name": "Ovo, de galinha, gema, cozida/10minutos",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "egg"
+      ],
+      "preparation": "cooked",
+      "mealContexts": [
+        "breakfast",
+        "snack",
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Whole/part egg, raw or cooked (never fried/omelete) — vegetarian, not vegan, pescatarian-compatible; egg allergen. fiberG inferred 0: eggs contain no dietary fiber by definition."
+    },
+    {
+      "sourceId": "488",
+      "name": "Ovo, de galinha, inteiro, cozido/10minutos",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "egg"
+      ],
+      "preparation": "cooked",
+      "mealContexts": [
+        "breakfast",
+        "snack",
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Whole/part egg, raw or cooked (never fried/omelete) — vegetarian, not vegan, pescatarian-compatible; egg allergen. fiberG inferred 0: eggs contain no dietary fiber by definition."
+    },
+    {
+      "sourceId": "489",
+      "name": "Ovo, de galinha, inteiro, cru",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "egg"
+      ],
+      "preparation": "raw",
+      "mealContexts": [
+        "breakfast",
+        "snack",
+        "main_meal"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Whole/part egg, raw or cooked (never fried/omelete) — vegetarian, not vegan, pescatarian-compatible; egg allergen. fiberG inferred 0: eggs contain no dietary fiber by definition."
+    },
+    {
+      "sourceId": "447",
+      "name": "Creme de Leite",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "milk"
+      ],
+      "preparation": "none",
+      "mealContexts": [
+        "breakfast",
+        "snack"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Simple dairy product (not flavored/sweetened/condensed/powdered) — vegetarian, not vegan, pescatarian-compatible; milk allergen. fiberG is null in TACO (not measured for dairy, not zero-by-measurement) — fiberG=0 inferred deterministically: dairy fat/protein/lactose contain no dietary fiber by definition."
+    },
+    {
+      "sourceId": "448",
+      "name": "Iogurte, natural",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "milk"
+      ],
+      "preparation": "none",
+      "mealContexts": [
+        "breakfast",
+        "snack"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Simple dairy product (not flavored/sweetened/condensed/powdered) — vegetarian, not vegan, pescatarian-compatible; milk allergen. fiberG is null in TACO (not measured for dairy, not zero-by-measurement) — fiberG=0 inferred deterministically: dairy fat/protein/lactose contain no dietary fiber by definition."
+    },
+    {
+      "sourceId": "449",
+      "name": "Iogurte, natural, desnatado",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "milk"
+      ],
+      "preparation": "none",
+      "mealContexts": [
+        "breakfast",
+        "snack"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Simple dairy product (not flavored/sweetened/condensed/powdered) — vegetarian, not vegan, pescatarian-compatible; milk allergen. fiberG is null in TACO (not measured for dairy, not zero-by-measurement) — fiberG=0 inferred deterministically: dairy fat/protein/lactose contain no dietary fiber by definition."
+    },
+    {
+      "sourceId": "454",
+      "name": "Leite, de cabra",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "milk"
+      ],
+      "preparation": "none",
+      "mealContexts": [
+        "breakfast",
+        "snack"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Simple dairy product (not flavored/sweetened/condensed/powdered) — vegetarian, not vegan, pescatarian-compatible; milk allergen. fiberG is null in TACO (not measured for dairy, not zero-by-measurement) — fiberG=0 inferred deterministically: dairy fat/protein/lactose contain no dietary fiber by definition."
+    },
+    {
+      "sourceId": "460",
+      "name": "Leite, fermentado",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "milk"
+      ],
+      "preparation": "none",
+      "mealContexts": [
+        "breakfast",
+        "snack"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Simple dairy product (not flavored/sweetened/condensed/powdered) — vegetarian, not vegan, pescatarian-compatible; milk allergen. fiberG is null in TACO (not measured for dairy, not zero-by-measurement) — fiberG=0 inferred deterministically: dairy fat/protein/lactose contain no dietary fiber by definition."
+    },
+    {
+      "sourceId": "461",
+      "name": "Queijo, minas, frescal",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "milk"
+      ],
+      "preparation": "none",
+      "mealContexts": [
+        "breakfast",
+        "snack"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Simple dairy product (not flavored/sweetened/condensed/powdered) — vegetarian, not vegan, pescatarian-compatible; milk allergen. fiberG is null in TACO (not measured for dairy, not zero-by-measurement) — fiberG=0 inferred deterministically: dairy fat/protein/lactose contain no dietary fiber by definition."
+    },
+    {
+      "sourceId": "462",
+      "name": "Queijo, minas, meia cura",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "milk"
+      ],
+      "preparation": "none",
+      "mealContexts": [
+        "breakfast",
+        "snack"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Simple dairy product (not flavored/sweetened/condensed/powdered) — vegetarian, not vegan, pescatarian-compatible; milk allergen. fiberG is null in TACO (not measured for dairy, not zero-by-measurement) — fiberG=0 inferred deterministically: dairy fat/protein/lactose contain no dietary fiber by definition."
+    },
+    {
+      "sourceId": "463",
+      "name": "Queijo, mozarela",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "milk"
+      ],
+      "preparation": "none",
+      "mealContexts": [
+        "breakfast",
+        "snack"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Simple dairy product (not flavored/sweetened/condensed/powdered) — vegetarian, not vegan, pescatarian-compatible; milk allergen. fiberG is null in TACO (not measured for dairy, not zero-by-measurement) — fiberG=0 inferred deterministically: dairy fat/protein/lactose contain no dietary fiber by definition."
+    },
+    {
+      "sourceId": "464",
+      "name": "Queijo, parmesão",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "milk"
+      ],
+      "preparation": "none",
+      "mealContexts": [
+        "breakfast",
+        "snack"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Simple dairy product (not flavored/sweetened/condensed/powdered) — vegetarian, not vegan, pescatarian-compatible; milk allergen. fiberG is null in TACO (not measured for dairy, not zero-by-measurement) — fiberG=0 inferred deterministically: dairy fat/protein/lactose contain no dietary fiber by definition."
+    },
+    {
+      "sourceId": "465",
+      "name": "Queijo, pasteurizado",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "milk"
+      ],
+      "preparation": "none",
+      "mealContexts": [
+        "breakfast",
+        "snack"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Simple dairy product (not flavored/sweetened/condensed/powdered) — vegetarian, not vegan, pescatarian-compatible; milk allergen. fiberG is null in TACO (not measured for dairy, not zero-by-measurement) — fiberG=0 inferred deterministically: dairy fat/protein/lactose contain no dietary fiber by definition."
+    },
+    {
+      "sourceId": "467",
+      "name": "Queijo, prato",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "milk"
+      ],
+      "preparation": "none",
+      "mealContexts": [
+        "breakfast",
+        "snack"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Simple dairy product (not flavored/sweetened/condensed/powdered) — vegetarian, not vegan, pescatarian-compatible; milk allergen. fiberG is null in TACO (not measured for dairy, not zero-by-measurement) — fiberG=0 inferred deterministically: dairy fat/protein/lactose contain no dietary fiber by definition."
+    },
+    {
+      "sourceId": "468",
+      "name": "Queijo, requeijão, cremoso",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "milk"
+      ],
+      "preparation": "none",
+      "mealContexts": [
+        "breakfast",
+        "snack"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Simple dairy product (not flavored/sweetened/condensed/powdered) — vegetarian, not vegan, pescatarian-compatible; milk allergen. fiberG is null in TACO (not measured for dairy, not zero-by-measurement) — fiberG=0 inferred deterministically: dairy fat/protein/lactose contain no dietary fiber by definition."
+    },
+    {
+      "sourceId": "469",
+      "name": "Queijo, ricota",
+      "dietaryFlags": {
+        "vegetarian": true,
+        "vegan": false,
+        "pescatarian": true
+      },
+      "allergens": [
+        "milk"
+      ],
+      "preparation": "none",
+      "mealContexts": [
+        "breakfast",
+        "snack"
+      ],
+      "inferFiberGZero": true,
+      "rationale": "Simple dairy product (not flavored/sweetened/condensed/powdered) — vegetarian, not vegan, pescatarian-compatible; milk allergen. fiberG is null in TACO (not measured for dairy, not zero-by-measurement) — fiberG=0 inferred deterministically: dairy fat/protein/lactose contain no dietary fiber by definition."
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "schemaVersion": "1.0.0",
+  "eligibility": {
+    "minimumAgeHandledByGlobalProductAccess": true,
+    "blockingGates": [
+      "pregnancy",
+      "lactation"
+    ],
+    "pregnancyAndLactationStateSource": "nutritionProfile/current",
+    "pregnancyAndLactationStateSourceNote": "Quiz.pregnancyScreening is an immutable onboarding snapshot and is used only to pre-fill nutritionProfile/current the first time it is created. The authoritative current value for both gates always lives in nutritionProfile/current and must be re-read and revalidated before every generation, not assumed from the Quiz.",
+    "onBlockedGeneration": {
+      "callAi": false,
+      "allowBypass": false,
+      "recommendProfessional": true
+    }
+  },
+  "foods": {
+    "excludedFoodIdsAreHardExclusions": true,
+    "allergenLayerEnabled": true,
+    "blockKnownCompositeProductsContainingExcludedOrIncompatibleAllergens": true,
+    "unknownCompositionIsNotAssumedSafe": true,
+    "aiMayUseOnlyApprovedGlobalFoods": true,
+    "aiMayInventFoods": false,
+    "userCustomFoodsAllowedInDiary": true,
+    "userCustomFoodsAllowedInAIGeneration": false
+  },
+  "dietaryPatterns": {
+    "allowed": [
+      "omnivore",
+      "vegetarian",
+      "vegan",
+      "pescatarian"
+    ],
+    "validationUsesCanonicalFlags": true
+  },
+  "plan": {
+    "sameRecommendationEveryDayInV1": true,
+    "trainingDayRestDayDifferentiation": false,
+    "mealOptionsMin": 2,
+    "mealOptionsMax": 3,
+    "exactlyOneRecommendedOption": true,
+    "wholeMealReplacementAllowed": true,
+    "individualFoodReplacementInsidePlanV1": false
+  },
+  "diary": {
+    "freeLogging": true,
+    "recommendationDoesNotConstrainActualIntake": true,
+    "planAndActualIntakeAreSeparate": true,
+    "dailyAdherenceScoreEnabled": false,
+    "mealAdherenceScoreEnabled": false,
+    "weeklyComparisonEnabled": true,
+    "loggedItemSources": ["catalog_food", "custom_food", "recipe", "food_log_catalog"],
+    "recommendedOptionTracking": {
+      "level": "meal",
+      "note": "\"Followed the recommended option\" is tracked per logged meal (a reference to the active plan's option id), not per logged item. A single item cannot carry a meaningful 'this came from the recommended option' flag on its own, since the recommended option is a set of foods, not one food."
+    }
+  },
+  "ai": {
+    "mustUseStructuredOutput": true,
+    "maxRetries": 2,
+    "correctionBeforeRetry": true,
+    "strongerModelFallbackAllowed": true,
+    "persistOnlyAfterDeterministicValidation": true
+  }
+}

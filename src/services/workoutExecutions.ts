@@ -9,8 +9,13 @@ import {
   onSnapshot,
   runTransaction,
   serverTimestamp,
+  startAfter,
   where,
   Timestamp,
+  type DocumentData,
+  type Query,
+  type QueryDocumentSnapshot,
+  type QuerySnapshot,
   type Unsubscribe,
 } from 'firebase/firestore';
 
@@ -1038,6 +1043,50 @@ export async function listRecentWorkoutExecutions(uid: string, count = 20): Prom
     .map((item) => fromDoc(item.id, item.data()))
     .sort((a, b) => (b.performedLocalDate ?? b.scheduledLocalDate)
       .localeCompare(a.performedLocalDate ?? a.scheduledLocalDate));
+}
+
+/**
+ * Recovery source for health-workout export. `finishedAt` is written only by
+ * the authoritative backend terminalization (or the explicit abandon path),
+ * so this bounded-field query can discover a completion whose callable
+ * response/process-local enqueue was lost. Status and the deterministic
+ * Schedule event are still checked by the export orchestrator before any
+ * native write; an ABANDONED document returned here is never exportable.
+ *
+ * Pagination is deliberate: a device can remain offline for a long time and
+ * must not permanently strand records after an arbitrary first-page cap.
+ * This uses only one range/order field and therefore needs no composite index.
+ */
+export async function listWorkoutExecutionsFinishedSince(
+  uid: string,
+  since: Date,
+): Promise<PersistedWorkoutExecution[]> {
+  const results: PersistedWorkoutExecution[] = [];
+  let cursor: QueryDocumentSnapshot<DocumentData> | null = null;
+  const pageSize = 100;
+  for (;;) {
+    const pageQuery: Query<DocumentData> = cursor
+      ? query(
+          executionsCollection(uid),
+          where('finishedAt', '>=', Timestamp.fromDate(since)),
+          orderBy('finishedAt', 'asc'),
+          startAfter(cursor),
+          fsLimit(pageSize),
+        )
+      : query(
+          executionsCollection(uid),
+          where('finishedAt', '>=', Timestamp.fromDate(since)),
+          orderBy('finishedAt', 'asc'),
+          fsLimit(pageSize),
+        );
+    countFirestoreRead('workout_executions.health_export_recovery');
+    const snapshot: QuerySnapshot<DocumentData> = await getDocs(pageQuery);
+    snapshot.docs.forEach((item: QueryDocumentSnapshot<DocumentData>) => results.push(fromDoc(item.id, item.data())));
+    if (snapshot.docs.length < pageSize) break;
+    cursor = snapshot.docs.at(-1) ?? null;
+    if (!cursor) break;
+  }
+  return results;
 }
 
 /**

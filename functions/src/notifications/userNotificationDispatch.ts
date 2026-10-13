@@ -10,7 +10,7 @@ import {
   dispatchNotification,
   type DispatcherDependencies,
 } from './dispatcher';
-import { claimDispatch, markDispatchOutcome } from './idempotency';
+import { claimDispatch, dispatchIdFor, markDispatchOutcome } from './idempotency';
 import {
   resolveNotificationEligibility,
   resolveUserNotificationPolicy,
@@ -31,6 +31,12 @@ async function dispatchWithEligibility(
 ): Promise<NotificationDispatchOutcome> {
   assertValidDispatchRequest(request);
   if (eligibility.allowed) return dispatchNotification(request, dependencies);
+  if (eligibility.reason === 'ACCOUNT_INACTIVE' || eligibility.reason === 'USER_NOT_FOUND') {
+    return {
+      status: 'SUPPRESSED_BY_PREFERENCE',
+      dispatchId: dispatchIdFor(request.idempotencyKey),
+    };
+  }
 
   const now: Timestamp = dependencies.now();
   const claim = await claimDispatch(dependencies.db, request, now);

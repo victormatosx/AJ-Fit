@@ -180,11 +180,24 @@
       "composition": "Composition",
       "measuredAt": "Measured on {{date}}",
       "delta": "{{direction}} {{value}} {{unit}}",
-      "singleEntry": "Log another assessment to see your evolution curve.",
+      "singleEntry": "Log another weight to see your evolution curve.",
       "loading": "Loading your evolution…",
       "error": "We couldn't load your evolution.",
       "retry": "Try again",
       "openAssessment": "View full assessment",
+      "weightSource": {
+        "assessment": "Physical assessment"
+      },
+      "imported": {
+        "title": "Imported weights",
+        "description": "Independent records; they do not change your physical assessment or nutrition calculations.",
+        "error": "Imported weights could not be loaded right now.",
+        "noAssessment": "Weights are shown above, but body composition and nutrition still depend on a physical assessment.",
+        "source": {
+          "ios": "Apple Health",
+          "android": "Health Connect"
+        }
+      },
       "metrics": {
         "bodyFat": "Body fat",
         "leanMass": "Lean mass",
