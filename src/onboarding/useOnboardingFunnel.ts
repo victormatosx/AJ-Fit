@@ -8,7 +8,13 @@ import {
   isStepDevJumpable,
   type OnboardingStepId,
 } from './steps';
-import { buildDraft, draftToQuiz, readOnboardingDraft, writeOnboardingDraft } from './draftStorage';
+import {
+  buildDraft,
+  draftToQuiz,
+  readOnboardingDraft,
+  writeOnboardingDraft,
+  type OnboardingHealthIntegrationChoice,
+} from './draftStorage';
 import { logOnboardingEvent } from './onboardingAnalytics';
 
 export type OnboardingFunnelMode = 'anonymous' | 'forcedQuestionnaire';
@@ -42,6 +48,7 @@ export function useOnboardingFunnel(mode: OnboardingFunnelMode) {
     () => getStepSequence(mode)[0],
   );
   const [name, setName] = useState<string | null>(null);
+  const [healthIntegrationChoice, setHealthIntegrationChoice] = useState<OnboardingHealthIntegrationChoice | null>(null);
   const [hydrated, setHydrated] = useState(mode === 'forcedQuestionnaire');
   const startedLogged = useRef(false);
 
@@ -54,6 +61,7 @@ export function useOnboardingFunnel(mode: OnboardingFunnelMode) {
       if (draft) {
         setQuiz(draftToQuiz(draft));
         setName(draft.name);
+        setHealthIntegrationChoice(draft.healthIntegrationChoice);
         setCurrentStepId(draft.currentStepId);
         logOnboardingEvent({ name: 'onboarding_resumed', stepId: draft.currentStepId });
       } else if (!startedLogged.current) {
@@ -72,8 +80,8 @@ export function useOnboardingFunnel(mode: OnboardingFunnelMode) {
   // draft. Cheap (single AsyncStorage write) and never blocks navigation.
   useEffect(() => {
     if (mode !== 'anonymous' || !hydrated) return;
-    void writeOnboardingDraft(buildDraft({ currentStepId, name, quiz }));
-  }, [mode, hydrated, currentStepId, name, quiz]);
+    void writeOnboardingDraft(buildDraft({ currentStepId, name, healthIntegrationChoice, quiz }));
+  }, [mode, hydrated, currentStepId, name, healthIntegrationChoice, quiz]);
 
   const progress = computeOnboardingProgress(currentStepId, mode, quiz);
 
@@ -103,6 +111,8 @@ export function useOnboardingFunnel(mode: OnboardingFunnelMode) {
     currentStepId,
     name,
     setName,
+    healthIntegrationChoice,
+    setHealthIntegrationChoice,
     quiz,
     setQuiz,
     progress,

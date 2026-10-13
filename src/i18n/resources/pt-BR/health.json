@@ -1,0 +1,112 @@
+{
+  "disconnected": {
+    "heroTitle": "Conecte com {{provider}}",
+    "benefitsTitle": "O que acontece ao conectar",
+    "benefitWeight": "O AJ Fit poderá ler o peso corporal registrado no {{provider}}.",
+    "benefitWorkouts": "O AJ Fit poderá registrar seus treinos concluídos no {{provider}}.",
+    "privacyNote": "A conexão é opcional. Você pode desconectar a qualquer momento e também pode gerenciar as permissões diretamente pelo sistema.",
+    "connectAction": "Conectar com {{provider}}",
+    "connectingAction": "Conectando..."
+  },
+  "connected": {
+    "statusTitle": "Conectado",
+    "statusDescription": "Seus dados de saúde estão conectados ao AJ Fit e são sincronizados automaticamente.",
+    "weightTitle": "Peso corporal",
+    "weightSubtitle": "Leitura automática",
+    "workoutsTitle": "Treinos concluídos",
+    "workoutsSubtitle": "Escrita automática",
+    "activeLabel": "Ativo",
+    "iosPermissionNotice": "O iOS não informa ao AJ Fit quais permissões de leitura foram concedidas. Isso é uma limitação do próprio sistema, não um erro do aplicativo.",
+    "androidImportantNotice": "O Health Connect controla quais permissões o AJ Fit recebe. Você pode revisar ou revogar o acesso a qualquer momento diretamente no app Health Connect.",
+    "androidPermissionGranted": "Permissão concedida",
+    "androidPermissionNotGranted": "Permissão não concedida",
+    "lastSyncSectionTitle": "Última sincronização",
+    "lastSyncToday": "Hoje, {{date}}",
+    "actionsSectionTitle": "Ações",
+    "importantSectionTitle": "Importante",
+    "manageAction": "Gerenciar permissões",
+    "disconnectAction": "Desconectar {{provider}}",
+    "disconnectingAction": "Desconectando..."
+  },
+  "disconnectConfirm": {
+    "title": "Desconectar do {{provider}}?",
+    "body": "O AJ Fit vai parar de usar o {{provider}}. Isso não revoga o acesso diretamente pelo sistema — você pode fazer isso nos ajustes nativos — e não apaga nenhum registro já gravado no {{provider}}.",
+    "confirm": "Desconectar",
+    "cancel": "Cancelar"
+  },
+  "sync": {
+    "title": "Sincronização de peso",
+    "lastSuccessful": "Última sincronização: {{date}}",
+    "never": "ainda não realizada",
+    "manualAction": "Sincronizar agora",
+    "syncing": "Sincronizando...",
+    "deleting": "Excluindo...",
+    "importedCount_one": "{{count}} nova pesagem importada",
+    "importedCount_other": "{{count}} novas pesagens importadas",
+    "status": {
+      "idle": "Aguardando sincronização",
+      "syncing": "Sincronizando pesagens",
+      "success": "Sincronização concluída",
+      "no_data": "Nenhuma nova pesagem encontrada",
+      "permission_required": "Permissão de peso necessária",
+      "unavailable": "Serviço de saúde indisponível",
+      "error": "Não foi possível sincronizar agora"
+    }
+  },
+  "export": {
+    "title": "Exportação de treinos",
+    "lastSuccessful": "Último treino exportado: {{date}}",
+    "never": "ainda não realizado",
+    "retryAction": "Tentar exportações agora",
+    "retrying": "Exportando...",
+    "pendingCount_one": "{{count}} treino aguardando exportação",
+    "pendingCount_other": "{{count}} treinos aguardando exportação",
+    "exportedCount_one": "{{count}} treino exportado nesta tentativa",
+    "exportedCount_other": "{{count}} treinos exportados nesta tentativa",
+    "status": {
+      "idle": "Exportação automática habilitada",
+      "exporting": "Exportando treinos concluídos",
+      "success": "Treinos exportados com sucesso",
+      "no_data": "Nenhum treino pendente",
+      "permission_required": "Permissão para treinos necessária",
+      "unavailable": "Serviço de saúde indisponível",
+      "error": "Não foi possível exportar agora"
+    }
+  },
+  "data": {
+    "title": "Dados importados",
+    "description": "Exclui somente as pesagens trazidas do app de saúde. Avaliações físicas, dados manuais e informações de nutrição não serão alterados.",
+    "deleteAction": "Excluir pesagens importadas"
+  },
+  "deleteImportedConfirm": {
+    "title": "Excluir pesagens importadas?",
+    "body": "Esta ação remove somente as pesagens importadas no AJ Fit. Avaliações físicas e dados manuais permanecem intactos. A conexão com o app de saúde continuará ativa.",
+    "confirm": "Excluir pesagens",
+    "cancel": "Cancelar"
+  },
+  "unavailable": {
+    "title": "Indisponível neste dispositivo",
+    "reason": {
+      "provider_missing": "O {{provider}} não está disponível neste dispositivo.",
+      "provider_update_required": "Atualize o {{provider}} para continuar.",
+      "check_failed": "Não foi possível verificar a disponibilidade agora.",
+      "platform_unsupported": "Este dispositivo não é compatível com essa integração."
+    },
+    "retryAction": "Tentar novamente",
+    "openSettingsAction": "Abrir ajustes do sistema"
+  },
+  "errors": {
+    "unavailable": "A integração está indisponível no momento.",
+    "permission_request_failed": "Não foi possível concluir a solicitação de permissão. Tente novamente.",
+    "provider_not_installed": "O {{provider}} não está disponível neste dispositivo.",
+    "unknown": "Não foi possível concluir a operação agora. Tente novamente."
+  },
+  "loading": "Carregando...",
+  "backAccessibility": "Voltar",
+  "onboardingConfirmation": {
+    "title": "Conectar {{provider}}?",
+    "body": "Você pediu para conectar durante o questionário inicial. Toque em Conectar para abrir a solicitação de permissão, ou Agora não para pular — você sempre pode conectar depois em Configurações.",
+    "connectAction": "Conectar {{provider}}",
+    "skipAction": "Agora não"
+  }
+}

@@ -23,12 +23,24 @@ export type DraftQuizAnswers = Omit<Quiz, 'birthDate' | 'place'> & {
   motivation?: unknown;
 };
 
+/**
+ * The health-integration step's choice (Fase 5) — pre-auth-only, same as
+ * `name`: never part of `Quiz`/Firestore questionnaire. `'connect'` means
+ * "ask me to finish connecting once I'm signed in" — it is NOT itself a
+ * live connection or a granted permission; see
+ * `services/healthIntegrationOnboardingStep.ts` for what happens with it
+ * once a real uid exists.
+ */
+export type OnboardingHealthIntegrationChoice = 'connect' | 'skip';
+
 export interface OnboardingDraftV1 {
   version: 1;
   currentStepId: OnboardingStepId;
   updatedAt: string;
   /** Pre-auth-only field — never part of `Quiz`/Firestore questionnaire. */
   name: string | null;
+  /** Pre-auth-only field — never part of `Quiz`/Firestore questionnaire. `null` until the step is answered. */
+  healthIntegrationChoice: OnboardingHealthIntegrationChoice | null;
   answers: DraftQuizAnswers;
 }
 
@@ -59,6 +71,7 @@ function fromDraftAnswers(raw: Partial<DraftQuizAnswers> | undefined | null): Qu
 export function buildDraft(params: {
   currentStepId: OnboardingStepId;
   name: string | null;
+  healthIntegrationChoice: OnboardingHealthIntegrationChoice | null;
   quiz: Quiz;
 }): OnboardingDraft {
   return {
@@ -66,6 +79,7 @@ export function buildDraft(params: {
     currentStepId: params.currentStepId,
     updatedAt: new Date().toISOString(),
     name: params.name,
+    healthIntegrationChoice: params.healthIntegrationChoice,
     answers: toDraftAnswers(params.quiz),
   };
 }
@@ -96,6 +110,11 @@ function migrateDraft(raw: unknown): OnboardingDraft | null {
     currentStepId: legacyGroupedSteps[candidate.currentStepId] ?? candidate.currentStepId as OnboardingStepId,
     updatedAt: typeof candidate.updatedAt === 'string' ? candidate.updatedAt : new Date().toISOString(),
     name: typeof candidate.name === 'string' ? candidate.name : null,
+    // Absent on every draft written before Fase 5 — degrades to `null`
+    // ("no choice made yet"), never silently treated as `'connect'`.
+    healthIntegrationChoice: candidate.healthIntegrationChoice === 'connect' || candidate.healthIntegrationChoice === 'skip'
+      ? candidate.healthIntegrationChoice
+      : null,
     answers: (candidate.answers ?? {}) as DraftQuizAnswers,
   };
 }

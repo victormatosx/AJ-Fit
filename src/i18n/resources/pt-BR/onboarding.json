@@ -174,5 +174,26 @@
         "highlight": "Resultado real, sem enrolação."
       }
     }
+  },
+  "healthIntegration": {
+    "eyebrow": "Integração de saúde",
+    "title": "Conecte seus dados de saúde",
+    "description": "Integre o AJ Fit com o Apple Health ou o Health Connect para acompanhar suas pesagens e registrar seus treinos automaticamente.",
+    "benefits": {
+      "weight": {
+        "title": "Peso sincronizado",
+        "description": "Suas pesagens aparecem automaticamente no AJ Fit."
+      },
+      "workouts": {
+        "title": "Treinos registrados",
+        "description": "Seus treinos realizados também ficam registrados no aplicativo."
+      },
+      "control": {
+        "title": "Você no controle",
+        "description": "Você decide quando conectar, e pode desconectar quando quiser."
+      }
+    },
+    "connectAction": "Conectar {{provider}}",
+    "skipAction": "Agora não"
   }
 }

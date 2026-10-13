@@ -14,6 +14,7 @@ function seedFullUser(harness: ReturnType<typeof createFakeFirestore>, uid: stri
   harness.seed(`users/${uid}/questionnaires/q1`);
   harness.seed(`users/${uid}/assessments/a1`);
   harness.seed(`users/${uid}/assessments/a2`);
+  harness.seed(`users/${uid}/healthWeightSamples/w1`);
   harness.seed(`users/${uid}/progressPhotos/p1`);
   harness.seed(`users/${uid}/workoutPrograms/wpg1`);
   harness.seed(`users/${uid}/workoutProgramState/active`);
@@ -75,6 +76,7 @@ describe('runFirestoreCleanup — happy path', () => {
     expect(harness.exists('users/uid-1')).toBe(false);
     expect(harness.listUnder('users/uid-1/questionnaires/')).toHaveLength(0);
     expect(harness.listUnder('users/uid-1/assessments/')).toHaveLength(0);
+    expect(harness.listUnder('users/uid-1/healthWeightSamples/')).toHaveLength(0);
     expect(harness.listUnder('users/uid-1/progressPhotos/')).toHaveLength(0);
     expect(harness.listUnder('users/uid-1/workoutPrograms/')).toHaveLength(0);
     expect(harness.listUnder('users/uid-1/workoutProgramState/')).toHaveLength(0);
@@ -193,7 +195,7 @@ describe('runFirestoreCleanup — ordering (Fase 6 §10)', () => {
     });
 
     expect(order).toEqual([
-      'questionnaires', 'assessments', 'nutrition', 'progressPhotos',
+      'questionnaires', 'assessments', 'healthWeightSamples', 'nutrition', 'progressPhotos',
       'pushTokenOwners', 'pushInstallations', 'pushDevices', 'notificationDispatches',
       'notificationProductWindows', 'notificationAchievementMilestones', 'dailyNotificationRegistration', 'entitlementSignal',
       'workoutProgramDescendants',

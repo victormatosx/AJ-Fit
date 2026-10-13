@@ -174,5 +174,26 @@
         "highlight": "Real results, no fluff."
       }
     }
+  },
+  "healthIntegration": {
+    "eyebrow": "Health integration",
+    "title": "Connect your health data",
+    "description": "Integrate AJ Fit with Apple Health or Health Connect to track your weigh-ins and log your workouts automatically.",
+    "benefits": {
+      "weight": {
+        "title": "Weight synced",
+        "description": "Your weigh-ins automatically show up in AJ Fit."
+      },
+      "workouts": {
+        "title": "Workouts logged",
+        "description": "Your completed workouts are also recorded in the app."
+      },
+      "control": {
+        "title": "You're in control",
+        "description": "You decide when to connect, and can disconnect whenever you want."
+      }
+    },
+    "connectAction": "Connect {{provider}}",
+    "skipAction": "Not now"
   }
 }

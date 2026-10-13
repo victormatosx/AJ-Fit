@@ -4,6 +4,7 @@ import type { Firestore } from 'firebase-admin/firestore';
 import {
   deleteProgressPhotoDocuments,
   deleteUserAssessments,
+  deleteUserHealthWeightSamples,
   deleteUserProfileDocument,
   deleteUserQuestionnaires,
   deleteUserNutritionResources,
@@ -107,6 +108,23 @@ describe('deleteUserAssessments', () => {
 
     expect(result.deletedCount).toBe(3);
     expect(harness.listUnder('users/uid-1/assessments/')).toHaveLength(0);
+  });
+});
+
+describe('deleteUserHealthWeightSamples', () => {
+  it('deletes only the target user imported weights and preserves assessments and other users', async () => {
+    const harness = createFakeFirestore();
+    harness.seed('users/uid-1/healthWeightSamples/w1');
+    harness.seed('users/uid-1/healthWeightSamples/w2');
+    harness.seed('users/uid-1/assessments/a1');
+    harness.seed('users/uid-2/healthWeightSamples/w1');
+
+    expect(await deleteUserHealthWeightSamples('uid-1', fs(harness))).toEqual({
+      resource: 'healthWeightSamples', deletedCount: 2, alreadyAbsent: false,
+    });
+    expect(harness.listUnder('users/uid-1/healthWeightSamples/')).toHaveLength(0);
+    expect(harness.exists('users/uid-1/assessments/a1')).toBe(true);
+    expect(harness.exists('users/uid-2/healthWeightSamples/w1')).toBe(true);
   });
 });
 

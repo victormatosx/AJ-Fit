@@ -36,7 +36,11 @@ import { WordmarkSplash } from './src/components/ui/WordmarkSplash';
 import { FullScreenLoading } from './src/components/ui/FullScreenLoading';
 import { hasCompletedInitialBoot, markInitialBootCompleted } from './src/lib/initialBootReadiness';
 import { OnboardingFunnelScreen } from './src/screens/OnboardingFunnelScreen';
-import { clearOnboardingDraft } from './src/onboarding/draftStorage';
+import { clearOnboardingDraft, readOnboardingDraft } from './src/onboarding/draftStorage';
+import {
+  markHealthIntegrationOnboardingPendingConfirmation,
+  markHealthIntegrationOnboardingStepSeen,
+} from './src/services/healthIntegrationOnboardingStep';
 import type { OnboardingAuthContext } from './src/onboarding/authContext';
 import { AuthScreen } from './src/screens/AuthScreen';
 import { EmailVerificationScreen } from './src/screens/EmailVerificationScreen';
@@ -267,13 +271,36 @@ function RootNavigator({ onDestinationReady }: { onDestinationReady: () => void 
     null,
   );
 
+  // Fase 5 — the health-integration step runs pre-auth, so its choice can
+  // only live in the local anonymous draft (no uid yet). This consumes it
+  // exactly once per uid, under the SAME guard/timing as the draft clear
+  // right below (provisioning + addQuestionnaire already durably wrote the
+  // real data server-side, so the draft is a trustworthy, final snapshot of
+  // what the user actually chose) — and strictly BEFORE the clear, via
+  // `.finally()`, so a concurrent read can never lose the choice to a
+  // race with the removal.
+  const healthIntegrationChoiceConsumedUidRef = useRef<string | null>(null);
+
   // The anonymous draft is only useful before a questionnaire exists under
   // the real UID. Once both are true, provisioning + addQuestionnaire have
   // already durably written the data server-side — safe to drop the local
   // copy. Idempotent (AsyncStorage removeItem on an absent key is a no-op),
   // so this can fire on every render where the condition holds.
   useEffect(() => {
-    if (user && questionnaire) void clearOnboardingDraft();
+    if (!user || !questionnaire) return;
+    if (healthIntegrationChoiceConsumedUidRef.current === user.uid) {
+      if (user && questionnaire) void clearOnboardingDraft();
+      return;
+    }
+    healthIntegrationChoiceConsumedUidRef.current = user.uid;
+    const uid = user.uid;
+    void readOnboardingDraft().then((draft) => (
+      draft?.healthIntegrationChoice === 'connect'
+        ? markHealthIntegrationOnboardingPendingConfirmation(uid)
+        : markHealthIntegrationOnboardingStepSeen(uid)
+    )).finally(() => {
+      if (user && questionnaire) void clearOnboardingDraft();
+    });
   }, [user, questionnaire]);
 
   // Ref (not state) so it can be read/reset from effects defined further

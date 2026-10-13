@@ -153,11 +153,24 @@
       "composition": "Composição",
       "measuredAt": "Medido em {{date}}",
       "delta": "{{direction}} {{value}} {{unit}}",
-      "singleEntry": "Registre outra avaliação para ver a curva de evolução.",
+      "singleEntry": "Registre outro peso para ver a curva de evolução.",
       "loading": "Carregando sua evolução…",
       "error": "Não foi possível carregar sua evolução.",
       "retry": "Tentar novamente",
       "openAssessment": "Ver avaliação completa",
+      "weightSource": {
+        "assessment": "Avaliação física"
+      },
+      "imported": {
+        "title": "Pesagens importadas",
+        "description": "Registros independentes; não alteram sua avaliação física nem seus cálculos de nutrição.",
+        "error": "Não foi possível carregar as pesagens importadas agora.",
+        "noAssessment": "As pesagens aparecem acima, mas composição corporal e nutrição continuam dependendo de uma avaliação física.",
+        "source": {
+          "ios": "Apple Health",
+          "android": "Health Connect"
+        }
+      },
       "metrics": {
         "bodyFat": "Gordura",
         "leanMass": "Massa magra",

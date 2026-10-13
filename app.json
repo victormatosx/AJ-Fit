@@ -5,7 +5,7 @@
     "scheme": "ajfit",
     "version": "1.0.5",
     "orientation": "portrait",
-    "icon": "./assets/logo-ajfit-app.png",
+    "icon": "./assets/ajfit-newlogo-branca.png",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#020010",
     "ios": {
@@ -28,11 +28,13 @@
       "versionCode": 1,
       "googleServicesFile": "./google-services.json",
       "permissions": [
-        "android.permission.POST_NOTIFICATIONS"
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.health.READ_WEIGHT",
+        "android.permission.health.WRITE_EXERCISE"
       ],
       "adaptiveIcon": {
-        "backgroundColor": "#020010",
-        "foregroundImage": "./assets/android-adaptive-icon-foreground.png"
+        "backgroundColor": "#030019",
+        "foregroundImage": "./assets/android-adaptive-icon-foreground-ajfit-newlogo.png"
       },
       "predictiveBackGestureEnabled": false
     },
@@ -85,9 +87,21 @@
                 "modular_headers": true
               }
             ]
+          },
+          "android": {
+            "minSdkVersion": 26
           }
         }
       ],
+      [
+        "@kingstinct/react-native-healthkit",
+        {
+          "background": false,
+          "NSHealthShareUsageDescription": "O AJ Fit lê seu peso corporal no Apple Health para mostrar sua evolução no aplicativo.",
+          "NSHealthUpdateUsageDescription": "O AJ Fit registra seus treinos concluídos no Apple Health quando você habilita a integração."
+        }
+      ],
+      "react-native-health-connect",
       "expo-image",
       [
         "expo-camera",

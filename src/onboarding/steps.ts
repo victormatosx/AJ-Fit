@@ -17,6 +17,7 @@ export type OnboardingStepKind =
   | 'socialProof'
   | 'processing'
   | 'result'
+  | 'healthIntegration'
   | 'auth'
   | 'monetization';
 
@@ -57,6 +58,7 @@ export type OnboardingStepId =
   | 'commitment'
   | 'analyzing'
   | 'plan'
+  | 'healthIntegration'
   | 'auth'
   | 'paywall';
 
@@ -92,6 +94,14 @@ export const ONBOARDING_STEPS: readonly OnboardingStepDef[] = [
   { id: 'equipment', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'interstitial_guidedWorkout', kind: 'interstitial', countsTowardProgress: false, persistsToDraft: false, devJumpable: true },
   { id: 'muscleFocus', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  // Fase 5 — the only health-integration offer in the app; reused nowhere
+  // else. Deliberately absent from `FORCED_QUESTIONNAIRE_STEP_IDS` below:
+  // that mode is for an ALREADY-authenticated account (repairing missing
+  // questionnaire data), so this step — which only ever records a pre-auth
+  // intent, never a live connection — would have nothing meaningful to do
+  // there; an already-authenticated user who wants to connect already has
+  // the Settings screen for that.
+  { id: 'healthIntegration', kind: 'healthIntegration', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'specialConditions', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'limits', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'lipedemaScreening', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },

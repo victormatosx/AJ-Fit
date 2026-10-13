@@ -4,6 +4,7 @@
     "account": "Account",
     "workout": "Workout",
     "notifications": "Notifications",
+    "healthIntegration": "Connected apps",
     "preferences": "Preferences",
     "privacyAndData": "Privacy & data",
     "support": "Support",
@@ -18,6 +19,7 @@
     "workoutPreferences": "Workout preferences",
     "timersAndSounds": "Timers and sounds",
     "notifications": "Notifications",
+    "healthIntegration": "Connected apps",
     "theme": "Theme",
     "units": "Units",
     "privacyPolicy": "Privacy Policy",
@@ -33,7 +35,11 @@
     "licenses": "Open Source Licenses"
   },
   "values": {
-    "darkTheme": "Dark"
+    "darkTheme": "Dark",
+    "healthIntegrationEnabled": "Connected",
+    "healthIntegrationDisabled": "Disconnected",
+    "healthIntegrationNotConfigured": "Not configured",
+    "healthIntegrationLoading": "Loading..."
   },
   "security": {
     "screenTitle": "Security",
@@ -213,5 +219,8 @@
       "dark": "Dark",
       "light": "Light"
     }
+  },
+  "connectedApps": {
+    "screenTitle": "Connected apps"
   }
 }

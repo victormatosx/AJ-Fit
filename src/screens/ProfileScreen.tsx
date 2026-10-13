@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, Text, ScrollView, Alert } from 'react-native';
+import { View, Text, Image, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
+import Constants from 'expo-constants';
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { Display, Slash, MonoLabel } from '../components/ui/Display';
 import { Icon, IconName } from '../components/ui/Icon';
@@ -10,9 +11,21 @@ import { ProfileAvatar } from '../components/ui/ProfileAvatar';
 import { SettingsSection } from '../components/ui/SettingsSection';
 import { SmartAlertsSection } from '../components/ui/SmartAlertsSection';
 import { EvolutionCard } from '../components/evolution/EvolutionCard';
+import { BOX } from '../lib/wordmarkMotion';
 import { useTheme } from '../theme';
 import { useAuth } from '../state/AuthContext';
 import type { EvolutionViewModel } from '../workoutEvolution/types';
+
+/**
+ * Same source asset and crop box as the cold-start `WordmarkSplash`
+ * ("AJ Fit." wordmark; `BOX` is the glyph's normalized bounding box inside
+ * the otherwise-transparent square PNG) — just rendered statically and
+ * small, for the Profile footer instead of animated full-screen.
+ */
+const WORDMARK_LOGO = require('../../assets/ajfit-newlogo.png');
+const FOOTER_GLYPH_H = 26;
+const FOOTER_LOGO_PX = FOOTER_GLYPH_H / (BOX.b - BOX.t);
+const FOOTER_GLYPH_W = FOOTER_LOGO_PX * (BOX.r - BOX.l);
 
 /** Provider ids come from Firebase Auth and MUST NOT be renamed here —
  *  translation happens at the label lookup, never on the id. */
@@ -51,6 +64,8 @@ export function ProfileScreen({
   const sinceYear = profile?.metadata.createdAt
     ? String(profile.metadata.createdAt.toDate().getFullYear())
     : '—';
+  const appVersion = Constants.expoConfig?.version;
+  const appVersionLabel = appVersion ? `v${appVersion}` : '—';
 
   function confirmLogout() {
     Alert.alert(t('logout.confirmTitle'), t('logout.confirmMessage'), [
@@ -216,6 +231,31 @@ export function ProfileScreen({
               },
             ]}
           />
+
+          <View style={{ alignItems: 'center', paddingTop: 20, paddingBottom: 12, gap: 8 }}>
+            <View style={{ width: FOOTER_GLYPH_W, height: FOOTER_GLYPH_H, overflow: 'hidden' }}>
+              <Image
+                source={WORDMARK_LOGO}
+                style={{
+                  position: 'absolute',
+                  width: FOOTER_LOGO_PX,
+                  height: FOOTER_LOGO_PX,
+                  left: -FOOTER_LOGO_PX * BOX.l,
+                  top: -FOOTER_LOGO_PX * BOX.t,
+                }}
+              />
+            </View>
+            <Text
+              style={{
+                fontFamily: theme.fonts.mono,
+                fontSize: 10.5,
+                letterSpacing: 0.5,
+                color: theme.colors.textFaint,
+              }}
+            >
+              {appVersionLabel}
+            </Text>
+          </View>
         </ScrollView>
       </SafeAreaView>
     </ScreenBg>

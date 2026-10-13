@@ -30,6 +30,7 @@ import { SocialProofScreen } from './SocialProofScreen';
 import { AnalyzingScreen } from './AnalyzingScreen';
 import { PlanReadyScreen } from './PlanReadyScreen';
 import { NameStepScreen } from './onboarding/NameStepScreen';
+import { HealthIntegrationOnboardingScreen } from './onboarding/HealthIntegrationOnboardingScreen';
 import { WelcomeInterstitialScreen } from './onboarding/WelcomeInterstitialScreen';
 import { EvolutionInterstitialScreen } from './onboarding/EvolutionInterstitialScreen';
 import { MethodologyInterstitialScreen } from './onboarding/MethodologyInterstitialScreen';
@@ -50,7 +51,10 @@ export function OnboardingFunnelScreen({
   const { theme } = useTheme();
   const { t } = useTranslation('quiz');
   const funnel = useOnboardingFunnel(mode);
-  const { currentStepId, name, setName, quiz, setQuiz, progress, goNext, goBack, canGoBack, jumpTo, hydrated } = funnel;
+  const {
+    currentStepId, name, setName, healthIntegrationChoice, setHealthIntegrationChoice,
+    quiz, setQuiz, progress, goNext, goBack, canGoBack, jumpTo, hydrated,
+  } = funnel;
   // Exact anatomy is UI state; `quiz.muscleFocus` intentionally remains the
   // existing grouped persistence contract used by workout prescription.
   const [selectedMuscleGroups, setSelectedMuscleGroups] = useState<MuscleFocusVisualGroup[]>(
@@ -134,9 +138,14 @@ export function OnboardingFunnelScreen({
   const handlePlanContinue = () => {
     logOnboardingEvent({ name: 'plan_ready_cta_pressed' });
     if (mode === 'forcedQuestionnaire') {
+      // healthIntegration never appears in this mode (see steps.ts) — goes
+      // straight to the done callback, unchanged from before Fase 5.
       void onForcedQuestionnaireDone();
       return;
     }
+    // healthIntegration now sits earlier in the funnel (see steps.ts), so
+    // 'plan' is the last step before auth — call onAuthRequested directly
+    // instead of goNext().
     onAuthRequested({ origin: 'planCompleted', name });
   };
 
@@ -290,6 +299,17 @@ export function OnboardingFunnelScreen({
       break;
     case 'plan':
       content = <PlanReadyScreen name={name} onContinue={handlePlanContinue} />;
+      break;
+    case 'healthIntegration':
+      content = (
+        <HealthIntegrationOnboardingScreen
+          choice={healthIntegrationChoice}
+          onChoose={setHealthIntegrationChoice}
+          progress={progress}
+          onBack={canGoBack ? goBack : null}
+          onNext={goNext}
+        />
+      );
       break;
     // 'auth' and 'paywall' are never rendered here — they're separate
     // RootScreenId values App.tsx owns directly. They exist in

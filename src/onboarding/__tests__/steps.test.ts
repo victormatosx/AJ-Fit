@@ -14,10 +14,10 @@ import {
 } from '../steps';
 
 describe('ONBOARDING_STEPS', () => {
-  it('has 38 unique step ids', () => {
+  it('has 39 unique step ids', () => {
     const ids = ONBOARDING_STEPS.map((s) => s.id);
-    expect(ids).toHaveLength(38);
-    expect(new Set(ids).size).toBe(38);
+    expect(ids).toHaveLength(39);
+    expect(new Set(ids).size).toBe(39);
   });
 
   it('never lets auth/paywall be dev-jumpable', () => {
@@ -98,6 +98,21 @@ describe('getNextStepId / getPreviousStepId', () => {
   it('reaches the end of the forcedQuestionnaire sequence at plan', () => {
     expect(getNextStepId('plan', 'forcedQuestionnaire')).toBeNull();
   });
+
+  it('Fase 5: healthIntegration sits right between muscleFocus and specialConditions, in anonymous mode only', () => {
+    expect(getNextStepId('muscleFocus', 'anonymous')).toBe('healthIntegration');
+    expect(getNextStepId('healthIntegration', 'anonymous')).toBe('specialConditions');
+    expect(getPreviousStepId('healthIntegration', 'anonymous')).toBe('muscleFocus');
+    expect(getNextStepId('plan', 'anonymous')).toBe('auth');
+    // forcedQuestionnaire is for an already-authenticated account — the
+    // step never appears there (see steps.ts's doc comment on the entry).
+    expect(FORCED_QUESTIONNAIRE_STEP_IDS).not.toContain('healthIntegration');
+    expect(getStepSequence('forcedQuestionnaire')).not.toContain('healthIntegration');
+  });
+
+  it('Fase 5: healthIntegration is dev-jumpable, like every other non-auth/paywall step', () => {
+    expect(isStepDevJumpable('healthIntegration')).toBe(true);
+  });
 });
 
 describe('computeOnboardingProgress', () => {
@@ -117,7 +132,12 @@ describe('computeOnboardingProgress', () => {
     expect(atGoal.current).toBeLessThan(atLevel.current);
   });
 
-  it('reaches total at the last question step (commitment) in anonymous mode', () => {
+  it('holds steady (not yet at total) at healthIntegration — commitment is still the last counted step', () => {
+    const { current, total } = computeOnboardingProgress('healthIntegration', 'anonymous');
+    expect(current).toBeLessThan(total);
+  });
+
+  it('reaches total at commitment, the real last question, in anonymous mode', () => {
     const { current, total } = computeOnboardingProgress('commitment', 'anonymous');
     expect(current).toBe(total);
   });

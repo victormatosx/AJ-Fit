@@ -49,6 +49,9 @@ import esTreino from './resources/es/treino.json';
 import ptBRNutrition from './resources/pt-BR/nutrition.json';
 import enNutrition from './resources/en/nutrition.json';
 import esNutrition from './resources/es/nutrition.json';
+import ptBRHealth from './resources/pt-BR/health.json';
+import enHealth from './resources/en/health.json';
+import esHealth from './resources/es/health.json';
 
 /** Single runtime registry used by bootstrap, parity tests and audits. */
 export const resources = {
@@ -70,6 +73,7 @@ export const resources = {
     notifications: ptBRNotifications,
     treino: ptBRTreino,
     nutrition: ptBRNutrition,
+    health: ptBRHealth,
   },
   en: {
     common: enCommon,
@@ -89,6 +93,7 @@ export const resources = {
     notifications: enNotifications,
     treino: enTreino,
     nutrition: enNutrition,
+    health: enHealth,
   },
   es: {
     common: esCommon,
@@ -108,6 +113,7 @@ export const resources = {
     notifications: esNotifications,
     treino: esTreino,
     nutrition: esNutrition,
+    health: esHealth,
   },
 } as const;
 

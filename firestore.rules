@@ -831,6 +831,28 @@ service cloud.firestore {
         && (!('visceralFat' in d) || (d.visceralFat is number && d.visceralFat > 0));
     }
 
+    // Fase 3 da integração de saúde (Apple Health / Health Connect) —
+    // pesagens isoladas importadas, ver o comentário em
+    // `healthWeightSamples` acima para o porquê de ser uma coleção própria.
+    function healthWeightSampleValid(sampleId) {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['platform', 'sourceId', 'sourceApp', 'measuredAt', 'weightKg', 'createdAt'])
+        && d.platform in ['ios', 'android']
+        && d.sourceId is string && d.sourceId.size() > 0 && d.sourceId.size() <= 512
+        // The external tuple (platform + source app + native id) is SHA-256
+        // hashed client-side. The fixed shape prevents path injection and
+        // truncation/substitution collisions while keeping ids bounded.
+        && sampleId.matches('^(ios|android)_[0-9a-f]{64}$')
+        && sampleId.matches('^' + d.platform + '_[0-9a-f]{64}$')
+        // A small clock-skew allowance avoids rejecting a legitimate native
+        // sample whose device timestamp is a few seconds ahead of Firestore.
+        && d.measuredAt is timestamp && d.measuredAt <= request.time + duration.value(5, 'm')
+        && d.createdAt == request.time
+        && d.weightKg is number && d.weightKg > 0 && d.weightKg < 500
+        && (!('sourceApp' in d)
+          || (d.sourceApp is string && d.sourceApp.size() > 0 && d.sourceApp.size() <= 256));
+    }
+
     // ── Photo Vault (docs/20_backend_functions_photo_vault.md) ────────────
     // Metadados das fotos privadas. A imagem NUNCA é gravada aqui: o binário
     // vive criptografado no Storage e este documento guarda apenas o ponteiro
@@ -2828,6 +2850,34 @@ service cloud.firestore {
           && (guidedAssessmentValid() || importedAssessmentValid());
 
         allow update, delete: if false;
+      }
+
+      // Pesagens isoladas importadas do Apple Health / Health Connect
+      // (Fase 3 da integração de saúde). Deliberadamente SEPARADO de
+      // `assessments`: uma amostra de peso do HealthKit/Health Connect não
+      // tem altura nem composição corporal — forçá-la no schema de
+      // `assessments` (que exige `height`) significaria fabricar um dado, e
+      // pior, o motor de nutrição lê `assessments` para resolver o peso do
+      // TDEE (functions/src/nutrition/generation/context.ts) — uma pesagem
+      // importada aqui NUNCA deve alimentar esse cálculo automaticamente.
+      //
+      // Identidade estável: o ID é plataforma + SHA-256 do tuple versionado
+      // (plataforma, app de origem e identificador nativo da amostra),
+      // então reimportar a mesma amostra é um CREATE idempotente no mesmo ID —
+      // a regra de imutabilidade (sem update) é o que impede uma reimportação
+      // de alterar silenciosamente um valor já gravado.
+      match /healthWeightSamples/{sampleId} {
+        allow read: if isVerifiedOwner(userId) && accountActive(userId);
+
+        allow create: if isVerifiedOwner(userId)
+          && accountActive(userId)
+          && healthWeightSampleValid(sampleId);
+
+        allow update: if false;
+        // Exclusão é permitida (ao contrário de assessments): é exatamente
+        // o mecanismo de "excluir dados importados" da Fase 3, distinto de
+        // desconectar a integração.
+        allow delete: if isVerifiedOwner(userId) && accountActive(userId);
       }
 
       // Metadados das fotos privadas de evolução (Photo Vault). O dono lê,

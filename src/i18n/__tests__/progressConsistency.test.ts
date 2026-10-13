@@ -64,17 +64,18 @@ describe('Progress truthfulness and retired consistency preview', () => {
     expect(home).not.toContain('UPCOMING_KEYS');
   });
 
-  it('derives the body panel from real assessments instead of fixed samples', () => {
+  it('derives the body panel from real assessments and imported health weights instead of fixed samples', () => {
     // The screen used to ship hardcoded sample series. It now reads the same
     // hook the assessment area uses, so every number belongs to the user.
     expect(progress).toContain("from '../hooks/useAssessments'");
     expect(progress).toContain('useAssessments(user?.uid ?? null)');
+    expect(progress).toContain("from '../hooks/useHealthWeightSamples'");
     expect(progress).not.toMatch(/const pointsKg = \[/);
     expect(body).not.toMatch(/const pointsKg = \[/);
 
     // Weights are converted through the shared unit helpers, never printed raw.
-    expect(body).toContain('formatWeightFromKg(latest.weight, resolvedUnits)');
-    expect(body).toContain('weightFromKg(entry.weight, resolvedUnits)');
+    expect(body).toContain('formatWeightFromKg(latestWeight.weightKg, resolvedUnits)');
+    expect(body).toContain('weightFromKg(entry.weightKg, resolvedUnits)');
   });
 
   it('derives the loads panel from persisted workout executions instead of previews', () => {

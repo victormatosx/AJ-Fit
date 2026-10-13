@@ -48,6 +48,7 @@ import type { ResourceCleanupResult } from './types';
 const USERS_COLLECTION = 'users';
 const QUESTIONNAIRES_COLLECTION = 'questionnaires';
 const ASSESSMENTS_COLLECTION = 'assessments';
+const HEALTH_WEIGHT_SAMPLES_COLLECTION = 'healthWeightSamples';
 export const NUTRITION_USER_RESOURCES = [
   'nutritionProfile', 'nutritionPlans', 'nutritionDailyLogs', 'nutritionRecipes',
   'nutritionFoods', 'nutritionPreferences', 'nutritionFavoriteMealOptions',
@@ -140,6 +141,16 @@ export async function deleteUserAssessments(
     userDocRef(db, uid).collection(ASSESSMENTS_COLLECTION),
   );
   return { resource: 'assessments', deletedCount, alreadyAbsent: deletedCount === 0 };
+}
+
+export async function deleteUserHealthWeightSamples(
+  uid: string,
+  db: Firestore = defaultDb,
+): Promise<ResourceCleanupResult> {
+  const { deletedCount } = await deleteCollectionDocuments(
+    userDocRef(db, uid).collection(HEALTH_WEIGHT_SAMPLES_COLLECTION),
+  );
+  return { resource: 'healthWeightSamples', deletedCount, alreadyAbsent: deletedCount === 0 };
 }
 
 /**

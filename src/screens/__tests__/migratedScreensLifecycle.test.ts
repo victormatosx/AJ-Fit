@@ -27,9 +27,9 @@ describe('AssessmentScreen — data refresh follows activation, not just mount',
 describe('ProgressScreen — evolution histories follow activation, not just mount', () => {
   const CODE = code('src/screens/ProgressScreen.tsx');
 
-  it('re-fetches assessments and real workout loads whenever the persistent Progress tab becomes active', () => {
+  it('re-fetches assessments, imported weights and real workout loads whenever the persistent Progress tab becomes active', () => {
     expect(CODE).toContain("import { useScreenFocusEffect } from '../state/ScreenActivity'");
-    expect(CODE).toMatch(/useScreenFocusEffect\(\(\) => \{\s*void refreshAssessments\(\);\s*void refreshLoads\(\);/);
+    expect(CODE).toMatch(/useScreenFocusEffect\(\(\) => \{\s*void refreshAssessments\(\);\s*void refreshImportedWeights\(\);\s*void refreshLoads\(\);/);
   });
 });
 

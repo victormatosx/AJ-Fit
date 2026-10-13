@@ -27,6 +27,8 @@ import { ProfileScreen } from './ProfileScreen';
 import { AssessmentScreen } from './AssessmentScreen';
 import { SettingsScreen } from './SettingsScreen';
 import { NotificationSettingsScreen } from './NotificationSettingsScreen';
+import { ConnectedAppsScreen } from './ConnectedAppsScreen';
+import { HealthIntegrationScreen } from './HealthIntegrationScreen';
 import { AccountSettingsScreen } from './AccountSettingsScreen';
 import { SecurityScreen } from './SecurityScreen';
 import { ChangePasswordScreen } from './ChangePasswordScreen';
@@ -42,6 +44,10 @@ import { SupportSuccessScreen } from './SupportSuccessScreen';
 import { SupportCasesScreen } from './SupportCasesScreen';
 import { SupportCaseDetailScreen } from './SupportCaseDetailScreen';
 import { useUnreadSupportCasesCount } from '../hooks/useUnreadSupportCasesCount';
+import { useHealthWeightSync } from '../hooks/useHealthWeightSync';
+import { useHealthWorkoutExport } from '../hooks/useHealthWorkoutExport';
+import { usePendingHealthIntegrationConfirmation } from '../hooks/usePendingHealthIntegrationConfirmation';
+import { PendingHealthIntegrationConfirmationSheet } from '../components/health/PendingHealthIntegrationConfirmationSheet';
 import { setForegroundSupportCaseId } from '../services/pushNotifications';
 import type { HelpArticle, SupportTicketType } from '../types/support';
 import { PersistentScreen } from '../components/navigation/PersistentScreen';
@@ -266,6 +272,13 @@ function AppShellContent({
   const reduceMotion = useReducedMotionPreference();
   const { tab, setTab } = useAppState();
   const { user, linkedProviders } = useAuth();
+  const healthWeightSync = useHealthWeightSync(user?.uid ?? null);
+  const healthWorkoutExport = useHealthWorkoutExport(user?.uid ?? null);
+  // Fase 5 — one-time confirmation for a "Conectar" choice made during the
+  // pre-auth questionnaire. Never auto-opens the native permission dialog;
+  // `PendingHealthIntegrationConfirmationSheet` only calls `connect()` after
+  // its own explicit tap.
+  const pendingHealthIntegrationConfirmation = usePendingHealthIntegrationConfirmation(user?.uid ?? null);
   // Gates the tab itself, not just its content — an unresolved/off flag
   // must never show the tab icon at all (round brief §3).
   const nutritionEnabled = useNutritionEnabled(user?.uid ?? null);
@@ -494,6 +507,8 @@ function AppShellContent({
   const [showSettings, setShowSettings] = useState(false);
   const [showSecurity, setShowSecurity] = useState(false);
   const [showNotificationSettings, setShowNotificationSettings] = useState(false);
+  const [showConnectedApps, setShowConnectedApps] = useState(false);
+  const [showHealthIntegration, setShowHealthIntegration] = useState(false);
   const [showAccountSettings, setShowAccountSettings] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
@@ -682,6 +697,8 @@ function AppShellContent({
     showSettings ||
     showSecurity ||
     showNotificationSettings ||
+    showConnectedApps ||
+    showHealthIntegration ||
     showAccountSettings ||
     showChangePassword ||
     showEditProfile ||
@@ -1500,6 +1517,10 @@ function AppShellContent({
         if (result === 'COMPLETED' && hasCardioFinisher) void clearCardioSession();
         if (!appShellMountedRef.current) return result;
         if (result === 'COMPLETED') {
+          // Health export is a non-blocking sidecar of the already-committed
+          // backend transaction. It never participates in workout success or
+          // summary navigation, and re-verifies both durable authority facts.
+          if (executionId) void healthWorkoutExport.enqueueConfirmed(executionId);
           const durableReachedAtMs = Date.now();
           setDurableCompletionReachedAtMs(durableReachedAtMs);
           logInfo('workout_performance', 'durable_completion_reached', {
@@ -2221,6 +2242,12 @@ function AppShellContent({
         onChoose={(decision) => { void handleMissDecision(decision); }}
         onCancel={cancelMissDecision}
       />
+      {pendingHealthIntegrationConfirmation.visible && user && (
+        <PendingHealthIntegrationConfirmationSheet
+          uid={user.uid}
+          onResolved={pendingHealthIntegrationConfirmation.resolve}
+        />
+      )}
       <Modal
         visible={showEvolutionUnlock
           && (evolution.viewModel.kind === 'EVOLUTION_READY'
@@ -2295,6 +2322,7 @@ function AppShellContent({
           onOpenEditProfile={() => setShowEditProfile(true)}
           onOpenSecurity={() => setShowSecurity(true)}
           onOpenNotifications={() => setShowNotificationSettings(true)}
+          onOpenConnectedApps={() => setShowConnectedApps(true)}
           onOpenAccount={() => setShowAccountSettings(true)}
           onOpenHelpCenter={() => setSupportRoute({ name: 'help' })}
           onReportProblem={() => {
@@ -2324,6 +2352,25 @@ function AppShellContent({
       >
         <NotificationSettingsScreen key={user?.uid ?? 'signed-out'} onBack={() => setShowNotificationSettings(false)} />
       </PersistentScreen>
+      {showConnectedApps ? (
+        <View style={FULL_BLEED.overlayZ50}>
+          <ConnectedAppsScreen
+            key={user?.uid ?? 'signed-out'}
+            onBack={() => setShowConnectedApps(false)}
+            onOpenHealthIntegration={() => setShowHealthIntegration(true)}
+          />
+        </View>
+      ) : null}
+      {showHealthIntegration ? (
+        <View style={FULL_BLEED.overlayZ50}>
+          <HealthIntegrationScreen
+            key={user?.uid ?? 'signed-out'}
+            weightSync={healthWeightSync}
+            workoutExport={healthWorkoutExport}
+            onBack={() => setShowHealthIntegration(false)}
+          />
+        </View>
+      ) : null}
       {showAccountSettings ? (
         <View style={FULL_BLEED.overlayZ50}>
           <AccountSettingsScreen
