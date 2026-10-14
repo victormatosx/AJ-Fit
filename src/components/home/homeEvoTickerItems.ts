@@ -16,6 +16,8 @@ export interface HomeEvoTickerTranslate {
   (key: string, options?: Record<string, unknown>): string;
 }
 
+export interface HomeEvoTickerItem { label: string; value: string }
+
 /**
  * Pure item-list builder for `HomeEvoTicker`'s marquee — mirrors
  * `workoutEvolution/tickerItems.ts`'s `buildEvolutionTickerContent` in shape
@@ -23,29 +25,43 @@ export interface HomeEvoTickerTranslate {
  * gating each item on its own real-data nullability) so this logic is
  * testable without mounting the component. Each of the 6 items is omitted,
  * never rendered as 0/fabricated, when its backing data is unavailable.
+ *
+ * Returns `{label, value}` pairs (not one combined string) so the component
+ * can render the same two-tone label/value treatment as `EvolutionTicker`
+ * (Treino) and the Nutrição redesign's own ticker — one consistent look
+ * across every tab's scrolling info strip.
  */
 export function buildHomeEvoTickerItems(
   viewModel: EvolutionViewModel,
   streak: Streak | null,
   sessionsLast30Days: number | null,
   t: HomeEvoTickerTranslate,
-): string[] {
+): HomeEvoTickerItem[] {
   if (viewModel.kind === 'LOADING' || viewModel.kind === 'ERROR' || viewModel.kind === 'UNAVAILABLE') return [];
   const { summary } = viewModel;
-  const result: string[] = [];
+  const result: HomeEvoTickerItem[] = [];
   if (streak) {
-    result.push(t('home:evoTicker.streak', { count: streak.current }));
+    // `fixed`-schedule streaks count obligations (days); `flexible`-schedule
+    // streaks count consecutive weeks whose weekly goal was met — see
+    // `src/home/streak.ts`'s doc comment. Rendering a `flexible` streak with
+    // the "days" unit text would misstate the number (e.g. "3 dias" for a
+    // 3-WEEK streak), so the two units need their own value key.
+    const streakValueKey = streak.unit === 'weeks' ? 'home:evoTicker.streakValueWeeks' : 'home:evoTicker.streakValue';
+    result.push({ label: t('home:evoTicker.streakLabel'), value: t(streakValueKey, { count: streak.current }) });
   }
   if (summary.activeDays !== null) {
-    result.push(t('home:evoTicker.activeDays', { count: summary.activeDays, required: summary.requiredActiveDays }));
+    result.push({
+      label: t('home:evoTicker.activeDaysLabel'),
+      value: t('home:evoTicker.activeDaysValue', { count: summary.activeDays, required: summary.requiredActiveDays }),
+    });
   }
   if (summary.adherenceRatio !== null) {
-    result.push(t('home:evoTicker.adherence', { percent: Math.round(summary.adherenceRatio * 100) }));
+    result.push({ label: t('home:evoTicker.adherenceLabel'), value: t('home:evoTicker.adherenceValue', { percent: Math.round(summary.adherenceRatio * 100) }) });
   }
-  result.push(t('home:evoTicker.cycle', { number: summary.cycleNumber }));
-  result.push(t('home:evoTicker.level', { level: t(`evolution:level.${summary.activeLevel}`) }));
+  result.push({ label: t('home:evoTicker.cycleLabel'), value: t('home:evoTicker.cycleValue', { number: summary.cycleNumber }) });
+  result.push({ label: t('home:evoTicker.levelLabel'), value: t('home:evoTicker.levelValue', { level: t(`evolution:level.${summary.activeLevel}`) }) });
   if (sessionsLast30Days !== null) {
-    result.push(t('home:evoTicker.sessions30d', { count: sessionsLast30Days }));
+    result.push({ label: t('home:evoTicker.sessions30dLabel'), value: t('home:evoTicker.sessions30dValue', { count: sessionsLast30Days }) });
   }
   return result;
 }

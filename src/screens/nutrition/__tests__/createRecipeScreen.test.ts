@@ -67,7 +67,9 @@ describe('CreateRecipeScreen', () => {
 
   it('shows per-serving macros only when the breakdown actually has them (servings was valid)', () => {
     expect(source).toMatch(/\{breakdown\.perServing \? \(/);
-    expect(source).toMatch(/<NutrientRow label=\{t\('recipe\.perServing'\)\} values=\{breakdown\.perServing\} \/>/);
+    expect(source).toMatch(/<NuCap>\{t\('recipe\.perServing'\)\}<\/NuCap>/);
+    expect(source).toMatch(/Math\.round\(breakdown\.perServing\.kcal\)/);
+    expect(source).toMatch(/breakdown\.perServing\.proteinG\.toFixed\(1\)/);
   });
 
   it('passes finalWeightG/servings through to createNutritionRecipe only when actually provided', () => {

@@ -1,20 +1,25 @@
 import React from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ScreenBg } from '../../components/ui/ScreenBg';
-import { Display } from '../../components/ui/Display';
 import { Icon } from '../../components/ui/Icon';
 import { NutritionErrorState } from '../../components/nutrition/NutritionStates';
-import { useTheme } from '../../theme';
-import { generationFailureCopyKey, generationStageKey, isGenerationRetryable } from '../../nutrition/ui/generationStage';
+import { NU, NuCap } from '../../components/nutrition/NuKit';
+import { generationFailureCopyKey, generationStageKey, isGenerationRetryable, type GenerationStageKey } from '../../nutrition/ui/generationStage';
 import type { NutritionGenerationJobDoc } from '../../services/nutritionGeneration';
 
 /**
  * Mirrors the "montando treino" experience in spirit (`screens.md` §3):
  * a listener-driven status screen that survives navigation/background and
  * never fabricates a progress percentage the backend doesn't report.
+ *
+ * The 4-step list below (§3.10 "Gerando") is exactly `GenerationStageKey`'s
+ * own real ordered sequence (`queued -> running -> validating ->
+ * completing`, src/nutrition/ui/generationStage.ts) — no invented progress
+ * steps, no percentage the backend doesn't report.
  */
+const STAGE_ORDER: readonly GenerationStageKey[] = ['queued', 'running', 'validating', 'completing'];
+
 export function NutritionGeneratingScreen({
   job, onRetry, onBack, retrying,
 }: {
@@ -23,14 +28,13 @@ export function NutritionGeneratingScreen({
   onBack: () => void;
   retrying: boolean;
 }) {
-  const { theme } = useTheme();
   const { t } = useTranslation('nutrition');
 
   if (job?.status === 'failed') {
     const copyKey = generationFailureCopyKey(job.errorCode);
     const retryable = isGenerationRetryable(job.errorCode);
     return (
-      <ScreenBg>
+      <View style={{ flex: 1, backgroundColor: NU.bg }}>
         <SafeAreaView style={{ flex: 1, justifyContent: 'center' }} edges={['top', 'bottom']}>
           <NutritionErrorState
             title={t(`generating.${copyKey}.title`)}
@@ -41,27 +45,57 @@ export function NutritionGeneratingScreen({
             onBack={onBack}
           />
         </SafeAreaView>
-      </ScreenBg>
+      </View>
     );
   }
 
   const stageKey = generationStageKey(job?.status ?? 'queued');
+  const currentIndex = STAGE_ORDER.indexOf(stageKey);
 
   return (
-    <ScreenBg>
-      <SafeAreaView style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }} edges={['top', 'bottom']}>
-        <View style={{
-          width: 72, height: 72, borderRadius: theme.radii.pill, alignItems: 'center', justifyContent: 'center',
-          backgroundColor: theme.colors.primarySurfaceSubtle, marginBottom: 24,
-        }}>
-          {retrying ? <ActivityIndicator color={theme.colors.primaryEmphasis} /> : <Icon name="sparkles" size={30} color={theme.colors.primaryEmphasis} />}
+    <View style={{ flex: 1, backgroundColor: NU.bg }}>
+      <SafeAreaView style={{ flex: 1, paddingHorizontal: 22 }} edges={['top', 'bottom']}>
+        <View style={{ paddingTop: 34 }}>
+          <NuCap>{t('generating.title')}</NuCap>
+          <Text style={{ fontFamily: 'Archivo_700Bold', fontSize: 22, color: NU.white, marginTop: 14, lineHeight: 28 }}>
+            {t(`generating.stages.${stageKey}`)}
+          </Text>
+
+          <View style={{ marginTop: 28 }}>
+            {STAGE_ORDER.map((stage, index) => {
+              const done = index < currentIndex || (retrying && index <= currentIndex);
+              const current = index === currentIndex && !retrying;
+              return (
+                <View
+                  key={stage}
+                  style={{
+                    flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 15,
+                    borderTopWidth: index ? 1 : 0, borderTopColor: NU.hairline,
+                    opacity: done || current ? 1 : 0.35,
+                  }}
+                >
+                  <View style={{
+                    width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                    backgroundColor: done ? NU.blue : 'transparent',
+                    borderWidth: done ? 0 : 1, borderColor: current ? NU.blueHi : 'rgba(255,255,255,0.25)',
+                  }}>
+                    {done ? <Icon name="check" size={12} color="#fff" /> : current ? (
+                      <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: NU.blueHi }} />
+                    ) : null}
+                  </View>
+                  <Text style={{ fontFamily: current ? 'Archivo_600SemiBold' : 'Archivo_500Medium', fontSize: 14.5, color: NU.white }}>
+                    {t(`generating.stages.${stage}`)}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+
+          <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 13, lineHeight: 20, color: NU.faint, marginTop: 24 }}>
+            {t('generating.leaveScreenNote')}
+          </Text>
         </View>
-        <Display size={22} style={{ textAlign: 'center' }}>{t('generating.title')}</Display>
-        <Text style={{ fontFamily: theme.fonts.ui, fontSize: 14, color: theme.colors.textMuted, textAlign: 'center', marginTop: 10 }}>
-          {t(`generating.stages.${stageKey}`)}
-        </Text>
-        <ActivityIndicator color={theme.colors.primaryEmphasis} style={{ marginTop: 28 }} />
       </SafeAreaView>
-    </ScreenBg>
+    </View>
   );
 }

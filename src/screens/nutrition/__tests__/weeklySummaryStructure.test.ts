@@ -24,7 +24,7 @@ describe('Nutrition weekly summary wiring', () => {
   it('renders weekly calories, macros, no-data days and the existing weight chart', () => {
     expect(weekly).toContain('<CaloriesSection summary={summary} />');
     expect(weekly).toContain('<MacrosSection summary={summary} />');
-    expect(weekly).toContain('day.hasLog ?');
+    expect(weekly).toContain('day.hasLog && day.totals');
     expect(weekly).toContain('<EvolutionAreaChart');
   });
 

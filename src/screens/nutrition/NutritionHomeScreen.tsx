@@ -1,23 +1,26 @@
-import React from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Easing, Pressable, ScrollView, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ScreenBg } from '../../components/ui/ScreenBg';
-import { Display, MonoLabel } from '../../components/ui/Display';
-import { CtaButton } from '../../components/ui/CtaButton';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Icon, type IconName } from '../../components/ui/Icon';
+import { ProfileAvatar } from '../../components/ui/ProfileAvatar';
+import { useAuth } from '../../state/AuthContext';
+import { useIsScreenActive } from '../../state/ScreenActivity';
 import { DailyNutritionSummary } from '../../components/nutrition/MacroProgress';
 import { MealCard } from '../../components/nutrition/MealCard';
 import { EmptyNutritionState, NutritionErrorState } from '../../components/nutrition/NutritionStates';
 import { SkeletonBlock } from '../../components/nutrition/NutritionPrimitives';
 import { WeeklySummaryCard } from '../../components/nutrition/WeeklySummaryCard';
-import { useTheme } from '../../theme';
+import { NU, NuCap, NuRing } from '../../components/nutrition/NuKit';
 import { nextPlanMeal } from '../../nutrition/ui/planView';
-import { diarySlotSummary } from '../../nutrition/ui/diaryModel';
+import { diaryFollowedCount, diarySlotSummary } from '../../nutrition/ui/diaryModel';
+import { isFutureLocalDate, todayLocalDate } from '../../nutrition/ui/localDate';
 import { isGenerationRequestErrorRetryable, type GenerationRequestErrorKey } from '../../nutrition/ui/generationStage';
 import type { NutritionMealSlot, NutritionTotals } from '../../types/nutrition';
 import type { NutritionPlanDoc } from '../../services/nutritionPlans';
 import type { NutritionDailyLogDoc } from '../../services/nutritionDiary';
+import { displayLineHeight } from '../../theme/tokens';
 import type { NutritionWeeklySummary, NutritionWeeklyWeightSummary } from '../../nutrition/weekly';
 
 export type NutritionHomeRequestErrorKey = GenerationRequestErrorKey;
@@ -52,8 +55,11 @@ export function NutritionHomeScreen({
   onCreateCustomFood: () => void;
   onCreateRecipe: () => void;
 }) {
-  const { theme } = useTheme();
   const { t } = useTranslation('nutrition');
+  // Same avatar as Home's header (`src/screens/HomeScreen.tsx`) — real
+  // photo/initials, never a fixed placeholder.
+  const { user, profile } = useAuth();
+  const displayName = profile?.profile.name || user?.displayName || '';
 
   if (state.kind === 'disabled') {
     return (
@@ -65,7 +71,7 @@ export function NutritionHomeScreen({
 
   if (state.kind === 'loading') {
     return (
-      <ScreenBg>
+      <View style={{ flex: 1, backgroundColor: NU.bg }}>
         <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
           <View style={{ padding: 22, gap: 12 }}>
             <SkeletonBlock height={28} style={{ width: '50%' }} />
@@ -74,7 +80,7 @@ export function NutritionHomeScreen({
             <SkeletonBlock height={70} />
           </View>
         </SafeAreaView>
-      </ScreenBg>
+      </View>
     );
   }
 
@@ -118,13 +124,13 @@ export function NutritionHomeScreen({
       <Centered>
         {state.safetyBlocked ? (
           <View style={{
-            padding: 16, borderRadius: theme.radii.lg, backgroundColor: theme.colors.feedbackCriticalBackground,
-            borderWidth: 1, borderColor: theme.colors.feedbackCriticalBorder, marginBottom: 18, width: '100%',
+            padding: 16, borderRadius: 14, backgroundColor: 'rgba(255,138,128,0.1)',
+            borderWidth: 1, borderColor: 'rgba(255,138,128,0.35)', marginBottom: 18, width: '100%',
           }}>
-            <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 14, color: theme.colors.feedbackCriticalText }}>
+            <Text style={{ fontFamily: 'Archivo_700Bold', fontSize: 14, color: NU.danger }}>
               {t('home.pregnancyBlock.title')}
             </Text>
-            <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.feedbackCriticalText, marginTop: 6, lineHeight: 19 }}>
+            <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 13, color: NU.danger, marginTop: 6, lineHeight: 19 }}>
               {t('home.pregnancyBlock.body')}
             </Text>
           </View>
@@ -134,9 +140,9 @@ export function NutritionHomeScreen({
           ctaLabel={state.safetyBlocked ? undefined : t('home.noPlan.cta')}
           onPress={state.safetyBlocked ? undefined : state.onCreatePlan}
         />
-        <CtaButton ghost onPress={state.onEditProfile} style={{ width: '100%', marginTop: -4 }}>
-          {t('home.noPlan.editProfile')}
-        </CtaButton>
+        <Pressable onPress={state.onEditProfile} accessibilityRole="button" style={{ marginTop: 16 }}>
+          <Text style={{ fontFamily: 'Archivo_600SemiBold', fontSize: 14, color: NU.secondary }}>{t('home.noPlan.editProfile')}</Text>
+        </Pressable>
       </Centered>
     );
   }
@@ -164,70 +170,103 @@ export function NutritionHomeScreen({
   // the plan's own totals, which are only a recommendation.
   const consumed: NutritionTotals = todayDiary?.totals ?? { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0, fiberG: 0 };
   const next = nextPlanMeal(plan);
+  const today = todayLocalDate();
+  const eyebrow = new Intl.DateTimeFormat(undefined, { weekday: 'short', day: '2-digit', month: 'short' }).format(new Date());
+  const followed = diaryFollowedCount(todayDiary);
+  const loggedMealCount = plan.meals.filter((meal) => diarySlotSummary(todayDiary, meal.slot) != null).length;
 
   return (
-    <ScreenBg>
+    <View style={{ flex: 1, backgroundColor: NU.bg }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-        <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 22, paddingTop: 10 }}>
-            <Display size={24}>{t('home.title')}</Display>
-            <CtaButton ghost onPress={state.onOpenFullPlan} style={{ width: 'auto', height: 36, paddingHorizontal: 14 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 12.5, color: theme.colors.primaryEmphasis }}>
-                  {t('plan.title')}
-                </Text>
-                <Icon name="chevron-right" size={13} color={theme.colors.primaryEmphasis} />
-              </View>
-            </CtaButton>
+        <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+          {/* §3.1 — header. Same geometry as Home's/Treino's (22px gutter,
+              50px total top offset, 12px bottom gap) so every tab's
+              header/ticker block lines up at an identical height. */}
+          <View style={{ paddingHorizontal: 22, paddingTop: 50 - 10, paddingBottom: 12, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+            <View>
+              <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 10, letterSpacing: 2, color: NU.legend, textTransform: 'uppercase' }}>
+                {eyebrow}
+              </Text>
+              <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 34, lineHeight: displayLineHeight(34), color: NU.white, marginTop: 8, textTransform: 'uppercase', transform: [{ skewX: '-8deg' }] }}>
+                {t('home.title')}.
+              </Text>
+            </View>
+            <ProfileAvatar
+              displayName={displayName}
+              photoURL={profile?.profile.photoURL}
+              photoVersion={profile?.profile.photoVersion}
+              size={46}
+            />
           </View>
 
-          <View style={{ paddingHorizontal: 22, marginTop: 16, marginBottom: 20 }}>
+          {/* §3.2 — scrolling ticker. Same wrapper margins as Home's/Treino's. */}
+          <View style={{ marginTop: 22, marginBottom: 18 }}>
+            <NutritionTicker
+              goalKcal={goals.kcal}
+              consumedKcal={consumed.kcal}
+              protein={consumed.proteinG}
+              proteinGoal={goals.proteinG}
+              loggedMeals={loggedMealCount}
+              totalMeals={plan.meals.length}
+              followed={followed.followed}
+              followedOf={followed.logged}
+              weeklySummary={state.weeklySummary}
+            />
+          </View>
+
+          {/* §3.3/§3.4 — hero kcal ring + 4 macro rings. */}
+          <View style={{ paddingHorizontal: 22, paddingBottom: next ? 0 : 20 }}>
             <DailyNutritionSummary totals={consumed} goals={goals} />
           </View>
 
-          {next ? (
-            <View style={{ marginBottom: 20 }}>
-              <MealCard variant="next" meal={next} onPress={() => state.onOpenMeal(next.slot)} />
-            </View>
-          ) : null}
+          {next ? <MealCard variant="next" meal={next} onPress={() => state.onOpenMeal(next.slot)} /> : null}
 
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginHorizontal: 22, marginBottom: 10 }}>
-            <MonoLabel color={theme.colors.textFaint}>{t('home.mealsToday.title')}</MonoLabel>
-            <Pressable onPress={state.onOpenDiary} accessibilityRole="button" accessibilityLabel={t('home.mealsToday.openDiaryCta')}>
-              <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 12, color: theme.colors.primaryEmphasis }}>
-                {t('home.mealsToday.openDiaryCta')}
-              </Text>
-            </Pressable>
-          </View>
-          {plan.meals.map((meal) => {
-            const summary = diarySlotSummary(todayDiary, meal.slot);
-            return (
-              <Pressable
-                key={meal.slot}
-                onPress={() => state.onOpenDiarySlot(meal.slot)}
-                accessibilityRole="button"
-                accessibilityLabel={t(`mealSlots.${meal.slot}`)}
-                style={{
-                  marginHorizontal: 22, marginBottom: 10, padding: 14, borderRadius: theme.radii.lg,
-                  backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border,
-                  flexDirection: 'row', alignItems: 'center', gap: 12,
-                }}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 14.5, color: theme.colors.textPrimary }}>
-                    {t(`mealSlots.${meal.slot}`)}
-                  </Text>
-                  <Text style={{ fontFamily: theme.fonts.ui, fontSize: 12.5, color: theme.colors.textMuted, marginTop: 2 }}>
-                    {summary ? `${Math.round(summary.kcal)} ${t('units.kcal')} · ${t('home.mealsToday.itemCount', { count: summary.itemCount })}`
-                      : t('home.mealsToday.empty')}
-                  </Text>
-                </View>
-                <Icon name="chevron-right" size={16} color={theme.colors.textFaint} />
+          {/* §3.6 — today's meals. */}
+          <View style={{ marginTop: 40, paddingHorizontal: 22 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 2 }}>
+              <NuCap>{t('home.mealsToday.title')}</NuCap>
+              <Pressable onPress={state.onOpenDiary} accessibilityRole="button" accessibilityLabel={t('home.mealsToday.openDiaryCta')} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Text style={{ fontFamily: 'Archivo_600SemiBold', fontSize: 12, color: NU.secondary }}>{t('home.mealsToday.openDiaryCta')}</Text>
+                <Icon name="chevron-right" size={12} color={NU.secondary} />
               </Pressable>
-            );
-          })}
+            </View>
+            {plan.meals.map((meal, index) => {
+              const summary = diarySlotSummary(todayDiary, meal.slot);
+              const isNext = next?.slot === meal.slot;
+              return (
+                <Pressable
+                  key={meal.slot}
+                  onPress={() => state.onOpenDiarySlot(meal.slot)}
+                  accessibilityRole="button"
+                  accessibilityLabel={t(`mealSlots.${meal.slot}`)}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, borderTopWidth: index ? 1 : 0, borderTopColor: NU.hairline }}
+                >
+                  <View style={{
+                    width: 8, height: 8, borderRadius: 4, flexShrink: 0,
+                    backgroundColor: summary ? NU.white : 'transparent',
+                    borderWidth: summary ? 0 : 1, borderColor: 'rgba(255,255,255,0.3)',
+                  }} />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={{ fontFamily: 'Archivo_600SemiBold', fontSize: 14.5, color: NU.white }}>
+                      {t(`mealSlots.${meal.slot}`)}
+                    </Text>
+                    <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 12, color: NU.faint, marginTop: 3 }}>
+                      {summary ? t('home.mealsToday.itemCount', { count: summary.itemCount }) : isNext ? t('home.nextMeal.title') : t('home.mealsToday.empty')}
+                    </Text>
+                  </View>
+                  <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 17, lineHeight: displayLineHeight(17), color: summary ? NU.white : NU.faintest, textTransform: 'uppercase' }}>
+                    {summary ? Math.round(summary.kcal) : '—'}
+                  </Text>
+                  <Icon name="chevron-right" size={15} color={NU.faintest} />
+                </Pressable>
+              );
+            })}
+          </View>
 
-          <View style={{ marginHorizontal: 22, marginTop: 12, marginBottom: 20 }}>
+          {/* §3.7 — week ring row. */}
+          <NutritionWeekRow summary={state.weeklySummary} loading={state.weeklyLoading} today={today} onOpenWeekly={state.onOpenWeekly} />
+
+          <View style={{ marginHorizontal: 22, marginTop: 24, marginBottom: 10 }}>
             <WeeklySummaryCard
               summary={state.weeklySummary}
               weight={state.weeklyWeight}
@@ -236,61 +275,204 @@ export function NutritionHomeScreen({
             />
           </View>
 
-          <MonoLabel color={theme.colors.textFaint} style={{ marginHorizontal: 22, marginTop: 10, marginBottom: 10 }}>
-            {t('home.quickAccess.title')}
-          </MonoLabel>
-          <View style={{ flexDirection: 'row', gap: 10, marginHorizontal: 22 }}>
-            <QuickAccessButton icon="plus" label={t('home.quickAccess.customFood')} onPress={onCreateCustomFood} />
-            <QuickAccessButton icon="plus" label={t('home.quickAccess.recipe')} onPress={onCreateRecipe} />
-          </View>
-          <View style={{ flexDirection: 'row', gap: 10, marginHorizontal: 22, marginTop: 10 }}>
-            <QuickAccessButton icon="heart" label={t('home.quickAccess.favorites')} onPress={state.onOpenFavorites} />
-            <QuickAccessButton icon="star" label={t('home.quickAccess.savedMeals')} onPress={state.onOpenMealFavorites} />
-          </View>
-          <View style={{ marginHorizontal: 22, marginTop: 10 }}>
-            <QuickAccessButton icon="file-text" label={t('home.quickAccess.history')} onPress={state.onOpenHistory} />
+          {/* §3.8 — shortcuts. */}
+          <View style={{ marginTop: 30, paddingHorizontal: 22 }}>
+            <NuCap style={{ marginBottom: 10 }}>{t('home.quickAccess.title')}</NuCap>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              <QuickAccessTile icon="plus" label={t('home.quickAccess.customFood')} onPress={onCreateCustomFood} />
+              <QuickAccessTile icon="plus" label={t('home.quickAccess.recipe')} onPress={onCreateRecipe} />
+              <QuickAccessTile icon="heart" label={t('home.quickAccess.favorites')} onPress={state.onOpenFavorites} />
+              <QuickAccessTile icon="star" label={t('home.quickAccess.savedMeals')} onPress={state.onOpenMealFavorites} />
+              <QuickAccessTile icon="file-text" label={t('home.quickAccess.history')} onPress={state.onOpenHistory} wide />
+            </View>
           </View>
         </ScrollView>
 
-        {/* Fixed, not inside the ScrollView above, so it stays put while the
-            page scrolls — positioned within the SafeAreaView's own bottom
-            inset, so it never overlaps the tab bar rendered by the
-            navigator outside this screen. */}
+        {/* §3.9 — floating "+" button. Fixed, not inside the ScrollView
+            above, so it stays put while the page scrolls — positioned within
+            the SafeAreaView's own bottom inset, so it never overlaps the tab
+            bar rendered by the navigator outside this screen. */}
         <Pressable
           onPress={state.onRegisterMeal}
           accessibilityRole="button"
           accessibilityLabel={t('registerMeal.fab')}
-          style={{
-            position: 'absolute', bottom: 20, right: 20, width: 56, height: 56, borderRadius: theme.radii.pill,
-            backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center',
-            ...theme.shadows.accent,
-          }}
+          style={{ position: 'absolute', bottom: 20, right: 20 }}
         >
-          <Icon name="plus" size={24} color={theme.colors.primaryForeground} />
+          <LinearGradient
+            colors={[NU.blueHi, NU.blue]}
+            style={{
+              width: 56, height: 56, borderRadius: 18, alignItems: 'center', justifyContent: 'center',
+              shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.45, shadowRadius: 22, elevation: 10,
+            }}
+          >
+            <Icon name="plus" size={22} color="#fff" />
+          </LinearGradient>
         </Pressable>
       </SafeAreaView>
-    </ScreenBg>
+    </View>
   );
 }
 
-function QuickAccessButton({ icon, label, onPress }: { icon: IconName; label: string; onPress: () => void }) {
-  const { theme } = useTheme();
+// Exactly the shape of `src/components/evolution/EvolutionTicker.tsx` (used
+// by Treino) — same border/gap/duration/colors, so every tab's scrolling
+// info strip reads as one consistent surface. Not a shared import: that
+// component takes an `EvolutionViewModel`, not Nutrition's data, and rule 9
+// says build Nutrição's own version rather than reshape a shared one.
+const TICKER_GUTTER = 22;
+const TICKER_ITEM_GAP = 36;
+const TICKER_LOOP_DURATION_MS = 18000;
+const TICKER_BORDER = 'rgba(255,255,255,0.06)';
+const TICKER_LABEL_COLOR = 'rgba(255,255,255,0.32)';
+
+interface TickerItem { label: string; value: string }
+
+/** §3.2 — infinite horizontal marquee. Two copies of the same content sit side by side inside one `Animated.View`; once it has slid left by exactly one copy's width (measured via `onLayout`, since RN has no CSS `%`-of-content translate), the loop resets to 0 — the second copy is already sitting where the first started, so the reset is invisible. Any item without real data is simply omitted (rule: never fabricate a number). */
+function NutritionTicker({
+  goalKcal, consumedKcal, protein, proteinGoal, loggedMeals, totalMeals, followed, followedOf, weeklySummary,
+}: {
+  goalKcal: number; consumedKcal: number; protein: number; proteinGoal: number;
+  loggedMeals: number; totalMeals: number; followed: number; followedOf: number;
+  weeklySummary: NutritionWeeklySummary | null;
+}) {
+  const { t } = useTranslation('nutrition');
+  const items = useMemo<TickerItem[]>(() => {
+    const parts: TickerItem[] = [
+      { label: t('home.ticker.goal'), value: `${Math.round(goalKcal)} ${t('units.kcal')}` },
+      { label: t('home.ticker.consumed'), value: `${Math.round(consumedKcal)} ${t('units.kcal')}` },
+      { label: t('home.summary.protein'), value: `${Math.round(protein)}/${Math.round(proteinGoal)}${t('units.gramsShort')}` },
+      { label: t('home.ticker.meals'), value: `${loggedMeals}/${totalMeals}` },
+    ];
+    if (followedOf > 0) parts.push({ label: t('home.ticker.followedPlan'), value: `${followed}/${followedOf}` });
+    if (weeklySummary) {
+      parts.push({ label: t('home.week.title'), value: `${weeklySummary.recordedDays}/7 ${t('weekly.days')}` });
+      if (weeklySummary.averageConsumed) {
+        parts.push({ label: t('weekly.average'), value: `${Math.round(weeklySummary.averageConsumed.kcal)} ${t('units.kcal')}` });
+      }
+    }
+    return parts;
+  }, [goalKcal, consumedKcal, protein, proteinGoal, loggedMeals, totalMeals, followed, followedOf, weeklySummary, t]);
+
+  const translateX = useRef(new Animated.Value(0)).current;
+  const [cycleWidth, setCycleWidth] = useState(0);
+  // Nutrição stays mounted (not unmounted) while another tab is active, same
+  // as Home — without this guard the native-driven loop below would keep
+  // running forever on an invisible screen (see `EvolutionTicker.tsx`).
+  const isActive = useIsScreenActive();
+
+  useEffect(() => {
+    if (!cycleWidth || !isActive) return;
+    translateX.setValue(0);
+    const loop = Animated.loop(
+      Animated.timing(translateX, {
+        toValue: -(cycleWidth + TICKER_ITEM_GAP),
+        duration: TICKER_LOOP_DURATION_MS,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [cycleWidth, isActive, translateX]);
+
+  const renderItems = (keyPrefix: string, measure: boolean) => (
+    <View
+      style={{ flexDirection: 'row', gap: TICKER_ITEM_GAP, paddingRight: TICKER_ITEM_GAP }}
+      onLayout={measure ? (e) => setCycleWidth(e.nativeEvent.layout.width) : undefined}
+    >
+      {items.map(({ label, value }, index) => (
+        <Text key={`${keyPrefix}-${index}`} style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 10, letterSpacing: 2, color: TICKER_LABEL_COLOR }}>
+          {label.toUpperCase()}{' '}
+          <Text style={{ color: NU.blueHi, fontFamily: 'JetBrainsMono_700Bold' }}>{value.toUpperCase()}</Text>
+        </Text>
+      ))}
+    </View>
+  );
+
   return (
-    <CtaButton ghost onPress={onPress} style={{ flex: 1 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
-        <Icon name={icon} size={14} color={theme.colors.primaryEmphasis} />
-        <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 13, color: theme.colors.primaryEmphasis }}>{label}</Text>
+    <View style={{ borderTopWidth: 1, borderBottomWidth: 1, borderColor: TICKER_BORDER, paddingVertical: 8, overflow: 'hidden' }}>
+      <Animated.View style={{ flexDirection: 'row', paddingLeft: TICKER_GUTTER, transform: [{ translateX }] }}>
+        {renderItems('a', true)}
+        {renderItems('b', false)}
+      </Animated.View>
+    </View>
+  );
+}
+
+/** §3.7 — 7 small rings, one per day of the active week. Reuses the same `NutritionWeeklyDay` shape and `hasLog`/future-date rules already established by `NutritionWeeklySummaryScreen`'s own day chart — no new data, just a different visual (rings instead of bars). */
+function NutritionWeekRow({
+  summary, loading, today, onOpenWeekly,
+}: {
+  summary: NutritionWeeklySummary | null;
+  loading: boolean;
+  today: string;
+  onOpenWeekly: () => void;
+}) {
+  const { t } = useTranslation('nutrition');
+  const weekdayLabels = t('weekly.weekdays', { returnObjects: true }) as unknown as string[];
+  if (loading) {
+    return (
+      <View style={{ marginTop: 40, paddingHorizontal: 22 }}>
+        <NuCap style={{ marginBottom: 10 }}>{t('home.week.title')}</NuCap>
+        <SkeletonBlock height={64} />
       </View>
-    </CtaButton>
+    );
+  }
+  if (!summary) return null;
+  const goal = summary.averageTarget?.kcal ?? summary.days.find((day) => day.target)?.target?.kcal ?? 0;
+  return (
+    <View style={{ marginTop: 40, paddingHorizontal: 22 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 16 }}>
+        <NuCap>{t('home.week.title')}</NuCap>
+        <Pressable onPress={onOpenWeekly} accessibilityRole="button" style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <Text style={{ fontFamily: 'Archivo_600SemiBold', fontSize: 12, color: NU.secondary }}>{t('home.week.summaryCta')}</Text>
+          <Icon name="chevron-right" size={12} color={NU.secondary} />
+        </Pressable>
+      </View>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+        {summary.days.map((day, index) => {
+          const isToday = day.localDate === today;
+          const future = isFutureLocalDate(day.localDate);
+          const pct = goal > 0 && day.totals ? (day.totals.kcal / goal) * 100 : 0;
+          return (
+            <View key={day.localDate} style={{ alignItems: 'center', gap: 8 }}>
+              <NuRing size={36} stroke={3.5} pct={pct} color={isToday ? NU.blueHi : NU.strong} dashed={!day.hasLog && !future} faint={future}>
+                <View />
+              </NuRing>
+              <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 8.5, letterSpacing: 0.8, color: isToday ? NU.white : NU.faint }}>
+                {weekdayLabels?.[index] ?? ''}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+function QuickAccessTile({ icon, label, onPress, wide }: { icon: IconName; label: string; onPress: () => void; wide?: boolean }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={{
+        flexBasis: wide ? '100%' : '47%', flexGrow: 1, minHeight: 88, padding: 16, borderRadius: 16,
+        backgroundColor: NU.surfaceSubtle, borderWidth: 1, borderColor: NU.hairline,
+        justifyContent: 'space-between',
+      }}
+    >
+      <Icon name={icon} size={18} color={NU.secondary} />
+      <Text style={{ fontFamily: 'Archivo_600SemiBold', fontSize: 13.5, color: NU.white }}>{label}</Text>
+    </Pressable>
   );
 }
 
 function Centered({ children }: { children: React.ReactNode }) {
   return (
-    <ScreenBg>
+    <View style={{ flex: 1, backgroundColor: NU.bg }}>
       <SafeAreaView style={{ flex: 1, justifyContent: 'center' }} edges={['top', 'bottom']}>
         {children}
       </SafeAreaView>
-    </ScreenBg>
+    </View>
   );
 }

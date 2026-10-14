@@ -1,12 +1,11 @@
-import React, { useCallback, useRef, useState } from 'react';
-import { ActivityIndicator, Linking, Modal, Pressable, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Easing, Linking, Modal, Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import type { Timestamp } from 'firebase/firestore';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon } from '../../components/ui/Icon';
-import { CtaButton } from '../../components/ui/CtaButton';
-import { useTheme } from '../../theme';
+import { NU, NuButton } from '../../components/nutrition/NuKit';
 import { resolveFoodLogEntryByBarcode } from '../../services/foodLogCatalog';
 import {
   beginBarcodeScan, endBarcodeScan, initialBarcodeScanGuardState, shouldAcceptBarcodeScan,
@@ -44,7 +43,6 @@ export function BarcodeScannerModal({
   /** Lets the caller offer manual/custom-food creation as a fallback (round brief §4) — this component never invents macros itself. */
   onNotFound?: () => void;
 }) {
-  const { theme } = useTheme();
   const { t } = useTranslation('nutrition');
   const [permission, requestPermission] = useCameraPermissions();
   const [state, setState] = useState<ScanState>({ phase: 'scanning' });
@@ -112,7 +110,7 @@ export function BarcodeScannerModal({
       <View style={{ flex: 1, backgroundColor: '#000' }}>
         <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 22, paddingTop: 10, zIndex: 10 }}>
-            <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 16, color: '#fff' }}>
+            <Text style={{ fontFamily: 'Archivo_600SemiBold', fontSize: 16, color: '#fff' }}>
               {t('barcodeScan.title')}
             </Text>
             <Pressable accessibilityRole="button" accessibilityLabel={t('profile.actions.cancel')} onPress={handleClose} style={{ padding: 6 }}>
@@ -123,13 +121,13 @@ export function BarcodeScannerModal({
           {!permission ? null : !permission.granted ? (
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 16 }}>
               <Icon name="camera" size={40} color="#fff" />
-              <Text style={{ fontFamily: theme.fonts.ui, fontSize: 14, color: '#fff', textAlign: 'center' }}>
+              <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 14, color: '#fff', textAlign: 'center' }}>
                 {t('barcodeScan.permissionExplanation')}
               </Text>
               {permission.canAskAgain ? (
-                <CtaButton onPress={() => { void requestPermission(); }}>{t('barcodeScan.permissionRequest')}</CtaButton>
+                <NuButton onPress={() => { void requestPermission(); }}>{t('barcodeScan.permissionRequest')}</NuButton>
               ) : (
-                <CtaButton onPress={() => { void Linking.openSettings(); }}>{t('barcodeScan.permissionOpenSettings')}</CtaButton>
+                <NuButton onPress={() => { void Linking.openSettings(); }}>{t('barcodeScan.permissionOpenSettings')}</NuButton>
               )}
             </View>
           ) : (
@@ -145,14 +143,17 @@ export function BarcodeScannerModal({
                 pointerEvents="box-none"
               >
                 {state.phase === 'scanning' ? (
-                  <View style={{ width: '78%', height: 140, borderRadius: theme.radii.lg, borderWidth: 2, borderColor: '#fff' }} />
+                  <View style={{ width: '78%', height: 140, borderRadius: 16, borderWidth: 2, borderColor: '#fff', overflow: 'hidden' }}>
+                    {/* `.aj2-scan` sweep — purely decorative, no state of its own, matches the design's "linha branca de varredura animada". */}
+                    <ScanSweep />
+                  </View>
                 ) : null}
               </View>
 
               {state.phase === 'resolving' ? (
                 <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.55)' }}>
                   <ActivityIndicator color="#fff" size="large" />
-                  <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13, color: '#fff', marginTop: 12 }}>
+                  <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 13, color: '#fff', marginTop: 12 }}>
                     {t('barcodeScan.resolving')}
                   </Text>
                 </View>
@@ -160,19 +161,19 @@ export function BarcodeScannerModal({
 
               {state.phase === 'not_found' || state.phase === 'error' ? (
                 <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.75)', padding: 32 }}>
-                  <View style={{ width: '100%', borderRadius: theme.radii.xl, backgroundColor: theme.colors.sheetBackground, borderWidth: 1, borderColor: theme.colors.border, padding: 22, gap: 14 }}>
-                    <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 16, color: theme.colors.textPrimary, textAlign: 'center' }}>
+                  <View style={{ width: '100%', borderRadius: 16, backgroundColor: NU.panel, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', padding: 22, gap: 14 }}>
+                    <Text style={{ fontFamily: 'Archivo_700Bold', fontSize: 16, color: NU.white, textAlign: 'center' }}>
                       {state.phase === 'not_found' ? t('barcodeScan.notFoundTitle') : t('barcodeScan.errorTitle')}
                     </Text>
-                    <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textMuted, textAlign: 'center' }}>
+                    <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 13, color: NU.faint, textAlign: 'center' }}>
                       {state.phase === 'not_found' ? t('barcodeScan.notFoundBody') : t('barcodeScan.errorBody')}
                     </Text>
                     <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
-                      <CtaButton ghost onPress={resetForRetry} style={{ flex: 1 }}>{t('barcodeScan.tryAgain')}</CtaButton>
+                      <NuButton ghost onPress={resetForRetry} style={{ flex: 1 }}>{t('barcodeScan.tryAgain')}</NuButton>
                       {state.phase === 'not_found' && onNotFound ? (
-                        <CtaButton onPress={() => { handleClose(); onNotFound(); }} style={{ flex: 1 }}>
+                        <NuButton onPress={() => { handleClose(); onNotFound(); }} style={{ flex: 1 }}>
                           {t('barcodeScan.createManually')}
-                        </CtaButton>
+                        </NuButton>
                       ) : null}
                     </View>
                   </View>
@@ -183,5 +184,28 @@ export function BarcodeScannerModal({
         </SafeAreaView>
       </View>
     </Modal>
+  );
+}
+
+/** Purely decorative animated scan line — `aj2-scan` in the design doc. No state, no props: just loops top-to-bottom inside its (clipped) parent. */
+function ScanSweep() {
+  const translateY = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(translateY, { toValue: 1, duration: 1800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(translateY, { toValue: 0, duration: 0, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [translateY]);
+  return (
+    <Animated.View
+      style={{
+        position: 'absolute', left: '10%', right: '10%', height: 2, backgroundColor: '#fff', opacity: 0.85,
+        transform: [{ translateY: translateY.interpolate({ inputRange: [0, 1], outputRange: [16, 124] }) }],
+      }}
+    />
   );
 }

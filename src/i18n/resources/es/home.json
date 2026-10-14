@@ -3,20 +3,29 @@
     "todayLine": "{{weekday}} · {{day}} {{month}}"
   },
   "evoTicker": {
-    "streak": "RACHA {{count}} DÍAS",
-    "activeDays": "DÍAS ACTIVOS {{count}}/{{required}}",
-    "adherence": "ADHERENCIA {{percent}}%",
-    "cycle": "CICLO {{number}}",
-    "level": "NIVEL {{level}}",
-    "sessions30d": "{{count}} ENTRENAMIENTOS EN LOS ÚLTIMOS 30 DÍAS"
+    "streakLabel": "RACHA",
+    "streakValue": "{{count}} DÍAS",
+    "streakValueWeeks": "{{count}} SEMANAS",
+    "activeDaysLabel": "DÍAS ACTIVOS",
+    "activeDaysValue": "{{count}}/{{required}}",
+    "adherenceLabel": "ADHERENCIA",
+    "adherenceValue": "{{percent}}%",
+    "cycleLabel": "CICLO",
+    "cycleValue": "{{number}}",
+    "levelLabel": "NIVEL",
+    "levelValue": "{{level}}",
+    "sessions30dLabel": "ENTRENAMIENTOS",
+    "sessions30dValue": "{{count}} EN LOS ÚLTIMOS 30 DÍAS"
   },
   "evoRing": {
     "ofCycle": "DEL CICLO",
     "daysLeft": "Faltan {{count}} días",
     "paused": "Progreso en pausa",
     "unlocked": "Evolución disponible",
+    "cycleComplete": "Ciclo completado",
     "streakLabel": "RACHA",
     "streakUnit": "días",
+    "streakUnitWeeks": "semanas",
     "adherenceLabel": "ADHERENCIA",
     "adherenceBelowThreshold": ", por debajo del objetivo",
     "towardAdvanced": "HACIA AVANZADO",
@@ -44,10 +53,13 @@
   },
   "todayCard": {
     "kicker": "Entreno de hoy",
+    "kickerWithLetter": "Hoy · Entreno {{letter}}",
     "meta": "{{duration}} min · {{exercises}} ejercicios · ~{{kcal}} kcal",
     "start": "Iniciar entreno",
     "review": "Revisar información",
     "sessionMeta": "{{exercises}} ejercicios · {{sets}} series",
+    "sessionMetaDuration_one": "{{minutes}} min · {{count}} ejercicio",
+    "sessionMetaDuration_other": "{{minutes}} min · {{count}} ejercicios",
     "confirm": {
       "title": "¿Iniciar entreno?",
       "question": "¿Quieres iniciar ahora",
@@ -224,8 +236,8 @@
         }
       },
       "empty": {
-        "title": "Ninguna evaluación registrada",
-        "description": "Registra tu primera evaluación física para seguir tu peso y composición corporal con el tiempo.",
+        "title": "Desbloquea tu evolución corporal",
+        "description": "Haz tu primera evaluación física para seguir tus cambios a lo largo del tiempo.",
         "cta": "Hacer evaluación"
       }
     },
@@ -279,9 +291,9 @@
         "chart": "Gráfico de evolución de {{exercise}}. Carga actual: {{value}} {{unit}}"
       },
       "empty": {
-        "title": "Aún sin historial de cargas",
-        "description": "Las cargas completadas durante tus entrenamientos aparecerán aquí automáticamente.",
-        "hint": "Registra una serie con carga para comenzar"
+        "title": "Tu evolución empieza aquí",
+        "description": "Registra las cargas de tus ejercicios para seguir tu fuerza y tus récords personales.",
+        "cta": "Iniciar entrenamiento"
       },
       "error": {
         "title": "No pudimos cargar tus pesos",

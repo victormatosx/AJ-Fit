@@ -734,6 +734,7 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
       />
       <FoodSearchScreen
         visible={diaryFoodTarget != null}
+        variant="nutrition"
         includeRecipes
         catalog="logging"
         favoriteFoodIds={favoriteFoodIds}

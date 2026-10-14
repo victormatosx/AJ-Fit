@@ -1,18 +1,15 @@
 import React, { useMemo } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ScreenBg } from '../../components/ui/ScreenBg';
-import { Display, MonoLabel } from '../../components/ui/Display';
-import { Icon } from '../../components/ui/Icon';
-import { CtaButton } from '../../components/ui/CtaButton';
-import { SkeletonBlock } from '../../components/nutrition/NutritionPrimitives';
 import { NutritionErrorState } from '../../components/nutrition/NutritionStates';
+import { SkeletonBlock } from '../../components/nutrition/NutritionPrimitives';
 import { EvolutionAreaChart } from '../../components/fitness/EvolutionAreaChart';
-import { useTheme } from '../../theme';
+import { NU, NuButton, NuCap, NuHairline, NuNav, NuRing, NuSheetHeader, NuThinBar } from '../../components/nutrition/NuKit';
 import { useUnits } from '../../state/UnitsContext';
 import { formatWeightFromKg, weightFromKg, weightUnit } from '../../units/weightConversions';
-import type { NutritionTotals } from '../../types/nutrition';
+import { isFutureLocalDate, todayLocalDate } from '../../nutrition/ui/localDate';
+import { displayLineHeight } from '../../theme/tokens';
 import type { NutritionWeeklyDay, NutritionWeeklySummary, NutritionWeeklyWeightSummary } from '../../nutrition/weekly';
 
 export function NutritionWeeklySummaryScreen({
@@ -31,31 +28,22 @@ export function NutritionWeeklySummaryScreen({
   onRetry: () => void;
   onOpenProgress: () => void;
 }) {
-  const { theme } = useTheme();
   const { t } = useTranslation('nutrition');
   const rangeLabel = useMemo(() => summary ? formatWeekRange(summary.weekStartLocalDate, summary.weekEndLocalDate) : '', [summary]);
 
   return (
-    <ScreenBg>
+    <View style={{ flex: 1, backgroundColor: NU.bg }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingTop: 8, gap: 12 }}>
-          <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel={t('weekly.back')} hitSlop={10} style={{ padding: 4 }}>
-            <Icon name="arrow-left" size={20} color={theme.colors.textPrimary} />
-          </Pressable>
-          <Display size={22} style={{ flex: 1 }}>{t('weekly.title')}</Display>
-        </View>
+        <NuSheetHeader title={t('weekly.title')} onBack={onBack} />
 
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 22, marginTop: 16 }}>
-          <Pressable onPress={onPreviousWeek} accessibilityRole="button" accessibilityLabel={t('weekly.previousWeek')} hitSlop={10}>
-            <Icon name="arrow-left" size={17} color={theme.colors.textPrimary} />
-          </Pressable>
-          <MonoLabel color={theme.colors.textSecondary}>{rangeLabel.toUpperCase()}</MonoLabel>
-          <Pressable
-            onPress={onNextWeek} disabled={!canGoNext} accessibilityRole="button" accessibilityLabel={t('weekly.nextWeek')}
-            hitSlop={10} style={{ opacity: canGoNext ? 1 : theme.opacity.disabled }}
-          >
-            <Icon name="arrow-right" size={17} color={theme.colors.textPrimary} />
-          </Pressable>
+        <View style={{ paddingHorizontal: 24 }}>
+          <NuNav
+            label={canGoNext ? t('weekly.thisWeek') : rangeLabel}
+            sub={rangeLabel}
+            onPrev={onPreviousWeek}
+            onNext={onNextWeek}
+            nextDisabled={!canGoNext}
+          />
         </View>
 
         {error ? (
@@ -63,64 +51,71 @@ export function NutritionWeeklySummaryScreen({
             <NutritionErrorState title={t('weekly.loadError')} retryLabel={t('home.errorState.cta')} onRetry={onRetry} />
           </View>
         ) : (
-          <ScrollView contentContainerStyle={{ padding: 22, paddingBottom: 42, gap: 24 }} showsVerticalScrollIndicator={false}>
+          <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 30 }}>
             {loading || !summary ? <WeeklySkeleton /> : (
               <>
                 <Overview summary={summary} />
                 <CaloriesSection summary={summary} />
-                <MacrosSection summary={summary} />
                 <DaysSection days={summary.days} />
+                <MacrosSection summary={summary} />
                 <WeightSection weight={weight} loading={weightLoading} onOpenProgress={onOpenProgress} />
               </>
             )}
-          </ScrollView>
+          </View>
         )}
       </SafeAreaView>
-    </ScreenBg>
+    </View>
   );
 }
 
 function Overview({ summary }: { summary: NutritionWeeklySummary }) {
-  const { theme } = useTheme();
   const { t } = useTranslation('nutrition');
+  if (summary.recordedDays === 0) {
+    return (
+      <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 13.5, lineHeight: 20, color: NU.faint, marginBottom: 20 }}>
+        {t('weekly.empty')}
+      </Text>
+    );
+  }
   return (
-    <Section title={t('weekly.overview')}>
-      {summary.recordedDays === 0 ? (
-        <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13.5, lineHeight: 20, color: theme.colors.textMuted }}>
-          {t('weekly.empty')}
+    <View style={{ alignItems: 'center', marginBottom: 30 }}>
+      <NuRing size={170} stroke={11} pct={summary.averageTarget?.kcal ? ((summary.averageConsumed?.kcal ?? 0) / summary.averageTarget.kcal) * 100 : 0}>
+        <NuCap>{t('weekly.averageConsumed')}</NuCap>
+        <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 42, lineHeight: displayLineHeight(42), color: NU.white, marginTop: 8, textTransform: 'uppercase' }}>
+          {Math.round(summary.averageConsumed?.kcal ?? 0)}
         </Text>
-      ) : (
-        <>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 16 }}>
-            <Metric label={t('weekly.loggedDays')} value={t('weekly.daysOfSeven', { count: summary.recordedDays })} />
-            <Metric label={t('weekly.meals')} value={`${summary.totalMeals}`} />
-          </View>
-          <Text style={{ fontFamily: theme.fonts.ui, fontSize: 12.5, lineHeight: 18, color: theme.colors.textMuted }}>
-            {summary.recordedDays < 7 ? t('weekly.partial', { count: summary.recordedDays }) : t('weekly.complete')}
-          </Text>
-          {summary.followedRecommendedMeals > 0 ? (
-            <Text style={{ fontFamily: theme.fonts.ui, fontSize: 12.5, color: theme.colors.textSecondary }}>
-              {t('weekly.followedRecommended', { count: summary.followedRecommendedMeals })}
-            </Text>
-          ) : null}
-        </>
-      )}
-    </Section>
+        <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 12, color: NU.faint, marginTop: 6 }}>
+          {t('home.summary.of')} {Math.round(summary.averageTarget?.kcal ?? 0)} {t('units.kcal')}
+        </Text>
+      </NuRing>
+      <Text style={{ fontFamily: 'Archivo_600SemiBold', fontSize: 15, color: NU.white, marginTop: 18, textAlign: 'center' }}>
+        {summary.recordedDays < 7 ? t('weekly.partial', { count: summary.recordedDays }) : t('weekly.complete')}
+      </Text>
+      <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 12.5, color: NU.faint, marginTop: 6, textAlign: 'center' }}>
+        {t('weekly.daysOfSeven', { count: summary.recordedDays })}
+      </Text>
+      {summary.followedRecommendedMeals > 0 ? (
+        <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 12.5, color: NU.secondary, marginTop: 4, textAlign: 'center' }}>
+          {t('weekly.followedRecommended', { count: summary.followedRecommendedMeals })}
+        </Text>
+      ) : null}
+    </View>
   );
 }
 
 function CaloriesSection({ summary }: { summary: NutritionWeeklySummary }) {
   const { t } = useTranslation('nutrition');
   return (
-    <Section title={t('weekly.calories')}>
+    <SectionBlock title={t('weekly.calories')}>
       <ComparisonRow
         label={t('weekly.averageConsumed')}
         value={summary.averageConsumed?.kcal ?? null}
         target={summary.averageTarget?.kcal ?? null}
         unit={t('weekly.kcalPerDay')}
+        last
       />
-      {summary.targetDays < 7 ? <CoverageNote summary={summary} /> : null}
-    </Section>
+      {summary.targetDays < 7 ? <MutedText>{t('weekly.targetCoverage', { count: summary.targetDays })}</MutedText> : null}
+    </SectionBlock>
   );
 }
 
@@ -129,91 +124,73 @@ function MacrosSection({ summary }: { summary: NutritionWeeklySummary }) {
   const consumed = summary.averageConsumed;
   const target = summary.averageTarget;
   return (
-    <Section title={t('weekly.macros')}>
+    <SectionBlock title={t('weekly.macros')}>
       <ComparisonRow label={t('weekly.protein')} value={consumed?.proteinG ?? null} target={target?.proteinG ?? null} unit={t('weekly.gramsPerDay')} />
       <ComparisonRow label={t('weekly.carbs')} value={consumed?.carbsG ?? null} target={target?.carbsG ?? null} unit={t('weekly.gramsPerDay')} />
       <ComparisonRow label={t('weekly.fat')} value={consumed?.fatG ?? null} target={target?.fatG ?? null} unit={t('weekly.gramsPerDay')} />
-      <ComparisonRow label={t('weekly.fiber')} value={summary.averageFiberG} target={target?.fiberG ?? null} unit={t('weekly.gramsPerDay')} />
+      <ComparisonRow label={t('weekly.fiber')} value={summary.averageFiberG} target={target?.fiberG ?? null} unit={t('weekly.gramsPerDay')} last={summary.averageFiberG == null || summary.fiberRecordedDays >= summary.recordedDays} />
       {summary.averageFiberG != null && summary.fiberRecordedDays < summary.recordedDays ? (
         <MutedText>{t('weekly.fiberCoverage', { count: summary.fiberRecordedDays })}</MutedText>
       ) : null}
-    </Section>
+    </SectionBlock>
   );
 }
 
+/** §4.2 "DIA A DIA" — a thin-bar row per day, not the old vertical column chart. */
 function DaysSection({ days }: { days: NutritionWeeklyDay[] }) {
-  const { theme } = useTheme();
   const { t } = useTranslation('nutrition');
   const max = Math.max(1, ...days.flatMap((day) => [day.totals?.kcal ?? 0, day.target?.kcal ?? 0]));
-  const weekdayLabels = t('weekly.weekdays', { returnObjects: true });
+  const weekdayLabels = t('weekly.weekdays', { returnObjects: true }) as unknown as string[];
+  const today = todayLocalDate();
   return (
-    <Section title={t('weekly.daysChart')}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 7, height: 154 }}>
-        {days.map((day, index) => {
-          const consumedHeight = day.totals ? Math.max(3, (day.totals.kcal / max) * 104) : 0;
-          const targetBottom = day.target ? (day.target.kcal / max) * 104 : null;
-          return (
-            <View key={day.localDate} style={{ flex: 1, alignItems: 'center', gap: 7 }}>
-              <Text style={{ fontFamily: theme.fonts.mono, fontSize: 8, color: theme.colors.textFaint }}>
-                {day.totals ? Math.round(day.totals.kcal) : '—'}
-              </Text>
-              <View style={{ height: 108, width: '100%', justifyContent: 'flex-end', alignItems: 'center', position: 'relative' }}>
-                {targetBottom != null ? (
-                  <View style={{ position: 'absolute', bottom: targetBottom, width: '100%', height: 1, backgroundColor: theme.colors.textFaint }} />
-                ) : null}
-                {day.hasLog ? (
-                  <View style={{ width: '62%', height: consumedHeight, borderRadius: 5, backgroundColor: theme.colors.primaryEmphasis }} />
-                ) : (
-                  <View style={{ width: '62%', borderTopWidth: 1, borderStyle: 'dashed', borderColor: theme.colors.borderStrong }} />
-                )}
-              </View>
-              <Text style={{ fontFamily: theme.fonts.mono, fontSize: 9, color: theme.colors.textMuted }}>
-                {weekdayLabels[index]}
-              </Text>
+    <SectionBlock title={t('weekly.daysChart')}>
+      {days.map((day, index) => {
+        const future = isFutureLocalDate(day.localDate);
+        const tickPct = day.target ? Math.min(100, (day.target.kcal / max) * 100) : undefined;
+        return (
+          <View key={day.localDate} style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 11 }}>
+            <Text style={{ width: 34, fontFamily: 'Archivo_600SemiBold', fontSize: 13, color: day.localDate === today ? NU.white : future ? NU.faintest : NU.secondary }}>
+              {weekdayLabels?.[index] ?? ''}
+            </Text>
+            <View style={{ flex: 1 }}>
+              {day.hasLog && day.totals
+                ? <NuThinBar value={day.totals.kcal} max={max} color={day.localDate === today ? NU.blueHi : NU.strong} tickPct={tickPct} />
+                : <NuThinBar value={0} max={1} tickPct={tickPct} dashed />}
             </View>
-          );
-        })}
-      </View>
-      <View style={{ flexDirection: 'row', gap: 16 }}>
-        <Legend color={theme.colors.primaryEmphasis} label={t('weekly.consumedLegend')} />
-        <Legend color={theme.colors.textFaint} label={t('weekly.targetLegend')} line />
+            <Text style={{ width: 84, textAlign: 'right', fontFamily: 'Archivo_400Regular', fontSize: 13, color: day.totals ? NU.white : NU.faintest }}>
+              {day.totals ? `${Math.round(day.totals.kcal)} ${t('units.kcal')}` : '—'}
+            </Text>
+          </View>
+        );
+      })}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
+        <View style={{ width: 1.5, height: 10, backgroundColor: 'rgba(255,255,255,0.5)' }} />
+        <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 12, color: NU.faintest }}>{t('weekly.targetLegend')}</Text>
       </View>
       <MutedText>{t('weekly.noDataLegend')}</MutedText>
-    </Section>
+    </SectionBlock>
   );
 }
 
 function WeightSection({ weight, loading, onOpenProgress }: { weight: NutritionWeeklyWeightSummary | null; loading: boolean; onOpenProgress: () => void }) {
-  const { theme } = useTheme();
   const { t } = useTranslation('nutrition');
   const { resolvedUnits } = useUnits();
   const unit = weightUnit(resolvedUnits);
   const dateFormatter = useMemo(() => new Intl.DateTimeFormat(undefined, { day: '2-digit', month: 'short' }), []);
 
-  if (loading) return <Section title={t('weekly.weight')}><SkeletonBlock height={150} /></Section>;
+  if (loading) return <SectionBlock title={t('weekly.weight')} last><SkeletonBlock height={150} /></SectionBlock>;
   if (!weight?.latest) {
     return (
-      <Section title={t('weekly.weight')}>
+      <SectionBlock title={t('weekly.weight')} last>
         <MutedText>{t('weekly.noWeight')}</MutedText>
-        <CtaButton ghost onPress={onOpenProgress}>{t('weekly.openProgress')}</CtaButton>
-      </Section>
+        <NuButton ghost onPress={onOpenProgress} style={{ marginTop: 14 }}>{t('weekly.openProgress')}</NuButton>
+      </SectionBlock>
     );
   }
   const delta = weight.deltaKg == null ? null : weightFromKg(weight.deltaKg, resolvedUnits);
   return (
-    <Section title={t('weekly.weight')}>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 16 }}>
-        <Metric label={t('weekly.currentWeight')} value={`${formatWeightFromKg(weight.latest.weightKg, resolvedUnits)} ${unit}`} />
-        <Metric
-          label={t('weekly.previousWeight')}
-          value={weight.previous ? `${formatWeightFromKg(weight.previous.weightKg, resolvedUnits)} ${unit}` : '—'}
-        />
-        <Metric label={t('weekly.variation')} value={delta == null ? '—' : `${delta > 0 ? '+' : ''}${delta.toFixed(1)} ${unit}`} />
-        <Metric
-          label={t('weekly.targetWeight')}
-          value={weight.targetWeightKg == null ? '—' : `${formatWeightFromKg(weight.targetWeightKg, resolvedUnits)} ${unit}`}
-        />
-      </View>
+    <SectionBlock title={t('weekly.weight')} last>
+      <ComparisonMetricsRow weight={weight} delta={delta} unit={unit} resolvedUnits={resolvedUnits} />
       {weight.points.length >= 2 ? (
         <EvolutionAreaChart
           points={weight.points.map((point) => ({
@@ -231,80 +208,75 @@ function WeightSection({ weight, loading, onOpenProgress }: { weight: NutritionW
           ? t('weekly.trendLimited', { count: weight.points.length })
           : t('weekly.trendBasedOn', { count: weight.points.length })}
       </MutedText>
-      <CtaButton ghost onPress={onOpenProgress}>{t('weekly.openProgress')}</CtaButton>
-    </Section>
+      <NuButton ghost onPress={onOpenProgress} style={{ marginTop: 14 }}>{t('weekly.openProgress')}</NuButton>
+    </SectionBlock>
   );
 }
 
-function ComparisonRow({ label, value, target, unit }: { label: string; value: number | null; target: number | null; unit: string }) {
-  const { theme } = useTheme();
+function ComparisonMetricsRow({ weight, delta, unit, resolvedUnits }: {
+  weight: NutritionWeeklyWeightSummary; delta: number | null; unit: string; resolvedUnits: Parameters<typeof formatWeightFromKg>[1];
+}) {
   const { t } = useTranslation('nutrition');
-  const max = Math.max(value ?? 0, target ?? 0, 1);
   return (
-    <View style={{ gap: 8 }}>
-      <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 13.5, color: theme.colors.textPrimary }}>{label}</Text>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Text style={{ fontFamily: theme.fonts.ui, fontSize: 12, color: theme.colors.textSecondary }}>
-          {t('weekly.consumed')}: {value == null ? '—' : Math.round(value)} {value == null ? '' : unit}
-        </Text>
-        <Text style={{ fontFamily: theme.fonts.ui, fontSize: 12, color: theme.colors.textMuted }}>
-          {t('weekly.target')}: {target == null ? '—' : Math.round(target)} {target == null ? '' : unit}
-        </Text>
-      </View>
-      <View style={{ gap: 4 }}>
-        <View style={{ height: 7, borderRadius: 4, backgroundColor: theme.colors.progressTrack, overflow: 'hidden' }}>
-          <View style={{ height: '100%', width: `${Math.min(100, ((value ?? 0) / max) * 100)}%`, backgroundColor: theme.colors.primaryEmphasis }} />
-        </View>
-        <View style={{ height: 3, borderRadius: 2, backgroundColor: theme.colors.progressTrack, overflow: 'hidden' }}>
-          <View style={{ height: '100%', width: `${Math.min(100, ((target ?? 0) / max) * 100)}%`, backgroundColor: theme.colors.textFaint }} />
-        </View>
-      </View>
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 16, marginBottom: 16 }}>
+      <Metric label={t('weekly.currentWeight')} value={`${formatWeightFromKg(weight.latest!.weightKg, resolvedUnits)} ${unit}`} />
+      <Metric
+        label={t('weekly.previousWeight')}
+        value={weight.previous ? `${formatWeightFromKg(weight.previous.weightKg, resolvedUnits)} ${unit}` : '—'}
+      />
+      <Metric label={t('weekly.variation')} value={delta == null ? '—' : `${delta > 0 ? '+' : ''}${delta.toFixed(1)} ${unit}`} />
+      <Metric
+        label={t('weekly.targetWeight')}
+        value={weight.targetWeightKg == null ? '—' : `${formatWeightFromKg(weight.targetWeightKg, resolvedUnits)} ${unit}`}
+      />
     </View>
   );
 }
 
-function CoverageNote({ summary }: { summary: NutritionWeeklySummary }) {
+function ComparisonRow({ label, value, target, unit, last }: { label: string; value: number | null; target: number | null; unit: string; last?: boolean }) {
   const { t } = useTranslation('nutrition');
-  return <MutedText>{t('weekly.targetCoverage', { count: summary.targetDays })}</MutedText>;
+  const max = Math.max(value ?? 0, target ?? 0, 1);
+  return (
+    <View style={{ paddingVertical: 14, borderBottomWidth: last ? 0 : 1, borderBottomColor: NU.hairline, gap: 8 }}>
+      <Text style={{ fontFamily: 'Archivo_600SemiBold', fontSize: 14, color: NU.white }}>{label}</Text>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+        <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 12, color: NU.secondary }}>
+          {t('weekly.consumed')}: {value == null ? '—' : Math.round(value)} {value == null ? '' : unit}
+        </Text>
+        <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 12, color: NU.faint }}>
+          {t('weekly.target')}: {target == null ? '—' : Math.round(target)} {target == null ? '' : unit}
+        </Text>
+      </View>
+      <NuThinBar value={value ?? 0} max={max} tickPct={target != null ? Math.min(100, (target / max) * 100) : undefined} />
+    </View>
+  );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  const { theme } = useTheme();
+function SectionBlock({ title, children, last }: { title: string; children: React.ReactNode; last?: boolean }) {
   return (
-    <View style={{ gap: 14, padding: 16, borderRadius: theme.radii.xl, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.cardBorder }}>
-      <MonoLabel color={theme.colors.textSecondary}>{title.toUpperCase()}</MonoLabel>
+    <View style={{ marginBottom: last ? 40 : 0 }}>
+      <NuCap style={{ marginBottom: 12 }}>{title}</NuCap>
       {children}
+      {!last ? <NuHairline style={{ marginTop: 24, marginBottom: 24 }} /> : null}
     </View>
   );
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
-  const { theme } = useTheme();
   return (
     <View style={{ width: '50%' }}>
-      <Text style={{ fontFamily: theme.fonts.mono, fontSize: 9, color: theme.colors.textFaint }}>{label.toUpperCase()}</Text>
-      <Text style={{ marginTop: 4, fontFamily: theme.fonts.uiBold, fontSize: 17, color: theme.colors.textPrimary }}>{value}</Text>
+      <NuCap>{label}</NuCap>
+      <Text style={{ marginTop: 4, fontFamily: 'Archivo_700Bold', fontSize: 17, color: NU.white }}>{value}</Text>
     </View>
   );
 }
 
 function MutedText({ children }: { children: React.ReactNode }) {
-  const { theme } = useTheme();
-  return <Text style={{ fontFamily: theme.fonts.ui, fontSize: 12, lineHeight: 18, color: theme.colors.textMuted }}>{children}</Text>;
-}
-
-function Legend({ color, label, line }: { color: string; label: string; line?: boolean }) {
-  const { theme } = useTheme();
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-      <View style={{ width: 12, height: line ? 1 : 6, borderRadius: 3, backgroundColor: color }} />
-      <Text style={{ fontFamily: theme.fonts.ui, fontSize: 10.5, color: theme.colors.textMuted }}>{label}</Text>
-    </View>
-  );
+  return <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 12, lineHeight: 18, color: NU.faint, marginTop: 10 }}>{children}</Text>;
 }
 
 function WeeklySkeleton() {
-  return <><SkeletonBlock height={150} /><SkeletonBlock height={130} /><SkeletonBlock height={220} /></>;
+  return <View style={{ gap: 20 }}><SkeletonBlock height={150} /><SkeletonBlock height={130} /><SkeletonBlock height={220} /></View>;
 }
 
 function formatWeekRange(start: string, end: string): string {

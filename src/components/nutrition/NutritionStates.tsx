@@ -1,9 +1,7 @@
 import React from 'react';
 import { Text, View } from 'react-native';
-import { Display } from '../ui/Display';
-import { CtaButton } from '../ui/CtaButton';
 import { Icon, type IconName } from '../ui/Icon';
-import { useTheme } from '../../theme';
+import { NU, NuButton } from './NuKit';
 
 /** `components.md` §11 — short message, benefit, single CTA. Reused for every "no X yet" surface. */
 export function EmptyNutritionState({
@@ -15,21 +13,20 @@ export function EmptyNutritionState({
   ctaLabel?: string;
   onPress?: () => void;
 }) {
-  const { theme } = useTheme();
   return (
     <View style={{ alignItems: 'center', paddingHorizontal: 32, paddingVertical: 28, gap: 14 }}>
       <View style={{
-        width: 56, height: 56, borderRadius: theme.radii.pill, alignItems: 'center', justifyContent: 'center',
-        backgroundColor: theme.colors.primarySurfaceSubtle,
+        width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center',
+        backgroundColor: 'rgba(11,112,249,0.12)',
       }}>
-        <Icon name={icon} size={26} color={theme.colors.primaryEmphasis} />
+        <Icon name={icon} size={26} color={NU.blueHi} />
       </View>
-      <Display size={20} style={{ textAlign: 'center' }}>{title}</Display>
-      <Text style={{ fontFamily: theme.fonts.ui, fontSize: 14, lineHeight: 20, color: theme.colors.textMuted, textAlign: 'center' }}>
+      <Text style={{ fontFamily: 'Archivo_700Bold', fontSize: 20, color: NU.white, textAlign: 'center', lineHeight: 26 }}>{title}</Text>
+      <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 14, lineHeight: 20, color: NU.faint, textAlign: 'center' }}>
         {body}
       </Text>
       {ctaLabel && onPress ? (
-        <CtaButton onPress={onPress} style={{ width: '100%', marginTop: 8 }}>{ctaLabel}</CtaButton>
+        <NuButton onPress={onPress} style={{ width: '100%', marginTop: 8 }}>{ctaLabel}</NuButton>
       ) : null}
     </View>
   );
@@ -46,26 +43,25 @@ export function NutritionErrorState({
   backLabel?: string;
   onBack?: () => void;
 }) {
-  const { theme } = useTheme();
   return (
     <View style={{ alignItems: 'center', paddingHorizontal: 32, paddingVertical: 28, gap: 14 }}>
       <View style={{
-        width: 56, height: 56, borderRadius: theme.radii.pill, alignItems: 'center', justifyContent: 'center',
-        backgroundColor: theme.colors.feedbackErrorBackground,
+        width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center',
+        backgroundColor: 'rgba(255,180,84,0.14)',
       }}>
-        <Icon name="alert-triangle" size={26} color={theme.colors.feedbackErrorIcon} />
+        <Icon name="alert-triangle" size={26} color={NU.warn} />
       </View>
-      <Display size={20} style={{ textAlign: 'center' }}>{title}</Display>
+      <Text style={{ fontFamily: 'Archivo_700Bold', fontSize: 20, color: NU.white, textAlign: 'center', lineHeight: 26 }}>{title}</Text>
       {body ? (
-        <Text style={{ fontFamily: theme.fonts.ui, fontSize: 14, lineHeight: 20, color: theme.colors.textMuted, textAlign: 'center' }}>
+        <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 14, lineHeight: 20, color: NU.faint, textAlign: 'center' }}>
           {body}
         </Text>
       ) : null}
       {retryLabel && onRetry ? (
-        <CtaButton onPress={onRetry} style={{ width: '100%', marginTop: 8 }}>{retryLabel}</CtaButton>
+        <NuButton onPress={onRetry} style={{ width: '100%', marginTop: 8 }}>{retryLabel}</NuButton>
       ) : null}
       {backLabel && onBack ? (
-        <CtaButton ghost onPress={onBack} style={{ width: '100%' }}>{backLabel}</CtaButton>
+        <NuButton ghost onPress={onBack} style={{ width: '100%' }}>{backLabel}</NuButton>
       ) : null}
     </View>
   );

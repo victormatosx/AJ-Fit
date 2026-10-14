@@ -1,15 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { Modal, View, Text, ScrollView, Pressable, useWindowDimensions } from 'react-native';
+import { Modal, View, Text, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import { ScreenBg } from '../components/ui/ScreenBg';
-import { Display, Slash, MonoLabel } from '../components/ui/Display';
-import { HudCorners } from '../components/ui/Card';
+import { Display, MonoLabel } from '../components/ui/Display';
 import { Icon } from '../components/ui/Icon';
 import { darkTheme, useTheme } from '../theme';
 import { useAuth } from '../state/AuthContext';
-import type { Sex } from '../state/AppState';
 import { getDisplayFirstName } from '../lib/userName';
 import { recordPerfMark } from '../lib/perf';
 import { ProfileAvatar } from '../components/ui/ProfileAvatar';
@@ -22,8 +19,6 @@ import { CycleProgressBlock } from '../components/home/CycleProgressBlock';
 import { PendingEvolutionBanner } from '../components/home/PendingEvolutionBanner';
 import type { EvolutionViewModel } from '../workoutEvolution/types';
 import type { PrescriptionDiffSummary } from '../workoutEvolution/diff';
-import { BodyMuscleMap } from '../components/fitness/BodyMuscleMap';
-import { deriveSessionMuscles } from '../lib/sessionMuscles';
 import { FrequencyHeatmap } from '../components/home/FrequencyHeatmap';
 import type { FrequencyWindowViewModel } from '../home/frequencyHeatmap';
 import type { InitialSectionStatus } from '../home/homeInitialReadiness';
@@ -31,6 +26,7 @@ import type { ActiveRest } from '../lib/restTimer';
 import { WorkoutRestHeaderStatus } from '../components/workout/WorkoutRestHeaderStatus';
 import { SupportInboxButton } from '../components/support/SupportInboxButton';
 import type { AdvancedWorkoutTarget } from '../scheduleEngine/advanceWorkout';
+import { estimateSessionMinutes } from '../home/sessionDuration';
 
 // Lifecycle claims on Home come from the shared EvolutionViewModel.
 
@@ -41,7 +37,6 @@ const TODAY_WORKOUT_THEME = darkTheme;
 const MISSED_INFO_POPOVER_WIDTH = 220;
 
 export function HomeScreen({
-  sex,
   prescription,
   loading,
   generating,
@@ -75,8 +70,9 @@ export function HomeScreen({
   homeInitialDataSettled = false,
   homeInitialVisualReady = false,
   onInitialLayoutCommitted,
+  ringCelebrationRequest = null,
+  onRingCelebrationFinished,
 }: {
-  sex: Sex;
   prescription: PrescriptionResult;
   /**
    * True until the FIRST resolution of `prescription` for the current
@@ -134,8 +130,16 @@ export function HomeScreen({
   homeInitialDataSettled?: boolean;
   homeInitialVisualReady?: boolean;
   onInitialLayoutCommitted?: () => void;
+  /** Bumps (new `token`) to play the cycle ring's "evolution reached" celebration, scrolling Home to top first — see `CycleProgressBlock`'s matching prop. */
+  ringCelebrationRequest?: { token: number } | null;
+  onRingCelebrationFinished?: () => void;
 }) {
   const { theme } = useTheme();
+  const scrollRef = useRef<ScrollView>(null);
+  useEffect(() => {
+    if (!ringCelebrationRequest) return;
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+  }, [ringCelebrationRequest]);
   useEffect(() => {
     recordPerfMark('home_mount');
     // The Evolution ticker/strip container is unconditionally part of Home's
@@ -164,11 +168,6 @@ export function HomeScreen({
   // measured from the icon rather than laid out in-flow alongside it.
   const missedInfoIconRef = useRef<View>(null);
   const [missedInfoAnchor, setMissedInfoAnchor] = useState<{ top: number; left: number } | null>(null);
-  const { width: windowWidth } = useWindowDimensions();
-  // ~58px validated visually in the body-muscle-map spike; narrower devices
-  // (compact iPhones, small Android) shrink it slightly rather than letting
-  // it crowd the CTA/next-workout row it now shares a line with.
-  const bodyMuscleMapSize = windowWidth < 360 ? 46 : 58;
   const { user, profile } = useAuth();
   const firstName = getDisplayFirstName({
     profileName: profile?.profile.name,
@@ -218,7 +217,6 @@ export function HomeScreen({
   const firstSession = prescription.status === 'SUCCESS'
     ? prescription.plan.sessions[scheduledSessionIndex] ?? prescription.plan.sessions[0]
     : null;
-  const totalSets = firstSession?.exercises.reduce((sum, exercise) => sum + (exercise.sets ?? 0), 0) ?? 0;
   // REST_DAY/TODAY_COMPLETED/SCHEDULE_SETUP_REQUIRED only override the card
   // when there is otherwise a ready program — a legacy/blocked prescription
   // keeps its own outcome copy above (docs/workout-lifecycle/
@@ -249,20 +247,11 @@ export function HomeScreen({
     && scheduleResolution?.status === 'REST_DAY'
     && advanceWorkoutTarget != null
     && onAdvanceWorkout != null;
-  // BodyMuscleMap is a read-only visual projection of the session already
-  // resolved above (`firstSession.exercises[].exerciseId` is the effective,
-  // post-adaptation/substitution/omission id) — it never influences
-  // `firstSession` itself. Only computed/shown in the same "ready session"
-  // state that renders the title/meta/CTA above (not while
-  // loading/generating, and not under a schedule override, which replaces
-  // this content with different copy entirely). Requiring at least one
-  // resolved primary muscle means a catalog lookup miss degrades to "no
-  // map" instead of an empty gray silhouette.
-  const sessionExerciseIds = !showLoadingState && !generating && !scheduleOverrideKey && firstSession
-    ? firstSession.exercises.map((exercise) => exercise.exerciseId)
-    : [];
-  const sessionMuscles = deriveSessionMuscles(sessionExerciseIds);
-  const showBodyMuscleMap = (!snapshotPresentationActive || todayActionsReady) && sessionMuscles.primary.length > 0;
+  // Session letter ("Treino A/B/C...") mirrors the same convention used by
+  // EvolutionUnlockScreen's exercise-swap rows — the session's position in
+  // the prescribed rotation, not a stored label.
+  const sessionLetter = String.fromCharCode(65 + scheduledSessionIndex);
+  const sessionDurationMinutes = firstSession ? estimateSessionMinutes(firstSession) : 0;
   const nextSession = prescription.status === 'SUCCESS' && isBlockedToday
     ? prescription.plan.sessions[(scheduleResolution as { nextSessionIndex: number }).nextSessionIndex] ?? null
     : null;
@@ -291,12 +280,12 @@ export function HomeScreen({
   return (
     <ScreenBg>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <ScrollView contentContainerStyle={{ paddingBottom: 12 }} showsVerticalScrollIndicator={false}>
+        <ScrollView ref={scrollRef} contentContainerStyle={{ paddingBottom: 12 }} showsVerticalScrollIndicator={false}>
           {/* greeting */}
           <View
             style={{
-              paddingHorizontal: 24,
-              paddingTop: 70 - 10, // screen padding target is 70 total; SafeAreaView already contributes top inset
+              paddingHorizontal: 22, // matches HomeEvoTicker's own hardcoded gutter below, and Treino's/Dieta's header
+              paddingTop: 50 - 10, // screen padding target is 50 total; SafeAreaView already contributes top inset
               paddingBottom: 12,
               flexDirection: 'row',
               alignItems: 'flex-end',
@@ -315,7 +304,7 @@ export function HomeScreen({
               resting={restRunning}
               onPress={onStart}
             /> : null}
-            {onOpenSupportCases && unreadSupportCasesCount > 0 && (
+            {onOpenSupportCases && (unreadSupportCasesCount > 0 || Boolean(snapshotFrequencyThrough)) && (
               <SupportInboxButton unreadCasesCount={unreadSupportCasesCount} onPress={onOpenSupportCases} />
             )}
             <Pressable onPress={onOpenProfile} hitSlop={8}>
@@ -340,280 +329,240 @@ export function HomeScreen({
           </View>
 
           <View style={{ paddingHorizontal: 24 }}>
-            <CycleProgressBlock viewModel={evolutionViewModel} streak={streak} />
+            <CycleProgressBlock
+              viewModel={evolutionViewModel}
+              streak={streak}
+              celebrationRequest={ringCelebrationRequest}
+              onCelebrationFinished={onRingCelebrationFinished}
+            />
             {(evolutionViewModel.kind === 'EVOLUTION_READY' || evolutionViewModel.kind === 'EVOLUTION_DEFERRED') && onOpenEvolution ? (
               <PendingEvolutionBanner viewModel={evolutionViewModel} diff={evolutionDiff} onPress={onOpenEvolution} />
             ) : null}
           </View>
 
           {/* TODAY POSTER */}
-          <View style={{ paddingHorizontal: 22, paddingBottom: 16 }}>
-            <LinearGradient
-              colors={TODAY_WORKOUT_THEME.gradients.poster}
-              locations={[0, 0.45, 1]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={{
-                borderRadius: 16,
-                borderBottomRightRadius: 0,
-                overflow: 'hidden',
-                minHeight: snapshotFrequencyThrough ? 310 : 250,
-                borderWidth: 1,
-                borderColor: TODAY_WORKOUT_THEME.colors.primaryBorderQuiet,
-                padding: 20,
-                justifyContent: 'space-between',
-              }}
-            >
-              <HudCorners color={TODAY_WORKOUT_THEME.colors.hudCorner} />
-              <View>
-                <Slash
-                  accentColor={TODAY_WORKOUT_THEME.colors.primaryEmphasis}
-                  textColor={TODAY_WORKOUT_THEME.colors.textFaint}
+          <View
+            style={{
+              paddingHorizontal: 22,
+              paddingTop: 28,
+              paddingBottom: 16,
+            }}
+          >
+            <View>
+              <Text
+                style={{
+                  fontFamily: theme.fonts.mono,
+                  fontSize: 11,
+                  letterSpacing: 2,
+                  color: TODAY_WORKOUT_THEME.colors.textFaint,
+                  textTransform: 'uppercase',
+                }}
+              >
+                {(workoutInProgress
+                  ? t('home:activeWorkout.kicker')
+                  : (!showLoadingState && !generating && !scheduleOverrideKey && firstSession
+                    ? t('home:todayCard.kickerWithLetter', { letter: sessionLetter })
+                    : t('home:todayCard.kicker'))
+                ).toUpperCase()}
+              </Text>
+              <Text
+                style={{
+                  fontFamily: theme.fonts.uiBold,
+                  fontSize: 30,
+                  lineHeight: 36,
+                  color: TODAY_WORKOUT_THEME.colors.textPrimary,
+                  marginTop: 10,
+                }}
+              >
+                {snapshotPresentationActive && !todayActionsReady
+                  ? t(todayStatus === 'ERROR' ? 'home:snapshot.todayUnavailableTitle' : 'home:snapshot.todayPendingTitle')
+                  : showLoadingState
+                  ? t('home:prescription.loadingState.title')
+                  : generating
+                    ? t('home:prescription.generatingState.title')
+                    : scheduleOverrideKey
+                      ? t(`home:schedule.${scheduleOverrideKey}.title`)
+                      : firstSession
+                        ? resolveSessionDisplayName(t as unknown as LooseTranslate, firstSession.name, firstSession.type, firstSession.displayName)
+                        : t(`home:prescription.${outcomeKey}.title` as 'home:prescription.unavailable.title')}
+              </Text>
+              <Text
+                style={{
+                  fontFamily: theme.fonts.ui,
+                  fontSize: 14.5,
+                  color: TODAY_WORKOUT_THEME.colors.textSecondary,
+                  marginTop: 8,
+                }}
+              >
+                {snapshotPresentationActive && !todayActionsReady
+                  ? t(todayStatus === 'ERROR' ? 'home:snapshot.todayUnavailableBody' : 'home:snapshot.todayPendingBody')
+                  : showLoadingState
+                  ? t('home:prescription.loadingState.body')
+                  : generating
+                    ? t('home:prescription.generatingState.body')
+                    : scheduleOverrideKey
+                      ? canAdvanceWorkout
+                        ? t('home:schedule.advance.helper')
+                        : t(`home:schedule.${scheduleOverrideKey}.body`)
+                      : workoutInProgress
+                        ? t('home:activeWorkout.cardStatus')
+                        : prescription.status === 'SUCCESS'
+                        ? t('home:todayCard.sessionMetaDuration', {
+                            count: firstSession?.exercises.length ?? 0,
+                            minutes: sessionDurationMinutes,
+                          })
+                        : t(`home:prescription.${outcomeKey}.body` as 'home:prescription.unavailable.body')}
+              </Text>
+            </View>
+
+            {showMissedPendingNotice && (
+              <View style={{ position: 'absolute', top: 0, right: 0 }}>
+                <Pressable
+                  ref={missedInfoIconRef}
+                  onPress={() => {
+                    missedInfoIconRef.current?.measureInWindow((x, y, width, height) => {
+                      setMissedInfoAnchor({
+                        top: y + height + 8,
+                        left: x + width - MISSED_INFO_POPOVER_WIDTH,
+                      });
+                    });
+                    setShowMissedPendingInfo(true);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('home:schedule.missedPending.badge.title')}
+                  hitSlop={8}
+                  style={{
+                    width: 30,
+                    height: 30,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Icon name="alert-triangle" size={15} color={TODAY_WORKOUT_THEME.colors.warning} />
+                </Pressable>
+              </View>
+            )}
+
+            {!todayActionsReady ? (
+              <View style={{ alignSelf: 'stretch', height: 54, marginTop: 24, borderRadius: 16, backgroundColor: TODAY_WORKOUT_THEME.colors.surfaceMuted }} />
+            ) : isBlockedToday ? (
+              canAdvanceWorkout ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t('home:schedule.advance.cta', { weekday: advanceWeekday })}
+                  onPress={onAdvanceWorkout}
+                  style={{
+                    alignSelf: 'stretch',
+                    marginTop: 24,
+                    paddingVertical: 18,
+                    borderRadius: 18,
+                    backgroundColor: TODAY_WORKOUT_THEME.colors.primary,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 10,
+                    shadowColor: TODAY_WORKOUT_THEME.colors.primary,
+                    shadowOpacity: 0.45,
+                    shadowRadius: 22,
+                    shadowOffset: { width: 0, height: 8 },
+                    elevation: 10,
+                  }}
+                >
+                  <Icon name="arrow-right" size={15} color={TODAY_WORKOUT_THEME.colors.primaryForeground} />
+                  <Text
+                    numberOfLines={2}
+                    style={{
+                      flexShrink: 1,
+                      fontFamily: theme.fonts.uiBold,
+                      fontSize: 15,
+                      color: TODAY_WORKOUT_THEME.colors.primaryForeground,
+                      textAlign: 'center',
+                    }}
+                  >
+                    {t('home:schedule.advance.cta', { weekday: advanceWeekday })}
+                  </Text>
+                </Pressable>
+              ) : nextWorkoutLine && (
+                <View
+                  style={{
+                    alignSelf: 'stretch',
+                    marginTop: 24,
+                    paddingVertical: 13,
+                    paddingHorizontal: 18,
+                    borderRadius: 16,
+                    borderWidth: 1,
+                    borderColor: TODAY_WORKOUT_THEME.colors.primaryBorderQuiet,
+                    backgroundColor: TODAY_WORKOUT_THEME.colors.surfaceMuted,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 10,
+                  }}
+                >
+                  <Icon name="calendar" size={14} color={TODAY_WORKOUT_THEME.colors.primaryEmphasis} />
+                  <View>
+                    <MonoLabel color={TODAY_WORKOUT_THEME.colors.textFaint}>
+                      {t('home:schedule.nextWorkout.label').toUpperCase()}
+                    </MonoLabel>
+                    <Text
+                      style={{
+                        fontFamily: theme.fonts.uiBold,
+                        fontSize: 13,
+                        color: TODAY_WORKOUT_THEME.colors.textPrimary,
+                        marginTop: 2,
+                      }}
+                    >
+                      {nextWorkoutLine}
+                    </Text>
+                  </View>
+                </View>
+              )
+            ) : (
+              <Pressable
+                onPress={onStart}
+                style={{
+                  alignSelf: 'stretch',
+                  marginTop: 24,
+                  paddingVertical: 18,
+                  paddingHorizontal: workoutInProgress ? 16 : 26,
+                  borderRadius: 18,
+                  backgroundColor: TODAY_WORKOUT_THEME.colors.primary,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 10,
+                  shadowColor: TODAY_WORKOUT_THEME.colors.primary,
+                  shadowOpacity: 0.45,
+                  shadowRadius: 22,
+                  shadowOffset: { width: 0, height: 8 },
+                  elevation: 10,
+                }}
+              >
+                {workoutInProgress ? (
+                  <Icon name="arrow-right" size={15} color={TODAY_WORKOUT_THEME.colors.primaryForeground} />
+                ) : (
+                  <Icon name="play" size={15} color={TODAY_WORKOUT_THEME.colors.primaryForeground} />
+                )}
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    flexShrink: 1,
+                    fontFamily: theme.fonts.uiBold,
+                    fontSize: workoutInProgress ? 13 : 15,
+                    color: TODAY_WORKOUT_THEME.colors.primaryForeground,
+                  }}
                 >
                   {t(workoutInProgress
-                    ? 'home:activeWorkout.kicker'
-                    : 'home:todayCard.kicker').toUpperCase()}
-                </Slash>
-                <Display
-                  size={38}
-                  color={TODAY_WORKOUT_THEME.colors.textPrimary}
-                  style={{ marginTop: 12 }}
-                >
-                  {(snapshotPresentationActive && !todayActionsReady
-                    ? t(todayStatus === 'ERROR' ? 'home:snapshot.todayUnavailableTitle' : 'home:snapshot.todayPendingTitle')
-                    : showLoadingState
-                    ? t('home:prescription.loadingState.title')
-                    : generating
-                      ? t('home:prescription.generatingState.title')
-                      : scheduleOverrideKey
-                        ? t(`home:schedule.${scheduleOverrideKey}.title`)
-                        : firstSession
-                          ? resolveSessionDisplayName(t as unknown as LooseTranslate, firstSession.name, firstSession.type, firstSession.displayName)
-                          : t(`home:prescription.${outcomeKey}.title` as 'home:prescription.unavailable.title')
-                  ).toUpperCase()}
-                </Display>
-                <View style={{ flexDirection: 'row', gap: 12, marginTop: 14 }}>
-                  <Text
-                    style={{
-                      fontFamily: theme.fonts.mono,
-                      fontSize: 10.5,
-                      color: TODAY_WORKOUT_THEME.colors.textSecondary,
-                      letterSpacing: 1,
-                    }}
-                  >
-                    {(snapshotPresentationActive && !todayActionsReady
-                      ? t(todayStatus === 'ERROR' ? 'home:snapshot.todayUnavailableBody' : 'home:snapshot.todayPendingBody')
-                      : showLoadingState
-                      ? t('home:prescription.loadingState.body')
-                      : generating
-                        ? t('home:prescription.generatingState.body')
-                        : scheduleOverrideKey
-                          ? canAdvanceWorkout
-                            ? t('home:schedule.advance.helper')
-                            : t(`home:schedule.${scheduleOverrideKey}.body`)
-                          : workoutInProgress
-                            ? t('home:activeWorkout.cardStatus')
-                            : prescription.status === 'SUCCESS'
-                            ? t('home:todayCard.sessionMeta', {
-                                exercises: firstSession?.exercises.length ?? 0,
-                                sets: totalSets,
-                              })
-                            : t(`home:prescription.${outcomeKey}.body` as 'home:prescription.unavailable.body')
-                    ).toUpperCase()}
-                  </Text>
-                </View>
-
-              </View>
-
-              {showMissedPendingNotice && (
-                <View style={{ position: 'absolute', top: 14, right: 14 }}>
-                  <Pressable
-                    ref={missedInfoIconRef}
-                    onPress={() => {
-                      missedInfoIconRef.current?.measureInWindow((x, y, width, height) => {
-                        setMissedInfoAnchor({
-                          top: y + height + 8,
-                          left: x + width - MISSED_INFO_POPOVER_WIDTH,
-                        });
-                      });
-                      setShowMissedPendingInfo(true);
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel={t('home:schedule.missedPending.badge.title')}
-                    hitSlop={8}
-                    style={{
-                      width: 30,
-                      height: 30,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <Icon name="alert-triangle" size={15} color={TODAY_WORKOUT_THEME.colors.warning} />
-                  </Pressable>
-                </View>
-              )}
-
-              {/* CTA/next-workout row shares its row with BodyMuscleMap so the
-                  title/meta block above always keeps the full card width —
-                  titles vary a lot in length ("PERNAS" vs "PEITO, OMBROS &
-                  TRÍCEPS" wrapping to 2-3 lines) and must never fight the map
-                  for horizontal space. */}
-              <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
-                {!todayActionsReady ? (
-                  <View style={{ width: 170, height: 46, marginTop: 20, borderRadius: 10, backgroundColor: TODAY_WORKOUT_THEME.colors.surfaceMuted }} />
-                ) : isBlockedToday ? (
-                  canAdvanceWorkout ? (
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={t('home:schedule.advance.cta', { weekday: advanceWeekday })}
-                      onPress={onAdvanceWorkout}
-                      style={{
-                        alignSelf: 'flex-start',
-                        flexShrink: 1,
-                        marginTop: 20,
-                        paddingVertical: 15,
-                        paddingHorizontal: 20,
-                        backgroundColor: TODAY_WORKOUT_THEME.colors.inverseSurface,
-                        borderRadius: 10,
-                        borderBottomRightRadius: 0,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 10,
-                      }}
-                    >
-                      <Icon name="arrow-right" size={13} color={TODAY_WORKOUT_THEME.colors.inverseForeground} />
-                      <Text
-                        numberOfLines={2}
-                        style={{
-                          flexShrink: 1,
-                          fontFamily: theme.fonts.display,
-                          fontSize: 14,
-                          letterSpacing: 1.2,
-                          color: TODAY_WORKOUT_THEME.colors.inverseForeground,
-                          textTransform: 'uppercase',
-                        }}
-                      >
-                        {t('home:schedule.advance.cta', { weekday: advanceWeekday })}
-                      </Text>
-                    </Pressable>
-                  ) : nextWorkoutLine && (
-                    <View
-                      style={{
-                        alignSelf: 'flex-start',
-                        marginTop: 20,
-                        paddingVertical: 13,
-                        paddingHorizontal: 18,
-                        borderRadius: 12,
-                        borderWidth: 1,
-                        borderColor: TODAY_WORKOUT_THEME.colors.primaryBorderQuiet,
-                        backgroundColor: TODAY_WORKOUT_THEME.colors.surfaceMuted,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 10,
-                      }}
-                    >
-                      <Icon name="calendar" size={14} color={TODAY_WORKOUT_THEME.colors.primaryEmphasis} />
-                      <View>
-                        <MonoLabel color={TODAY_WORKOUT_THEME.colors.textFaint}>
-                          {t('home:schedule.nextWorkout.label').toUpperCase()}
-                        </MonoLabel>
-                        <Text
-                          style={{
-                            fontFamily: theme.fonts.uiBold,
-                            fontSize: 13,
-                            color: TODAY_WORKOUT_THEME.colors.textPrimary,
-                            marginTop: 2,
-                          }}
-                        >
-                          {nextWorkoutLine}
-                        </Text>
-                      </View>
-                    </View>
-                  )
-                ) : (
-                  <Pressable
-                    onPress={onStart}
-                    style={{
-                      alignSelf: 'flex-start',
-                      flexShrink: 1,
-                      marginTop: 20,
-                      paddingVertical: 15,
-                      paddingHorizontal: workoutInProgress ? 16 : 26,
-                      backgroundColor: TODAY_WORKOUT_THEME.colors.inverseSurface,
-                      borderTopLeftRadius: 10,
-                      borderTopRightRadius: 10,
-                      borderBottomLeftRadius: 10,
-                      borderBottomRightRadius: 0,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 10,
-                      shadowColor: TODAY_WORKOUT_THEME.colors.inverseShadow,
-                      shadowOpacity: 0.16,
-                      shadowRadius: 20,
-                      shadowOffset: { width: 0, height: 10 },
-                      elevation: 8,
-                      ...(workoutInProgress ? {
-                        backgroundColor: TODAY_WORKOUT_THEME.colors.primary,
-                        shadowColor: TODAY_WORKOUT_THEME.colors.primary,
-                      } : {}),
-                    }}
-                  >
-                    {workoutInProgress ? (
-                      <Icon
-                        name="arrow-right"
-                        size={13}
-                        color={TODAY_WORKOUT_THEME.colors.primaryForeground}
-                      />
-                    ) : (
-                      <Icon
-                        name="play"
-                        size={13}
-                        color={TODAY_WORKOUT_THEME.colors.inverseForeground}
-                      />
-                    )}
-                    <Text
-                      numberOfLines={1}
-                      style={{
-                        flexShrink: 1,
-                        fontFamily: theme.fonts.display,
-                        fontSize: workoutInProgress ? 13 : 15,
-                        letterSpacing: 1.5,
-                        color: TODAY_WORKOUT_THEME.colors.inverseForeground,
-                        textTransform: 'uppercase',
-                        ...(workoutInProgress ? {
-                          color: TODAY_WORKOUT_THEME.colors.primaryForeground,
-                        } : {}),
-                      }}
-                    >
-                      {t(workoutInProgress
-                        ? 'home:activeWorkout.return'
-                        : prescription.status === 'SUCCESS'
-                          ? 'home:todayCard.start'
-                          : 'home:todayCard.review')}
-                    </Text>
-                  </Pressable>
-                )}
-
-                {showBodyMuscleMap && (
-                  <BodyMuscleMap
-                    sex={sex}
-                    primaryMuscles={sessionMuscles.primary}
-                    secondaryMuscles={sessionMuscles.secondary}
-                    activeColor={TODAY_WORKOUT_THEME.colors.primaryEmphasis}
-                    baseColor={TODAY_WORKOUT_THEME.colors.textFaint}
-                    outlineColor={TODAY_WORKOUT_THEME.colors.border}
-                    size={bodyMuscleMapSize}
-                  />
-                )}
-                {snapshotPresentationActive && !showBodyMuscleMap ? (
-                  <View style={{ width: bodyMuscleMapSize, height: bodyMuscleMapSize }} />
-                ) : null}
-              </View>
-            </LinearGradient>
+                    ? 'home:activeWorkout.return'
+                    : prescription.status === 'SUCCESS'
+                      ? 'home:todayCard.start'
+                      : 'home:todayCard.review')}
+                </Text>
+              </Pressable>
+            )}
           </View>
 
           {(frequencyWindow || snapshotFrequencyWindow) && onFrequencyPrev && onFrequencyNext ? (
-            <View style={{ marginTop: 4, marginBottom: 8 }}>
+            <View style={{ marginTop: 28, marginBottom: 8 }}>
               <FrequencyHeatmap
                 window={frequencyWindow ?? snapshotFrequencyWindow}
                 loading={frequencyWindow ? Boolean(frequencyLoading) : false}

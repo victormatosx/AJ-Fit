@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Text, TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { CtaButton } from '../../components/ui/CtaButton';
-import { useTheme } from '../../theme';
+import { NU, NuButton, NuPanel, NuSelectPill } from '../../components/nutrition/NuKit';
 import { recipePortionToGrams } from '../../nutrition/catalog/math';
 import { isPositiveGrams } from '../../nutrition/ui/diaryModel';
 import type { NutritionRecipe } from '../../types/nutrition';
@@ -22,7 +21,8 @@ import type { NutritionRecipe } from '../../types/nutrition';
  * `visible` at once is unreliable (same class of bug fixed for
  * `MealDetailsScreen` + `MealFeedbackSheet`) — hosted as a plain View
  * inside `FoodSearchScreen`'s `overlay` slot instead, there is nothing
- * left to stack.
+ * left to stack. `NuPanel` (src/components/nutrition/NuKit.tsx) is this
+ * redesign's own version of that same plain-View overlay chrome.
  */
 export function RecipeQuantityModal({
   visible, recipeName, recipe, onClose, onConfirm,
@@ -34,7 +34,6 @@ export function RecipeQuantityModal({
   onClose: () => void;
   onConfirm: (grams: number) => void;
 }) {
-  const { theme } = useTheme();
   const { t } = useTranslation('nutrition');
   const hasServings = typeof recipe?.servings === 'number' && recipe.servings > 0;
   const [mode, setMode] = useState<'grams' | 'portions'>('grams');
@@ -48,53 +47,35 @@ export function RecipeQuantityModal({
   const grams = mode === 'grams' ? amount : (recipe ? recipePortionToGrams(recipe, amount) : null);
   const valid = grams != null && isPositiveGrams(grams);
 
-  if (!visible) return null;
-
   return (
-    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50, elevation: 50 }}>
-      <View style={{ flex: 1, backgroundColor: theme.colors.loadingOverlay, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
-        <View style={{ width: '100%', borderRadius: theme.radii.xl, backgroundColor: theme.colors.sheetBackground,
-          borderWidth: 1, borderColor: theme.colors.border, padding: 22, gap: 16 }}>
-          <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 16, color: theme.colors.textPrimary }}>{recipeName}</Text>
+    <NuPanel visible={visible} onClose={onClose}>
+      <Text style={{ fontFamily: 'Archivo_700Bold', fontSize: 18, color: NU.white }}>{recipeName}</Text>
 
-          {hasServings ? (
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <Pressable
-                onPress={() => { setMode('grams'); setText('100'); }}
-                accessibilityRole="button" accessibilityLabel={t('recipe.quantityByGrams')}
-                style={{ flex: 1, paddingVertical: 10, borderRadius: theme.radii.control, alignItems: 'center',
-                  backgroundColor: mode === 'grams' ? theme.colors.choiceSelectedBackground : theme.colors.choiceBackground }}
-              >
-                <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 13, color: theme.colors.textPrimary }}>{t('recipe.quantityByGrams')}</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => { setMode('portions'); setText('1'); }}
-                accessibilityRole="button" accessibilityLabel={t('recipe.quantityByPortion')}
-                style={{ flex: 1, paddingVertical: 10, borderRadius: theme.radii.control, alignItems: 'center',
-                  backgroundColor: mode === 'portions' ? theme.colors.choiceSelectedBackground : theme.colors.choiceBackground }}
-              >
-                <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 13, color: theme.colors.textPrimary }}>{t('recipe.quantityByPortion')}</Text>
-              </Pressable>
-            </View>
-          ) : null}
-
-          <TextInput
-            value={text} onChangeText={setText} keyboardType="decimal-pad" autoFocus
-            style={{ height: 48, borderRadius: theme.radii.lg, paddingHorizontal: 14, backgroundColor: theme.colors.inputBackground,
-              borderWidth: 1, borderColor: theme.colors.inputBorder, fontFamily: theme.fonts.ui, fontSize: 16, color: theme.colors.inputText }}
-          />
-          <Text style={{ fontFamily: theme.fonts.ui, fontSize: 12.5, color: theme.colors.textMuted }}>
-            {mode === 'grams' ? t('recipe.gramsHint') : t('recipe.portionsHint')}
-          </Text>
-
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            <CtaButton ghost onPress={onClose} style={{ flex: 1 }}>{t('diary.cancel')}</CtaButton>
-            <CtaButton onPress={() => { if (valid && grams != null) onConfirm(grams); }} disabled={!valid} style={{ flex: 1 }}>
-              {t('diary.save')}
-            </CtaButton>
-          </View>
+      {hasServings ? (
+        <View style={{ flexDirection: 'row', gap: 8, marginTop: 18 }}>
+          <NuSelectPill on={mode === 'grams'} onPress={() => { setMode('grams'); setText('100'); }}>
+            {t('recipe.quantityByGrams')}
+          </NuSelectPill>
+          <NuSelectPill on={mode === 'portions'} onPress={() => { setMode('portions'); setText('1'); }}>
+            {t('recipe.quantityByPortion')}
+          </NuSelectPill>
         </View>
-      </View>
-    </View>
+      ) : null}
+
+      <TextInput
+        value={text} onChangeText={setText} keyboardType="decimal-pad" autoFocus
+        style={{
+          marginTop: 20, height: 52, borderRadius: 12, paddingHorizontal: 16,
+          backgroundColor: NU.surfaceSubtleStrong, fontFamily: 'Archivo_600SemiBold', fontSize: 16, color: NU.white,
+        }}
+      />
+      <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 12.5, color: NU.faint, marginTop: 10 }}>
+        {mode === 'grams' ? t('recipe.gramsHint') : t('recipe.portionsHint')}
+      </Text>
+
+      <NuButton onPress={() => { if (valid && grams != null) onConfirm(grams); }} disabled={!valid} style={{ marginTop: 22 }}>
+        {t('diary.save')}
+      </NuButton>
+    </NuPanel>
   );
 }

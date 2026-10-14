@@ -97,3 +97,11 @@ export function foodPickOriginToDiarySource(origin: 'catalog' | 'custom' | 'reci
 export function isPositiveGrams(value: number): boolean {
   return Number.isFinite(value) && value > 0 && value <= 10000;
 }
+
+export interface DiaryFollowedCount { logged: number; followed: number }
+
+/** Today's "seguiu o plano X/Y" tally — X = logged meals whose items came from `followedRecommendedOptionId`, Y = all logged meals. Purely a read of already-fetched `NutritionDailyLogDoc` data, no new field. */
+export function diaryFollowedCount<T>(day: { meals: NutritionLoggedMeal<T>[] } | null): DiaryFollowedCount {
+  const logged = day?.meals.filter((meal) => meal.items.length > 0) ?? [];
+  return { logged: logged.length, followed: logged.filter((meal) => meal.followedRecommendedOptionId != null).length };
+}

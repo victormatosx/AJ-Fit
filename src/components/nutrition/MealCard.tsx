@@ -1,11 +1,10 @@
 import React from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { Card } from '../ui/Card';
-import { MonoLabel } from '../ui/Display';
 import { Icon } from '../ui/Icon';
-import { useTheme } from '../../theme';
+import { NU, NuButton, NuCap } from './NuKit';
 import { foodNames, recommendedOption } from '../../nutrition/ui/planView';
+import { displayLineHeight } from '../../theme/tokens';
 import type { NutritionMeal } from '../../types/nutrition';
 
 /**
@@ -20,38 +19,45 @@ export function MealCard({
   variant?: 'next' | 'list';
   onPress: () => void;
 }) {
-  const { theme } = useTheme();
   const { t } = useTranslation('nutrition');
   const option = recommendedOption(meal);
   const slotLabel = t(`mealSlots.${meal.slot}`);
 
   if (variant === 'next') {
+    const cols: [string, number, string][] = [
+      [t('units.kcal'), Math.round(option.totals.kcal), ''],
+      [t('home.summary.protein'), Math.round(option.totals.proteinG), 'g'],
+      [t('home.summary.carbs'), Math.round(option.totals.carbsG), 'g'],
+      [t('home.summary.fat'), Math.round(option.totals.fatG), 'g'],
+    ];
     return (
-      <Card style={{ marginHorizontal: 22, padding: 18 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <MonoLabel color={theme.colors.primaryEmphasis}>{t('home.nextMeal.title')}</MonoLabel>
-          <Text style={{ fontFamily: theme.fonts.mono, fontSize: 10, letterSpacing: 1.5, color: theme.colors.textFaint }}>
-            {Math.round(option.totals.kcal)} {t('units.kcal')}
-          </Text>
+      <View style={{ marginTop: 36, paddingTop: 24, paddingHorizontal: 24, borderTopWidth: 1, borderTopColor: NU.hairline }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
+          <NuCap>{t('home.nextMeal.title')}</NuCap>
+          <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 12.5, color: NU.faint }}>{slotLabel}</Text>
         </View>
-        <Text style={{ fontFamily: theme.fonts.display, fontSize: 22, color: theme.colors.textPrimary, marginTop: 8 }}>
-          {slotLabel.toUpperCase()}
-        </Text>
-        <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13.5, color: theme.colors.textSecondary, marginTop: 4 }} numberOfLines={2}>
+        {/* The design shows a composed "dish name" here (e.g. "Panqueca de
+            banana com whey") — `NutritionMealOption` has no such field, only
+            `foods[]`/`totals` (diet-quality-v3: free-form AI items, never a
+            named dish). Showing the food list as the headline instead,
+            exactly what this card showed before the redesign (the slot name
+            already sits in the row above). */}
+        <Text style={{ fontFamily: 'Archivo_700Bold', fontSize: 18, color: NU.white, marginTop: 12, lineHeight: 24 }} numberOfLines={2}>
           {foodNames(meal)}
         </Text>
-        <Pressable
-          onPress={onPress}
-          accessibilityRole="button"
-          accessibilityLabel={t('home.nextMeal.openCta')}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 14 }}
-        >
-          <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 13, color: theme.colors.primaryEmphasis }}>
-            {t('home.nextMeal.openCta')}
-          </Text>
-          <Icon name="arrow-right" size={14} color={theme.colors.primaryEmphasis} />
-        </Pressable>
-      </Card>
+        <View style={{ flexDirection: 'row', marginTop: 20, paddingVertical: 14, borderTopWidth: 1, borderBottomWidth: 1, borderColor: NU.hairline }}>
+          {cols.map(([label, value, unit], i) => (
+            <View key={label} style={{ flex: 1, alignItems: 'center', borderLeftWidth: i ? 1 : 0, borderLeftColor: NU.hairline }}>
+              <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+                <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 20, lineHeight: displayLineHeight(20), color: NU.white, textTransform: 'uppercase' }}>{value}</Text>
+                {unit ? <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 12, color: NU.faint }}>{unit}</Text> : null}
+              </View>
+              <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 11.5, color: NU.faint, marginTop: 5 }}>{label}</Text>
+            </View>
+          ))}
+        </View>
+        <NuButton icon="plus" onPress={onPress} style={{ marginTop: 20 }}>{t('home.nextMeal.openCta')}</NuButton>
+      </View>
     );
   }
 
@@ -60,31 +66,18 @@ export function MealCard({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={slotLabel}
-      style={{
-        marginHorizontal: 22,
-        marginBottom: 10,
-        padding: 14,
-        borderRadius: theme.radii.lg,
-        backgroundColor: theme.colors.surface,
-        borderWidth: 1,
-        borderColor: theme.colors.border,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-      }}
+      style={{ width: '100%', flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14 }}
     >
-      <View style={{ flex: 1 }}>
-        <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 14.5, color: theme.colors.textPrimary }}>
-          {slotLabel}
-        </Text>
-        <Text style={{ fontFamily: theme.fonts.ui, fontSize: 12.5, color: theme.colors.textMuted, marginTop: 2 }} numberOfLines={1}>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={{ fontFamily: 'Archivo_600SemiBold', fontSize: 14.5, color: NU.white }}>{slotLabel}</Text>
+        <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 12.5, color: NU.faint, marginTop: 3 }} numberOfLines={1}>
           {foodNames(meal)}
         </Text>
       </View>
-      <Text style={{ fontFamily: theme.fonts.mono, fontSize: 11, color: theme.colors.textFaint }}>
+      <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 14, color: NU.strong }}>
         {Math.round(option.totals.kcal)} {t('units.kcal')}
       </Text>
-      <Icon name="chevron-right" size={16} color={theme.colors.textFaint} />
+      <Icon name="chevron-right" size={15} color={NU.faintest} />
     </Pressable>
   );
 }

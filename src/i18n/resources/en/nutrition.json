@@ -36,12 +36,30 @@
       "protein": "PROTEIN",
       "carbs": "CARBS",
       "fat": "FAT",
-      "fiber": "FIBER"
+      "fiber": "FIBER",
+      "remaining": "LEFT",
+      "over": "OVER",
+      "of": "of",
+      "status": {
+        "below": "LOW",
+        "near": "OK",
+        "above": "HIGH"
+      }
     },
     "nextMeal": {
       "title": "NEXT MEAL",
       "recommended": "Recommended",
       "openCta": "View meal"
+    },
+    "ticker": {
+      "goal": "GOAL",
+      "consumed": "CONSUMED",
+      "meals": "MEALS",
+      "followedPlan": "FOLLOWED PLAN"
+    },
+    "week": {
+      "title": "WEEK",
+      "summaryCta": "Summary"
     },
     "mealsToday": {
       "title": "TODAY'S MEALS",
@@ -271,6 +289,7 @@
   },
   "generating": {
     "title": "Preparing your diet",
+    "leaveScreenNote": "You can leave this screen. We'll let you know when your plan is ready.",
     "stages": {
       "queued": "Preparing your data",
       "running": "Selecting foods and building your meals",
@@ -501,6 +520,7 @@
   },
   "history": {
     "title": "Plan history",
+    "restoreHint": "Restoring reactivates an old plan exactly as it was, without generating a new one.",
     "activeBadge": "Active",
     "archivedBadge": "Archived",
     "view": "View plan",

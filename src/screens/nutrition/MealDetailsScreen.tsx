@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, ScrollView, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ScreenBg } from '../../components/ui/ScreenBg';
-import { Display, MonoLabel } from '../../components/ui/Display';
-import { Icon } from '../../components/ui/Icon';
 import { MealOptionCard } from '../../components/nutrition/MealOptionCard';
-import { useTheme } from '../../theme';
+import { NU, NuButton, NuCap, NuSheetHeader } from '../../components/nutrition/NuKit';
+import { recommendedOption } from '../../nutrition/ui/planView';
+import { displayLineHeight } from '../../theme/tokens';
 import type { NutritionMeal, NutritionMealOption } from '../../types/nutrition';
 
 export function MealDetailsScreen({
@@ -37,7 +36,6 @@ export function MealDetailsScreen({
    */
   overlay?: React.ReactNode;
 }) {
-  const { theme } = useTheme();
   const { t } = useTranslation('nutrition');
   const [confirmation, setConfirmation] = useState<string | null>(null);
 
@@ -51,71 +49,77 @@ export function MealDetailsScreen({
     setConfirmation(null);
   }, [meal?.slot]);
 
+  // `NutritionMealOption` carries no per-slot min/max kcal range (only a
+  // single fixed `totals` per option) — "META DA REFEIÇÃO" below shows the
+  // recommended option's own kcal as one value instead of a fabricated range.
+  const goalKcal = meal ? Math.round(recommendedOption(meal).totals.kcal) : null;
+
   return (
     <Modal visible={meal != null} animationType="slide" onRequestClose={onClose} presentationStyle="pageSheet">
-      <ScreenBg>
+      <View style={{ flex: 1, backgroundColor: NU.bg }}>
         <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 22, paddingTop: 10 }}>
-            <Display size={20}>{meal ? t(`mealSlots.${meal.slot}`) : t('mealDetails.title')}</Display>
-            <Pressable accessibilityRole="button" accessibilityLabel={t('profile.actions.cancel')} onPress={onClose} style={{ padding: 6 }}>
-              <Icon name="x" size={20} color={theme.colors.textFaint} />
-            </Pressable>
-          </View>
+          <NuSheetHeader title={meal ? t(`mealSlots.${meal.slot}`) : t('mealDetails.title')} onBack={onClose} />
 
           {meal ? (
-            <ScrollView contentContainerStyle={{ padding: 22, gap: 20 }}>
+            <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+              <View style={{ alignItems: 'center', marginTop: 18 }}>
+                <NuCap>{t('mealDetails.totals')}</NuCap>
+                {goalKcal != null ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 10 }}>
+                    <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 40, lineHeight: displayLineHeight(40), color: NU.white, textTransform: 'uppercase' }}>{goalKcal}</Text>
+                    <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 14, color: NU.faint }}> {t('units.kcal')}</Text>
+                  </View>
+                ) : null}
+              </View>
+
+              <View style={{ marginTop: 34 }}>
+                <NuCap style={{ marginBottom: 10 }}>{t('mealDetails.options')}</NuCap>
+                {meal.options.map((option, index) => (
+                  <View key={option.id} style={{ marginTop: index ? 28 : 0 }}>
+                    <MealOptionCard
+                      option={option}
+                      recommended={option.id === meal.recommendedOptionId}
+                      onRegister={readOnly || !onRegister ? undefined : () => {
+                        onRegister(option);
+                        setConfirmation(t('mealDetails.registered'));
+                      }}
+                      registering={registeringOptionId === option.id}
+                      onFavorite={readOnly || !onFavorite ? undefined : () => {
+                        onFavorite(option);
+                        setConfirmation(t('mealDetails.favorited'));
+                      }}
+                      favoriting={favoritingOptionId === option.id}
+                      favorited={favoritedOptionIds.includes(option.id)}
+                    />
+                  </View>
+                ))}
+              </View>
+
               {!readOnly && onSwap ? (
-                <Pressable
-                  onPress={onSwap} accessibilityRole="button" accessibilityLabel={t('mealDetails.swap')}
-                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-                    paddingVertical: 12, borderRadius: theme.radii.lg, borderWidth: 1, borderColor: theme.colors.cardBorder }}
-                >
-                  <Icon name="swap" size={15} color={theme.colors.primaryEmphasis} />
-                  <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 14, color: theme.colors.primaryEmphasis }}>
-                    {t('mealDetails.swap')}
-                  </Text>
-                </Pressable>
+                <NuButton ghost icon="swap" onPress={onSwap} style={{ marginTop: 20 }}>
+                  {t('mealDetails.swap')}
+                </NuButton>
               ) : null}
 
-              <MonoLabel color={theme.colors.textFaint}>{t('mealDetails.options')}</MonoLabel>
-              {meal.options.map((option) => (
-                <MealOptionCard
-                  key={option.id}
-                  option={option}
-                  recommended={option.id === meal.recommendedOptionId}
-                  onRegister={readOnly || !onRegister ? undefined : () => {
-                    onRegister(option);
-                    setConfirmation(t('mealDetails.registered'));
-                  }}
-                  registering={registeringOptionId === option.id}
-                  onFavorite={readOnly || !onFavorite ? undefined : () => {
-                    onFavorite(option);
-                    setConfirmation(t('mealDetails.favorited'));
-                  }}
-                  favoriting={favoritingOptionId === option.id}
-                  favorited={favoritedOptionIds.includes(option.id)}
-                />
-              ))}
-
               {confirmation ? (
-                <Text style={{ fontFamily: theme.fonts.ui, fontSize: 12.5, color: theme.colors.statusSuccessText, textAlign: 'center' }}>
+                <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 12.5, color: NU.blueHi, textAlign: 'center', marginTop: 16 }}>
                   {confirmation}
                 </Text>
               ) : null}
               {registerError ? (
-                <Text style={{ fontFamily: theme.fonts.ui, fontSize: 12.5, color: theme.colors.formErrorText, textAlign: 'center' }}>
+                <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 12.5, color: NU.danger, textAlign: 'center', marginTop: 16 }}>
                   {registerError}
                 </Text>
               ) : null}
               {favoriteError ? (
-                <Text style={{ fontFamily: theme.fonts.ui, fontSize: 12.5, color: theme.colors.formErrorText, textAlign: 'center' }}>
+                <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 12.5, color: NU.danger, textAlign: 'center', marginTop: 16 }}>
                   {favoriteError}
                 </Text>
               ) : null}
             </ScrollView>
           ) : null}
         </SafeAreaView>
-      </ScreenBg>
+      </View>
       {overlay}
     </Modal>
   );
@@ -123,12 +127,11 @@ export function MealDetailsScreen({
 
 /** Thin loading placeholder reused while a meal alternative is being generated. */
 export function MealAlternativeLoading() {
-  const { theme } = useTheme();
   const { t } = useTranslation('nutrition');
   return (
     <View style={{ alignItems: 'center', paddingVertical: 28, gap: 14 }}>
-      <ActivityIndicator color={theme.colors.primaryEmphasis} />
-      <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13.5, color: theme.colors.textMuted }}>{t('alternative.loading')}</Text>
+      <ActivityIndicator color={NU.blueHi} />
+      <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 13.5, color: NU.faint }}>{t('alternative.loading')}</Text>
     </View>
   );
 }

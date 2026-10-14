@@ -2,7 +2,7 @@ import React from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Icon } from '../ui/Icon';
-import { useTheme } from '../../theme';
+import { NU } from './NuKit';
 import { Pill } from './NutritionPrimitives';
 import { formatFoodDisplayName } from '../../nutrition/ui/formatFoodDisplayName';
 
@@ -51,7 +51,6 @@ export function FoodRow({
   /** A sibling action to the row button, so tapping it can never trigger `onPress`. */
   onToggleFavorite?: () => void;
 }) {
-  const { theme } = useTheme();
   const { t } = useTranslation('nutrition');
   const name = raw ? rawName : formatFoodDisplayName(rawName, brandName ? { name: brandName } : null);
   const heart = onToggleFavorite ? (
@@ -60,13 +59,13 @@ export function FoodRow({
       accessibilityLabel={favorited ? t('favorites.remove') : t('favorites.add')}
       accessibilityState={{ selected: Boolean(favorited) }}
     >
-      <Icon name="heart" filled={Boolean(favorited)} size={18} color={favorited ? theme.colors.danger : theme.colors.textFaint} />
+      <Icon name="heart" filled={Boolean(favorited)} size={18} color={favorited ? NU.white : NU.faint} />
     </Pressable>
   ) : null;
   const details = (
     <View style={{ flex: 1 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 14.5, color: theme.colors.textPrimary }} numberOfLines={1}>
+        <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 14.5, color: NU.white }} numberOfLines={1}>
           {name}
         </Text>
         {origin ? (
@@ -76,7 +75,7 @@ export function FoodRow({
         ) : null}
       </View>
       {(brandName || grams != null || kcal != null) ? (
-        <Text style={{ fontFamily: theme.fonts.ui, fontSize: 12.5, color: theme.colors.textMuted, marginTop: 2 }}>
+        <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 12.5, color: NU.faint, marginTop: 3 }}>
           {[brandName, grams != null ? `${grams}${t('units.gramsShort')}` : null,
             kcal != null ? `${Math.round(kcal)} ${t('units.kcal')}` : null,
             grams == null && proteinG != null ? `${proteinG} ${t('units.gramsShort')} ${t('registerMeal.proteinShort')}` : null,
@@ -86,13 +85,13 @@ export function FoodRow({
     </View>
   );
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 14 }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 13 }}>
       {onPress ? (
         <Pressable
           onPress={onPress}
           accessibilityRole="button"
           accessibilityLabel={name}
-          style={({ pressed }) => ({ flex: 1, opacity: pressed ? 0.72 : 1, borderRadius: theme.radii.md })}
+          style={({ pressed }) => ({ flex: 1, opacity: pressed ? 0.72 : 1 })}
         >
           {details}
         </Pressable>
@@ -100,7 +99,7 @@ export function FoodRow({
       {(heart || trailing || onPress) ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           {heart}
-          {trailing ?? (onPress ? <Icon name="chevron-right" size={16} color={theme.colors.textFaint} /> : null)}
+          {trailing ?? (onPress ? <Icon name="chevron-right" size={15} color={NU.faintest} /> : null)}
         </View>
       ) : null}
     </View>

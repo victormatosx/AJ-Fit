@@ -2,39 +2,55 @@ import React, { useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ScreenBg } from '../../components/ui/ScreenBg';
-import { Display } from '../../components/ui/Display';
-import { CtaButton } from '../../components/ui/CtaButton';
 import { Icon } from '../../components/ui/Icon';
-import { useTheme } from '../../theme';
+import { NU, NuButton, NuCap, NuHairline } from '../../components/nutrition/NuKit';
 import { useAuth } from '../../state/AuthContext';
 import { createCustomFood } from '../../services/nutritionFoods';
 import { validateCustomFoodForm } from '../../nutrition/ui/customFoodForm';
 import type { NutritionCustomFood } from '../../types/nutrition';
 import type { Timestamp } from 'firebase/firestore';
 
-function Field({ label, value, onChangeText, placeholder, error, numeric = false }: {
-  label: string; value: string; onChangeText: (v: string) => void; placeholder?: string; error?: boolean; numeric?: boolean;
+/** `NOME` — full-width filled input (spec §4.9). */
+function NuFormInput({ value, onChangeText, placeholder, error }: {
+  value: string; onChangeText: (v: string) => void; placeholder?: string; error?: boolean;
 }) {
-  const { theme } = useTheme();
   return (
-    <View style={{ gap: 6 }}>
-      <Text style={{ fontFamily: theme.fonts.ui, fontSize: 12.5, color: theme.colors.inputLabel }}>
-        {label}
-      </Text>
+    <TextInput
+      value={value}
+      onChangeText={onChangeText}
+      placeholder={placeholder}
+      placeholderTextColor={NU.faint}
+      style={{
+        height: 52, borderRadius: 12, paddingHorizontal: 16,
+        backgroundColor: NU.surfaceSubtleStrong,
+        borderWidth: 1, borderColor: error ? NU.danger : 'transparent',
+        fontFamily: 'Archivo_400Regular', fontSize: 15.5, color: NU.white,
+      }}
+    />
+  );
+}
+
+/** A labeled row with a small right-aligned numeric input + trailing unit — spec §4.9 `C2NumRow` ("Calorias/Proteína/…" rows). */
+function NuNumRow({ label, value, onChangeText, unit, placeholder = '0', last, error }: {
+  label: string; value: string; onChangeText: (v: string) => void; unit: string; placeholder?: string; last?: boolean; error?: boolean;
+}) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, borderBottomWidth: last ? 0 : 1, borderBottomColor: NU.hairline }}>
+      <Text style={{ flex: 1, fontFamily: 'Archivo_400Regular', fontSize: 14.5, color: NU.white }}>{label}</Text>
       <TextInput
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={theme.colors.inputPlaceholder}
-        keyboardType={numeric ? 'decimal-pad' : 'default'}
+        placeholderTextColor={NU.faint}
+        keyboardType="decimal-pad"
+        textAlign="right"
         style={{
-          height: 48, borderRadius: theme.radii.lg, paddingHorizontal: 14,
-          backgroundColor: theme.colors.inputBackground,
-          borderWidth: 1, borderColor: error ? theme.colors.inputBorderError : theme.colors.inputBorder,
-          fontFamily: theme.fonts.ui, fontSize: 15, color: theme.colors.inputText,
+          width: 84, height: 40, borderRadius: 10, paddingHorizontal: 12,
+          backgroundColor: NU.surfaceSubtleStrong, borderWidth: 1, borderColor: error ? NU.danger : 'transparent',
+          fontFamily: 'Archivo_600SemiBold', fontSize: 15, color: NU.white,
         }}
       />
+      <Text style={{ width: 30, fontFamily: 'Archivo_400Regular', fontSize: 13, color: NU.faint }}>{unit}</Text>
     </View>
   );
 }
@@ -62,7 +78,6 @@ export function CreateCustomFoodScreen({
   onClose: () => void;
   onCreated: (food: NutritionCustomFood<Timestamp> & { id: string }) => void;
 }) {
-  const { theme } = useTheme();
   const { t } = useTranslation('nutrition');
   const { user } = useAuth();
   const [name, setName] = useState('');
@@ -96,35 +111,33 @@ export function CreateCustomFoodScreen({
   if (!visible) return null;
 
   return (
-    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50, elevation: 50 }}>
-      <ScreenBg>
-        <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 22, paddingTop: 10 }}>
-            <Display size={20}>{t('customFood.title')}</Display>
-            <Pressable accessibilityRole="button" accessibilityLabel={t('profile.actions.cancel')} onPress={() => { reset(); onClose(); }} style={{ padding: 6 }}>
-              <Icon name="x" size={20} color={theme.colors.textFaint} />
-            </Pressable>
-          </View>
-          <ScrollView contentContainerStyle={{ padding: 22, gap: 16 }} keyboardShouldPersistTaps="handled">
-            <Field label={t('customFood.name')} value={name} onChangeText={setName} placeholder={t('customFood.namePlaceholder')} error={errors.name} />
-            {errors.name ? <Text style={{ color: theme.colors.formErrorText, fontSize: 12 }}>{t('customFood.errors.name')}</Text> : null}
+    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50, elevation: 50, backgroundColor: NU.bg }}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 22, paddingTop: 10 }}>
+          <Text style={{ fontFamily: 'Archivo_700Bold', fontSize: 18, color: NU.white }}>{t('customFood.title')}</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel={t('profile.actions.cancel')} onPress={() => { reset(); onClose(); }} style={{ padding: 6 }}>
+            <Icon name="x" size={20} color={NU.faint} />
+          </Pressable>
+        </View>
+        <ScrollView contentContainerStyle={{ paddingHorizontal: 22, paddingTop: 18, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+          <NuCap style={{ marginBottom: 10 }}>{t('customFood.name')}</NuCap>
+          <NuFormInput value={name} onChangeText={setName} placeholder={t('customFood.namePlaceholder')} error={errors.name} />
+          {errors.name ? <Text style={{ color: NU.danger, fontSize: 12, marginTop: 6 }}>{t('customFood.errors.name')}</Text> : null}
 
-            <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 13, color: theme.colors.textSecondary, marginTop: 4 }}>
-              {t('customFood.per100g')}
-            </Text>
-            <Field numeric label={t('customFood.kcal')} value={kcal} onChangeText={setKcal} placeholder="0" error={errors.kcal} />
-            <Field numeric label={t('customFood.protein')} value={protein} onChangeText={setProtein} placeholder="0" error={errors.protein} />
-            <Field numeric label={t('customFood.carbs')} value={carbs} onChangeText={setCarbs} placeholder="0" error={errors.carbs} />
-            <Field numeric label={t('customFood.fat')} value={fat} onChangeText={setFat} placeholder="0" error={errors.fat} />
-            <Field numeric label={t('customFood.fiber')} value={fiber} onChangeText={setFiber} placeholder="0" error={errors.fiber} />
-            {(errors.kcal || errors.protein || errors.carbs || errors.fat || errors.fiber) ? (
-              <Text style={{ color: theme.colors.formErrorText, fontSize: 12 }}>{t('customFood.errors.number')}</Text>
-            ) : null}
+          <NuCap style={{ marginTop: 30, marginBottom: 2 }}>{t('customFood.per100g')}</NuCap>
+          <NuNumRow label={t('customFood.kcal')} unit="kcal" value={kcal} onChangeText={setKcal} error={errors.kcal} />
+          <NuNumRow label={t('customFood.protein')} unit="g" value={protein} onChangeText={setProtein} error={errors.protein} />
+          <NuNumRow label={t('customFood.carbs')} unit="g" value={carbs} onChangeText={setCarbs} error={errors.carbs} />
+          <NuNumRow label={t('customFood.fat')} unit="g" value={fat} onChangeText={setFat} error={errors.fat} />
+          <NuNumRow label={t('customFood.fiber')} unit="g" value={fiber} onChangeText={setFiber} error={errors.fiber} last />
+          {(errors.kcal || errors.protein || errors.carbs || errors.fat || errors.fiber) ? (
+            <Text style={{ color: NU.danger, fontSize: 12, marginTop: 10 }}>{t('customFood.errors.number')}</Text>
+          ) : null}
 
-            <CtaButton onPress={handleSave} disabled={saving} style={{ marginTop: 8 }}>{t('customFood.save')}</CtaButton>
-          </ScrollView>
-        </SafeAreaView>
-      </ScreenBg>
+          <NuHairline style={{ marginTop: 24 }} />
+          <NuButton onPress={handleSave} disabled={saving} style={{ marginTop: 24 }}>{t('customFood.save')}</NuButton>
+        </ScrollView>
+      </SafeAreaView>
     </View>
   );
 }

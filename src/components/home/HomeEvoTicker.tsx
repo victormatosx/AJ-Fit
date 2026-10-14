@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useIsScreenActive } from '../../state/ScreenActivity';
 import type { EvolutionViewModel } from '../../workoutEvolution/types';
 import type { Streak } from '../../home/streak';
-import { buildHomeEvoTickerItems, type HomeEvoTickerTranslate } from './homeEvoTickerItems';
+import { buildHomeEvoTickerItems, type HomeEvoTickerItem, type HomeEvoTickerTranslate } from './homeEvoTickerItems';
 
 const LOOP_DURATION_MS = 18000;
 const ITEM_GAP = 36;
@@ -12,13 +12,15 @@ const ITEM_GAP = 36;
 // Deliberately hardcoded, not sourced from `useTheme()` — this whole Home
 // redesign is a fixed-dark "poster" surface regardless of the app's active
 // theme (same precedent as `EvoRing.tsx`'s `trackColor` and
-// `HomeScreen.tsx`'s `TODAY_WORKOUT_THEME`). `ACCENT_COLOR` is the same
-// value `theme.colors.primaryEmphasis` resolves to in dark theme — visually
-// identical to before, just no longer reactive to a theme switch. Font
-// names aren't theme-dependent anyway, but `FONT_FAMILY` is kept as a fixed
-// literal too for consistency with that same "fixed, not reactive" principle.
+// `HomeScreen.tsx`'s `TODAY_WORKOUT_THEME`). These are the same values
+// `theme.colors.primaryEmphasis`/`textFaint` resolve to in dark theme —
+// visually identical to before, just no longer reactive to a theme switch.
+// Same two values `EvolutionTicker.tsx` (Treino) and the Nutrição redesign's
+// own ticker use, so every tab's info strip reads as one consistent look.
 const ACCENT_COLOR = '#4da3ff';
+const LABEL_COLOR = 'rgba(255,255,255,0.32)';
 const FONT_FAMILY = 'JetBrainsMono_400Regular';
+const FONT_FAMILY_BOLD = 'JetBrainsMono_700Bold';
 
 /**
  * Home-only HUD marquee (section 2.2 of the Home redesign). Deliberately a
@@ -42,7 +44,7 @@ export function HomeEvoTicker({
   const { t } = useTranslation(['home', 'evolution']);
   const tLoose = t as unknown as HomeEvoTickerTranslate;
 
-  const items = useMemo<string[]>(
+  const items = useMemo<HomeEvoTickerItem[]>(
     () => buildHomeEvoTickerItems(viewModel, streak, sessionsLast30Days, tLoose),
     [viewModel, streak, sessionsLast30Days, tLoose],
   );
@@ -63,20 +65,12 @@ export function HomeEvoTicker({
         overflow: 'hidden',
       }}
     >
-      <TickerMarquee items={items} accentColor={ACCENT_COLOR} fontFamily={FONT_FAMILY} />
+      <TickerMarquee items={items} />
     </View>
   );
 }
 
-function TickerMarquee({
-  items,
-  accentColor,
-  fontFamily,
-}: {
-  items: string[];
-  accentColor: string;
-  fontFamily: string;
-}) {
+function TickerMarquee({ items }: { items: HomeEvoTickerItem[] }) {
   const [width, setWidth] = useState(0);
   const x = useRef(new Animated.Value(0)).current;
   // Home is kept alive while inactive (docs/23_navegacao_e_lifecycle.md) —
@@ -99,12 +93,10 @@ function TickerMarquee({
       onLayout={onLayout ? (e) => onLayout(e.nativeEvent.layout.width) : undefined}
       style={{ flexDirection: 'row', gap: ITEM_GAP, paddingRight: ITEM_GAP }}
     >
-      {items.map((item, i) => (
-        <Text
-          key={i}
-          style={{ fontFamily, fontSize: 10, letterSpacing: 2, color: accentColor }}
-        >
-          {item}
+      {items.map(({ label, value }, i) => (
+        <Text key={i} style={{ fontFamily: FONT_FAMILY, fontSize: 10, letterSpacing: 2, color: LABEL_COLOR }}>
+          {label.toUpperCase()}{' '}
+          <Text style={{ color: ACCENT_COLOR, fontFamily: FONT_FAMILY_BOLD }}>{value.toUpperCase()}</Text>
         </Text>
       ))}
     </View>

@@ -48,13 +48,21 @@ describe('Nutrition feature: no stacked native Modals (preventive audit)', () =>
     const modalStart = foodSearchSource.indexOf('<Modal');
     const modalEnd = foodSearchSource.indexOf('</Modal>');
     const modalBody = foodSearchSource.slice(modalStart, modalEnd);
-    expect(modalBody).toMatch(/<CreateCustomFoodScreen/);
+    // Nutrição-redesign variant branch (`body`/`createCustomFoodOverlay`
+    // computed above the single `<Modal>`, then injected by reference) —
+    // confirm both pieces are still (a) defined as real JSX elsewhere in
+    // the file and (b) actually rendered inside this one Modal's children.
+    expect(foodSearchSource).toMatch(/<CreateCustomFoodScreen/);
+    expect(modalBody).toMatch(/\{createCustomFoodOverlay\}/);
     expect(modalBody).toMatch(/\{overlay\}/);
   });
 
   it('RecipeQuantityModal owns no native Modal and fully unmounts while closed', () => {
     expect(recipeQuantitySource).not.toMatch(/<Modal\b/);
-    expect(recipeQuantitySource).toMatch(/if \(!visible\) return null;/);
+    // Delegates the "unmount while closed" guard to `NuPanel` (its own
+    // `if (!visible) return null;`, src/components/nutrition/NuKit.tsx)
+    // instead of repeating the check here — same outcome, no native Modal.
+    expect(recipeQuantitySource).toMatch(/<NuPanel visible=\{visible\}/);
   });
 
   it('NutritionShell wires RecipeQuantityModal through the Diary FoodSearchScreen.overlay, not as a top-level Modal sibling', () => {
@@ -71,14 +79,21 @@ describe('Nutrition feature: no stacked native Modals (preventive audit)', () =>
     expect(shellSource.match(/<RecipeQuantityModal/g)?.length).toBe(1);
   });
 
-  it('NutritionDiaryScreen has exactly one Modal; EditGramsSheet and the move-meal picker are plain overlays inside it', () => {
+  it('NutritionDiaryScreen has exactly one Modal; EditGramsSheet and the move-meal picker are plain NuPanel overlays inside it, never a second Modal', () => {
     expect(diarySource.match(/<Modal\b/g)?.length).toBe(1);
     expect(diarySource).toMatch(/function EditGramsSheet\(/);
     const editGramsStart = diarySource.indexOf('function EditGramsSheet(');
     const editGramsEnd = diarySource.indexOf('export function NutritionDiaryScreen', editGramsStart);
-    expect(diarySource.slice(editGramsStart, editGramsEnd)).toMatch(/if \(!visible\) return null;/);
-    // The "move meal" overlay is now a conditional plain View, not a Modal.
-    expect(diarySource).toMatch(/\{moving != null \? \(/);
-    expect(diarySource).not.toMatch(/visible=\{moving != null\}/);
+    const editGramsBody = diarySource.slice(editGramsStart, editGramsEnd);
+    // `NuPanel` (src/components/nutrition/NuKit.tsx) is the redesign's own
+    // plain-View overlay chrome — it has its own `if (!visible) return
+    // null;` guard internally, so callers pass it a `visible` prop instead
+    // of repeating that check themselves. Neither call site below renders
+    // a second `<Modal>`.
+    expect(editGramsBody).not.toMatch(/<Modal\b/);
+    expect(editGramsBody).toMatch(/<NuPanel visible=\{visible\}/);
+    const movingPanelStart = diarySource.indexOf('<NuPanel visible={moving != null}');
+    expect(movingPanelStart).toBeGreaterThan(-1);
+    expect(diarySource).not.toMatch(/<Modal\b[^>]*visible=\{moving/);
   });
 });

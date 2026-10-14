@@ -3,13 +3,10 @@ import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View 
 import { useTranslation } from 'react-i18next';
 import type { Timestamp } from 'firebase/firestore';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ScreenBg } from '../../components/ui/ScreenBg';
-import { Display, MonoLabel } from '../../components/ui/Display';
-import { CtaButton } from '../../components/ui/CtaButton';
 import { Icon } from '../../components/ui/Icon';
 import { FoodRow } from '../../components/nutrition/FoodRow';
 import { SkeletonBlock } from '../../components/nutrition/NutritionPrimitives';
-import { useTheme } from '../../theme';
+import { NU, NuButton, NuCap, NuHairline } from '../../components/nutrition/NuKit';
 import { useAuth } from '../../state/AuthContext';
 import { createNutritionRecipe } from '../../services/nutritionRecipes';
 import { listCustomFoods } from '../../services/nutritionFoods';
@@ -19,6 +16,7 @@ import type { FoodLogEntry, NutritionCustomFood } from '../../types/nutrition';
 import type { NutritionFoodPick } from './FoodSearchScreen';
 import { countBucket, durationBucket, trackNutritionEvent } from '../../nutrition/analytics';
 import { formatFoodDisplayName } from '../../nutrition/ui/formatFoodDisplayName';
+import { displayLineHeight } from '../../theme/tokens';
 
 const DEBOUNCE_MS = 350;
 const localFoodLogSearchProvider = createLocalFoodLogSearchProvider();
@@ -28,13 +26,31 @@ interface DraftIngredient extends NutritionFoodPick { grams: string }
 /** Round brief part 1 §12: recipes accept at most 6 ingredients (`09_safety/nutrition_safety_rules.md`) — never raised here. */
 const MAX_INGREDIENTS = 6;
 
+/** Input row used for "Peso final"/"Porções" — same filled-field look as the custom-food form. */
+function NuInlineInput({ value, onChangeText, placeholder, keyboardType }: {
+  value: string; onChangeText: (v: string) => void; placeholder?: string; keyboardType?: 'decimal-pad' | 'number-pad';
+}) {
+  return (
+    <TextInput
+      value={value}
+      onChangeText={onChangeText}
+      keyboardType={keyboardType}
+      placeholder={placeholder}
+      placeholderTextColor={NU.faint}
+      style={{
+        height: 44, borderRadius: 12, paddingHorizontal: 14,
+        backgroundColor: NU.surfaceSubtleStrong, fontFamily: 'Archivo_400Regular', fontSize: 14, color: NU.white,
+      }}
+    />
+  );
+}
+
 function NutrientRow({ label, values }: { label: string; values: RecipeNutritionBreakdown['total'] }) {
-  const { theme } = useTheme();
   const { t } = useTranslation('nutrition');
   return (
     <View style={{ gap: 4 }}>
-      <MonoLabel color={theme.colors.textFaint}>{label}</MonoLabel>
-      <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textSecondary }}>
+      <NuCap>{label}</NuCap>
+      <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 13, color: NU.secondary }}>
         {Math.round(values.kcal)} {t('units.kcal')} · P {values.proteinG.toFixed(1)}{t('units.gramsShort')} ·
         {' '}C {values.carbsG.toFixed(1)}{t('units.gramsShort')} · G {values.fatG.toFixed(1)}{t('units.gramsShort')} ·
         {' '}F {values.fiberG == null ? '—' : `${values.fiberG.toFixed(1)}${t('units.gramsShort')}`}
@@ -59,7 +75,6 @@ export function CreateRecipeScreen({
   recentFoodIds?: readonly string[];
   onToggleFavoriteFood?: (foodId: string) => void;
 }) {
-  const { theme } = useTheme();
   const { t } = useTranslation('nutrition');
   const { user } = useAuth();
   const [name, setName] = useState('');
@@ -193,39 +208,41 @@ export function CreateRecipeScreen({
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose} presentationStyle="pageSheet">
-      <ScreenBg>
+      <View style={{ flex: 1, backgroundColor: NU.bg }}>
         <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 22, paddingTop: 10 }}>
-            <Display size={20}>{t('recipe.title')}</Display>
+            <Text style={{ fontFamily: 'Archivo_700Bold', fontSize: 18, color: NU.white }}>{t('recipe.title')}</Text>
             <Pressable accessibilityRole="button" accessibilityLabel={t('profile.actions.cancel')} onPress={() => { reset(); onClose(); }} style={{ padding: 6 }}>
-              <Icon name="x" size={20} color={theme.colors.textFaint} />
+              <Icon name="x" size={20} color={NU.faint} />
             </Pressable>
           </View>
-          <ScrollView contentContainerStyle={{ padding: 22, gap: 16 }} keyboardShouldPersistTaps="handled">
+          <ScrollView contentContainerStyle={{ paddingHorizontal: 22, paddingTop: 18, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+            <NuCap style={{ marginBottom: 10 }}>{t('recipe.name')}</NuCap>
             <TextInput
               value={name}
               onChangeText={setName}
               placeholder={t('recipe.namePlaceholder')}
-              placeholderTextColor={theme.colors.inputPlaceholder}
-              style={{ height: 48, borderRadius: theme.radii.lg, paddingHorizontal: 14, backgroundColor: theme.colors.inputBackground,
-                borderWidth: 1, borderColor: theme.colors.inputBorder, fontFamily: theme.fonts.ui, fontSize: 15, color: theme.colors.inputText }}
+              placeholderTextColor={NU.faint}
+              style={{ height: 52, borderRadius: 12, paddingHorizontal: 16, backgroundColor: NU.surfaceSubtleStrong, fontFamily: 'Archivo_400Regular', fontSize: 15.5, color: NU.white }}
             />
             <TextInput
               value={description}
               onChangeText={setDescription}
               placeholder={t('recipe.description')}
-              placeholderTextColor={theme.colors.inputPlaceholder}
+              placeholderTextColor={NU.faint}
               multiline
-              style={{ minHeight: 60, borderRadius: theme.radii.lg, paddingHorizontal: 14, paddingTop: 12, backgroundColor: theme.colors.inputBackground,
-                borderWidth: 1, borderColor: theme.colors.inputBorder, fontFamily: theme.fonts.ui, fontSize: 14, color: theme.colors.inputText }}
+              style={{ minHeight: 56, marginTop: 10, borderRadius: 12, paddingHorizontal: 16, paddingTop: 14, backgroundColor: NU.surfaceSubtleStrong, fontFamily: 'Archivo_400Regular', fontSize: 14, color: NU.white }}
             />
 
-            <MonoLabel color={theme.colors.textFaint}>{t('recipe.ingredients')}</MonoLabel>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 30, marginBottom: 2 }}>
+              <NuCap>{t('recipe.ingredients')}</NuCap>
+              <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 12.5, color: NU.faint }}>{ingredients.length}/{MAX_INGREDIENTS}</Text>
+            </View>
             {ingredients.length === 0 ? (
-              <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textFaint }}>{t('recipe.empty')}</Text>
+              <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 13, color: NU.faint, marginTop: 8 }}>{t('recipe.empty')}</Text>
             ) : ingredients.map((item, index) => (
-              <View key={`${item.foodId}-${index}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <Text style={{ flex: 1, fontFamily: theme.fonts.uiSemi, fontSize: 14, color: theme.colors.textPrimary }} numberOfLines={1}>
+              <View key={`${item.foodId}-${index}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: NU.hairline }}>
+                <Text style={{ flex: 1, fontFamily: 'Archivo_400Regular', fontSize: 14.5, color: NU.white }} numberOfLines={1}>
                   {formatFoodDisplayName(item.name)}
                 </Text>
                 {/* Editing an ingredient is just changing its grams here — the macros preview/total recompute live, never typed directly. */}
@@ -234,33 +251,28 @@ export function CreateRecipeScreen({
                   onChangeText={(v) => setIngredients((prev) => prev.map((ing, i) => (i === index ? { ...ing, grams: v } : ing)))}
                   keyboardType="decimal-pad"
                   placeholder={t('recipe.grams')}
-                  placeholderTextColor={theme.colors.inputPlaceholder}
-                  style={{ width: 70, height: 40, borderRadius: theme.radii.control, textAlign: 'center',
-                    backgroundColor: theme.colors.inputBackground, borderWidth: 1, borderColor: theme.colors.inputBorder,
-                    fontFamily: theme.fonts.ui, fontSize: 14, color: theme.colors.inputText }}
+                  placeholderTextColor={NU.faint}
+                  textAlign="center"
+                  style={{ width: 60, height: 36, borderRadius: 10, backgroundColor: NU.surfaceSubtleStrong, fontFamily: 'Archivo_600SemiBold', fontSize: 13.5, color: NU.white }}
                 />
                 <Pressable onPress={() => setIngredients((prev) => prev.filter((_, i) => i !== index))} accessibilityRole="button"
-                  accessibilityLabel={t('recipe.removeIngredient')}>
-                  <Icon name="trash" size={16} color={theme.colors.textFaint} />
+                  accessibilityLabel={t('recipe.removeIngredient')} hitSlop={8}>
+                  <Icon name="x" size={16} color={NU.faint} />
                 </Pressable>
               </View>
             ))}
 
             {ingredients.length < MAX_INGREDIENTS ? (
-              <View style={{ gap: 10 }}>
+              <View style={{ gap: 10, marginTop: 14 }}>
                 {/* Same embedded search UX as RegisterMealScreen: search field right on this
                     page, results show kcal/protein/"per 100 g", tapping one adds it straight
                     to the ingredient list — never a separate FoodSearchScreen page. */}
-                <View
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, height: 48,
-                    borderRadius: theme.radii.lg, backgroundColor: theme.colors.inputBackground,
-                    borderWidth: 1, borderColor: theme.colors.inputBorder }}
-                >
-                  <Icon name="search" size={16} color={theme.colors.inputIcon} />
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, height: 48, borderRadius: 12, backgroundColor: NU.surfaceSubtleStrong }}>
+                  <Icon name="search" size={16} color={NU.faint} />
                   <TextInput
                     value={searchText} onChangeText={setSearchText} placeholder={t('foodSearch.placeholder')}
-                    placeholderTextColor={theme.colors.inputPlaceholder} returnKeyType="search"
-                    style={{ flex: 1, fontFamily: theme.fonts.ui, fontSize: 15, color: theme.colors.inputText }}
+                    placeholderTextColor={NU.faint} returnKeyType="search"
+                    style={{ flex: 1, fontFamily: 'Archivo_400Regular', fontSize: 15, color: NU.white }}
                   />
                 </View>
 
@@ -268,11 +280,11 @@ export function CreateRecipeScreen({
                   searchLoading ? (
                     <View style={{ gap: 8 }}><SkeletonBlock height={52} /><SkeletonBlock height={52} /></View>
                   ) : searchError ? (
-                    <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.feedbackErrorTextStrong }}>
+                    <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 13, color: NU.danger }}>
                       {t('foodSearch.error')}
                     </Text>
                   ) : matchingCustom.length === 0 && visibleCatalogResults.length === 0 ? (
-                    <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textFaint }}>
+                    <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 13, color: NU.faint }}>
                       {t('foodSearch.empty')}
                     </Text>
                   ) : (
@@ -293,8 +305,8 @@ export function CreateRecipeScreen({
                       ))}
                       {cursor ? (
                         <Pressable onPress={loadMore} disabled={loadingMore} style={{ paddingVertical: 14, alignItems: 'center' }}>
-                          {loadingMore ? <ActivityIndicator color={theme.colors.primaryEmphasis} /> : (
-                            <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 13, color: theme.colors.primaryEmphasis }}>
+                          {loadingMore ? <ActivityIndicator color={NU.blueHi} /> : (
+                            <Text style={{ fontFamily: 'Archivo_600SemiBold', fontSize: 13, color: NU.blueHi }}>
                               {t('foodSearch.loadMore')}
                             </Text>
                           )}
@@ -305,36 +317,26 @@ export function CreateRecipeScreen({
                 ) : null}
               </View>
             ) : (
-              <Text style={{ fontFamily: theme.fonts.ui, fontSize: 12.5, color: theme.colors.textFaint }}>
+              <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 12.5, color: NU.faint, marginTop: 10 }}>
                 {t('recipe.maxIngredients', { count: MAX_INGREDIENTS })}
               </Text>
             )}
 
             {breakdown ? (
-              <View style={{ marginTop: 8, padding: 14, borderRadius: theme.radii.lg, backgroundColor: theme.colors.surfaceMuted, gap: 14 }}>
+              <View style={{ marginTop: 30, paddingTop: 24, borderTopWidth: 1, borderTopColor: NU.hairline, gap: 16 }}>
                 <View style={{ gap: 4 }}>
-                  <MonoLabel color={theme.colors.textFaint}>{t('recipe.totalWeight')}</MonoLabel>
-                  <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textSecondary }}>
+                  <NuCap>{t('recipe.totalWeight')}</NuCap>
+                  <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 13, color: NU.secondary }}>
                     {Math.round(breakdown.totalIngredientWeightG)}{t('units.gramsShort')}
                   </Text>
                 </View>
                 <NutrientRow label={t('recipe.calculatedMacros')} values={breakdown.total} />
 
                 <View>
-                  <TextInput
-                    value={finalWeightText}
-                    onChangeText={setFinalWeightText}
-                    keyboardType="decimal-pad"
-                    placeholder={t('recipe.finalWeightPlaceholder')}
-                    placeholderTextColor={theme.colors.inputPlaceholder}
-                    style={{ height: 44, borderRadius: theme.radii.lg, paddingHorizontal: 14, backgroundColor: theme.colors.inputBackground,
-                      borderWidth: 1, borderColor: theme.colors.inputBorder, fontFamily: theme.fonts.ui, fontSize: 14, color: theme.colors.inputText }}
-                  />
-                  <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 12, color: theme.colors.textFaint, marginTop: 6 }}>
-                    {t('recipe.finalWeightLabel')}
-                  </Text>
+                  <NuCap style={{ marginBottom: 8 }}>{t('recipe.finalWeightLabel')}</NuCap>
+                  <NuInlineInput value={finalWeightText} onChangeText={setFinalWeightText} keyboardType="decimal-pad" placeholder={t('recipe.finalWeightPlaceholder')} />
                   {breakdown.usedIngredientWeightFallback ? (
-                    <Text style={{ fontFamily: theme.fonts.ui, fontSize: 11.5, color: theme.colors.textFaint, marginTop: 4 }}>
+                    <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 11.5, color: NU.faint, marginTop: 8 }}>
                       {t('recipe.finalWeightFallback', { grams: Math.round(breakdown.totalIngredientWeightG) })}
                     </Text>
                   ) : null}
@@ -342,30 +344,32 @@ export function CreateRecipeScreen({
                 <NutrientRow label={t('recipe.per100g')} values={breakdown.per100g} />
 
                 <View>
-                  <TextInput
-                    value={servingsText}
-                    onChangeText={setServingsText}
-                    keyboardType="number-pad"
-                    placeholder={t('recipe.servingsPlaceholder')}
-                    placeholderTextColor={theme.colors.inputPlaceholder}
-                    style={{ height: 44, borderRadius: theme.radii.lg, paddingHorizontal: 14, backgroundColor: theme.colors.inputBackground,
-                      borderWidth: 1, borderColor: theme.colors.inputBorder, fontFamily: theme.fonts.ui, fontSize: 14, color: theme.colors.inputText }}
-                  />
-                  <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 12, color: theme.colors.textFaint, marginTop: 6 }}>
-                    {t('recipe.servingsLabel')}
-                  </Text>
+                  <NuCap style={{ marginBottom: 8 }}>{t('recipe.servingsLabel')}</NuCap>
+                  <NuInlineInput value={servingsText} onChangeText={setServingsText} keyboardType="number-pad" placeholder={t('recipe.servingsPlaceholder')} />
                 </View>
                 {breakdown.perServing ? (
-                  <NutrientRow label={t('recipe.perServing')} values={breakdown.perServing} />
+                  <View style={{ alignItems: 'center', marginTop: 8, paddingTop: 20, borderTopWidth: 1, borderTopColor: NU.hairline }}>
+                    <NuCap>{t('recipe.perServing')}</NuCap>
+                    <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 10 }}>
+                      <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 38, lineHeight: displayLineHeight(38), color: NU.white, textTransform: 'uppercase' }}>
+                        {Math.round(breakdown.perServing.kcal)}
+                      </Text>
+                      <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 14, color: NU.faint }}> {t('units.kcal')}</Text>
+                    </View>
+                    <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 13, color: NU.faint, marginTop: 8 }}>
+                      P {breakdown.perServing.proteinG.toFixed(1)}{t('units.gramsShort')} · C {breakdown.perServing.carbsG.toFixed(1)}{t('units.gramsShort')} · G {breakdown.perServing.fatG.toFixed(1)}{t('units.gramsShort')}
+                    </Text>
+                  </View>
                 ) : null}
               </View>
             ) : null}
 
-            {error ? <Text style={{ color: theme.colors.formErrorText, fontSize: 12 }}>{error}</Text> : null}
-            <CtaButton onPress={handleSave} disabled={saving} style={{ marginTop: 8 }}>{t('recipe.save')}</CtaButton>
+            {error ? <Text style={{ color: NU.danger, fontSize: 12, marginTop: 16 }}>{error}</Text> : null}
+            <NuHairline style={{ marginTop: 24 }} />
+            <NuButton onPress={handleSave} disabled={saving} style={{ marginTop: 24 }}>{t('recipe.save')}</NuButton>
           </ScrollView>
         </SafeAreaView>
-      </ScreenBg>
+      </View>
     </Modal>
   );
 }

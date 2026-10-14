@@ -1,8 +1,19 @@
-import React from 'react';
-import { Pressable, Text, View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Animated, Easing, Pressable, Text, View } from 'react-native';
 import { HudCorners } from '../ui/Card';
 import { Icon } from '../ui/Icon';
 import { useTheme } from '../../theme';
+import { NU } from './NuKit';
+
+/**
+ * NOTE for the Nutrição redesign: `SelectableRow`/`SelectableChip` below are
+ * NOT restyled here — they're also used by `NutritionProfileScreen.tsx` (the
+ * nutrition-profile wizard), which is outside the requested redesign scope
+ * ("Aplique somente o novo visual à tela Nutrição... e a todas as
+ * telas/sheets abertas a partir dela" — the wizard isn't in that list).
+ * `MealFeedbackSheet.tsx`'s own reason-picker/dislike-chips use new,
+ * separate local components instead, so this pair stays exactly as it was.
+ */
 
 /**
  * Selectable row/chip primitives for Nutrition screens, visually matching
@@ -98,33 +109,47 @@ export function SelectableChip({
   );
 }
 
-/** A structural placeholder for data still loading — never a central spinner (`states_and_loading.md` §3). */
+/**
+ * A structural placeholder for data still loading — never a central spinner
+ * (`states_and_loading.md` §3). Pulses per the redesign's loading-state spec
+ * (section 3.10 "Carregando": blocks pulsing 1.4s) — purely a visual
+ * animation addition, same component/props as before.
+ */
 export function SkeletonBlock({ height = 60, style }: { height?: number; style?: object }) {
-  const { theme } = useTheme();
+  const opacity = useRef(new Animated.Value(0.55)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 1, duration: 700, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.55, duration: 700, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [opacity]);
   return (
-    <View
-      style={[{ height, borderRadius: theme.radii.lg, backgroundColor: theme.colors.surfaceMuted }, style]}
+    <Animated.View
+      style={[{ height, borderRadius: 6, backgroundColor: NU.surfaceSubtleStrong, opacity }, style]}
     />
   );
 }
 
 export function Pill({ label, tone = 'default' }: { label: string; tone?: 'default' | 'accent' }) {
-  const { theme } = useTheme();
   return (
     <View
       style={{
         paddingHorizontal: 8,
         paddingVertical: 3,
-        borderRadius: theme.radii.pill,
-        backgroundColor: tone === 'accent' ? theme.colors.primarySurfaceSubtle : theme.colors.surfaceMuted,
+        borderRadius: 999,
+        backgroundColor: tone === 'accent' ? 'rgba(11,112,249,0.16)' : NU.surfaceSubtleStrong,
       }}
     >
       <Text
         style={{
-          fontFamily: theme.fonts.mono,
+          fontFamily: 'JetBrainsMono_400Regular',
           fontSize: 9,
           letterSpacing: 1.2,
-          color: tone === 'accent' ? theme.colors.primaryEmphasis : theme.colors.textFaint,
+          color: tone === 'accent' ? NU.blueHi : NU.faint,
         }}
       >
         {label.toUpperCase()}

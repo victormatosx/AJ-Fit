@@ -1,14 +1,10 @@
 import React from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ScreenBg } from '../../components/ui/ScreenBg';
-import { Display, MonoLabel } from '../../components/ui/Display';
-import { CtaButton } from '../../components/ui/CtaButton';
-import { Icon } from '../../components/ui/Icon';
 import { MealOptionCard } from '../../components/nutrition/MealOptionCard';
 import { NutritionErrorState } from '../../components/nutrition/NutritionStates';
-import { useTheme } from '../../theme';
+import { NU, NuCap, NuSheetHeader } from '../../components/nutrition/NuKit';
 import type { NutritionMealOption } from '../../types/nutrition';
 import { MealAlternativeLoading } from './MealDetailsScreen';
 
@@ -40,43 +36,36 @@ export function MealAlternativeResultScreen({
   onRegister: (option: NutritionMealOption) => void;
   onFavorite: (option: NutritionMealOption) => void;
 }) {
-  const { theme } = useTheme();
   const { t } = useTranslation('nutrition');
 
   if (!visible) return null;
 
   return (
-    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50, elevation: 50 }}>
-      <ScreenBg>
-        <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 22, paddingTop: 10 }}>
-            <Display size={18}>{t('alternative.title')}</Display>
-            <Pressable accessibilityRole="button" accessibilityLabel={t('alternative.backToPlan')} onPress={onClose} style={{ padding: 6 }}>
-              <Icon name="x" size={20} color={theme.colors.textFaint} />
-            </Pressable>
+    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50, elevation: 50, backgroundColor: NU.bg }}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+        <NuSheetHeader title={t('alternative.title')} onBack={onClose} />
+
+        {state?.kind === 'loading' ? <MealAlternativeLoading /> : null}
+
+        {state?.kind === 'error' ? (
+          <View style={{ paddingTop: 20 }}>
+            <NutritionErrorState
+              title={t(`alternative.${state.copyKey}.title`)}
+              body={t(`alternative.${state.copyKey}.body`)}
+              retryLabel={state.retryable ? t('alternative.error.retry') : undefined}
+              onRetry={state.retryable ? onRetry : undefined}
+              backLabel={t('alternative.backToPlan')}
+              onBack={onClose}
+            />
           </View>
+        ) : null}
 
-          {state?.kind === 'loading' ? <MealAlternativeLoading /> : null}
-
-          {state?.kind === 'error' ? (
-            <View style={{ paddingTop: 20 }}>
-              <NutritionErrorState
-                title={t(`alternative.${state.copyKey}.title`)}
-                body={t(`alternative.${state.copyKey}.body`)}
-                retryLabel={state.retryable ? t('alternative.error.retry') : undefined}
-                onRetry={state.retryable ? onRetry : undefined}
-                backLabel={t('alternative.backToPlan')}
-                onBack={onClose}
-              />
-            </View>
-          ) : null}
-
-          {state?.kind === 'result' ? (
-            <ScrollView contentContainerStyle={{ padding: 22, gap: 20 }}>
-              <MonoLabel color={theme.colors.textFaint}>{t('mealDetails.options')}</MonoLabel>
-              {state.options.map((option) => (
+        {state?.kind === 'result' ? (
+          <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 18, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+            <NuCap style={{ marginBottom: 10 }}>{t('mealDetails.options')}</NuCap>
+            {state.options.map((option, index) => (
+              <View key={option.id} style={{ marginTop: index ? 28 : 0 }}>
                 <MealOptionCard
-                  key={option.id}
                   option={option}
                   recommended={option.id === state.recommendedOptionId}
                   onRegister={() => onRegister(option)}
@@ -85,11 +74,18 @@ export function MealAlternativeResultScreen({
                   favoriting={favoritingOptionId === option.id}
                   favorited={favoritedOptionIds.includes(option.id)}
                 />
-              ))}
-            </ScrollView>
-          ) : null}
-        </SafeAreaView>
-      </ScreenBg>
+              </View>
+            ))}
+            <Text
+              onPress={onClose}
+              accessibilityRole="button"
+              style={{ fontFamily: 'Archivo_600SemiBold', fontSize: 13.5, color: NU.secondary, textAlign: 'center', marginTop: 26 }}
+            >
+              {t('alternative.backToPlan')}
+            </Text>
+          </ScrollView>
+        ) : null}
+      </SafeAreaView>
     </View>
   );
 }

@@ -1,7 +1,10 @@
+import { useEffect, useRef } from 'react';
 import { Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { palette } from '../../theme/tokens';
 import { EvoRing } from './EvoRing';
+import { EvoRingCelebration } from './EvoRingCelebration';
+import { useEvoRingCelebration } from './useEvoRingCelebration';
 import { LitFlame } from './LitFlame';
 import { CountUp } from './CountUp';
 import { ADHERENCE_EARNED_THRESHOLD_PERCENT, INTERMEDIATE_CYCLES_FOR_ADVANCED } from '../../home/evoRingMetrics';
@@ -9,13 +12,51 @@ import type { EvolutionViewModel } from '../../workoutEvolution/types';
 import type { Streak } from '../../home/streak';
 
 const evCap = { fontFamily: 'JetBrainsMono_400Regular', fontSize: 10, letterSpacing: 1.6, color: 'rgba(255,255,255,0.38)' } as const;
+const NOOP = () => {};
 // This whole redesign is a fixed-dark "poster" surface, independent of the
 // app's light/dark theme setting (same reasoning as `EvoRing.tsx`'s own
 // `trackColor` comment) — colors below are deliberately `palette.*`/literal
 // hex, never `theme.colors.*`.
 
-export function CycleProgressBlock({ viewModel, streak }: { viewModel: EvolutionViewModel; streak: Streak | null }) {
+/** Same formula the component used to compute inline, lifted out so it can
+ * run unconditionally (before the LOADING/ERROR/UNAVAILABLE early return)
+ * for `useEvoRingCelebration`'s trigger effect, which — like every hook —
+ * must never be called conditionally. */
+function cyclePctFromViewModel(viewModel: EvolutionViewModel): number {
+  if (viewModel.kind === 'LOADING' || viewModel.kind === 'ERROR' || viewModel.kind === 'UNAVAILABLE') return 0;
+  if (viewModel.kind === 'EVOLUTION_READY' || viewModel.kind === 'EVOLUTION_DEFERRED') return 100;
+  const { summary } = viewModel;
+  return summary.requiredActiveDays > 0
+    ? Math.min(100, Math.round(((summary.activeDays ?? 0) / summary.requiredActiveDays) * 100))
+    : 0;
+}
+
+export function CycleProgressBlock({
+  viewModel,
+  streak,
+  celebrationRequest = null,
+  onCelebrationFinished,
+}: {
+  viewModel: EvolutionViewModel;
+  streak: Streak | null;
+  /** Bumps (new `token`) to play the "evolution reached" ring celebration — set by `AppShell` only after a real `activatePendingEvolution` success, or by the `__DEV__`-only `EvolutionDebugPanel`. `null` outside those triggers. */
+  celebrationRequest?: { token: number } | null;
+  /** Fires once, when the celebration's full sequence ends — never during the normal (non-celebrating) ring. */
+  onCelebrationFinished?: () => void;
+}) {
   const { t } = useTranslation('home');
+  const cyclePct = cyclePctFromViewModel(viewModel);
+  const celebration = useEvoRingCelebration(onCelebrationFinished ?? NOOP);
+  const startedCelebrationTokenRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!celebrationRequest || startedCelebrationTokenRef.current === celebrationRequest.token) return;
+    startedCelebrationTokenRef.current = celebrationRequest.token;
+    celebration.start(cyclePct);
+    // Narrow deps are intentional: this must fire exactly once per new
+    // `token`, driven by whatever `cyclePct` was current at that moment —
+    // not re-run just because `celebration`'s identity changes every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [celebrationRequest, cyclePct]);
 
   if (viewModel.kind === 'LOADING' || viewModel.kind === 'ERROR' || viewModel.kind === 'UNAVAILABLE') return null;
 
@@ -25,17 +66,14 @@ export function CycleProgressBlock({ viewModel, streak }: { viewModel: Evolution
     : null;
   const paused = summary.pausedAtLocalDate !== null;
   const activeDays = summary.activeDays ?? 0;
-  const cyclePct = pendingKind
-    ? 100
-    : summary.requiredActiveDays > 0
-      ? Math.min(100, Math.round((activeDays / summary.requiredActiveDays) * 100))
-      : 0;
   const daysLeft = Math.max(0, summary.requiredActiveDays - activeDays);
-  const statusText = pendingKind
-    ? t('evoRing.unlocked')
-    : paused
-      ? t('evoRing.paused')
-      : t('evoRing.daysLeft', { count: daysLeft });
+  const statusText = celebration.celebrating
+    ? t('evoRing.cycleComplete')
+    : pendingKind
+      ? t('evoRing.unlocked')
+      : paused
+        ? t('evoRing.paused')
+        : t('evoRing.daysLeft', { count: daysLeft });
   const adherencePercent = summary.adherenceRatio !== null ? Math.round(summary.adherenceRatio * 100) : null;
   const belowAdherenceThreshold = adherencePercent !== null && adherencePercent < ADHERENCE_EARNED_THRESHOLD_PERCENT;
   const adherenceColor = belowAdherenceThreshold ? palette.amber500 : '#fff';
@@ -44,31 +82,47 @@ export function CycleProgressBlock({ viewModel, streak }: { viewModel: Evolution
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 22, marginTop: 32 }}>
       <View style={{ alignItems: 'center', gap: 12 }}>
-        <EvoRing
-          size={150}
-          strokeWidth={11}
-          progress={cyclePct}
-          color={paused ? palette.amber500 : palette.blue500}
-          accessibilityLabel={`${cyclePct}% ${t('evoRing.ofCycle').toLowerCase()}`}
-        >
-          <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 40, color: '#fff', lineHeight: 40 }}>
-            <CountUp to={cyclePct} style={{ fontFamily: 'Anton_400Regular', fontSize: 40, color: '#fff' }} />
-            <Text style={{ fontSize: 18, color: 'rgba(255,255,255,0.45)' }}>%</Text>
-          </Text>
-          <Text style={[evCap, { marginTop: 6 }]}>{t('evoRing.ofCycle')}</Text>
-        </EvoRing>
+        {celebration.celebrating ? (
+          <EvoRingCelebration
+            fromPercent={cyclePct}
+            progress={celebration.progress}
+            glow={celebration.glow}
+            burst={celebration.burst}
+            check={celebration.check}
+            numberOpacity={celebration.numberOpacity}
+          />
+        ) : (
+          <EvoRing
+            size={150}
+            strokeWidth={11}
+            progress={cyclePct}
+            color={paused ? palette.amber500 : palette.blue500}
+            accessibilityLabel={`${cyclePct}% ${t('evoRing.ofCycle').toLowerCase()}`}
+          >
+            <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 40, color: '#fff', lineHeight: 48 }}>
+              <CountUp to={cyclePct} style={{ fontFamily: 'Anton_400Regular', fontSize: 40, color: '#fff' }} />
+              <Text style={{ fontSize: 18, color: 'rgba(255,255,255,0.45)' }}>%</Text>
+            </Text>
+            <Text style={[evCap, { marginTop: 6 }]}>{t('evoRing.ofCycle')}</Text>
+          </EvoRing>
+        )}
         <Text style={{ fontFamily: 'Archivo_600SemiBold', fontSize: 14, color: '#fff', textAlign: 'center' }}>
           {statusText}
         </Text>
       </View>
 
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Row last={!intermediate} accessibilityLabel={`${t('evoRing.streakLabel')} ${streak?.current ?? 0} ${t('evoRing.streakUnit')}`}>
+        {/* `fixed`-schedule streaks count obligations (days); `flexible`-schedule
+            streaks count consecutive weeks whose weekly goal was met — see
+            `src/home/streak.ts`'s doc comment. Always showing "dias" would
+            misstate a flexible-schedule user's streak (e.g. "3 dias" for a
+            3-WEEK streak), so the unit text follows `streak.unit`. */}
+        <Row last={!intermediate} accessibilityLabel={`${t('evoRing.streakLabel')} ${streak?.current ?? 0} ${t(streak?.unit === 'weeks' ? 'evoRing.streakUnitWeeks' : 'evoRing.streakUnit')}`}>
           <Text style={evCap}>{t('evoRing.streakLabel')}</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
             <LitFlame size={42} lit={(streak?.current ?? 0) > 0} />
             <CountUp to={streak?.current ?? 0} style={{ fontFamily: 'Anton_400Regular', fontSize: 30, color: '#fff' }} />
-            <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>{t('evoRing.streakUnit')}</Text>
+            <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>{t(streak?.unit === 'weeks' ? 'evoRing.streakUnitWeeks' : 'evoRing.streakUnit')}</Text>
           </View>
         </Row>
         <Row last={!intermediate} accessibilityLabel={adherencePercent !== null ? `${t('evoRing.adherenceLabel')} ${adherencePercent}%${belowAdherenceThreshold ? t('evoRing.adherenceBelowThreshold') : ''}` : t('evoRing.adherenceLabel')}>

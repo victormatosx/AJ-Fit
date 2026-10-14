@@ -28,6 +28,7 @@ function summary(overrides: Partial<ProgressingSummary> = {}): ProgressingSummar
 }
 
 const STREAK: Streak = { scheduleMode: 'fixed', unit: 'obligations', current: 5, complete: true };
+const WEEKLY_STREAK: Streak = { scheduleMode: 'flexible', unit: 'weeks', current: 3, complete: true };
 
 describe('buildHomeEvoTickerItems — non-marquee view model kinds', () => {
   it('LOADING yields no items', () => {
@@ -48,37 +49,43 @@ describe('buildHomeEvoTickerItems — item presence, each gated on its own real 
     const vm: EvolutionViewModel = { kind: 'PROGRESSING', summary: summary() };
     const items = buildHomeEvoTickerItems(vm, STREAK, 10, t);
     expect(items).toEqual([
-      'home:evoTicker.streak:{"count":5}',
-      'home:evoTicker.activeDays:{"count":12,"required":85}',
-      'home:evoTicker.adherence:{"percent":80}',
-      'home:evoTicker.cycle:{"number":4}',
-      'home:evoTicker.level:{"level":"evolution:level.INTERMEDIATE"}',
-      'home:evoTicker.sessions30d:{"count":10}',
+      { label: 'home:evoTicker.streakLabel', value: 'home:evoTicker.streakValue:{"count":5}' },
+      { label: 'home:evoTicker.activeDaysLabel', value: 'home:evoTicker.activeDaysValue:{"count":12,"required":85}' },
+      { label: 'home:evoTicker.adherenceLabel', value: 'home:evoTicker.adherenceValue:{"percent":80}' },
+      { label: 'home:evoTicker.cycleLabel', value: 'home:evoTicker.cycleValue:{"number":4}' },
+      { label: 'home:evoTicker.levelLabel', value: 'home:evoTicker.levelValue:{"level":"evolution:level.INTERMEDIATE"}' },
+      { label: 'home:evoTicker.sessions30dLabel', value: 'home:evoTicker.sessions30dValue:{"count":10}' },
     ]);
+  });
+
+  it('uses the weeks value key (not the days one) for a flexible-schedule streak, never misstating its unit', () => {
+    const vm: EvolutionViewModel = { kind: 'PROGRESSING', summary: summary() };
+    const items = buildHomeEvoTickerItems(vm, WEEKLY_STREAK, 10, t);
+    expect(items[0]).toEqual({ label: 'home:evoTicker.streakLabel', value: 'home:evoTicker.streakValueWeeks:{"count":3}' });
   });
 
   it('omits the streak item when streak is null, never showing a fabricated 0', () => {
     const vm: EvolutionViewModel = { kind: 'PROGRESSING', summary: summary() };
     const items = buildHomeEvoTickerItems(vm, null, 10, t);
-    expect(items.some((i) => i.startsWith('home:evoTicker.streak'))).toBe(false);
+    expect(items.some((i) => i.label === 'home:evoTicker.streakLabel')).toBe(false);
   });
 
   it('omits the activeDays item when summary.activeDays is null', () => {
     const vm: EvolutionViewModel = { kind: 'PROGRESSING', summary: summary({ activeDays: null }) };
     const items = buildHomeEvoTickerItems(vm, STREAK, 10, t);
-    expect(items.some((i) => i.startsWith('home:evoTicker.activeDays'))).toBe(false);
+    expect(items.some((i) => i.label === 'home:evoTicker.activeDaysLabel')).toBe(false);
   });
 
   it('omits the adherence item when summary.adherenceRatio is null', () => {
     const vm: EvolutionViewModel = { kind: 'PROGRESSING', summary: summary({ adherenceRatio: null }) };
     const items = buildHomeEvoTickerItems(vm, STREAK, 10, t);
-    expect(items.some((i) => i.startsWith('home:evoTicker.adherence'))).toBe(false);
+    expect(items.some((i) => i.label === 'home:evoTicker.adherenceLabel')).toBe(false);
   });
 
   it('omits the sessions30d item when sessionsLast30Days is null', () => {
     const vm: EvolutionViewModel = { kind: 'PROGRESSING', summary: summary() };
     const items = buildHomeEvoTickerItems(vm, STREAK, null, t);
-    expect(items.some((i) => i.startsWith('home:evoTicker.sessions30d'))).toBe(false);
+    expect(items.some((i) => i.label === 'home:evoTicker.sessions30dLabel')).toBe(false);
   });
 
   it('always includes cycle and level, regardless of other nullability', () => {
@@ -88,8 +95,8 @@ describe('buildHomeEvoTickerItems — item presence, each gated on its own real 
     };
     const items = buildHomeEvoTickerItems(vm, null, null, t);
     expect(items).toEqual([
-      'home:evoTicker.cycle:{"number":4}',
-      'home:evoTicker.level:{"level":"evolution:level.INTERMEDIATE"}',
+      { label: 'home:evoTicker.cycleLabel', value: 'home:evoTicker.cycleValue:{"number":4}' },
+      { label: 'home:evoTicker.levelLabel', value: 'home:evoTicker.levelValue:{"level":"evolution:level.INTERMEDIATE"}' },
     ]);
   });
 });

@@ -1,13 +1,11 @@
 import React from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ScreenBg } from '../../components/ui/ScreenBg';
-import { Display, MonoLabel } from '../../components/ui/Display';
 import { Icon } from '../../components/ui/Icon';
 import { DailyNutritionSummary } from '../../components/nutrition/MacroProgress';
 import { MealCard } from '../../components/nutrition/MealCard';
-import { useTheme } from '../../theme';
+import { NU, NuCap, NuSheetHeader } from '../../components/nutrition/NuKit';
 import type { NutritionMealSlot } from '../../types/nutrition';
 import type { NutritionPlanDoc } from '../../services/nutritionPlans';
 
@@ -16,7 +14,6 @@ export function NutritionPlanScreen({
 }: {
   plan: NutritionPlanDoc; onOpenMeal: (slot: NutritionMealSlot) => void; onBack: () => void; historical?: boolean;
 }) {
-  const { theme } = useTheme();
   const { t } = useTranslation('nutrition');
   const goals = {
     kcal: plan.engineSnapshot.output.energy.targetKcal,
@@ -27,42 +24,41 @@ export function NutritionPlanScreen({
   };
 
   return (
-    <ScreenBg>
+    <View style={{ flex: 1, backgroundColor: NU.bg }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingTop: 8, gap: 12 }}>
-          <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel={t('plan.back')} hitSlop={10} style={{ padding: 4 }}>
-            <Icon name="arrow-left" size={20} color={theme.colors.textPrimary} />
-          </Pressable>
-          <Display size={22} style={{ flex: 1 }}>{t('plan.title')}</Display>
-        </View>
+        <NuSheetHeader title={historical ? t('history.title') : t('plan.title')} onBack={onBack} />
 
-        <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
+        <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
           {historical ? (
-            <View style={{ marginHorizontal: 22, marginTop: 10, padding: 12, borderRadius: theme.radii.lg,
-              backgroundColor: theme.colors.feedbackInfoBackground, borderWidth: 1, borderColor: theme.colors.feedbackInfoBorder }}>
-              <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 12.5, color: theme.colors.textSecondary }}>
+            <View style={{ marginHorizontal: 24, marginTop: 10, padding: 13, borderRadius: 12, backgroundColor: NU.surfaceSubtle, borderWidth: 1, borderColor: NU.hairline, flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+              <Icon name="lock" size={14} color={NU.faint} />
+              <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 13, color: NU.secondary, flex: 1 }}>
                 {t('history.readOnlyBanner')}
               </Text>
             </View>
           ) : null}
 
-          <View style={{ paddingHorizontal: 22, marginTop: 16, marginBottom: 20 }}>
-            <MonoLabel color={theme.colors.textFaint} style={{ marginBottom: 10 }}>{t('plan.dailyGoal')}</MonoLabel>
+          <View style={{ alignItems: 'center', marginTop: 24 }}>
+            <NuCap style={{ marginBottom: 6 }}>{t('plan.dailyGoal')}</NuCap>
+          </View>
+          <View style={{ paddingHorizontal: 24 }}>
             <DailyNutritionSummary totals={plan.dailyTotals} goals={goals} />
           </View>
 
-          <MonoLabel color={theme.colors.textFaint} style={{ marginHorizontal: 22, marginBottom: 10 }}>
-            {t('home.mealsToday.title')}
-          </MonoLabel>
-          {plan.meals.map((meal) => (
-            <MealCard key={meal.slot} meal={meal} onPress={() => onOpenMeal(meal.slot)} />
-          ))}
+          <View style={{ marginTop: 36, paddingHorizontal: 24 }}>
+            <NuCap style={{ marginBottom: 2 }}>{t('home.mealsToday.title')}</NuCap>
+            {plan.meals.map((meal, index) => (
+              <View key={meal.slot} style={index ? { borderTopWidth: 1, borderTopColor: NU.hairline } : undefined}>
+                <MealCard meal={meal} onPress={() => onOpenMeal(meal.slot)} />
+              </View>
+            ))}
+          </View>
 
-          <Text style={{ fontFamily: theme.fonts.ui, fontSize: 12, color: theme.colors.textFaint, textAlign: 'center', marginTop: 16, paddingHorizontal: 32 }}>
+          <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 12, color: NU.faintest, textAlign: 'center', marginTop: 28, paddingHorizontal: 32, lineHeight: 17 }}>
             {t('plan.disclaimer')}
           </Text>
         </ScrollView>
       </SafeAreaView>
-    </ScreenBg>
+    </View>
   );
 }

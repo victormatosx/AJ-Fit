@@ -144,6 +144,8 @@ import type { ManualSubstitutionUserContext } from '../services/exerciseSubstitu
 import { workoutExercisesFromPlan, type ManualSubstitutionContextStatus } from './workoutScreenPlan';
 import { EvolutionUnlockScreen } from './EvolutionUnlockScreen';
 import { EvolutionCelebration } from '../components/evolution/EvolutionCelebration';
+import { EvolutionDebugPanel } from '../components/dev/EvolutionDebugPanel';
+import type { EvolutionDebugPreset } from '../home/evolutionDebugPresets';
 import { NewPlanRevealScreen } from './NewPlanRevealScreen';
 import type { PendingEvolutionType } from '../workoutLifecycle/types';
 import type { PrescriptionDiffSummary } from '../workoutEvolution/diff';
@@ -405,6 +407,12 @@ function AppShellContent({
     trainingDays: schedule.config?.trainingDays ?? [],
     activeRecoveryDays: schedule.config?.activeRecoveryDays ?? [],
   });
+  // __DEV__-only Home evolution preview (EvolutionDebugPanel) — stays `null`
+  // forever in any build where the panel itself never mounts, so this has
+  // zero effect outside local development.
+  const [evolutionDebugPreset, setEvolutionDebugPreset] = useState<EvolutionDebugPreset | null>(null);
+  const homeEvolutionViewModel = evolutionDebugPreset?.viewModel ?? evolution.viewModel;
+  const homeStreakForDisplay = evolutionDebugPreset?.streak ?? homeStreak;
   const { pendingIntent, consumeIntent } = useDeepLinkIntent();
   const [nutritionNavigationRequest, setNutritionNavigationRequest] = useState<{
     destination: 'plan' | 'diary' | 'weekly';
@@ -577,6 +585,44 @@ function AppShellContent({
   const handleEvolutionCelebrationDone = useCallback(() => {
     setEvolutionCelebration((current) => current ? { ...current, phase: 'reveal' } : null);
   }, []);
+  // Home cycle-ring "evolution reached" celebration (visual only — see
+  // `useEvoRingCelebration`'s doc comment). `ringCelebrationRequest` bumping
+  // is what `CycleProgressBlock` watches to play it; the full-screen
+  // celebration/reveal flow above is deliberately NOT started until the ring
+  // animation finishes (`handleRingCelebrationFinished`), so the two never
+  // play at once.
+  const [ringCelebrationRequest, setRingCelebrationRequest] = useState<{ token: number } | null>(null);
+  const onRingCelebrationFinishedRef = useRef<(() => void) | null>(null);
+  const handleRingCelebrationFinished = useCallback(() => {
+    onRingCelebrationFinishedRef.current?.();
+    onRingCelebrationFinishedRef.current = null;
+  }, []);
+  // __DEV__-only trigger (EvolutionDebugPanel) for the celebration/reveal
+  // overlay above — reuses the real current plan as a stand-in `newPlan`
+  // (no real evolution activated, so there is no real diff) purely to
+  // preview the animation/layout without needing a real pending evolution.
+  const triggerEvolutionCelebrationDebug = useCallback((phase: 'celebrating' | 'reveal') => {
+    if (prescription.status !== 'SUCCESS') return;
+    setEvolutionCelebration({
+      type: 'CYCLE_EVOLUTION',
+      cycleNumber: 2,
+      levelLabel: t('evolution:level.INTERMEDIATE'),
+      currentPlan: prescription.plan,
+      newPlan: prescription.plan,
+      exerciseReplacements: [],
+      swapCount: 0,
+      phase,
+    });
+  }, [prescription, t]);
+  // __DEV__-only trigger for the ring celebration alone — same path a real
+  // activation uses (`setTab('home')` + `ringCelebrationRequest`), except
+  // what runs when it finishes is the debug full-screen trigger above
+  // instead of a real captured plan pair.
+  const triggerRingCelebrationDebug = useCallback(() => {
+    setTab('home');
+    onRingCelebrationFinishedRef.current = () => triggerEvolutionCelebrationDebug('celebrating');
+    setRingCelebrationRequest({ token: Date.now() });
+  }, [triggerEvolutionCelebrationDebug, setTab]);
   const [supportRoute, setSupportRoute] = useState<SupportRoute | null>(null);
   // Realtime, Firestore-backed unread count for the Home support icon's
   // badge (see useUnreadSupportCasesCount) — no locally tracked counter.
@@ -1987,7 +2033,6 @@ function AppShellContent({
       >
         <PersistentScreen active={tab === 'home'} activeStyle={FULL_BLEED.tab} inactiveMode="materialized">
           <HomeScreen
-            sex={sex}
             prescription={prescription}
             loading={prescriptionLoading}
             generating={generatingWorkout}
@@ -2002,7 +2047,7 @@ function AppShellContent({
             onOpenProfile={() => setTab('profile')}
             onOpenSupportCases={() => setSupportRoute({ name: 'cases', origin: 'home' })}
             unreadSupportCasesCount={unreadSupportCases.count}
-            evolutionViewModel={evolution.viewModel}
+            evolutionViewModel={homeEvolutionViewModel}
             evolutionDiff={evolution.diff}
             onOpenEvolution={() => setShowEvolutionUnlock(true)}
             frequencyWindow={frequencyPresentation.source === 'AUTHORITATIVE' ? frequencyPresentation.value : null}
@@ -2026,7 +2071,9 @@ function AppShellContent({
             homeInitialDataSettled={homeInitialDataSettled}
             homeInitialVisualReady={homeInitialVisualReady}
             onInitialLayoutCommitted={onInitialLayoutCommitted}
-            streak={homeStreak}
+            streak={homeStreakForDisplay}
+            ringCelebrationRequest={ringCelebrationRequest}
+            onRingCelebrationFinished={handleRingCelebrationFinished}
           />
         </PersistentScreen>
         <PersistentScreen active={tab === 'nutrition' && nutritionEnabled === true} activeStyle={FULL_BLEED.tab} inactiveMode="materialized">
@@ -2035,6 +2082,14 @@ function AppShellContent({
             onOpenProgress={() => setTab('progress')}
           />
         </PersistentScreen>
+        <EvolutionDebugPanel
+          visible={tab === 'home'}
+          activePresetId={evolutionDebugPreset?.id ?? null}
+          onSelect={setEvolutionDebugPreset}
+          canTriggerCelebration={prescription.status === 'SUCCESS'}
+          onTriggerCelebration={triggerEvolutionCelebrationDebug}
+          onTriggerRingCelebration={triggerRingCelebrationDebug}
+        />
         {tab === 'workout' && workoutStartAttempt && (
           <WorkoutStartVisibilityMetric
             key={workoutStartAttempt.id}
@@ -2058,11 +2113,8 @@ function AppShellContent({
             onStart={requestStartWorkout}
             onOpenAgendaEditor={() => setAgendaEditorOpen(true)}
             onReposition={requestReposition}
-            weekSummary={activitySnapshot.week
-              ? { completedCount: activitySnapshot.week.completedCount, scheduledCount: activitySnapshot.week.scheduledCount }
-              : null}
-            last30DaysCompletedCount={frequencyPresentation.source === 'AUTHORITATIVE' && frequencyPresentation.value
-              ? frequencyPresentation.value.completedCount : null}
+            evolutionViewModel={evolution.viewModel}
+            weekOverview={activitySnapshot.week}
           />
         )}
         {tab === 'workout' && !workoutInProgress && agendaEditorOpen && activeProgram && (
@@ -2176,7 +2228,7 @@ function AppShellContent({
           activeStyle={FULL_BLEED.tab}
           inactiveMode="materialized"
         >
-          <ProgressScreen onOpenAssessment={() => setShowAssessment(true)} />
+          <ProgressScreen onOpenAssessment={() => setShowAssessment(true)} onStartWorkout={requestStartWorkout} />
         </PersistentScreen>
         <PersistentScreen
           active={tab === 'profile'}
@@ -2329,16 +2381,24 @@ function AppShellContent({
                 setShowEvolutionUnlock(false);
                 if (capturedCurrentPlan && capturedPendingPlan
                   && (capturedViewModel.kind === 'EVOLUTION_READY' || capturedViewModel.kind === 'EVOLUTION_DEFERRED')) {
-                  setEvolutionCelebration({
-                    type: capturedViewModel.pending.type,
-                    cycleNumber: capturedViewModel.summary.cycleNumber,
-                    levelLabel: t(`evolution:level.${capturedViewModel.pending.toLevel}`),
-                    currentPlan: capturedCurrentPlan,
-                    newPlan: capturedPendingPlan,
-                    exerciseReplacements: capturedDiff?.exerciseReplacements ?? [],
-                    swapCount: capturedDiff?.exerciseReplacements.length ?? 0,
-                    phase: 'celebrating',
-                  });
+                  // Visual-only prologue: play the Home cycle ring's
+                  // "evolution reached" celebration first; the existing
+                  // full-screen celebration/reveal flow (unchanged) only
+                  // starts once that finishes (`handleRingCelebrationFinished`).
+                  setTab('home');
+                  onRingCelebrationFinishedRef.current = () => {
+                    setEvolutionCelebration({
+                      type: capturedViewModel.pending.type,
+                      cycleNumber: capturedViewModel.summary.cycleNumber,
+                      levelLabel: t(`evolution:level.${capturedViewModel.pending.toLevel}`),
+                      currentPlan: capturedCurrentPlan,
+                      newPlan: capturedPendingPlan,
+                      exerciseReplacements: capturedDiff?.exerciseReplacements ?? [],
+                      swapCount: capturedDiff?.exerciseReplacements.length ?? 0,
+                      phase: 'celebrating',
+                    });
+                  };
+                  setRingCelebrationRequest({ token: Date.now() });
                 }
               });
             }}
@@ -3202,8 +3262,8 @@ function TabBar({ tab, setTab, nutritionVisible }: { tab: TabId; setTab: (t: Tab
   const items: { id: TabId; icon: IconName; labelKey: 'home' | 'workout' | 'progress' | 'profile' | 'nutrition' }[] = [
     { id: 'home', icon: 'home', labelKey: 'home' },
     { id: 'workout', icon: 'dumbbell', labelKey: 'workout' },
-    { id: 'progress', icon: 'chart', labelKey: 'progress' },
     ...(nutritionVisible ? [{ id: 'nutrition' as const, icon: 'utensils' as const, labelKey: 'nutrition' as const }] : []),
+    { id: 'progress', icon: 'chart', labelKey: 'progress' },
     { id: 'profile', icon: 'user', labelKey: 'profile' },
   ];
   return (

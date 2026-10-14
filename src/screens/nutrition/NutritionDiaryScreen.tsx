@@ -1,35 +1,32 @@
 import React, { useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ScreenBg } from '../../components/ui/ScreenBg';
-import { Display, MonoLabel } from '../../components/ui/Display';
-import { CtaButton } from '../../components/ui/CtaButton';
 import { Icon } from '../../components/ui/Icon';
 import { FoodRow } from '../../components/nutrition/FoodRow';
 import { DailyNutritionSummary } from '../../components/nutrition/MacroProgress';
 import { SkeletonBlock } from '../../components/nutrition/NutritionPrimitives';
-import { useTheme } from '../../theme';
+import { NU, NuButton, NuNav, NuPanel, NuSelectPill, NuSheetHeader, NuStepper } from '../../components/nutrition/NuKit';
 import { todayLocalDate } from '../../nutrition/ui/localDate';
 import type { NutritionLoggedFoodItem, NutritionMealSlot, NutritionTotals } from '../../types/nutrition';
 import type { NutritionDailyLogDoc } from '../../services/nutritionDiary';
 
 function DateNav({ localDate, onPrev, onNext }: { localDate: string; onPrev: () => void; onNext: () => void }) {
-  const { theme } = useTheme();
   const { t } = useTranslation('nutrition');
   const today = todayLocalDate();
   const isToday = localDate === today;
-  const label = isToday ? t('diary.today') : localDate;
+  const date = new Date(`${localDate}T00:00:00`);
+  const weekdayLabel = new Intl.DateTimeFormat(undefined, { weekday: 'long' }).format(date);
+  const sub = new Intl.DateTimeFormat(undefined, { day: '2-digit', month: 'short', year: 'numeric' }).format(date);
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 22, marginTop: 4 }}>
-      <Pressable onPress={onPrev} accessibilityRole="button" accessibilityLabel={t('diary.yesterday')} hitSlop={10}>
-        <Icon name="arrow-left" size={18} color={theme.colors.textPrimary} />
-      </Pressable>
-      <MonoLabel color={theme.colors.textSecondary}>{label.toUpperCase()}</MonoLabel>
-      <Pressable onPress={onNext} disabled={isToday} accessibilityRole="button" accessibilityLabel="next" hitSlop={10}
-        style={{ opacity: isToday ? theme.opacity.disabled : 1 }}>
-        <Icon name="arrow-right" size={18} color={theme.colors.textPrimary} />
-      </Pressable>
+    <View style={{ paddingHorizontal: 24 }}>
+      <NuNav
+        label={isToday ? t('diary.today') : weekdayLabel.charAt(0).toUpperCase() + weekdayLabel.slice(1)}
+        sub={sub}
+        onPrev={onPrev}
+        onNext={onNext}
+        nextDisabled={isToday}
+      />
     </View>
   );
 }
@@ -49,31 +46,21 @@ function DateNav({ localDate, onPrev, onNext }: { localDate: string; onPrev: () 
 function EditGramsSheet({
   visible, initialGrams, onClose, onSave,
 }: { visible: boolean; initialGrams: number; onClose: () => void; onSave: (grams: number) => void }) {
-  const { theme } = useTheme();
   const { t } = useTranslation('nutrition');
-  const [value, setValue] = useState(String(initialGrams));
-
-  if (!visible) return null;
+  const [grams, setGrams] = useState(initialGrams);
 
   return (
-    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50, elevation: 50 }}>
-      <View style={{ flex: 1, backgroundColor: theme.colors.loadingOverlay, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
-        <View style={{ width: '100%', borderRadius: theme.radii.xl, backgroundColor: theme.colors.surfaceElevated, padding: 20, gap: 14 }}>
-          <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 15, color: theme.colors.textPrimary }}>{t('diary.editGrams')}</Text>
-          <TextInput
-            value={value} onChangeText={setValue} keyboardType="decimal-pad" autoFocus
-            style={{ height: 48, borderRadius: theme.radii.lg, paddingHorizontal: 14, backgroundColor: theme.colors.inputBackground,
-              borderWidth: 1, borderColor: theme.colors.inputBorder, fontFamily: theme.fonts.ui, fontSize: 16, color: theme.colors.inputText }}
-          />
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            <CtaButton ghost onPress={onClose} style={{ flex: 1 }}>{t('diary.cancel')}</CtaButton>
-            <CtaButton onPress={() => { const grams = Number(value.replace(',', '.')); if (Number.isFinite(grams) && grams > 0) onSave(grams); }} style={{ flex: 1 }}>
-              {t('diary.save')}
-            </CtaButton>
-          </View>
-        </View>
+    <NuPanel visible={visible} onClose={onClose}>
+      <Text style={{ fontFamily: 'Archivo_700Bold', fontSize: 18, color: NU.white }}>{t('diary.editGrams')}</Text>
+      <View style={{ marginTop: 24 }}>
+        <NuStepper
+          value={`${Math.round(grams)} ${t('units.gramsShort')}`}
+          onMinus={() => setGrams((g) => Math.max(1, g - 10))}
+          onPlus={() => setGrams((g) => Math.min(10000, g + 10))}
+        />
       </View>
-    </View>
+      <NuButton onPress={() => { if (grams > 0) onSave(grams); }} style={{ marginTop: 26 }}>{t('diary.save')}</NuButton>
+    </NuPanel>
   );
 }
 
@@ -95,90 +82,84 @@ export function NutritionDiaryScreen({
   onRemove: (slot: NutritionMealSlot, itemId: string) => void;
   onMove: (slot: NutritionMealSlot, itemId: string, toSlot: NutritionMealSlot) => void;
 }) {
-  const { theme } = useTheme();
   const { t } = useTranslation('nutrition');
   const [editing, setEditing] = useState<{ slot: NutritionMealSlot; item: NutritionLoggedFoodItem } | null>(null);
-  const [moving, setMoving] = useState<{ slot: NutritionMealSlot; itemId: string } | null>(null);
+  const [moving, setMoving] = useState<{ slot: NutritionMealSlot; itemId: string; toSlot: NutritionMealSlot } | null>(null);
 
   const totals: NutritionTotals = day?.totals ?? { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0, fiberG: 0 };
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose} presentationStyle="pageSheet">
-      <ScreenBg>
+      <View style={{ flex: 1, backgroundColor: NU.bg }}>
         <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 22, paddingTop: 10 }}>
-            <Display size={20}>{t('diary.title')}</Display>
-            <Pressable accessibilityRole="button" accessibilityLabel={t('diary.cancel')} onPress={onClose} style={{ padding: 6 }}>
-              <Icon name="x" size={20} color={theme.colors.textFaint} />
-            </Pressable>
-          </View>
-
+          <NuSheetHeader title={t('diary.title')} onBack={onClose} />
           <DateNav localDate={localDate} onPrev={onPrevDay} onNext={onNextDay} />
 
-          <ScrollView contentContainerStyle={{ padding: 22, paddingBottom: 40, gap: 20 }}>
+          <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 30, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
             {!dayLoaded ? (
               <SkeletonBlock height={120} />
             ) : goals ? (
-              <View>
-                <MonoLabel color={theme.colors.textFaint} style={{ marginBottom: 10 }}>{t('diary.dailyGoal')}</MonoLabel>
+              <View style={{ marginBottom: 20 }}>
                 <DailyNutritionSummary totals={totals} goals={goals} />
               </View>
             ) : null}
 
-            {mealSlots.map((slot) => {
+            {mealSlots.map((slot, index) => {
               const meal = day?.meals.find((item) => item.slot === slot);
               const items = meal?.items ?? [];
               return (
-                <View key={slot} style={{ gap: 8 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 15, color: theme.colors.textPrimary }}>
-                        {t(`mealSlots.${slot}`)}
-                      </Text>
-                      {meal?.followedRecommendedOptionId ? (
-                        <Text style={{ fontFamily: theme.fonts.mono, fontSize: 9, color: theme.colors.primaryEmphasis }}>
-                          {t('diary.followedBadge').toUpperCase()}
-                        </Text>
-                      ) : null}
-                    </View>
-                    <Pressable onPress={() => onAddFood(slot)} accessibilityRole="button" accessibilityLabel={t('diary.addFood')}>
-                      <Icon name="plus" size={16} color={theme.colors.primaryEmphasis} />
-                    </Pressable>
+                <View key={slot} style={{ paddingTop: 20, borderTopWidth: index ? 1 : 0, borderTopColor: NU.hairline }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: NU.hairline }}>
+                    <Text style={{ fontFamily: 'Archivo_700Bold', fontSize: 16, color: NU.white }}>
+                      {t(`mealSlots.${slot}`)}
+                    </Text>
+                    <Text style={{ fontFamily: 'Archivo_600SemiBold', fontSize: 13, color: items.length ? NU.white : NU.faint }}>
+                      {items.length ? `${Math.round(meal!.totals.kcal)} ${t('units.kcal')}` : '—'}
+                    </Text>
                   </View>
-                  {items.length === 0 ? (
-                    <Text style={{ fontFamily: theme.fonts.ui, fontSize: 12.5, color: theme.colors.textFaint }}>{t('diary.empty')}</Text>
-                  ) : items.map((item) => (
-                    <View key={item.id}>
-                      <FoodRow
-                        name={item.snapshot.name} grams={item.grams} kcal={item.snapshot.kcal}
-                        trailing={(
-                          <View style={{ flexDirection: 'row', gap: 14 }}>
-                            <Pressable onPress={() => setEditing({ slot, item })} accessibilityRole="button" accessibilityLabel={t('diary.editGrams')}>
-                              <Icon name="settings" size={15} color={theme.colors.textFaint} />
-                            </Pressable>
-                            <Pressable onPress={() => setMoving({ slot, itemId: item.id })} accessibilityRole="button" accessibilityLabel={t('diary.moveMeal')}>
-                              <Icon name="swap" size={15} color={theme.colors.textFaint} />
-                            </Pressable>
-                            <Pressable
-                              onPress={() => Alert.alert(t('diary.removeConfirm'), undefined, [
-                                { text: t('diary.cancel'), style: 'cancel' },
-                                { text: t('diary.remove'), style: 'destructive', onPress: () => onRemove(slot, item.id) },
-                              ])}
-                              accessibilityRole="button" accessibilityLabel={t('diary.remove')}
-                            >
-                              <Icon name="trash" size={15} color={theme.colors.textFaint} />
-                            </Pressable>
-                          </View>
-                        )}
-                      />
+                  {meal?.followedRecommendedOptionId ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 }}>
+                      <Icon name="check" size={12} color={NU.faint} />
+                      <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 12, color: NU.faint }}>{t('diary.followedBadge')}</Text>
                     </View>
+                  ) : null}
+                  {items.length === 0 ? (
+                    <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 12.5, color: NU.faint, paddingVertical: 10 }}>{t('diary.empty')}</Text>
+                  ) : items.map((item) => (
+                    <FoodRow
+                      key={item.id}
+                      name={item.snapshot.name} grams={item.grams} kcal={item.snapshot.kcal}
+                      trailing={(
+                        <View style={{ flexDirection: 'row', gap: 16 }}>
+                          <Pressable onPress={() => setEditing({ slot, item })} accessibilityRole="button" accessibilityLabel={t('diary.editGrams')} hitSlop={8}>
+                            <Icon name="settings" size={15} color={NU.faint} />
+                          </Pressable>
+                          <Pressable onPress={() => setMoving({ slot, itemId: item.id, toSlot: slot })} accessibilityRole="button" accessibilityLabel={t('diary.moveMeal')} hitSlop={8}>
+                            <Icon name="swap" size={15} color={NU.faint} />
+                          </Pressable>
+                          <Pressable
+                            onPress={() => Alert.alert(t('diary.removeConfirm'), undefined, [
+                              { text: t('diary.cancel'), style: 'cancel' },
+                              { text: t('diary.remove'), style: 'destructive', onPress: () => onRemove(slot, item.id) },
+                            ])}
+                            accessibilityRole="button" accessibilityLabel={t('diary.remove')} hitSlop={8}
+                          >
+                            <Icon name="trash" size={15} color={NU.faint} />
+                          </Pressable>
+                        </View>
+                      )}
+                    />
                   ))}
+                  <Pressable onPress={() => onAddFood(slot)} accessibilityRole="button" accessibilityLabel={t('diary.addFood')} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 12 }}>
+                    <Icon name="plus" size={15} color={NU.secondary} />
+                    <Text style={{ fontFamily: 'Archivo_600SemiBold', fontSize: 14, color: NU.secondary }}>{t('diary.addFood')}</Text>
+                  </Pressable>
                 </View>
               );
             })}
           </ScrollView>
         </SafeAreaView>
-      </ScreenBg>
+      </View>
 
       <EditGramsSheet
         visible={editing != null}
@@ -187,28 +168,25 @@ export function NutritionDiaryScreen({
         onSave={(grams) => { if (editing) onEditGrams(editing.slot, editing.item, grams); setEditing(null); }}
       />
 
-      {moving != null ? (
-        // Plain overlay, not its own `<Modal>` — see the comment on
-        // `EditGramsSheet` above for why nesting a second native Modal
-        // here is unreliable.
-        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50, elevation: 50 }}>
-          <View style={{ flex: 1, backgroundColor: theme.colors.loadingOverlay, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
-            <View style={{ width: '100%', borderRadius: theme.radii.xl, backgroundColor: theme.colors.surfaceElevated, padding: 20, gap: 10 }}>
-              <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 15, color: theme.colors.textPrimary }}>{t('diary.moveMeal')}</Text>
-              {mealSlots.filter((slot) => slot !== moving?.slot).map((slot) => (
-                <Pressable
-                  key={slot}
-                  onPress={() => { if (moving) onMove(moving.slot, moving.itemId, slot); setMoving(null); }}
-                  style={{ paddingVertical: 12 }}
-                >
-                  <Text style={{ fontFamily: theme.fonts.ui, fontSize: 14, color: theme.colors.textPrimary }}>{t(`mealSlots.${slot}`)}</Text>
-                </Pressable>
-              ))}
-              <CtaButton ghost onPress={() => setMoving(null)}>{t('diary.cancel')}</CtaButton>
-            </View>
-          </View>
+      {/* Plain overlay, not its own `<Modal>` — see the comment on
+          `EditGramsSheet` above for why nesting a second native Modal here
+          is unreliable. */}
+      <NuPanel visible={moving != null} onClose={() => setMoving(null)}>
+        <Text style={{ fontFamily: 'Archivo_700Bold', fontSize: 18, color: NU.white }}>{t('diary.moveMeal')}</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 20 }}>
+          {mealSlots.filter((slot) => slot !== moving?.slot).map((slot) => (
+            <NuSelectPill key={slot} on={moving?.toSlot === slot} onPress={() => setMoving((current) => (current ? { ...current, toSlot: slot } : current))}>
+              {t(`mealSlots.${slot}`)}
+            </NuSelectPill>
+          ))}
         </View>
-      ) : null}
+        <NuButton
+          onPress={() => { if (moving) onMove(moving.slot, moving.itemId, moving.toSlot); setMoving(null); }}
+          style={{ marginTop: 26 }}
+        >
+          {t('diary.save')}
+        </NuButton>
+      </NuPanel>
     </Modal>
   );
 }

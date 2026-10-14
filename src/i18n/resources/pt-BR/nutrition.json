@@ -36,12 +36,30 @@
       "protein": "PROTEÍNA",
       "carbs": "CARBOIDRATOS",
       "fat": "GORDURA",
-      "fiber": "FIBRA"
+      "fiber": "FIBRA",
+      "remaining": "FALTAM",
+      "over": "ACIMA",
+      "of": "de",
+      "status": {
+        "below": "BAIXO",
+        "near": "OK",
+        "above": "ACIMA"
+      }
     },
     "nextMeal": {
       "title": "PRÓXIMA REFEIÇÃO",
       "recommended": "Recomendado",
       "openCta": "Ver refeição"
+    },
+    "ticker": {
+      "goal": "META",
+      "consumed": "CONSUMIDO",
+      "meals": "REFEIÇÕES",
+      "followedPlan": "SEGUIU O PLANO"
+    },
+    "week": {
+      "title": "SEMANA",
+      "summaryCta": "Resumo"
     },
     "mealsToday": {
       "title": "REFEIÇÕES DO DIA",
@@ -271,6 +289,7 @@
   },
   "generating": {
     "title": "Preparando sua dieta",
+    "leaveScreenNote": "Pode sair desta tela. Avisamos quando o plano estiver pronto.",
     "stages": {
       "queued": "Preparando seus dados",
       "running": "Selecionando alimentos e montando suas refeições",
@@ -501,6 +520,7 @@
   },
   "history": {
     "title": "Histórico de planos",
+    "restoreHint": "Restaurar reativa um plano antigo exatamente como ele era, sem gerar um novo.",
     "activeBadge": "Ativo",
     "archivedBadge": "Arquivado",
     "view": "Ver plano",

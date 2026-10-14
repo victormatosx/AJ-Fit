@@ -9,6 +9,7 @@ import { CtaButton } from '../../components/ui/CtaButton';
 import { Icon } from '../../components/ui/Icon';
 import { FoodRow } from '../../components/nutrition/FoodRow';
 import { SkeletonBlock } from '../../components/nutrition/NutritionPrimitives';
+import { NU, NuButton, NuSheetHeader } from '../../components/nutrition/NuKit';
 import { useTheme } from '../../theme';
 import { useAuth } from '../../state/AuthContext';
 import { searchNutritionCatalog, listCustomFoods } from '../../services/nutritionFoods';
@@ -71,7 +72,7 @@ const localFoodLogSearchProvider = createFederatedFoodLogSearchProvider({
  * text index needed for a small personal list).
  */
 export function FoodSearchScreen({
-  visible, onClose, onSelect, excludeIds = [], includeRecipes = false, catalog = 'generation',
+  visible, onClose, onSelect, excludeIds = [], includeRecipes = false, catalog = 'generation', variant = 'profile',
   favoriteFoodIds, recentFoodIds, favoriteRecipeIds, onToggleFavoriteFood, onToggleFavoriteRecipe, overlay,
 }: {
   visible: boolean;
@@ -82,6 +83,15 @@ export function FoodSearchScreen({
   includeRecipes?: boolean;
   /** `'generation'` (default) searches the curated AI-generation catalog; `'logging'` searches the Fase C2 amplo food-log catalog. See doc comment above — never pass `'logging'` for the Nutrition Profile food pickers. */
   catalog?: 'generation' | 'logging';
+  /**
+   * Purely visual switch (2026-10 Nutrição redesign). `'profile'` (default)
+   * keeps this screen's original theme-driven look — required for
+   * `NutritionProfileScreen.tsx`'s preferred/usual/excluded pickers, which
+   * are OUTSIDE that redesign's scope and must render exactly as before.
+   * `'nutrition'` is the new fixed dark palette, used only by the Diary's
+   * "+ Adicionar alimento" call site. No behavior differs between the two.
+   */
+  variant?: 'profile' | 'nutrition';
   /** Heart toggles on each row — omit either pair to render that row type without a heart (e.g. the Profile preferred/usual/excluded pickers). */
   favoriteFoodIds?: readonly string[];
   /** Derived from diary data already subscribed by the shell; never causes a search-path read. */
@@ -240,114 +250,182 @@ export function FoodSearchScreen({
     }
   };
 
+  // Purely visual branch (see `variant` doc comment above) — every handler,
+  // state value and piece of logic below this point is shared identically
+  // by both render paths.
+  const resultsList = (nu: boolean) => (
+    <View style={nu ? undefined : { paddingHorizontal: 12 }}>
+      {visibleCustom.map((food) => (
+        <FoodRow key={food.id} name={food.name} origin="custom"
+          kcal={food.nutritionPer100g.kcal} proteinG={food.nutritionPer100g.proteinG} per100g
+          favorited={favoriteFoodIds?.includes(food.id)}
+          onToggleFavorite={onToggleFavoriteFood ? () => onToggleFavoriteFood(food.id) : undefined}
+          onPress={() => trackedSelect({ foodId: food.id, name: food.name, origin: 'custom', nutritionPer100g: food.nutritionPer100g })} />
+      ))}
+      {visibleRecipes.map((recipe) => (
+        <FoodRow key={recipe.id} name={recipe.name} origin="recipe"
+          favorited={favoriteRecipeIds?.includes(recipe.id)}
+          onToggleFavorite={onToggleFavoriteRecipe ? () => onToggleFavoriteRecipe(recipe.id) : undefined}
+          trailing={selectingRecipeId === recipe.id ? <ActivityIndicator size="small" color={nu ? NU.faint : theme.colors.textFaint} /> : undefined}
+          onPress={() => { void selectRecipe(recipe); }} />
+      ))}
+      {visibleResults.map((food) => {
+        const origin: 'catalog' | 'food_log' = catalog === 'logging' ? 'food_log' : 'catalog';
+        // Fase C7 — shows the food's default natural unit (ovo -> "1 unidade", mussarela -> "1 fatia") instead of always "por 100 g", when one exists.
+        const raw = origin === 'food_log' ? foodLogEntriesRef.current.get(food.id) : undefined;
+        const defaultUnit = raw ? resolveDefaultServingUnit(raw.servings, raw.defaultServingId) : null;
+        const servingNutrients = defaultUnit ? nutrientsForServing(food.nutritionPer100g, defaultUnit) : null;
+        return (
+          <FoodRow key={food.id} name={food.name} brandName={food.brandName} origin={origin}
+            kcal={servingNutrients?.kcal ?? food.nutritionPer100g.kcal} proteinG={servingNutrients?.proteinG ?? food.nutritionPer100g.proteinG}
+            per100g={!servingNutrients} servingLabel={defaultUnit?.label}
+            favorited={favoriteFoodIds?.includes(food.id)}
+            onToggleFavorite={onToggleFavoriteFood ? () => onToggleFavoriteFood(food.id) : undefined}
+            trailing={materializingId === food.id ? <ActivityIndicator size="small" color={nu ? NU.faint : theme.colors.textFaint} /> : undefined}
+            onPress={() => { void selectFoodLogResult(food); }} />
+        );
+      })}
+      {cursor ? (
+        <Pressable onPress={loadMore} disabled={loadingMore} style={{ paddingVertical: 14, alignItems: 'center' }}>
+          {loadingMore ? <ActivityIndicator color={nu ? NU.blueHi : theme.colors.primaryEmphasis} /> : (
+            <Text style={{ fontFamily: nu ? 'Archivo_600SemiBold' : theme.fonts.uiSemi, fontSize: 13, color: nu ? NU.secondary : theme.colors.primaryEmphasis }}>
+              {t('foodSearch.loadMore')}
+            </Text>
+          )}
+        </Pressable>
+      ) : null}
+    </View>
+  );
+
+  const createCustomFoodOverlay = (
+    <CreateCustomFoodScreen
+      visible={creatingFood}
+      onClose={() => setCreatingFood(false)}
+      onCreated={(food) => {
+        setCreatingFood(false);
+        setCustomFoods((prev) => [...prev, food]);
+        trackNutritionEvent({ name: 'nutrition_custom_item_created_after_search',
+          properties: { catalogMode: catalog, afterZeroResults: lastSearchHadZeroResults } });
+        trackedSelect({ foodId: food.id, name: food.name, origin: 'custom', nutritionPer100g: food.nutritionPer100g });
+      }}
+    />
+  );
+
+  // Exactly one native `<Modal>` for this screen regardless of `variant` —
+  // only the chrome/content inside it differs. Two independent native
+  // Modals able to be visible at once is the documented anti-pattern this
+  // feature's own `stackedModalAuditRegression.test.ts` guards against.
+  const body = variant === 'nutrition' ? (
+    <View style={{ flex: 1, backgroundColor: NU.bg }}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+        <NuSheetHeader title={t('foodSearch.title')} onBack={onClose} />
+
+        <View
+          style={{
+            marginHorizontal: 24, marginTop: 6, flexDirection: 'row', alignItems: 'center', gap: 10,
+            paddingHorizontal: 16, height: 50, borderRadius: 12, backgroundColor: NU.surfaceSubtleStrong,
+          }}
+        >
+          <Icon name="search" size={17} color={NU.faint} />
+          <TextInput
+            value={text}
+            onChangeText={setText}
+            placeholder={t('foodSearch.placeholder')}
+            placeholderTextColor={NU.faint}
+            style={{ flex: 1, fontFamily: 'Archivo_400Regular', fontSize: 15.5, color: NU.white }}
+            autoFocus
+            returnKeyType="search"
+          />
+          {text.length > 0 ? (
+            <Pressable onPress={() => setText('')} accessibilityRole="button" accessibilityLabel={t('profile.actions.cancel')} hitSlop={8}>
+              <Icon name="x" size={15} color={NU.faint} />
+            </Pressable>
+          ) : null}
+        </View>
+
+        <ScrollView style={{ flex: 1, marginTop: 12 }} contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
+          {text.trim().length < 2 ? (
+            <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 13, color: NU.faint, textAlign: 'center', marginTop: 24 }}>
+              {t('foodSearch.typeMore')}
+            </Text>
+          ) : loading ? (
+            <View style={{ gap: 8, marginTop: 8 }}>
+              <SkeletonBlock height={52} /><SkeletonBlock height={52} /><SkeletonBlock height={52} />
+            </View>
+          ) : error ? (
+            <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 13, color: NU.danger, textAlign: 'center', marginTop: 24 }}>
+              {t('foodSearch.error')}
+            </Text>
+          ) : showEmpty ? (
+            <View style={{ alignItems: 'center', gap: 14, marginTop: 24 }}>
+              <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 13, color: NU.faint, textAlign: 'center' }}>
+                {t('foodSearch.empty')}
+              </Text>
+              <NuButton ghost onPress={() => setCreatingFood(true)} style={{ width: '70%' }}>{t('foodSearch.emptyCta')}</NuButton>
+            </View>
+          ) : resultsList(true)}
+        </ScrollView>
+      </SafeAreaView>
+    </View>
+  ) : (
+    <ScreenBg>
+      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 22, paddingTop: 10 }}>
+          <Display size={20}>{t('foodSearch.title')}</Display>
+          <Pressable accessibilityRole="button" accessibilityLabel={t('profile.actions.cancel')} onPress={onClose} style={{ padding: 6 }}>
+            <Icon name="x" size={20} color={theme.colors.textFaint} />
+          </Pressable>
+        </View>
+
+        <View
+          style={{
+            marginHorizontal: 22, marginTop: 14, flexDirection: 'row', alignItems: 'center', gap: 10,
+            paddingHorizontal: 14, height: 48, borderRadius: theme.radii.lg,
+            backgroundColor: theme.colors.inputBackground, borderWidth: 1, borderColor: theme.colors.inputBorder,
+          }}
+        >
+          <Icon name="search" size={16} color={theme.colors.inputIcon} />
+          <TextInput
+            value={text}
+            onChangeText={setText}
+            placeholder={t('foodSearch.placeholder')}
+            placeholderTextColor={theme.colors.inputPlaceholder}
+            style={{ flex: 1, fontFamily: theme.fonts.ui, fontSize: 15, color: theme.colors.inputText }}
+            autoFocus
+            returnKeyType="search"
+          />
+        </View>
+
+        <ScrollView style={{ flex: 1, marginTop: 10 }} contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
+          {text.trim().length < 2 ? (
+            <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textFaint, textAlign: 'center', marginTop: 24 }}>
+              {t('foodSearch.typeMore')}
+            </Text>
+          ) : loading ? (
+            <View style={{ paddingHorizontal: 22, gap: 8, marginTop: 8 }}>
+              <SkeletonBlock height={52} /><SkeletonBlock height={52} /><SkeletonBlock height={52} />
+            </View>
+          ) : error ? (
+            <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.feedbackErrorTextStrong, textAlign: 'center', marginTop: 24 }}>
+              {t('foodSearch.error')}
+            </Text>
+          ) : showEmpty ? (
+            <View style={{ alignItems: 'center', gap: 14, marginTop: 24 }}>
+              <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textFaint, textAlign: 'center' }}>
+                {t('foodSearch.empty')}
+              </Text>
+              <CtaButton onPress={() => setCreatingFood(true)} style={{ width: '70%' }}>{t('foodSearch.emptyCta')}</CtaButton>
+            </View>
+          ) : resultsList(false)}
+        </ScrollView>
+      </SafeAreaView>
+    </ScreenBg>
+  );
+
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose} presentationStyle="pageSheet">
-      <ScreenBg>
-        <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 22, paddingTop: 10 }}>
-            <Display size={20}>{t('foodSearch.title')}</Display>
-            <Pressable accessibilityRole="button" accessibilityLabel={t('profile.actions.cancel')} onPress={onClose} style={{ padding: 6 }}>
-              <Icon name="x" size={20} color={theme.colors.textFaint} />
-            </Pressable>
-          </View>
-
-          <View
-            style={{
-              marginHorizontal: 22, marginTop: 14, flexDirection: 'row', alignItems: 'center', gap: 10,
-              paddingHorizontal: 14, height: 48, borderRadius: theme.radii.lg,
-              backgroundColor: theme.colors.inputBackground, borderWidth: 1, borderColor: theme.colors.inputBorder,
-            }}
-          >
-            <Icon name="search" size={16} color={theme.colors.inputIcon} />
-            <TextInput
-              value={text}
-              onChangeText={setText}
-              placeholder={t('foodSearch.placeholder')}
-              placeholderTextColor={theme.colors.inputPlaceholder}
-              style={{ flex: 1, fontFamily: theme.fonts.ui, fontSize: 15, color: theme.colors.inputText }}
-              autoFocus
-              returnKeyType="search"
-            />
-          </View>
-
-          <ScrollView style={{ flex: 1, marginTop: 10 }} contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
-            {text.trim().length < 2 ? (
-              <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textFaint, textAlign: 'center', marginTop: 24 }}>
-                {t('foodSearch.typeMore')}
-              </Text>
-            ) : loading ? (
-              <View style={{ paddingHorizontal: 22, gap: 8, marginTop: 8 }}>
-                <SkeletonBlock height={52} /><SkeletonBlock height={52} /><SkeletonBlock height={52} />
-              </View>
-            ) : error ? (
-              <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.feedbackErrorTextStrong, textAlign: 'center', marginTop: 24 }}>
-                {t('foodSearch.error')}
-              </Text>
-            ) : showEmpty ? (
-              <View style={{ alignItems: 'center', gap: 14, marginTop: 24 }}>
-                <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textFaint, textAlign: 'center' }}>
-                  {t('foodSearch.empty')}
-                </Text>
-                <CtaButton onPress={() => setCreatingFood(true)} style={{ width: '70%' }}>{t('foodSearch.emptyCta')}</CtaButton>
-              </View>
-            ) : (
-              <View style={{ paddingHorizontal: 12 }}>
-                {visibleCustom.map((food) => (
-                  <FoodRow key={food.id} name={food.name} origin="custom"
-                    kcal={food.nutritionPer100g.kcal} proteinG={food.nutritionPer100g.proteinG} per100g
-                    favorited={favoriteFoodIds?.includes(food.id)}
-                    onToggleFavorite={onToggleFavoriteFood ? () => onToggleFavoriteFood(food.id) : undefined}
-                    onPress={() => trackedSelect({ foodId: food.id, name: food.name, origin: 'custom', nutritionPer100g: food.nutritionPer100g })} />
-                ))}
-                {visibleRecipes.map((recipe) => (
-                  <FoodRow key={recipe.id} name={recipe.name} origin="recipe"
-                    favorited={favoriteRecipeIds?.includes(recipe.id)}
-                    onToggleFavorite={onToggleFavoriteRecipe ? () => onToggleFavoriteRecipe(recipe.id) : undefined}
-                    trailing={selectingRecipeId === recipe.id ? <ActivityIndicator size="small" color={theme.colors.textFaint} /> : undefined}
-                    onPress={() => { void selectRecipe(recipe); }} />
-                ))}
-                {visibleResults.map((food) => {
-                  const origin: 'catalog' | 'food_log' = catalog === 'logging' ? 'food_log' : 'catalog';
-                  // Fase C7 — shows the food's default natural unit (ovo -> "1 unidade", mussarela -> "1 fatia") instead of always "por 100 g", when one exists.
-                  const raw = origin === 'food_log' ? foodLogEntriesRef.current.get(food.id) : undefined;
-                  const defaultUnit = raw ? resolveDefaultServingUnit(raw.servings, raw.defaultServingId) : null;
-                  const servingNutrients = defaultUnit ? nutrientsForServing(food.nutritionPer100g, defaultUnit) : null;
-                  return (
-                    <FoodRow key={food.id} name={food.name} brandName={food.brandName} origin={origin}
-                      kcal={servingNutrients?.kcal ?? food.nutritionPer100g.kcal} proteinG={servingNutrients?.proteinG ?? food.nutritionPer100g.proteinG}
-                      per100g={!servingNutrients} servingLabel={defaultUnit?.label}
-                      favorited={favoriteFoodIds?.includes(food.id)}
-                      onToggleFavorite={onToggleFavoriteFood ? () => onToggleFavoriteFood(food.id) : undefined}
-                      trailing={materializingId === food.id ? <ActivityIndicator size="small" color={theme.colors.textFaint} /> : undefined}
-                      onPress={() => { void selectFoodLogResult(food); }} />
-                  );
-                })}
-                {cursor ? (
-                  <Pressable onPress={loadMore} disabled={loadingMore} style={{ paddingVertical: 14, alignItems: 'center' }}>
-                    {loadingMore ? <ActivityIndicator color={theme.colors.primaryEmphasis} /> : (
-                      <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 13, color: theme.colors.primaryEmphasis }}>
-                        {t('foodSearch.loadMore')}
-                      </Text>
-                    )}
-                  </Pressable>
-                ) : null}
-              </View>
-            )}
-          </ScrollView>
-        </SafeAreaView>
-      </ScreenBg>
-
-      <CreateCustomFoodScreen
-        visible={creatingFood}
-        onClose={() => setCreatingFood(false)}
-        onCreated={(food) => {
-          setCreatingFood(false);
-          setCustomFoods((prev) => [...prev, food]);
-          trackNutritionEvent({ name: 'nutrition_custom_item_created_after_search',
-            properties: { catalogMode: catalog, afterZeroResults: lastSearchHadZeroResults } });
-          trackedSelect({ foodId: food.id, name: food.name, origin: 'custom', nutritionPer100g: food.nutritionPer100g });
-        }}
-      />
+      {body}
+      {createCustomFoodOverlay}
       {overlay}
     </Modal>
   );

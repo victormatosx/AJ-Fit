@@ -6,10 +6,10 @@ const source = readFileSync('src/screens/nutrition/NutritionHomeScreen.tsx', 'ut
   .replace(/\/\/.*$/gm, '');
 
 describe('NutritionHomeScreen register-meal FAB', () => {
-  it('renders a circular, accessible FAB that calls onRegisterMeal', () => {
+  it('renders an accessible, rounded-square FAB that calls onRegisterMeal', () => {
     expect(source).toMatch(/onPress=\{state\.onRegisterMeal\}/);
     expect(source).toMatch(/accessibilityLabel=\{t\('registerMeal\.fab'\)\}/);
-    expect(source).toMatch(/borderRadius: theme\.radii\.pill/);
+    expect(source).toMatch(/borderRadius: 18/);
     expect(source).toMatch(/width: 56, height: 56/);
   });
 
@@ -21,9 +21,11 @@ describe('NutritionHomeScreen register-meal FAB', () => {
     expect(source).toMatch(/position: 'absolute', bottom: 20, right: 20/);
   });
 
-  it('reuses existing theme tokens (primary color + accent shadow), not hardcoded one-off styling', () => {
-    expect(source).toMatch(/backgroundColor: theme\.colors\.primary,/);
-    expect(source).toMatch(/\.\.\.theme\.shadows\.accent/);
-    expect(source).toMatch(/<Icon name="plus" size=\{24\} color=\{theme\.colors\.primaryForeground\} \/>/);
+  it('uses the Nutrição redesign\'s own fixed gradient tokens (NU.blueHi/NU.blue), not an arbitrary one-off color', () => {
+    // Nutrição is a fixed dark "poster" surface regardless of the active
+    // theme (same precedent as `EvoRing.tsx`/`HomeEvoTicker.tsx`), so this
+    // button intentionally does not pull from `theme.colors.*`.
+    expect(source).toMatch(/colors=\{\[NU\.blueHi, NU\.blue\]\}/);
+    expect(source).toMatch(/<Icon name="plus" size=\{22\} color="#fff" \/>/);
   });
 });

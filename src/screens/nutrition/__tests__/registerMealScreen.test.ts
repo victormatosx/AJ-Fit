@@ -39,9 +39,9 @@ describe('RegisterMealScreen — single screen, no wizard', () => {
     expect(source).toMatch(/const \[slot, setSlot\] = useState<NutritionMealSlot>\(initialSlot \?\? NUTRITION_MEAL_SLOTS\[0\]\)/);
   });
 
-  it('renders all six meal slots in a single dropdown', () => {
+  it('renders all six meal slots as a single pill row (no separate "pick a slot" step)', () => {
     expect(source).toMatch(/NUTRITION_MEAL_SLOTS\.map\(\(option\) =>/);
-    expect(source).toMatch(/onPress=\{\(\) => \{ setSlot\(option\); setSlotMenuOpen\(false\); \}\}/);
+    expect(source).toMatch(/onPress=\{\(\) => setSlot\(option\)\}/);
   });
 
   it('derives the live summary and item list straight from the `day` prop, never from local state', () => {
@@ -69,33 +69,35 @@ describe('RegisterMealScreen — single screen, no wizard', () => {
     expect(confirmBody).toMatch(/await onEditGrams\(slot, gramsStep\.item, gramsValue\);/);
   });
 
-  it('renders the grams step as a plain absolute overlay, not a second nested <Modal>', () => {
+  it('renders the grams step through the shared NuPanel overlay, not a second nested <Modal>', () => {
     // Regression: a second <Modal> stacked on top of the outer `pageSheet`
     // Modal sometimes failed to paint its own dimming background, leaving
     // the card's text overlapping the real screen behind it with no
-    // backdrop. There must be exactly one `<Modal` (the outer one).
+    // backdrop. There must be exactly one `<Modal` (the outer one); `NuPanel`
+    // itself (src/components/nutrition/NuKit.tsx) renders a plain absolute
+    // `View`, never a `Modal`.
     expect(source.match(/<Modal\b/g)).toHaveLength(1);
+    expect(source).toMatch(/<NuPanel visible=\{gramsStep != null\} onClose=\{\(\) => setGramsStep\(null\)\}>/);
     expect(source).toMatch(/\{gramsStep \? \(/);
-    expect(source).toMatch(/position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: theme\.colors\.loadingOverlay/);
   });
 
-  it('uses an OPAQUE sheet token for the grams card, never the near-transparent surfaceElevated token', () => {
-    // Regression: `surfaceElevated` is only 5% white in the dark theme
-    // (`alpha.white05`) — the card read as backgroundless, with the food
-    // list bleeding through its own text. `sheetBackground` is solid in
-    // both themes (see lightTokens.ts/tokens.ts).
-    const cardStart = source.indexOf("gramsStep ? (");
-    const cardBody = source.slice(cardStart, source.indexOf(') : null}', cardStart));
-    expect(cardBody).not.toMatch(/backgroundColor: theme\.colors\.surfaceElevated/);
-    expect(cardBody).toMatch(/backgroundColor: theme\.colors\.sheetBackground/);
-    expect(cardBody).toMatch(/borderWidth: 1, borderColor: theme\.colors\.border,\s*padding: 22, gap: 16/);
+  it('uses the opaque, fixed Nutrição panel background for the grams card, never a theme-translucent token', () => {
+    // Regression: a near-transparent theme token (e.g. `surfaceElevated`,
+    // ~5% white in the dark theme) let the food list bleed through the
+    // card's own text. `NuPanel` always uses `NU.panel` (`#0b0922`), a
+    // fully opaque fixed color — see NuKit.tsx.
+    expect(source).not.toMatch(/backgroundColor: theme\.colors\.surfaceElevated/);
+    expect(source).not.toMatch(/\btheme\.colors\b/);
   });
 
-  it('forces the overlay above every sibling via explicit zIndex/elevation', () => {
+  it('forces the overlay above every sibling via explicit zIndex/elevation (inside the shared NuPanel)', () => {
     // Android resolves view stacking by `elevation` first, not just render
     // order — a sibling that happens to carry its own elevation could
-    // otherwise paint on top of this overlay.
-    expect(source).toMatch(/zIndex: 50, elevation: 50/);
+    // otherwise paint on top of this overlay. Lives in `NuPanel` itself
+    // (src/components/nutrition/NuKit.tsx) so every Nutrição screen using it
+    // gets the same protection.
+    const panelSource = readFileSync('src/components/nutrition/NuKit.tsx', 'utf8');
+    expect(panelSource).toMatch(/zIndex: 50, elevation: 50/);
   });
 
   it('renders referenceItems (free-form plan names) raw, never through the catalog-only formatFoodDisplayName', () => {
@@ -120,11 +122,11 @@ describe('RegisterMealScreen — single screen, no wizard', () => {
   });
 
   it('shows the full accumulated meal summary (kcal, protein, carbs, fat, fiber)', () => {
-    expect(source).toMatch(/key: 'kcal', value: String\(Math\.round\(totals\.kcal\)\)/);
-    expect(source).toMatch(/key: 'proteinG', value: totals\.proteinG\.toFixed\(1\)/);
-    expect(source).toMatch(/key: 'carbsG', value: totals\.carbsG\.toFixed\(1\)/);
-    expect(source).toMatch(/key: 'fatG', value: totals\.fatG\.toFixed\(1\)/);
-    expect(source).toMatch(/key: 'fiberG', value: totals\.fiberG\.toFixed\(1\)/);
+    expect(source).toMatch(/\['kcal', String\(Math\.round\(totals\.kcal\)\)/);
+    expect(source).toMatch(/\['proteinG', totals\.proteinG\.toFixed\(1\)/);
+    expect(source).toMatch(/\['carbsG', totals\.carbsG\.toFixed\(1\)/);
+    expect(source).toMatch(/\['fatG', totals\.fatG\.toFixed\(1\)/);
+    expect(source).toMatch(/\['fiberG', totals\.fiberG\.toFixed\(1\)/);
   });
 
   it('each listed item exposes an edit-grams and a remove action', () => {
@@ -141,7 +143,7 @@ describe('RegisterMealScreen — single screen, no wizard', () => {
   });
 
   it('has a clear close action and never breaks layout under the keyboard', () => {
-    expect(source).toMatch(/<CtaButton onPress=\{onClose\}>\{t\('registerMeal\.close'\)\}<\/CtaButton>/);
+    expect(source).toMatch(/<NuButton onPress=\{onClose\}>\{t\('registerMeal\.close'\)\}<\/NuButton>/);
     expect(source).toMatch(/KeyboardAvoidingView style=\{\{ flex: 1 \}\} behavior=\{Platform\.OS === 'ios' \? 'padding' : undefined\}/);
   });
 });

@@ -3,20 +3,29 @@
     "todayLine": "{{weekday}} · {{month}} {{day}}"
   },
   "evoTicker": {
-    "streak": "STREAK {{count}} DAYS",
-    "activeDays": "ACTIVE DAYS {{count}}/{{required}}",
-    "adherence": "ADHERENCE {{percent}}%",
-    "cycle": "CYCLE {{number}}",
-    "level": "LEVEL {{level}}",
-    "sessions30d": "{{count}} WORKOUTS IN THE LAST 30 DAYS"
+    "streakLabel": "STREAK",
+    "streakValue": "{{count}} DAYS",
+    "streakValueWeeks": "{{count}} WEEKS",
+    "activeDaysLabel": "ACTIVE DAYS",
+    "activeDaysValue": "{{count}}/{{required}}",
+    "adherenceLabel": "ADHERENCE",
+    "adherenceValue": "{{percent}}%",
+    "cycleLabel": "CYCLE",
+    "cycleValue": "{{number}}",
+    "levelLabel": "LEVEL",
+    "levelValue": "{{level}}",
+    "sessions30dLabel": "WORKOUTS",
+    "sessions30dValue": "{{count}} IN THE LAST 30 DAYS"
   },
   "evoRing": {
     "ofCycle": "OF CYCLE",
     "daysLeft": "{{count}} days left",
     "paused": "Progress paused",
     "unlocked": "Evolution unlocked",
+    "cycleComplete": "Cycle complete",
     "streakLabel": "STREAK",
     "streakUnit": "days",
+    "streakUnitWeeks": "weeks",
     "adherenceLabel": "ADHERENCE",
     "adherenceBelowThreshold": ", below target",
     "towardAdvanced": "TOWARD ADVANCED",
@@ -44,10 +53,13 @@
   },
   "todayCard": {
     "kicker": "Today's workout",
+    "kickerWithLetter": "Today · Workout {{letter}}",
     "meta": "{{duration}} min · {{exercises}} exercises · ~{{kcal}} kcal",
     "start": "Start workout",
     "review": "Review information",
     "sessionMeta": "{{exercises}} exercises · {{sets}} sets",
+    "sessionMetaDuration_one": "{{minutes}} min · {{count}} exercise",
+    "sessionMetaDuration_other": "{{minutes}} min · {{count}} exercises",
     "confirm": {
       "title": "Start workout?",
       "question": "Do you want to start now",
@@ -224,8 +236,8 @@
         }
       },
       "empty": {
-        "title": "No assessment recorded",
-        "description": "Log your first physical assessment to track weight and body composition over time.",
+        "title": "Unlock your body evolution",
+        "description": "Complete your first physical assessment to track your changes over time.",
         "cta": "Take assessment"
       }
     },
@@ -279,9 +291,9 @@
         "chart": "{{exercise}} evolution chart. Current load: {{value}} {{unit}}"
       },
       "empty": {
-        "title": "No load history yet",
-        "description": "Completed loads from your workouts will appear here automatically.",
-        "hint": "Log a weighted set to get started"
+        "title": "Your evolution starts here",
+        "description": "Log your exercise loads to track your strength and personal records.",
+        "cta": "Start workout"
       },
       "error": {
         "title": "We couldn't load your weights",
