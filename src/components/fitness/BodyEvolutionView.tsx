@@ -3,6 +3,8 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { EvolutionAreaChart } from './EvolutionAreaChart';
+import { EvolutionLockedPreview } from './EvolutionLockedPreview';
+import { buildDemoAssessments } from './demoAssessmentData';
 import { Display, MonoLabel, Slash } from '../ui/Display';
 import { Icon } from '../ui/Icon';
 import { sizes, spacing } from '../../theme/tokens';
@@ -36,6 +38,22 @@ const MEASUREMENT_SITE_KEYS: readonly SiteKey[] = [
 
 function formatMeasurement(value: number): string {
   return (Math.round(value * 10) / 10).toFixed(1).replace(/\.0$/, '');
+}
+
+interface WeightEntry {
+  id: string;
+  source: 'assessment' | HealthWeightSampleDoc['platform'];
+  measuredAt: Date;
+  weightKg: number;
+}
+
+function assessmentWeightEntries(list: AssessmentView[]): WeightEntry[] {
+  return list.map((entry) => ({
+    id: `assessment:${entry.id}`,
+    source: 'assessment',
+    measuredAt: entry.measuredAt.toDate(),
+    weightKg: entry.weight,
+  }));
 }
 
 interface Props {
@@ -401,23 +419,52 @@ export function BodyEvolutionView({
     [],
   );
 
-  const weightEntries = useMemo(() => [
-    ...assessments.map((entry) => ({
-      id: `assessment:${entry.id}`,
-      source: 'assessment' as const,
-      measuredAt: entry.measuredAt.toDate(),
-      weightKg: entry.weight,
-    })),
-    ...importedWeights.map((entry) => ({
-      id: `health:${entry.id}`,
-      source: entry.platform,
-      measuredAt: entry.measuredAt,
-      weightKg: entry.weightKg,
-    })),
-  ].sort((a, b) => {
-    const byTime = a.measuredAt.getTime() - b.measuredAt.getTime();
-    return byTime || a.id.localeCompare(b.id);
-  }), [assessments, importedWeights]);
+  // Whether each section has any *real* data to show. `hasRealAssessment`
+  // implies `hasAnyRealWeight` — a guided assessment always carries its own
+  // weight — so `hasAnyRealWeight` being false also implies no real
+  // assessment; the two booleans below partition the panel into exactly
+  // three states: nothing real yet (both locked), health-synced weight only
+  // (weight real, composition locked), or a real assessment exists (both
+  // real, blending in any imported weights too).
+  const hasRealAssessment = latest != null;
+  const hasImportedWeights = importedWeights.length > 0;
+  const hasAnyRealWeight = hasRealAssessment || hasImportedWeights;
+
+  // Demo data backs whichever section(s) above have no real data yet. Built
+  // only when needed, and never combined with real assessments or imported
+  // weights in the same list — each section is either fully real or fully
+  // demo, never a blend of the two.
+  const demoAssessments = useMemo(
+    () => (hasRealAssessment ? [] : buildDemoAssessments()),
+    [hasRealAssessment],
+  );
+
+  const realWeightEntries = useMemo(() => {
+    const fromAssessments = hasRealAssessment ? assessmentWeightEntries(assessments) : [];
+    const assessmentTimestamps = new Set(fromAssessments.map((entry) => entry.measuredAt.getTime()));
+    // A health sample sharing the exact timestamp of a real assessment is the
+    // same real-world measurement recorded twice; the assessment's own value
+    // wins so it isn't double-counted in the combined series.
+    const fromHealth: WeightEntry[] = importedWeights
+      .filter((entry) => !assessmentTimestamps.has(entry.measuredAt.getTime()))
+      .map((entry) => ({
+        id: `health:${entry.id}`,
+        source: entry.platform,
+        measuredAt: entry.measuredAt,
+        weightKg: entry.weightKg,
+      }));
+    return [...fromAssessments, ...fromHealth].sort((a, b) => {
+      const byTime = a.measuredAt.getTime() - b.measuredAt.getTime();
+      return byTime || a.id.localeCompare(b.id);
+    });
+  }, [assessments, hasRealAssessment, importedWeights]);
+
+  const demoWeightEntries = useMemo(
+    () => assessmentWeightEntries(demoAssessments),
+    [demoAssessments],
+  );
+
+  const weightEntries = hasAnyRealWeight ? realWeightEntries : demoWeightEntries;
 
   const weightPoints = useMemo(
     () => weightEntries.map((entry) => ({
@@ -483,50 +530,24 @@ export function BodyEvolutionView({
   }
 
   if (!latestWeight) {
-    return (
-      <CenteredState>
-        <Icon name="chart" size={26} color={theme.colors.textFaint} />
-        <Display size={20} style={{ textAlign: 'center' }}>
-          {t('progress.body.empty.title')}
-        </Display>
-        <Text
-          style={{
-            fontFamily: theme.fonts.ui,
-            fontSize: 13,
-            lineHeight: 19,
-            color: theme.colors.textMuted,
-            textAlign: 'center',
-          }}
-        >
-          {t('progress.body.empty.description')}
-        </Text>
-        {onOpenAssessment ? (
-          <Pressable
-            onPress={onOpenAssessment}
-            accessibilityRole="button"
-            accessibilityLabel={t('progress.body.empty.cta')}
-            style={{
-              marginTop: spacing[2],
-              paddingVertical: spacing[3],
-              paddingHorizontal: spacing[5],
-              borderRadius: 10,
-              borderWidth: 1,
-              borderColor: theme.colors.borderStrong,
-              backgroundColor: theme.colors.surfaceElevated,
-            }}
-          >
-            <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 14, color: theme.colors.textPrimary }}>
-              {t('progress.body.empty.cta')}
-            </Text>
-          </Pressable>
-        ) : null}
-      </CenteredState>
-    );
+    // Unreachable: demo entries are non-empty by construction, and
+    // `hasAnyRealWeight` is only true when a real assessment or an imported
+    // weight actually exists. Kept as a defensive fallback only.
+    return null;
   }
 
   const measuredAt = dateTimeFormatter.format(latestWeight.measuredAt);
 
-  return (
+  // Composition (body-fat, lean/fat mass, BMI, skinfold measurements) comes
+  // exclusively from guided assessments — imported health weight never
+  // carries it. So this section locks on `hasRealAssessment` alone, which
+  // can diverge from the weight section's own `hasAnyRealWeight` lock
+  // whenever the user has synced health weight but never run an assessment.
+  const compositionLatest = hasRealAssessment ? latest : demoAssessments[0] ?? null;
+  const compositionEvolution = hasRealAssessment ? evolutionSincePrevious : null;
+  const compositionAssessments = hasRealAssessment ? assessments : demoAssessments;
+
+  const weightSection = (
     <View>
       {/* Hero: one number carries the screen. */}
       <View style={{ paddingHorizontal: GUTTER }}>
@@ -590,6 +611,85 @@ export function BodyEvolutionView({
           </Text>
         )}
       </View>
+    </View>
+  );
+
+  const compositionSection = compositionLatest ? (
+    <View>
+      <View style={{ paddingHorizontal: GUTTER, marginBottom: spacing[1] }}>
+        <Slash>{t('progress.body.composition').toUpperCase()}</Slash>
+      </View>
+
+      {compositionLatest.bodyFat != null ? (
+        <MetricRow
+          label={t('progress.body.metrics.bodyFat')}
+          value={compositionLatest.bodyFat.toFixed(1)}
+          unit="%"
+          delta={compositionEvolution?.bodyFatDelta ?? null}
+        />
+      ) : null}
+      {compositionLatest.leanMass != null ? (
+        <MetricRow
+          label={t('progress.body.metrics.leanMass')}
+          value={formatWeightFromKg(compositionLatest.leanMass, resolvedUnits)}
+          unit={unit}
+          delta={
+            compositionEvolution?.leanMassDelta != null
+              ? weightFromKg(compositionEvolution.leanMassDelta, resolvedUnits)
+              : null
+          }
+        />
+      ) : null}
+      {compositionLatest.fatMass != null ? (
+        <MetricRow
+          label={t('progress.body.metrics.fatMass')}
+          value={formatWeightFromKg(compositionLatest.fatMass, resolvedUnits)}
+          unit={unit}
+          delta={
+            compositionEvolution?.fatMassDelta != null
+              ? weightFromKg(compositionEvolution.fatMassDelta, resolvedUnits)
+              : null
+          }
+        />
+      ) : null}
+      {compositionLatest.bmi != null ? (
+        <MetricRow
+          label={t('progress.body.metrics.bmi')}
+          value={compositionLatest.bmi.toFixed(1)}
+          unit=""
+        />
+      ) : null}
+
+      <Rule />
+      <BodyMeasurementsChart assessments={compositionAssessments} />
+    </View>
+  ) : null;
+
+  // `hasAnyRealWeight` false implies `hasRealAssessment` false too (see the
+  // comment above both flags), so when the weight section has no real data,
+  // neither does composition: the whole panel is one full-screen locked
+  // preview, exactly as before imported health weight existed.
+  if (!hasAnyRealWeight) {
+    return (
+      <EvolutionLockedPreview
+        title={t('progress.body.empty.title')}
+        description={t('progress.body.empty.description')}
+        ctaLabel={onOpenAssessment ? t('progress.body.empty.cta') : undefined}
+        onPress={onOpenAssessment}
+      >
+        <View>
+          {weightSection}
+          <Rule />
+          <ImportedWeightsHistory samples={importedWeights} />
+          {compositionSection}
+        </View>
+      </EvolutionLockedPreview>
+    );
+  }
+
+  return (
+    <View>
+      {weightSection}
 
       <Rule />
 
@@ -610,66 +710,24 @@ export function BodyEvolutionView({
       <ImportedWeightsHistory samples={importedWeights} />
       {importedWeights.length > 0 ? <Rule /> : null}
 
-      {/* Composition. Only what the domain actually reports for this entry. */}
-      {latest ? (
-        <>
-          <View style={{ paddingHorizontal: GUTTER, marginBottom: spacing[1] }}>
-            <Slash>{t('progress.body.composition').toUpperCase()}</Slash>
-          </View>
-
-          {latest.bodyFat != null ? (
-            <MetricRow
-              label={t('progress.body.metrics.bodyFat')}
-              value={latest.bodyFat.toFixed(1)}
-              unit="%"
-              delta={evolutionSincePrevious?.bodyFatDelta ?? null}
-            />
-          ) : null}
-          {latest.leanMass != null ? (
-            <MetricRow
-              label={t('progress.body.metrics.leanMass')}
-              value={formatWeightFromKg(latest.leanMass, resolvedUnits)}
-              unit={unit}
-              delta={
-                evolutionSincePrevious?.leanMassDelta != null
-                  ? weightFromKg(evolutionSincePrevious.leanMassDelta, resolvedUnits)
-                  : null
-              }
-            />
-          ) : null}
-          {latest.fatMass != null ? (
-            <MetricRow
-              label={t('progress.body.metrics.fatMass')}
-              value={formatWeightFromKg(latest.fatMass, resolvedUnits)}
-              unit={unit}
-              delta={
-                evolutionSincePrevious?.fatMassDelta != null
-                  ? weightFromKg(evolutionSincePrevious.fatMassDelta, resolvedUnits)
-                  : null
-              }
-            />
-          ) : null}
-          {latest.bmi != null ? (
-            <MetricRow
-              label={t('progress.body.metrics.bmi')}
-              value={latest.bmi.toFixed(1)}
-              unit=""
-            />
-          ) : null}
-
-          <Rule />
-          <BodyMeasurementsChart assessments={assessments} />
-        </>
+      {/* Composition still has no real data (e.g. health weight is synced
+          but no assessment was ever done): lock just this sub-section,
+          sized to its own demo content rather than the full screen. */}
+      {hasRealAssessment ? (
+        compositionSection
       ) : (
-        <View style={{ paddingHorizontal: GUTTER, alignItems: 'center', gap: spacing[2] }}>
-          <Display size={18} style={{ textAlign: 'center' }}>{t('progress.body.empty.title')}</Display>
-          <Text style={[theme.typography.bodySmall, { color: theme.colors.textMuted, textAlign: 'center' }]}>
-            {t('progress.body.imported.noAssessment')}
-          </Text>
-        </View>
+        <EvolutionLockedPreview
+          title={t('progress.body.empty.title')}
+          description={t('progress.body.empty.description')}
+          ctaLabel={onOpenAssessment ? t('progress.body.empty.cta') : undefined}
+          onPress={onOpenAssessment}
+          fillHeight={false}
+        >
+          {compositionSection}
+        </EvolutionLockedPreview>
       )}
 
-      {onOpenAssessment ? (
+      {onOpenAssessment && hasRealAssessment ? (
         <>
           <Rule />
           <Pressable

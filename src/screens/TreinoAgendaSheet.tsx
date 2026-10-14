@@ -1,11 +1,17 @@
 import { useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { Slash } from '../components/ui/Display';
+import { Display, Slash } from '../components/ui/Display';
+import { WeekdayGlowCircle } from '../components/treino/WeekdayGlowCircle';
 import { useTheme } from '../theme';
-import { ScheduleModeLink, WeeklySchedulePicker } from '../components/onboarding/WeeklySchedulePicker';
+import { WEEKDAY_ORDER } from '../state/AppState';
 import {
+  AVAILABLE_FREQUENCIES,
   isWeeklyScheduleComplete,
+  selectFixedSchedule,
+  selectFlexibleFrequency,
+  selectFlexibleSchedule,
+  toggleFixedTrainingDay,
   type WeeklyScheduleValue,
 } from '../onboarding/weeklyScheduleSelection';
 import type { ScheduleMode, Weekday } from '../state/AppState';
@@ -15,14 +21,17 @@ export type AgendaSaveOutcome = 'OK' | 'ERROR';
 
 /**
  * Editar agenda (docs §Alteração de agenda). Reuses the onboarding's own
- * `WeeklySchedulePicker`/`weeklyScheduleSelection` helpers verbatim — the
- * user only ever answers "which days do you want to train", never sees
- * `template`/`programInstance`/`ScheduleState` concepts. Whether the save
- * is a same-frequency agenda edit (`saveScheduleConfig`, never touches the
- * program) or a real frequency change (`adaptWorkoutProgram`, regenerates
- * the division) is decided here, transparently, by comparing the selected
- * day count against the program's current prescribed frequency — never by
- * the user picking a mode.
+ * pure selection helpers (`weeklyScheduleSelection.ts`) verbatim — the user
+ * only ever answers "which days do you want to train", never sees
+ * `template`/`programInstance`/`ScheduleState` concepts. The weekday/
+ * frequency grid below is a Treino-specific restyle (`WeekdayGlowCircle`),
+ * deliberately NOT the shared `WeeklySchedulePicker` component — reusing
+ * that one here would also restyle onboarding's own schedule question.
+ * Whether the save is a same-frequency agenda edit (`saveScheduleConfig`,
+ * never touches the program) or a real frequency change
+ * (`adaptWorkoutProgram`, regenerates the division) is decided here,
+ * transparently, by comparing the selected day count against the program's
+ * current prescribed frequency — never by the user picking a mode.
  */
 export function TreinoAgendaSheet({
   initialScheduleMode,
@@ -41,6 +50,7 @@ export function TreinoAgendaSheet({
 }) {
   const { theme } = useTheme();
   const { t } = useTranslation('treino');
+  const { t: tQuiz } = useTranslation('quiz');
   const [value, setValue] = useState<WeeklyScheduleValue>({
     days: initialScheduleMode === 'fixed' ? (initialTrainingDays.length || null) : currentFrequency,
     scheduleMode: initialScheduleMode,
@@ -50,9 +60,12 @@ export function TreinoAgendaSheet({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(false);
 
-  const newCount = value.scheduleMode === 'flexible' ? value.days ?? currentFrequency : value.trainingDays?.length ?? 0;
+  const flexible = value.scheduleMode === 'flexible';
+  const selectedDays = value.scheduleMode === 'fixed' ? value.trainingDays ?? [] : [];
+  const newCount = flexible ? value.days ?? currentFrequency : selectedDays.length;
+  const complete = isWeeklyScheduleComplete(value);
   const frequencyChanged = agendaChangeRequiresAdaptation(value, currentFrequency);
-  const canSave = isWeeklyScheduleComplete(value) && !submitting;
+  const canSave = complete && !submitting;
 
   const handleSavePress = () => {
     setError(false);
@@ -95,6 +108,15 @@ export function TreinoAgendaSheet({
     }
   };
 
+  // Live preview of what Salvar/Continuar will do — purely a restatement of
+  // already-real state (`complete`/`frequencyChanged`/`newCount`), never a
+  // second validation rule.
+  const liveNote = !complete
+    ? { text: tQuiz('days.minimumSelectionHint'), warn: true }
+    : frequencyChanged
+      ? { text: t('agenda.liveFrequencyChange', { from: currentFrequency, to: newCount }), warn: false }
+      : { text: t('agenda.liveSameFrequency', { count: newCount }), warn: false };
+
   return (
     <Modal visible transparent animationType="fade" onRequestClose={submitting ? undefined : onClose} statusBarTranslucent>
       <Pressable
@@ -107,57 +129,113 @@ export function TreinoAgendaSheet({
           accessibilityRole="none"
           onPress={(event) => event.stopPropagation()}
           style={{
-            backgroundColor: theme.colors.background,
-            borderTopLeftRadius: 20, borderTopRightRadius: 20,
-            paddingHorizontal: 22, paddingTop: 20, paddingBottom: 34,
+            backgroundColor: theme.colors.workoutSheetBackground,
+            borderTopLeftRadius: 26, borderTopRightRadius: 26,
+            borderWidth: 1, borderBottomWidth: 0, borderColor: theme.colors.sheetBorder,
+            paddingHorizontal: 24, paddingTop: 22, paddingBottom: 34,
             maxHeight: '85%',
           }}
         >
           {step === 'edit' ? (
             <ScrollView showsVerticalScrollIndicator={false}>
-              <Slash>{t('agenda.sheetTitle').toUpperCase()}</Slash>
-              <Text style={{ color: theme.colors.textPrimary, fontFamily: theme.fonts.uiBold, fontSize: 16, marginTop: 10, marginBottom: 16 }}>
+              <Slash>{t('agenda.sheetTitle')}</Slash>
+              <Display size={24} skew={false} style={{ marginTop: 12, marginBottom: 6 }}>
+                {t('agenda.title')}
+              </Display>
+              <Text style={{ color: theme.colors.textSecondary, fontFamily: theme.fonts.ui, fontSize: 13.5, marginBottom: 22 }}>
                 {t('agenda.sheetQuestion')}
               </Text>
-              <View style={{ alignItems: 'center', marginBottom: 10 }}>
-                <ScheduleModeLink value={value} onChange={setValue} />
+
+              {flexible ? (
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  {AVAILABLE_FREQUENCIES.map((frequency) => (
+                    <WeekdayGlowCircle
+                      key={frequency}
+                      label={String(frequency)}
+                      selected={value.days === frequency}
+                      size={38}
+                      onPress={() => setValue(selectFlexibleFrequency(frequency))}
+                    />
+                  ))}
+                </View>
+              ) : (
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  {WEEKDAY_ORDER.map((day) => (
+                    <WeekdayGlowCircle
+                      key={day}
+                      label={t(`agenda.weekday.${day}`)}
+                      selected={selectedDays.includes(day)}
+                      size={38}
+                      onPress={() => setValue(toggleFixedTrainingDay(value, day))}
+                    />
+                  ))}
+                </View>
+              )}
+
+              <View style={{ alignItems: 'center', marginTop: 18 }}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: flexible }}
+                  onPress={() => setValue(flexible ? selectFixedSchedule() : selectFlexibleSchedule(value))}
+                  style={{ paddingHorizontal: 8, paddingVertical: 4 }}
+                >
+                  <Text style={{
+                    color: theme.colors.textSecondary,
+                    fontFamily: theme.fonts.ui,
+                    fontSize: 13,
+                    textDecorationLine: 'underline',
+                    textDecorationColor: theme.colors.textFaint,
+                  }}>
+                    {flexible ? tQuiz('days.fixedModeLink') : tQuiz('days.flexible.label')}
+                  </Text>
+                </Pressable>
               </View>
-              <WeeklySchedulePicker value={value} onChange={setValue} />
+
+              <Text style={{
+                color: liveNote.warn ? theme.colors.warning : theme.colors.textSecondary,
+                fontFamily: theme.fonts.ui, fontSize: 13, textAlign: 'center', marginTop: 18, lineHeight: 18,
+              }}>
+                {liveNote.text}
+              </Text>
+
               {error && (
-                <Text style={{ color: theme.colors.danger, fontFamily: theme.fonts.ui, fontSize: 12, marginTop: 10 }}>
+                <Text style={{ color: theme.colors.danger, fontFamily: theme.fonts.ui, fontSize: 12, marginTop: 10, textAlign: 'center' }}>
                   {t('agenda.error')}
                 </Text>
               )}
-              <View style={{ flexDirection: 'row', gap: 10, marginTop: 22 }}>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={onClose}
-                  disabled={submitting}
-                  style={{ flex: 1, height: 48, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme.colors.inputBorder }}
-                >
-                  <Text style={{ color: theme.colors.textPrimary, fontFamily: theme.fonts.uiSemi, fontSize: 14 }}>
-                    {t('changeWorkout.cancel')}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={handleSavePress}
-                  disabled={!canSave}
-                  style={{
-                    flex: 1, height: 48, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
-                    backgroundColor: theme.colors.inverseSurface, opacity: canSave ? 1 : 0.5,
-                  }}
-                >
-                  <Text style={{ color: theme.colors.inverseForeground, fontFamily: theme.fonts.uiSemi, fontSize: 14 }}>
-                    {submitting ? t('agenda.saving') : t('agenda.save')}
-                  </Text>
-                </Pressable>
-              </View>
+
+              <Pressable
+                accessibilityRole="button"
+                onPress={handleSavePress}
+                disabled={!canSave}
+                style={{
+                  marginTop: 22, height: 54, borderRadius: 12, borderBottomRightRadius: 2,
+                  alignItems: 'center', justifyContent: 'center',
+                  backgroundColor: theme.colors.inverseSurface, opacity: canSave ? 1 : 0.35,
+                }}
+              >
+                <Text style={{ color: theme.colors.inverseForeground, fontFamily: theme.fonts.display, fontSize: 15, letterSpacing: 1.3, textTransform: 'uppercase' }}>
+                  {submitting ? t('agenda.saving') : frequencyChanged ? t('changeWorkout.confirm') : t('agenda.save')}
+                </Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={onClose}
+                disabled={submitting}
+                style={{ marginTop: 12, height: 44, alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Text style={{ color: theme.colors.textSecondary, fontFamily: theme.fonts.uiSemi, fontSize: 14 }}>
+                  {t('changeWorkout.cancel')}
+                </Text>
+              </Pressable>
             </ScrollView>
           ) : (
             <View>
-              <Slash>{t('agenda.frequencyChangeTitle').toUpperCase()}</Slash>
-              <Text style={{ color: theme.colors.textSecondaryStrong, fontFamily: theme.fonts.ui, fontSize: 14, lineHeight: 20, marginTop: 12 }}>
+              <Slash>{t('agenda.frequencyChangeTitle')}</Slash>
+              <Display size={22} skew={false} style={{ marginTop: 12, marginBottom: 10 }}>
+                {t('agenda.frequencyChangeTitle')}
+              </Display>
+              <Text style={{ color: theme.colors.textSecondaryStrong, fontFamily: theme.fonts.ui, fontSize: 14, lineHeight: 20 }}>
                 {t('agenda.frequencyChangeBody', { from: currentFrequency, to: newCount })}
               </Text>
               {error && (

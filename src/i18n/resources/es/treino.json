@@ -49,6 +49,8 @@
     "updating": "Actualizando tu división…",
     "saving": "Guardando agenda…",
     "saved": "Agenda actualizada.",
+    "liveSameFrequency": "{{count}} días por semana",
+    "liveFrequencyChange": "{{from}} → {{to}} días por semana · tu división será rehecha",
     "error": "No se pudo guardar tu agenda ahora. Inténtalo de nuevo.",
     "accessibilityClose": "Cerrar edición de agenda"
   },
@@ -59,5 +61,12 @@
     "last30Days": "Últimos 30 días",
     "last30DaysValue_one": "{{count}} entreno",
     "last30DaysValue_other": "{{count}} entrenos"
+  },
+  "upcoming": {
+    "titleFlexible": "Próximos en la secuencia"
+  },
+  "detail": {
+    "makeNow": "Hacerlo ahora",
+    "makeNowAccessibility": "Iniciar este entreno ahora"
   }
 }

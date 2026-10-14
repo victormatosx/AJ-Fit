@@ -48,3 +48,17 @@ describe('evolution chart interaction', () => {
     expect(loadsView).toContain('label: dateFormatter.format(localDateAsDate(point.localDate))');
   });
 });
+
+describe('loads evolution locked preview', () => {
+  it('wraps the real panel in EvolutionLockedPreview, fed by demo data, only when there is no real load history', () => {
+    expect(loadsView).toContain("import { EvolutionLockedPreview } from './EvolutionLockedPreview'");
+    expect(loadsView).toContain(
+      "import { buildDemoLoadExercises, buildDemoLoadRecords } from './demoLoadProgressData'",
+    );
+    expect(loadsView).toContain('const displayExercises = exercises.length ? exercises : demoExercises');
+    expect(loadsView).toContain('<EvolutionLockedPreview');
+    expect(loadsView).toContain("title={t('progress.loads.empty.title')}");
+    expect(loadsView).toContain("description={t('progress.loads.empty.description')}");
+    expect(loadsView).toContain('onPress={onStartWorkout}');
+  });
+});

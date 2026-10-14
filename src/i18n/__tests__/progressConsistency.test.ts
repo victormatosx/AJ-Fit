@@ -78,6 +78,16 @@ describe('Progress truthfulness and retired consistency preview', () => {
     expect(body).toContain('weightFromKg(entry.weightKg, resolvedUnits)');
   });
 
+  it('shows real imported health weight even without an assessment, but locks composition separately', () => {
+    // Weight and composition lock independently: imported health weight
+    // alone unlocks the weight section, while composition (assessment-only
+    // data) stays demo-and-blurred until a real assessment exists.
+    expect(body).toContain('hasRealAssessment');
+    expect(body).toContain('hasAnyRealWeight');
+    expect(body).toContain('hasImportedWeights');
+    expect(body).toContain('fillHeight={false}');
+  });
+
   it('derives the loads panel from persisted workout executions instead of previews', () => {
     expect(progress).toContain("from '../loadProgress/LoadProgressContext'");
     expect(progress).toContain('useLoadProgressState()');

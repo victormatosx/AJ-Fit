@@ -22,6 +22,8 @@ import {
 import { Display, MonoLabel, Slash } from '../ui/Display';
 import { Icon } from '../ui/Icon';
 import { EvolutionAreaChart } from './EvolutionAreaChart';
+import { EvolutionLockedPreview } from './EvolutionLockedPreview';
+import { buildDemoLoadExercises, buildDemoLoadRecords } from './demoLoadProgressData';
 
 const GUTTER = sizes.screenGutter;
 
@@ -50,6 +52,7 @@ export function LoadsEvolutionView({
   loading,
   error,
   onRetry,
+  onStartWorkout,
 }: {
   exercises: ExerciseLoadProgress[];
   recordsLast90Days: LoadPersonalRecord[];
@@ -57,6 +60,8 @@ export function LoadsEvolutionView({
   loading: boolean;
   error: Error | null;
   onRetry: () => void;
+  /** Starts a workout. Absent when the host cannot drive that flow. */
+  onStartWorkout?: () => void;
 }) {
   const { theme } = useTheme();
   const { t, i18n } = useTranslation('home');
@@ -66,6 +71,20 @@ export function LoadsEvolutionView({
   const [query, setQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
   const [showAllRecords, setShowAllRecords] = useState(false);
+
+  // No real load history yet: feed the exact same panel with local,
+  // non-persisted demo data instead of a plain "no data" block. Never
+  // computed when real data exists, and never mixed with it.
+  const demoExercises = useMemo(
+    () => (exercises.length ? [] : buildDemoLoadExercises(todayLocalDate)),
+    [exercises.length, todayLocalDate],
+  );
+  const demoRecords = useMemo(
+    () => (exercises.length ? [] : buildDemoLoadRecords(todayLocalDate)),
+    [exercises.length, todayLocalDate],
+  );
+  const displayExercises = exercises.length ? exercises : demoExercises;
+  const displayRecords = exercises.length ? recordsLast90Days : demoRecords;
 
   const catalogLocale = i18n.language === 'pt-BR' ? 'ptBR' : i18n.language === 'es' ? 'es' : 'en';
   const exerciseName = (exerciseId: string) => exerciseDisplayName(exerciseId, catalogLocale);
@@ -79,22 +98,22 @@ export function LoadsEvolutionView({
   );
 
   const orderedExercises = useMemo(
-    () => exercises.slice().sort((a, b) => {
+    () => displayExercises.slice().sort((a, b) => {
       const aLatest = a.history[a.history.length - 1]?.localDate ?? '';
       const bLatest = b.history[b.history.length - 1]?.localDate ?? '';
       return bLatest.localeCompare(aLatest) || exerciseName(a.exerciseId).localeCompare(exerciseName(b.exerciseId));
     }),
     // The translated catalog name changes with i18n.language.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [exercises, i18n.language],
+    [displayExercises, i18n.language],
   );
 
   useEffect(() => {
-    if (selectedId && exercises.some((exercise) => exercise.exerciseId === selectedId)) return;
+    if (selectedId && displayExercises.some((exercise) => exercise.exerciseId === selectedId)) return;
     setSelectedId(orderedExercises[0]?.exerciseId ?? null);
-  }, [exercises, orderedExercises, selectedId]);
+  }, [displayExercises, orderedExercises, selectedId]);
 
-  const selected = exercises.find((exercise) => exercise.exerciseId === selectedId) ?? null;
+  const selected = displayExercises.find((exercise) => exercise.exerciseId === selectedId) ?? null;
   const normalizedQuery = normalizeExerciseSearch(query);
   const searchResults = orderedExercises
     .filter((exercise) => normalizeExerciseSearch(exerciseName(exercise.exerciseId)).includes(normalizedQuery))
@@ -106,7 +125,7 @@ export function LoadsEvolutionView({
   const latest = periodHistory[periodHistory.length - 1] ?? null;
   const deltaKg = first && latest ? latest.loadKg - first.loadKg : null;
   const unit = workoutLoadUnit(resolvedUnits);
-  const visibleRecords = showAllRecords ? recordsLast90Days : recordsLast90Days.slice(0, 3);
+  const visibleRecords = showAllRecords ? displayRecords : displayRecords.slice(0, 3);
 
   if (loading && exercises.length === 0) {
     return (
@@ -148,32 +167,14 @@ export function LoadsEvolutionView({
     );
   }
 
-  if (exercises.length === 0) {
-    return (
-      <View style={{ paddingHorizontal: GUTTER, paddingTop: spacing[6] }}>
-        <Slash style={{ marginBottom: spacing[5] }}>{t('progress.loads.eyebrow').toUpperCase()}</Slash>
-        <View style={{ alignItems: 'center', paddingVertical: spacing[10], gap: spacing[3] }}>
-          <Icon name="dumbbell" size={26} color={theme.colors.textFaint} />
-          <Display size={20} style={{ textAlign: 'center' }}>{t('progress.loads.empty.title')}</Display>
-          <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13, lineHeight: 19, color: theme.colors.textMuted, textAlign: 'center' }}>
-            {t('progress.loads.empty.description')}
-          </Text>
-          <MonoLabel size={9} style={{ marginTop: spacing[2], textAlign: 'center' }}>
-            {t('progress.loads.empty.hint').toUpperCase()}
-          </MonoLabel>
-        </View>
-      </View>
-    );
-  }
-
-  return (
+  const panel = (
     <View>
       <View style={{ paddingHorizontal: GUTTER }}>
         <Slash style={{ marginBottom: spacing[4] }}>{t('progress.loads.records90Title').toUpperCase()}</Slash>
         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: spacing[2] }}>
-          <Display size={54}>{recordsLast90Days.length}</Display>
+          <Display size={54}>{displayRecords.length}</Display>
           <MonoLabel size={10} color={theme.colors.textMuted}>
-            {t('progress.loads.recordsCount', { count: recordsLast90Days.length }).toUpperCase()}
+            {t('progress.loads.recordsCount', { count: displayRecords.length }).toUpperCase()}
           </MonoLabel>
         </View>
 
@@ -215,7 +216,7 @@ export function LoadsEvolutionView({
           </View>
         ))}
 
-        {recordsLast90Days.length > 3 ? (
+        {displayRecords.length > 3 ? (
           <Pressable
             onPress={() => setShowAllRecords((current) => !current)}
             accessibilityRole="button"
@@ -354,4 +355,19 @@ export function LoadsEvolutionView({
       </View>
     </View>
   );
+
+  if (exercises.length === 0) {
+    return (
+      <EvolutionLockedPreview
+        title={t('progress.loads.empty.title')}
+        description={t('progress.loads.empty.description')}
+        ctaLabel={onStartWorkout ? t('progress.loads.empty.cta') : undefined}
+        onPress={onStartWorkout}
+      >
+        {panel}
+      </EvolutionLockedPreview>
+    );
+  }
+
+  return panel;
 }

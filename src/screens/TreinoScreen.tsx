@@ -1,29 +1,36 @@
 import { useState } from 'react';
-import { Modal, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import { Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import { Icon } from '../components/ui/Icon';
 import { BodyMuscleMap } from '../components/fitness/BodyMuscleMap';
 import { HudCorners } from '../components/ui/Card';
 import { Display, MonoLabel, Slash } from '../components/ui/Display';
+import { ProfileAvatar } from '../components/ui/ProfileAvatar';
 import { ScreenBg } from '../components/ui/ScreenBg';
-import { useTheme } from '../theme';
-import { localDateInTimezone, weekdayOfLocalDate } from '../scheduleEngine';
-import { WEEKDAY_ORDER } from '../state/AppState';
+import { useAuth } from '../state/AuthContext';
+import { WeeklyOverview } from '../components/home/WeeklyOverview';
+import { EvolutionTicker } from '../components/evolution/EvolutionTicker';
+import { darkTheme, useTheme } from '../theme';
+import { localDateInTimezone } from '../scheduleEngine';
 import type { Sex } from '../state/AppState';
 import { deriveSessionMuscles } from '../lib/sessionMuscles';
 import { effectiveNextSessionIndex } from '../scheduleEngine/effectiveNextSessionIndex';
 import { treinoCardSession } from './treinoCardSession';
+import { buildUpcomingWorkouts, type UpcomingWorkoutViewModel } from '../home/upcomingWorkouts';
+import { TreinoWorkoutDetailSheet } from './TreinoWorkoutDetailSheet';
 import { resolveSessionDisplayName, type LooseTranslate } from '../workoutPrescription/sessionPresentation';
 import type { FinalWorkoutPlan } from '../workoutPrescription/types';
 import type { ScheduleConfig, ScheduleResolution } from '../scheduleEngine/types';
+import type { EvolutionViewModel } from '../workoutEvolution/types';
+import type { WeekOverviewViewModel } from '../home/weekOverview';
+
+// Product invariant shared with Home: the Today Workout poster keeps the
+// official Dark art direction in both app themes.
+const TODAY_WORKOUT_THEME = darkTheme;
 
 export type RepositionOutcome = 'OK' | 'BLOCKED_IN_PROGRESS' | 'ALREADY_COMPLETED_TODAY' | 'ERROR';
-
-export interface TreinoWeekSummary {
-  completedCount: number;
-  scheduledCount: number;
-}
 
 /**
  * TREINO hub (docs §Nova tela TREINO). The Schedule Engine's own resolution
@@ -43,8 +50,8 @@ export function TreinoScreen({
   onStart,
   onOpenAgendaEditor,
   onReposition,
-  weekSummary,
-  last30DaysCompletedCount,
+  evolutionViewModel,
+  weekOverview,
 }: {
   sex: Sex;
   plan: FinalWorkoutPlan;
@@ -56,19 +63,24 @@ export function TreinoScreen({
   onStart: () => void;
   onOpenAgendaEditor: () => void;
   onReposition: (targetSessionIndex: number) => Promise<RepositionOutcome>;
-  weekSummary: TreinoWeekSummary | null;
-  last30DaysCompletedCount: number | null;
+  evolutionViewModel: EvolutionViewModel;
+  weekOverview: WeekOverviewViewModel | null;
 }) {
   const { theme } = useTheme();
   const { t, i18n } = useTranslation('treino');
   const { t: tHome } = useTranslation('home');
   const tLoose = tHome as unknown as LooseTranslate;
-  const [changeSheetOpen, setChangeSheetOpen] = useState(false);
-  const { width } = useWindowDimensions();
+  // Same avatar as Home's header (`src/screens/HomeScreen.tsx`) — real
+  // photo/initials, never a fixed "AJ" placeholder.
+  const { user, profile } = useAuth();
+  const headerDisplayName = profile?.profile.name || user?.displayName || '';
+  const [detailWorkout, setDetailWorkout] = useState<UpcomingWorkoutViewModel | null>(null);
+  const { width: windowWidth } = useWindowDimensions();
+  // Same breakpoint/value Home's own Today poster uses for its BodyMuscleMap.
+  const bodyMuscleMapSize = windowWidth < 360 ? 46 : 58;
 
   const nextIndex = effectiveNextSessionIndex(resolution);
   const displayedSession = treinoCardSession(plan.sessions, resolution, completedTodaySessionIndex);
-  const displayedIndex = resolution.status === 'TODAY_COMPLETED' ? completedTodaySessionIndex : nextIndex;
   // Same actionable-CTA set as Home's own "todayCard" (docs §Consistência com
   // Meu Plano): MISSED_SESSION_DECISION_REQUIRED keeps the normal "Iniciar
   // treino" affordance — the decision itself is only asked once the user
@@ -92,277 +104,251 @@ export function TreinoScreen({
   const sessionMuscles = deriveSessionMuscles(displayedSession?.exercises.map((exercise) => exercise.exerciseId) ?? []);
   const showBodyMap = sessionMuscles.primary.length > 0;
   const todayLocalDate = localDateInTimezone(new Date(), scheduleConfig?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone);
-  const todayWeekday = weekdayOfLocalDate(todayLocalDate);
   const nextWorkoutDate = 'nextWorkoutDate' in resolution ? resolution.nextWorkoutDate : null;
   const dateLabel = new Intl.DateTimeFormat(i18n.resolvedLanguage ?? i18n.language, { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' })
     .format(new Date(`${nextWorkoutDate ?? todayLocalDate}T12:00:00Z`));
-  const compact = width < 360;
+  const headerDateLabel = new Intl.DateTimeFormat(i18n.resolvedLanguage ?? i18n.language, { weekday: 'short', day: '2-digit', month: 'short', timeZone: 'UTC' })
+    .format(new Date(`${todayLocalDate}T12:00:00Z`))
+    .toUpperCase();
+
+  const trainingDays = scheduleConfig?.trainingDays ?? [];
+  const upcoming = buildUpcomingWorkouts({
+    todayLocalDate,
+    scheduleMode: scheduleConfig?.scheduleMode,
+    trainingDays,
+    sessions: plan.sessions,
+    resolution,
+    limit: 3,
+  });
 
   return (
     <ScreenBg>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         <ScrollView
-          contentContainerStyle={{ paddingHorizontal: 22, paddingTop: 18, paddingBottom: 112 }}
+          contentContainerStyle={{ paddingBottom: 112 }}
           showsVerticalScrollIndicator={false}
         >
-          <Slash>{t('header.subtitle')}</Slash>
-          <Display size={34} style={{ marginTop: 8, marginBottom: 22 }}>{t('header.title')}</Display>
+          {/* Same header geometry as Home's (`src/screens/HomeScreen.tsx`) —
+              22px gutter, 50px total top offset, 12px bottom gap before the
+              ticker — so every tab's header/ticker block lines up at an
+              identical height. */}
+          <View style={{ paddingHorizontal: 22, paddingTop: 50 - 10, paddingBottom: 12, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+            <View>
+              <MonoLabel color={theme.colors.textFaint}>{headerDateLabel}</MonoLabel>
+              <Display size={34} style={{ marginTop: 8 }}>{t('header.title')}</Display>
+            </View>
+            <ProfileAvatar
+              displayName={headerDisplayName}
+              photoURL={profile?.profile.photoURL}
+              photoVersion={profile?.profile.photoVersion}
+              size={46}
+            />
+          </View>
 
-          {/* One dominant training poster; the resolution remains the sole authority. */}
-          <View style={{ backgroundColor: theme.colors.backgroundSecondary, borderRadius: 18, borderBottomRightRadius: 2, borderWidth: 1, borderColor: theme.colors.primaryBorderQuiet, overflow: 'hidden', minHeight: 310 }}>
-            <HudCorners color={theme.colors.primaryEmphasis} />
-            <View pointerEvents="none" style={{ position: 'absolute', right: -74, top: 34, width: 220, height: 220, borderRadius: 110, borderWidth: 1, borderColor: theme.colors.primaryBorderSoft }} />
-            <View pointerEvents="none" style={{ position: 'absolute', right: -28, top: 80, width: 128, height: 128, borderRadius: 64, borderWidth: 1, borderColor: theme.colors.primaryBorderQuiet }} />
-            <View pointerEvents="none" style={{ position: 'absolute', right: 26, top: 0, bottom: 0, width: 1, backgroundColor: theme.colors.primarySurfaceSubtle }} />
-            <View style={{ padding: compact ? 19 : 23, paddingBottom: 18, flex: 1 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                <Slash textColor={theme.colors.textSecondary}>
+          <View style={{ marginTop: 22, marginBottom: 18 }}>
+            <EvolutionTicker viewModel={evolutionViewModel} />
+          </View>
+
+          {/* TODAY POSTER — pixel-identical to Home's own Today card (same
+              forced Dark art direction, gradient, radius and CTA button). */}
+          <View style={{ paddingHorizontal: 22, paddingBottom: 16 }}>
+            <LinearGradient
+              colors={TODAY_WORKOUT_THEME.gradients.poster}
+              locations={[0, 0.45, 1]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{
+                borderRadius: 16,
+                borderBottomRightRadius: 0,
+                overflow: 'hidden',
+                minHeight: 250,
+                borderWidth: 1,
+                borderColor: TODAY_WORKOUT_THEME.colors.primaryBorderQuiet,
+                padding: 20,
+                justifyContent: 'space-between',
+              }}
+            >
+              <HudCorners color={TODAY_WORKOUT_THEME.colors.hudCorner} />
+              <View>
+                <Slash accentColor={TODAY_WORKOUT_THEME.colors.primaryEmphasis} textColor={TODAY_WORKOUT_THEME.colors.textFaint}>
                   {(workoutInProgress ? t('hero.inProgress') : statusCopyKey ? tHome(`schedule.${statusCopyKey}.title`) : tHome('todayCard.kicker')).toUpperCase()}
                 </Slash>
-                <MonoLabel color={theme.colors.primaryEmphasis}>{displayedIndex == null ? '—' : String(displayedIndex + 1).padStart(2, '0')} / {String(plan.sessions.length).padStart(2, '0')}</MonoLabel>
-              </View>
-              <View style={{ minHeight: 110, justifyContent: 'center', marginTop: 24, marginRight: 28 }}>
-                {displayedSession ? (
-                  <Display size={compact ? 34 : 40} skew={false} style={{ flexShrink: 1 }}>
-                    {resolveSessionDisplayName(tLoose, displayedSession.name, displayedSession.type, displayedSession.displayName)}
-                  </Display>
-                ) : (
-                  <Display size={compact ? 28 : 34} skew={false}>{tHome(`schedule.${statusCopyKey ?? 'setupRequired'}.title`)}</Display>
-                )}
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 7 }}>
-                <View style={{ flex: 1, gap: 8 }}>
-                  {displayedSession && <MonoLabel color={theme.colors.textSecondaryStrong} size={10}>{tHome('todayCard.sessionMeta', { exercises: exerciseCount, sets: setCount })}</MonoLabel>}
-                  <MonoLabel color={theme.colors.primaryEmphasis} size={9}>{dateLabel}</MonoLabel>
+                <Display size={38} color={TODAY_WORKOUT_THEME.colors.textPrimary} style={{ marginTop: 12 }}>
+                  {(displayedSession
+                    ? resolveSessionDisplayName(tLoose, displayedSession.name, displayedSession.type, displayedSession.displayName)
+                    : tHome(`schedule.${statusCopyKey ?? 'setupRequired'}.title`)
+                  ).toUpperCase()}
+                </Display>
+                <View style={{ flexDirection: 'row', gap: 12, marginTop: 14 }}>
+                  <Text style={{ fontFamily: theme.fonts.mono, fontSize: 10.5, color: TODAY_WORKOUT_THEME.colors.textSecondary, letterSpacing: 1 }}>
+                    {(displayedSession
+                      ? tHome('todayCard.sessionMeta', { exercises: exerciseCount, sets: setCount })
+                      : statusCopyKey ? tHome(`schedule.${statusCopyKey}.body`) : ''
+                    ).toUpperCase()}
+                  </Text>
                 </View>
-                {showBodyMap && <BodyMuscleMap sex={sex} primaryMuscles={sessionMuscles.primary} secondaryMuscles={sessionMuscles.secondary} activeColor={theme.colors.primaryEmphasis} baseColor={theme.colors.textFaint} outlineColor={theme.colors.border} size={compact ? 58 : 72} />}
+                <MonoLabel color={TODAY_WORKOUT_THEME.colors.primaryEmphasis} size={9} style={{ marginTop: 10 }}>{dateLabel}</MonoLabel>
               </View>
-              {statusCopyKey && !displayedSession && (
-                <Text style={{ color: theme.colors.textSecondaryStrong, fontFamily: theme.fonts.ui, fontSize: 13, marginTop: 10 }}>
-                  {tHome(`schedule.${statusCopyKey}.body`)}
-                </Text>
-              )}
-              <View style={{ marginTop: 24, gap: 8 }}>
-                {canStartNow && (
-                  <Pressable accessibilityRole="button" accessibilityState={{ disabled: startPending }} disabled={startPending} onPress={onStart} style={({ pressed }) => ({ minHeight: 52, backgroundColor: pressed ? theme.colors.primaryEmphasis : theme.colors.primary, borderRadius: 11, borderBottomRightRadius: 2, paddingHorizontal: 17, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', opacity: startPending ? 0.6 : 1 })}>
-                    <Text style={{ color: theme.colors.primaryForeground, fontFamily: theme.fonts.display, fontSize: 16, letterSpacing: 1.2, textTransform: 'uppercase', flexShrink: 1 }}>
+
+              <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
+                {canStartNow ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: startPending }}
+                    disabled={startPending}
+                    onPress={onStart}
+                    style={{
+                      alignSelf: 'flex-start',
+                      flexShrink: 1,
+                      marginTop: 20,
+                      paddingVertical: 15,
+                      paddingHorizontal: workoutInProgress ? 16 : 26,
+                      backgroundColor: TODAY_WORKOUT_THEME.colors.inverseSurface,
+                      borderTopLeftRadius: 10,
+                      borderTopRightRadius: 10,
+                      borderBottomLeftRadius: 10,
+                      borderBottomRightRadius: 0,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 10,
+                      opacity: startPending ? 0.6 : 1,
+                      shadowColor: TODAY_WORKOUT_THEME.colors.inverseShadow,
+                      shadowOpacity: 0.16,
+                      shadowRadius: 20,
+                      shadowOffset: { width: 0, height: 10 },
+                      elevation: 8,
+                      ...(workoutInProgress ? {
+                        backgroundColor: TODAY_WORKOUT_THEME.colors.primary,
+                        shadowColor: TODAY_WORKOUT_THEME.colors.primary,
+                      } : {}),
+                    }}
+                  >
+                    <Icon
+                      name={workoutInProgress ? 'arrow-right' : 'play'}
+                      size={13}
+                      color={workoutInProgress ? TODAY_WORKOUT_THEME.colors.primaryForeground : TODAY_WORKOUT_THEME.colors.inverseForeground}
+                    />
+                    <Text
+                      numberOfLines={1}
+                      style={{
+                        flexShrink: 1,
+                        fontFamily: theme.fonts.display,
+                        fontSize: workoutInProgress ? 13 : 15,
+                        letterSpacing: 1.5,
+                        color: TODAY_WORKOUT_THEME.colors.inverseForeground,
+                        textTransform: 'uppercase',
+                        ...(workoutInProgress ? { color: TODAY_WORKOUT_THEME.colors.primaryForeground } : {}),
+                      }}
+                    >
                       {workoutInProgress ? t('currentWorkout.continue') : tHome('todayCard.start')}
                     </Text>
-                    <Icon name={workoutInProgress ? 'arrow-right' : 'play'} size={16} color={theme.colors.primaryForeground} />
                   </Pressable>
-                )}
-                {plan.sessions.length > 1 && (
-                  <Pressable accessibilityRole="button" accessibilityLabel={t('changeWorkout.accessibilityOpen')} accessibilityState={{ disabled: workoutInProgress }} disabled={workoutInProgress} onPress={() => setChangeSheetOpen(true)} style={{ minHeight: 42, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: workoutInProgress ? 0.4 : 1 }}>
-                    <Icon name="swap" size={15} color={theme.colors.primaryEmphasis} />
-                    <Text style={{ color: theme.colors.textPrimary, fontFamily: theme.fonts.uiSemi, fontSize: 13 }}>{t('changeWorkout.cta')}</Text>
-                  </Pressable>
+                ) : <View />}
+
+                {showBodyMap && (
+                  <BodyMuscleMap
+                    sex={sex}
+                    primaryMuscles={sessionMuscles.primary}
+                    secondaryMuscles={sessionMuscles.secondary}
+                    activeColor={TODAY_WORKOUT_THEME.colors.primaryEmphasis}
+                    baseColor={TODAY_WORKOUT_THEME.colors.textFaint}
+                    outlineColor={TODAY_WORKOUT_THEME.colors.border}
+                    size={bodyMuscleMapSize}
+                  />
                 )}
               </View>
-            </View>
+            </LinearGradient>
           </View>
 
-          <View style={{ marginTop: 32, marginBottom: 14, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
-            <View><MonoLabel color={theme.colors.primaryEmphasis}>{t('mySplit.sequence')}</MonoLabel><Display size={23} skew={false} style={{ marginTop: 4 }}>{t('mySplit.title')}</Display></View>
-            <MonoLabel>{String(plan.sessions.length).padStart(2, '0')}</MonoLabel>
-          </View>
-          <View style={{ borderTopWidth: 1, borderTopColor: theme.colors.divider }}>
-            {plan.sessions.map((session, index) => {
-              const isNext = index === nextIndex;
-              const sessionName = resolveSessionDisplayName(tLoose, session.name, session.type, session.displayName);
-              return <View key={`${session.name}-${index}`} accessibilityRole="text" accessibilityLabel={`${index + 1}. ${sessionName}${isNext ? `, ${t('mySplit.nextBadge')}` : ''}`} style={{ flexDirection: 'row', alignItems: 'center', minHeight: 68, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.colors.divider, backgroundColor: isNext ? theme.colors.primarySurfaceSubtle : 'transparent' }}>
-                <View style={{ width: 4, alignSelf: 'stretch', backgroundColor: isNext ? theme.colors.primaryEmphasis : 'transparent', marginRight: 14 }} />
-                <MonoLabel color={isNext ? theme.colors.primaryEmphasis : theme.colors.textFaint} size={12} style={{ width: 30 }}>{String(index + 1).padStart(2, '0')}</MonoLabel>
-                <View style={{ flex: 1, paddingRight: 8 }}>
-                  <Text style={{ fontFamily: isNext ? theme.fonts.display : theme.fonts.uiSemi, color: isNext ? theme.colors.textPrimary : theme.colors.textSecondaryStrong, fontSize: isNext ? 18 : 14, textTransform: isNext ? 'uppercase' : 'none' }}>{sessionName}</Text>
-                  <MonoLabel size={9} style={{ marginTop: 4 }}>{t('mySplit.exerciseCount', { count: session.exercises.length })}</MonoLabel>
-                </View>
-                {isNext && <MonoLabel color={theme.colors.primaryEmphasis} size={9} style={{ marginRight: 12 }}>{t('mySplit.nextBadge')}</MonoLabel>}
-              </View>;
-            })}
+          <View style={{ marginTop: 28 }}>
+            <View style={{ paddingHorizontal: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Slash>{isFlexible ? t('agenda.flexibleLabel') : t('agenda.title')}</Slash>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ disabled: workoutInProgress }}
+                disabled={workoutInProgress}
+                onPress={onOpenAgendaEditor}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, opacity: workoutInProgress ? 0.4 : 1 }}
+              >
+                <Icon name="calendar" size={12} color={theme.colors.primaryEmphasis} />
+                <Text style={{ color: theme.colors.primaryEmphasis, fontFamily: theme.fonts.mono, fontSize: 10, letterSpacing: 1.2, textTransform: 'uppercase' }}>
+                  {t('agenda.edit')}
+                </Text>
+              </Pressable>
+            </View>
+
+            {/* Same "Esta semana" visual Home uses — real per-day completion
+                status from the Schedule Engine, not a trainingDays-only grid. */}
+            {weekOverview && <WeeklyOverview overview={weekOverview} />}
           </View>
 
-          <View style={{ marginTop: 34, marginBottom: 14, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8 }}>
-            <View style={{ flex: 1 }}><MonoLabel color={theme.colors.primaryEmphasis}>{isFlexible ? t('agenda.flexibleLabel') : t('agenda.fixedLabel')}</MonoLabel><Display size={23} skew={false} style={{ marginTop: 4 }}>{t('agenda.title')}</Display></View>
-            <Pressable accessibilityRole="button" accessibilityState={{ disabled: workoutInProgress }} disabled={workoutInProgress} onPress={onOpenAgendaEditor} style={{ minHeight: 44, justifyContent: 'center', opacity: workoutInProgress ? 0.4 : 1 }}>
-              <Text style={{ color: theme.colors.primaryEmphasis, fontFamily: theme.fonts.uiSemi, fontSize: 12 }}>{t('agenda.edit')}</Text>
-            </Pressable>
-          </View>
-          {isFlexible ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 15, paddingVertical: 20, paddingHorizontal: 18, backgroundColor: theme.colors.primarySurfaceSubtle, borderLeftWidth: 3, borderLeftColor: theme.colors.primaryEmphasis }}>
-              <Icon name="calendar" size={21} color={theme.colors.primaryEmphasis} />
-              <View style={{ flex: 1 }}><Text style={{ color: theme.colors.textPrimary, fontFamily: theme.fonts.uiBold, fontSize: 15 }}>{t('agenda.flexibleLabel')}</Text><Text style={{ color: theme.colors.textSecondary, fontFamily: theme.fonts.ui, fontSize: 12, marginTop: 3 }}>{t('agenda.flexibleHint')}</Text></View>
-            </View>
-          ) : (
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 3 }}>
-              {WEEKDAY_ORDER.map((day) => {
-                const isToday = day === todayWeekday;
-                const isTraining = scheduleConfig?.trainingDays.includes(day) ?? false;
-                const isRecovery = !isTraining && (scheduleConfig?.activeRecoveryDays?.includes(day) ?? false);
-                return <View key={day} accessible accessibilityRole="text" accessibilityLabel={`${tLoose(`quiz:trainingDays.options.${day}`)}, ${t(isTraining ? 'agenda.trainingDay' : isRecovery ? 'agenda.activeRecoveryDay' : 'agenda.restDay')}${isToday ? `, ${t('agenda.today')}` : ''}`} style={{ alignItems: 'center', flex: 1, minWidth: 0 }}>
-                  <MonoLabel color={isToday ? theme.colors.primaryEmphasis : theme.colors.textFaint} size={9}>{t(`agenda.weekday.${day}`)}</MonoLabel>
-                  <View style={{ marginTop: 9, width: compact ? 31 : 38, height: compact ? 38 : 42, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: isTraining ? theme.colors.primarySurface : theme.colors.surfaceMuted, borderWidth: isToday ? 1 : 0, borderColor: theme.colors.primaryEmphasis }}>
-                    {isRecovery ? <Icon name="heart" size={11} color={theme.colors.textMuted} /> : <View style={{ width: isTraining ? 8 : 4, height: isTraining ? 8 : 2, borderRadius: 4, backgroundColor: isTraining ? theme.colors.primaryEmphasis : theme.colors.indicatorRest }} />}
-                  </View>
-                </View>;
+          {upcoming.length > 0 && (
+            <View style={{ paddingHorizontal: 22, marginTop: 36 }}>
+              <Slash style={{ marginBottom: 16 }}>{isFlexible ? t('upcoming.titleFlexible') : tHome('upcoming.title')}</Slash>
+              {upcoming.map((workout) => {
+                const weekdayLabel = workout.flexible
+                  ? tHome('upcoming.flexible').toUpperCase()
+                  : tLoose(`quiz:trainingDays.options.${workout.weekday}`).toUpperCase();
+                const sessionLabel = resolveSessionDisplayName(tLoose, workout.sessionName, workout.sessionType, workout.sessionDisplayName);
+                const meta = workout.estimatedMinutes > 0
+                  ? tHome('upcoming.meta', { minutes: workout.estimatedMinutes, count: workout.exerciseCount })
+                  : tHome('upcoming.metaNoEstimate', { count: workout.exerciseCount });
+                return (
+                  <Pressable
+                    key={`${workout.localDate}:${workout.sessionIndex}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={tHome('upcoming.open', { weekday: weekdayLabel, session: sessionLabel })}
+                    onPress={() => setDetailWorkout(workout)}
+                    style={({ pressed }) => ({
+                      flexDirection: 'row', alignItems: 'center', gap: 6,
+                      paddingVertical: 16, paddingHorizontal: 16,
+                      borderRadius: theme.radii.xl, marginBottom: 10,
+                      backgroundColor: pressed ? theme.colors.surfacePressed : theme.colors.surface,
+                      borderWidth: 1, borderColor: theme.colors.cardBorder,
+                    })}
+                  >
+                    <Text
+                      numberOfLines={1}
+                      ellipsizeMode="clip"
+                      style={{
+                        width: workout.flexible ? 82 : 46,
+                        fontFamily: theme.fonts.monoBold,
+                        fontSize: 14,
+                        letterSpacing: 1.2,
+                        color: theme.colors.textFaint,
+                      }}
+                    >
+                      {weekdayLabel}
+                    </Text>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text numberOfLines={1} style={{ fontFamily: theme.fonts.uiBold, fontSize: 16.5, color: theme.colors.textPrimary }}>
+                        {sessionLabel}
+                      </Text>
+                      <Text numberOfLines={1} style={{ fontFamily: theme.fonts.mono, fontSize: 12, color: theme.colors.textFaint, marginTop: 4 }}>
+                        {meta}
+                      </Text>
+                    </View>
+                    <Icon name="chevron-right" size={18} color={theme.colors.textFaint} />
+                  </Pressable>
+                );
               })}
             </View>
           )}
-
-          {(weekSummary || last30DaysCompletedCount != null) && <View style={{ marginTop: 38, borderTopWidth: 1, borderTopColor: theme.colors.divider, paddingTop: 19 }}>
-            <MonoLabel color={theme.colors.primaryEmphasis}>{t('summary.title')}</MonoLabel>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 24, marginTop: 17 }}>
-              {weekSummary && <View style={{ flexGrow: 1, minWidth: 110 }}><Display size={27} skew={false}>{t('summary.thisWeekValue', { completed: weekSummary.completedCount, scheduled: weekSummary.scheduledCount })}</Display><MonoLabel style={{ marginTop: 5 }}>{t('summary.thisWeek')}</MonoLabel></View>}
-              {last30DaysCompletedCount != null && <View style={{ flexGrow: 1, minWidth: 110 }}><Display size={27} skew={false}>{t('summary.last30DaysValue', { count: last30DaysCompletedCount })}</Display><MonoLabel style={{ marginTop: 5 }}>{t('summary.last30Days')}</MonoLabel></View>}
-            </View>
-          </View>}
         </ScrollView>
       </SafeAreaView>
 
-      {changeSheetOpen && (
-        <ChangeWorkoutSheet
+      {detailWorkout && (
+        <TreinoWorkoutDetailSheet
+          workout={detailWorkout}
           plan={plan}
-          nextIndex={nextIndex}
+          nextSessionIndex={nextIndex}
           completedTodaySessionIndex={completedTodaySessionIndex}
-          onClose={() => setChangeSheetOpen(false)}
-          onConfirm={async (targetIndex) => {
-            const outcome = await onReposition(targetIndex);
-            if (outcome === 'OK') setChangeSheetOpen(false);
-            return outcome;
-          }}
+          workoutInProgress={workoutInProgress}
+          onClose={() => setDetailWorkout(null)}
+          onStart={onStart}
+          onReposition={onReposition}
         />
       )}
     </ScreenBg>
-  );
-}
-
-function ChangeWorkoutSheet({
-  plan,
-  nextIndex,
-  completedTodaySessionIndex,
-  onClose,
-  onConfirm,
-}: {
-  plan: FinalWorkoutPlan;
-  nextIndex: number | null;
-  completedTodaySessionIndex: number | null;
-  onClose: () => void;
-  onConfirm: (targetIndex: number) => Promise<RepositionOutcome>;
-}) {
-  const { theme } = useTheme();
-  const { t } = useTranslation('treino');
-  const { t: tHome } = useTranslation('home');
-  const tLoose = tHome as unknown as LooseTranslate;
-  const [selected, setSelected] = useState<number | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [errorCode, setErrorCode] = useState<RepositionOutcome | null>(null);
-
-  const confirm = async () => {
-    if (selected == null || submitting) return;
-    setSubmitting(true);
-    setErrorCode(null);
-    try {
-      const outcome = await onConfirm(selected);
-      if (outcome !== 'OK') setErrorCode(outcome);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <Modal visible transparent animationType="fade" onRequestClose={submitting ? undefined : onClose} statusBarTranslucent>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={t('changeWorkout.accessibilityClose')}
-        onPress={submitting ? undefined : onClose}
-        style={{ flex: 1, backgroundColor: theme.colors.overlayStrong, justifyContent: 'flex-end' }}
-      >
-        <Pressable
-          accessibilityRole="none"
-          onPress={(event) => event.stopPropagation()}
-          style={{
-            backgroundColor: theme.colors.background,
-            borderTopLeftRadius: 20, borderTopRightRadius: 20,
-            paddingHorizontal: 22, paddingTop: 20, paddingBottom: 34,
-            maxHeight: '80%',
-          }}
-        >
-          <Slash>{t('changeWorkout.sheetTitle').toUpperCase()}</Slash>
-          <Text style={{ color: theme.colors.textSecondaryStrong, fontFamily: theme.fonts.ui, fontSize: 13, marginTop: 8, marginBottom: 16 }}>
-            {t('changeWorkout.sheetSubtitle')}
-          </Text>
-          <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
-            {plan.sessions.map((session, index) => {
-              const isCurrent = index === nextIndex;
-              const isSelected = index === selected;
-              const alreadyCompletedToday = index === completedTodaySessionIndex;
-              return (
-                <Pressable
-                  key={`${session.name}-${index}`}
-                  accessibilityRole="radio"
-                  accessibilityState={{ checked: isSelected, disabled: alreadyCompletedToday }}
-                  disabled={alreadyCompletedToday}
-                  onPress={() => { setErrorCode(null); setSelected(index); }}
-                  style={{
-                    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                    paddingVertical: 14, paddingHorizontal: 14, marginBottom: 8, borderRadius: 10,
-                    backgroundColor: isSelected ? theme.colors.primaryBorderQuiet : theme.colors.surfaceElevated,
-                    opacity: alreadyCompletedToday ? 0.45 : 1,
-                  }}
-                >
-                  <View>
-                    <Text style={{
-                      color: isSelected ? theme.colors.primaryEmphasis : theme.colors.textPrimary,
-                      fontFamily: theme.fonts.uiBold, fontSize: 14,
-                    }}>
-                      {resolveSessionDisplayName(tLoose, session.name, session.type, session.displayName)}
-                    </Text>
-                    {isCurrent && (
-                      <Text style={{ color: theme.colors.textMuted, fontFamily: theme.fonts.ui, fontSize: 11, marginTop: 2 }}>
-                        {t('mySplit.nextBadge')}
-                      </Text>
-                    )}
-                  </View>
-                  {isSelected && <Icon name="check" size={18} color={theme.colors.primaryEmphasis} stroke={2.6} />}
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-          {errorCode && (
-            <Text style={{ color: theme.colors.danger ?? theme.colors.textPrimary, fontFamily: theme.fonts.ui, fontSize: 12, marginTop: 8 }}>
-              {errorCode === 'ALREADY_COMPLETED_TODAY'
-                ? t('changeWorkout.blockedCompletedToday')
-                : errorCode === 'BLOCKED_IN_PROGRESS'
-                  ? t('changeWorkout.blockedInProgress')
-                  : t('changeWorkout.error')}
-            </Text>
-          )}
-          <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
-            <Pressable
-              accessibilityRole="button"
-              onPress={onClose}
-              disabled={submitting}
-              style={{ flex: 1, height: 48, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme.colors.inputBorder }}
-            >
-              <Text style={{ color: theme.colors.textPrimary, fontFamily: theme.fonts.uiSemi, fontSize: 14 }}>
-                {t('changeWorkout.cancel')}
-              </Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              onPress={confirm}
-              disabled={selected == null || submitting}
-              style={{
-                flex: 1, height: 48, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
-                backgroundColor: theme.colors.inverseSurface, opacity: selected == null || submitting ? 0.5 : 1,
-              }}
-            >
-              <Text style={{ color: theme.colors.inverseForeground, fontFamily: theme.fonts.uiSemi, fontSize: 14 }}>
-                {t('changeWorkout.confirm')}
-              </Text>
-            </Pressable>
-          </View>
-        </Pressable>
-      </Pressable>
-    </Modal>
   );
 }

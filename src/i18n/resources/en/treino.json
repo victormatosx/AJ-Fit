@@ -49,6 +49,8 @@
     "updating": "Updating your split…",
     "saving": "Saving schedule…",
     "saved": "Schedule updated.",
+    "liveSameFrequency": "{{count}} days per week",
+    "liveFrequencyChange": "{{from}} → {{to}} days per week · your split will be rebuilt",
     "error": "Couldn't save your schedule right now. Try again.",
     "accessibilityClose": "Close schedule editing"
   },
@@ -59,5 +61,12 @@
     "last30Days": "Last 30 days",
     "last30DaysValue_one": "{{count}} workout",
     "last30DaysValue_other": "{{count}} workouts"
+  },
+  "upcoming": {
+    "titleFlexible": "Next in sequence"
+  },
+  "detail": {
+    "makeNow": "Do it now",
+    "makeNowAccessibility": "Start this workout now"
   }
 }
