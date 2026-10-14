@@ -3,11 +3,12 @@ import { Text, type TextProps } from 'react-native';
 
 export function CountUp({
   to,
+  from = 0,
   durationMs = 1200,
   ...textProps
-}: { to: number; durationMs?: number } & TextProps) {
-  const [value, setValue] = useState(0);
-  const fromRef = useRef(0);
+}: { to: number; /** Starting value — read once, at mount, only. */ from?: number; durationMs?: number } & TextProps) {
+  const [value, setValue] = useState(from);
+  const fromRef = useRef(from);
 
   useEffect(() => {
     const from = fromRef.current;
