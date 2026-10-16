@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
@@ -17,7 +17,10 @@ import { ProgressPhotosScreen } from './ProgressPhotosScreen';
 import { BodyEvolutionView } from '../components/fitness/BodyEvolutionView';
 import { LoadsEvolutionView } from '../components/fitness/LoadsEvolutionView';
 import { ExerciseEvolutionDetail } from '../components/fitness/ExerciseEvolutionDetail';
-import { Display, Slash } from '../components/ui/Display';
+import { EvolutionProgressTicker } from '../components/fitness/EvolutionProgressTicker';
+import { buildEvolutionProgressTickerItems } from '../components/fitness/evolutionProgressTickerItems';
+import { Display, MonoLabel } from '../components/ui/Display';
+import { ProfileAvatar } from '../components/ui/ProfileAvatar';
 import { motion, radii, sizes, spacing } from '../theme/tokens';
 import { useTheme } from '../theme';
 import { useAuth } from '../state/AuthContext';
@@ -25,6 +28,7 @@ import { useAssessments } from '../hooks/useAssessments';
 import { useHealthWeightSamples } from '../hooks/useHealthWeightSamples';
 import { useLoadProgressState } from '../loadProgress/LoadProgressContext';
 import { useScreenFocusEffect } from '../state/ScreenActivity';
+import { useUnits } from '../state/UnitsContext';
 
 /**
  * The Evolution screen.
@@ -58,9 +62,10 @@ export function ProgressScreen({
   /** Starts a workout. Optional so the screen stands alone. */
   onStartWorkout?: () => void;
 } = {}) {
-  const { t } = useTranslation('home');
+  const { t, i18n } = useTranslation('home');
   const { theme } = useTheme();
-  const { user, questionnaire } = useAuth();
+  const { user, questionnaire, profile } = useAuth();
+  const { resolvedUnits } = useUnits();
   // Same authoritative source AppShell reads for every other body map. Left
   // nullable on purpose: the panels drop the map rather than flash the male
   // anatomy while the questionnaire resolves.
@@ -99,6 +104,23 @@ export function ProgressScreen({
     error: loadsError,
     refresh: refreshLoads,
   } = useLoadProgressState();
+
+  // i18next's generated `t` type only accepts its own literal key union —
+  // the builder takes a plain string key (same `as unknown as` cast
+  // `EvolutionTicker`/`LoadsEvolutionView` already use for this exact
+  // mismatch).
+  const tLoose = t as unknown as (key: string, options?: Record<string, unknown>) => string;
+  const evolutionTickerItems = useMemo(
+    () => buildEvolutionProgressTickerItems({
+      weightDeltaKg: evolutionSincePrevious?.weightDelta ?? null,
+      lastAssessmentMeasuredAt: latest ? latest.measuredAt.toDate() : null,
+      recordsLast90DaysCount: loadExercises.length > 0 ? recordsLast90Days.length : null,
+      assessmentsCount: assessments.length > 0 ? assessments.length : null,
+      resolvedUnits,
+      t: tLoose,
+    }),
+    [evolutionSincePrevious, latest, loadExercises.length, recordsLast90Days, assessments.length, resolvedUnits, tLoose],
+  );
 
   const selectedExercise = selectedExerciseId
     ? loadExercises.find((exercise) => exercise.exerciseId === selectedExerciseId) ?? null
@@ -143,19 +165,35 @@ export function ProgressScreen({
     void refreshLoads();
   });
 
-  const title = (
-    <View style={{ paddingHorizontal: GUTTER, paddingTop: spacing[3], paddingBottom: spacing[5] }}>
-      <Slash style={{ marginBottom: spacing[2.5] }}>
-        {t('progress.header.eyebrow').toUpperCase()}
-      </Slash>
-      <Display size={40}>{t('progress.header.title').toUpperCase()}</Display>
-    </View>
-  );
+  // Same date-line eyebrow + avatar Treino/Dieta/Home already use — only
+  // the title text differs ("Evolução." instead of "Treino."/"Dieta.").
+  const headerDisplayName = profile?.profile.name || user?.displayName || '';
+  const headerDateLabel = t('meta.todayLine', {
+    weekday: new Intl.DateTimeFormat(i18n.resolvedLanguage ?? i18n.language, { weekday: 'short', timeZone: 'UTC' }).format(new Date(`${todayLocalDate}T12:00:00Z`)),
+    day: new Intl.DateTimeFormat(i18n.resolvedLanguage ?? i18n.language, { day: '2-digit', timeZone: 'UTC' }).format(new Date(`${todayLocalDate}T12:00:00Z`)),
+    month: new Intl.DateTimeFormat(i18n.resolvedLanguage ?? i18n.language, { month: 'short', timeZone: 'UTC' }).format(new Date(`${todayLocalDate}T12:00:00Z`)),
+  }).toUpperCase();
 
-  /** Shared header for all three Evolution tabs: eyebrow/title plus the blue pill selector. */
+  /** Shared by all three Evolution tabs: header, evolution ticker, and the blue pill selector. */
   const panelHeader = (
     <View>
-      {title}
+      <View style={{ paddingHorizontal: GUTTER, paddingTop: 50 - 10, paddingBottom: 12, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+        <View>
+          <MonoLabel color={theme.colors.textFaint}>{headerDateLabel}</MonoLabel>
+          <Display size={34} style={{ marginTop: 8 }}>{t('progress.header.title')}.</Display>
+        </View>
+        <ProfileAvatar
+          displayName={headerDisplayName}
+          photoURL={profile?.profile.photoURL}
+          photoVersion={profile?.profile.photoVersion}
+          size={46}
+        />
+      </View>
+
+      <View style={{ marginTop: 4, marginBottom: 18 }}>
+        <EvolutionProgressTicker items={evolutionTickerItems} />
+      </View>
+
       <PillTabs
         tabs={tabs}
         view={view}
