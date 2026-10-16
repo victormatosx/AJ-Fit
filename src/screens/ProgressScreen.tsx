@@ -67,6 +67,15 @@ export function ProgressScreen({
   const sex = questionnaire?.answers.sex ?? null;
   const [view, setView] = useState<ProgressView>('body');
   const [selectedExerciseId, setSelectedExerciseId] = useState<string | null>(null);
+  // Fotos mounts `PillTabs` fresh every time it's entered/left (see the
+  // "mounted INSTEAD of" doc comment above) — a brand-new Animated.Value
+  // always starts at slot 0, which made returning from Fotos visibly slide
+  // the indicator through Corpo first. Remembering the tab active just
+  // before this one lets a fresh mount start positioned there instead.
+  const previousViewRef = useRef<ProgressView>(view);
+  useEffect(() => {
+    previousViewRef.current = view;
+  }, [view]);
 
   const {
     assessments,
@@ -150,6 +159,7 @@ export function ProgressScreen({
       <PillTabs
         tabs={tabs}
         view={view}
+        previousView={previousViewRef.current}
         onSelect={(next) => { setView(next); setSelectedExerciseId(null); }}
         // Zero when the active panel is a locked preview: that gap would
         // otherwise leave a clean, un-blurred strip between the selector
@@ -233,11 +243,14 @@ export function ProgressScreen({
 function PillTabs({
   tabs,
   view,
+  previousView,
   onSelect,
   style,
 }: {
   tabs: [ProgressView, string][];
   view: ProgressView;
+  /** Tab active right before this one — see the mount-position effect below. */
+  previousView: ProgressView;
   onSelect: (view: ProgressView) => void;
   style?: StyleProp<ViewStyle>;
 }) {
@@ -245,18 +258,36 @@ function PillTabs({
   const { t } = useTranslation('home');
   const [trackWidth, setTrackWidth] = useState(0);
   const offset = useRef(new Animated.Value(0)).current;
+  // Guards the one-time positioning below from repeating on every later tab
+  // switch, which must keep animating continuously from wherever `offset`
+  // already is, not snap back to `previousView` again.
+  const hasPositionedRef = useRef(false);
 
   const index = tabs.findIndex(([key]) => key === view);
+  const initialIndex = tabs.findIndex(([key]) => key === previousView);
   const slotWidth = trackWidth > 0 ? trackWidth / tabs.length : 0;
 
   useEffect(() => {
+    // Nothing to position yet — the indicator itself isn't rendered below
+    // until `slotWidth` is known either.
+    if (slotWidth === 0) return;
+    if (!hasPositionedRef.current) {
+      // First time we know the real slot width: this is either the very
+      // first mount, or a fresh mount after crossing the Fotos boundary.
+      // Start the indicator at the tab the user was actually on, so the
+      // animation below always slides from a real previous position —
+      // never from a fixed leftmost slot that would read as sliding
+      // through an unrelated tab.
+      offset.setValue(initialIndex * slotWidth);
+      hasPositionedRef.current = true;
+    }
     Animated.timing(offset, {
       toValue: index * slotWidth,
       duration: motion.duration.normal,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
-  }, [index, offset, slotWidth]);
+  }, [index, offset, slotWidth, initialIndex]);
 
   return (
     <View style={[{ paddingHorizontal: GUTTER }, style]}>
