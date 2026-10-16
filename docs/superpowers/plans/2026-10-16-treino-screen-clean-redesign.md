@@ -481,7 +481,7 @@ export function TreinoWeekStrip({
 }
 ```
 
-Note: `LETTER_FAINT` (`rgba(255,255,255,0.4)`) and `SIGLA_FAINT` (`rgba(255,255,255,0.35)`) are literals because no existing token is an exact `0.35`/`0.4` white — closest tokens are `alpha.white32` and `alpha.white40`. Record this in the final report's color-literal table.
+> **ERRATA (aplicada no commit `14b0b93`):** o código acima declarava `LETTER_FAINT = 'rgba(255,255,255,0.4)'` e `SIGLA_FAINT = 'rgba(255,255,255,0.35)'` como literais. Isso estava **errado** para uma tela theme-aware: branco semitransparente fica ilegível no tema claro. Ambas as constantes foram removidas e os dois usos passaram a ler `theme.colors.textFaint`. Veja a tabela no §9 item 5.
 
 - [ ] **Step 2: Typecheck just this file's imports**
 
@@ -709,6 +709,8 @@ export function TreinoTodayBlock({
   );
 }
 ```
+
+> **ERRATA (aplicada no commit `14b0b93`):** as constantes `SESSION_LABEL_FAINT`, `METRIC_LABEL_FAINT`, `METRIC_UNIT_FAINT` e `MUSCLE_SECONDARY_TEXT` acima, além do `outlineColor="rgba(255,255,255,0.85)"` do `BodyMuscleMap`, eram literais brancos e ficavam ilegíveis no tema claro. Foram substituídos por `theme.colors.textInactive` (os três primeiros), `theme.colors.textMuted` (músculo secundário) e `theme.colors.textEmphasis` (contorno). `MUSCLE_DOT_FROM`/`MUSCLE_DOT_TO` e `baseColor="transparent"` permanecem literais de propósito. Veja a tabela no §9 item 5.
 
 - [ ] **Step 2: Typecheck**
 
@@ -1447,7 +1449,16 @@ Write a summary covering, in order:
 2. **"elemento do design → fonte real" table**, copying the mapping table from the spec's §4 and flagging the divergences this plan already identified (muscle focus line, progress bar, week-summary count, upcoming row's "· Foco").
 3. **Funcionalidades que mudaram de lugar**: week-summary count → `TreinoWeekStrip`'s `accessibilityLabel` only; "Editar agenda" → the whole week strip is now the touch target.
 4. **Itens omitidos por falta de dado real**: session focus/description, in-progress sets-done progress bar, week-summary visual count, upcoming row's focus suffix.
-5. **Literais de cor sem token**: `rgba(255,255,255,0.45)` (session label, metric label/unit), `rgba(255,255,255,0.55)` (secondary muscle text — equals `alpha.white55`/`theme.colors.textMuted`, kept literal for locality — consider swapping to the token during review), `rgba(255,255,255,0.38)`/`0.35`/`0.4` (week-strip weekday sigla and session-letter faint states), the 3-stop muscle-dot scale `#4da3ff → #1f6fd6`, `rgba(255,255,255,0.85)` (body-map outline), `transparent` (body-map base).
+5. **Literais de cor sem token** — **revisado durante a execução (commit `14b0b93`)**. A versão original deste plano permitia literais `rgba(255,255,255,0.xx)` para os textos apagados e para o contorno do body map, sob a justificativa de que "não existe token exato". Essa justificativa estava incompleta: como esta tela é **theme-aware** por decisão aprovada (§ item 6 abaixo) e o §5 do spec exige que "o tema claro deve continuar legível", branco semitransparente ficava ilegível sobre o fundo claro (`#E7E7E7`). Todos foram trocados pelo token semântico mais próximo, que é quase exato no escuro e correto no claro:
+
+   | Literal original | Token adotado | Escuro | Claro | Delta no escuro |
+   |---|---|---|---|---|
+   | `rgba(255,255,255,0.35)` / `0.4` | `theme.colors.textFaint` | `rgba(255,255,255,0.32)` | `#5D6676` | 0.03 / 0.08 |
+   | `rgba(255,255,255,0.45)` | `theme.colors.textInactive` | `rgba(255,255,255,0.50)` | `#6B7280` | 0.05 |
+   | `rgba(255,255,255,0.55)` | `theme.colors.textMuted` | `rgba(255,255,255,0.55)` | `#5B6475` | exato |
+   | `rgba(255,255,255,0.85)` (contorno do body map) | `theme.colors.textEmphasis` | `rgba(255,255,255,0.82)` | `#273142` | 0.03 |
+
+   **Literais remanescentes, intencionais:** a escala decorativa de intensidade das bolinhas de músculo (`#4da3ff` → `#1f6fd6`) — é acento de marca, legível sobre os dois fundos, e não é texto apagado; e `transparent` para o `baseColor` do body map, correto nos dois temas.
 6. **Theme behavior change (flagged for explicit user approval, already obtained)**: Treino's Today block no longer forces `TODAY_WORKOUT_THEME = darkTheme` — it now follows the live theme. Home's own forced-dark poster is untouched.
 7. **Resultados de `tsc`, `lint` e testes** — paste the actual command output from Task 9.
 8. **Capturas** — attach manual screenshots from Task 9 Step 5's four required states (livre, em andamento, concluído hoje, lista expandida).
