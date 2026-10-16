@@ -252,10 +252,12 @@ describe('official Light theme', () => {
     const todayBlock = readFileSync('src/components/treino/TreinoTodayBlock.tsx', 'utf8');
     const weekStrip = readFileSync('src/components/treino/TreinoWeekStrip.tsx', 'utf8');
     const exerciseList = readFileSync('src/components/treino/TreinoExerciseList.tsx', 'utf8');
+    const upcomingList = readFileSync('src/components/treino/TreinoUpcomingList.tsx', 'utf8');
 
     expect(todayBlock).not.toMatch(WHITE_LITERAL);
     expect(weekStrip).not.toMatch(WHITE_LITERAL);
     expect(exerciseList).not.toMatch(WHITE_LITERAL);
+    expect(upcomingList).not.toMatch(WHITE_LITERAL);
   });
 
   it('keeps the Today Workout poster on the official Dark artwork in both themes', () => {
