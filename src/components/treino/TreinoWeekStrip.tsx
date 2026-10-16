@@ -5,9 +5,6 @@ import { Icon } from '../ui/Icon';
 import { useTheme } from '../../theme';
 import type { TreinoWeekStripDayViewModel } from '../../home/treinoWeekStrip';
 
-const LETTER_FAINT = 'rgba(255,255,255,0.4)'; // spec §3.2.B letter on non-next training days
-const SIGLA_FAINT = 'rgba(255,255,255,0.35)'; // spec §3.2.B weekday sigla on non-today days
-
 function DayGlyph({ day }: { day: TreinoWeekStripDayViewModel }) {
   const { theme } = useTheme();
 
@@ -27,7 +24,7 @@ function DayGlyph({ day }: { day: TreinoWeekStripDayViewModel }) {
           fontFamily: theme.fonts.mono,
           fontSize: 9,
           letterSpacing: 0.6,
-          color: day.isNextSession ? theme.colors.primaryEmphasis : LETTER_FAINT,
+          color: day.isNextSession ? theme.colors.primaryEmphasis : theme.colors.textFaint,
         }}
       >
         {String.fromCharCode(65 + day.sessionIndex)}
@@ -84,7 +81,7 @@ export function TreinoWeekStrip({
               fontFamily: theme.fonts.mono,
               fontSize: 8.5,
               letterSpacing: 0.8,
-              color: day.isToday ? theme.colors.textPrimary : SIGLA_FAINT,
+              color: day.isToday ? theme.colors.textPrimary : theme.colors.textFaint,
             }}
           >
             {t(`agenda.weekday.${day.weekday}`)}

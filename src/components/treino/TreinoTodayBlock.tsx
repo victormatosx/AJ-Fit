@@ -7,10 +7,6 @@ import { useTheme } from '../../theme';
 import type { Sex } from '../../state/AppState';
 import type { MuscleId } from '../../types/exercise';
 
-const SESSION_LABEL_FAINT = 'rgba(255,255,255,0.45)'; // spec §3.2.C — no exact 0.45 white token
-const METRIC_LABEL_FAINT = 'rgba(255,255,255,0.45)';
-const METRIC_UNIT_FAINT = 'rgba(255,255,255,0.45)';
-const MUSCLE_SECONDARY_TEXT = 'rgba(255,255,255,0.55)'; // == alpha.white55 / theme.colors.textMuted exactly — kept literal here for locality with the dot-color scale below
 const MUSCLE_DOT_FROM = '#4da3ff';
 const MUSCLE_DOT_TO = '#1f6fd6';
 
@@ -80,7 +76,7 @@ export function TreinoTodayBlock({
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
         {kicker ? <MonoLabel>{kicker}</MonoLabel> : <View />}
         {sessionLabel && (
-          <Text style={{ fontFamily: theme.fonts.ui, fontSize: 12.5, color: SESSION_LABEL_FAINT }}>
+          <Text style={{ fontFamily: theme.fonts.ui, fontSize: 12.5, color: theme.colors.textInactive }}>
             {sessionLabel}
           </Text>
         )}
@@ -111,7 +107,7 @@ export function TreinoTodayBlock({
                     style={{
                       fontFamily: theme.fonts.ui,
                       fontSize: 13,
-                      color: index === 0 ? theme.colors.textPrimary : MUSCLE_SECONDARY_TEXT,
+                      color: index === 0 ? theme.colors.textPrimary : theme.colors.textMuted,
                     }}
                   >
                     {muscle.name}
@@ -130,7 +126,7 @@ export function TreinoTodayBlock({
               secondaryMuscles={secondaryMuscles}
               activeColor={theme.colors.primaryEmphasis}
               baseColor="transparent"
-              outlineColor="rgba(255,255,255,0.85)"
+              outlineColor={theme.colors.textEmphasis}
               size={bodyMapSize}
               gap={12}
               frontOffsetX={frontOffsetX}
@@ -162,9 +158,9 @@ export function TreinoTodayBlock({
             >
               <Text style={{ fontFamily: theme.fonts.display, fontSize: 20, lineHeight: 20, color: theme.colors.textPrimary }}>
                 {metric.value}
-                {metric.unit && <Text style={{ fontFamily: theme.fonts.ui, fontSize: 12, color: METRIC_UNIT_FAINT }}> {metric.unit}</Text>}
+                {metric.unit && <Text style={{ fontFamily: theme.fonts.ui, fontSize: 12, color: theme.colors.textInactive }}> {metric.unit}</Text>}
               </Text>
-              <Text style={{ fontFamily: theme.fonts.ui, fontSize: 11.5, color: METRIC_LABEL_FAINT, marginTop: 5 }}>
+              <Text style={{ fontFamily: theme.fonts.ui, fontSize: 11.5, color: theme.colors.textInactive, marginTop: 5 }}>
                 {metric.label}
               </Text>
             </View>
