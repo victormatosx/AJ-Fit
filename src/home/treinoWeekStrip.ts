@@ -55,6 +55,13 @@ export function buildTreinoWeekStrip(input: {
     resolution,
     limit: 7,
   });
+  // In flexible mode every projected entry carries `localDate = todayLocalDate`,
+  // so this Map collapses to a single last-write-wins entry. Harmless only
+  // because flexible mode is always `SESSION_READY` — which makes
+  // `todayHasPendingSession` true and short-circuits to `nextSessionIndex`
+  // before the Map is ever consulted for today — and because `weekOverview`'s
+  // flexible classification never yields TODAY_PENDING/UPCOMING/MISSED on
+  // another day. Loosen either of those and the collision becomes visible.
   const sessionIndexByDate = new Map(projected.map((workout) => [workout.localDate, workout.sessionIndex]));
   const firstUpcomingDate = projected[0]?.localDate ?? null;
 

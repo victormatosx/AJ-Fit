@@ -12,7 +12,7 @@
 
 ## Important context for the engineer
 
-- Read `src/screens/TreinoScreen.tsx` in full before starting — every derivation it currently computes (`nextIndex`, `displayedSession`, `canStartNow`, `isFlexible`, `statusCopyKey`, `exerciseCount`, `setCount`, `sessionMuscles`, `showBodyMap`, `todayLocalDate`, `nextWorkoutDate`, `dateLabel`, `headerDateLabel`, `trainingDays`, `upcoming`) must still exist in the rewritten file, verbatim in behavior. Only their *rendering* changes.
+- Read `src/screens/TreinoScreen.tsx` in full before starting — every derivation it currently computes (`nextIndex`, `displayedSession`, `canStartNow`, `isFlexible`, `statusCopyKey`, `exerciseCount`, `setCount`, `sessionMuscles`, `showBodyMap`, `todayLocalDate`, `nextWorkoutDate`, `dateLabel`, `headerDateLabel`, `trainingDays`, `upcoming`) must still exist in the rewritten file, verbatim in behavior. Only their *rendering* changes. **Exceção documentada:** `dateLabel` e o corpo de status `schedule.{statusCopyKey}.body` foram removidos de propósito na Task 8 — veja a **ERRATA** no fim da Task 8.
 - `TreinoScreen`'s prop signature is **frozen**: `sex, plan, resolution, completedTodaySessionIndex, scheduleConfig, workoutInProgress, startPending, onStart, onOpenAgendaEditor, onReposition, evolutionViewModel, weekOverview`. Do not add, remove, or rename any of them.
 - No new call sites of `<BodyMuscleMap>` — there must still be exactly 5 in the whole repo, or `src/components/fitness/__tests__/bodyMuscleMapArchitecture.test.ts` (`'gives every production BodyMuscleMap call site an explicit sex prop'`, `expect(tags).toHaveLength(5)`) fails. We are restyling the one existing call site inside `TreinoScreen.tsx`, not adding another.
 - **Known, approved omissions from the visual spec** (do not try to "fill in" these with invented data — this was already decided during planning):
@@ -1388,6 +1388,13 @@ export function TreinoScreen({
 ```
 
 Note: `View` is used but not imported above — add `View` to the `react-native` import at the top (`import { ScrollView, View, useWindowDimensions } from 'react-native';`).
+
+> **ERRATA (aplicada durante a execução):** a seção §Important context afirma que **toda** derivação atual do `TreinoScreen.tsx` sobrevive "verbatim in behavior". O código acima **remove duas coisas de propósito**, e a contradição está resolvida aqui:
+>
+> 1. **`dateLabel`** — a linha longa de dia da semana / dia / mês que vivia dentro do pôster antigo. O layout limpo já comunica a mesma informação de forma estrutural: o kicker `Próximo · {weekday}` (ou `Treino de hoje`) do `TreinoTodayBlock` diz *quando*, e os números do dia na `TreinoWeekStrip` dizem *qual data*. Manter uma terceira linha de data seria redundância visual exatamente onde a Opção B pede respiro. O `headerDateLabel` (sigla curta no header) **permanece** e é a única data literal da tela.
+> 2. **`tHome('schedule.{statusCopyKey}.body')`** — o corpo da cópia de status (ex.: "Hoje não é um dos seus dias de treino"). Essa chave **não ficou morta no repositório**: `src/screens/HomeScreen.tsx` continua renderizando-a, então o usuário em dia de descanso continua lendo essa frase na Home. No Treino a mesma informação passou a ser expressa estruturalmente — ausência de CTA "Iniciar treino", kicker `Próximo · {dia}` e o nome/lista de exercícios da próxima sessão — o que é mais informativo que a frase genérica.
+>
+> O `statusCopyKey` em si **continua sendo computado e consumido**: ele é o título de fallback do `TreinoTodayBlock` (`tHome('schedule.{statusCopyKey}.title')`) quando não há `displayedSession`. Só o `.body` saiu.
 
 - [ ] **Step 2: Verify no leftover references to removed imports**
 

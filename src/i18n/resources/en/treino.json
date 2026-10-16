@@ -6,7 +6,6 @@
   "currentWorkout": {
     "continue": "Resume workout"
   },
-  "hero": { "inProgress": "Workout in progress" },
   "changeWorkout": {
     "cta": "Change workout",
     "sheetTitle": "Choose another workout",
@@ -29,7 +28,6 @@
   "agenda": {
     "title": "Training schedule",
     "fixedLabel": "Fixed days",
-    "flexibleLabel": "Free training",
     "flexibleHint": "Train whenever you want",
     "trainingDay": "Training day",
     "activeRecoveryDay": "Active recovery",

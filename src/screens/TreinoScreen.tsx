@@ -81,7 +81,14 @@ export function TreinoScreen({
 
   const nextIndex = effectiveNextSessionIndex(resolution);
   const displayedSession = treinoCardSession(plan.sessions, resolution, completedTodaySessionIndex);
-  const displayedSessionIndex = resolution.status === 'TODAY_COMPLETED' ? completedTodaySessionIndex : nextIndex;
+  const rawDisplayedSessionIndex = resolution.status === 'TODAY_COMPLETED' ? completedTodaySessionIndex : nextIndex;
+  // Only an index that actually resolves to the session named above — otherwise
+  // `workoutExercisesFromPlan`'s own `?? plan.sessions[0]` fallback would list a
+  // DIFFERENT session's exercises under this session's title. `treinoCardSession`
+  // resolves an out-of-range cursor to null, so the two must agree here.
+  const displayedSessionIndex = rawDisplayedSessionIndex != null && plan.sessions[rawDisplayedSessionIndex]
+    ? rawDisplayedSessionIndex
+    : null;
   // Same actionable-CTA set as Home's own "todayCard" (docs §Consistência com
   // Meu Plano): MISSED_SESSION_DECISION_REQUIRED keeps the normal "Iniciar
   // treino" affordance — the decision itself is only asked once the user

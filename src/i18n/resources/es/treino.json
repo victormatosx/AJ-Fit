@@ -6,7 +6,6 @@
   "currentWorkout": {
     "continue": "Reanudar entreno"
   },
-  "hero": { "inProgress": "Entreno en curso" },
   "changeWorkout": {
     "cta": "Cambiar entreno",
     "sheetTitle": "Elegir otro entreno",
@@ -29,7 +28,6 @@
   "agenda": {
     "title": "Agenda de entreno",
     "fixedLabel": "Días fijos",
-    "flexibleLabel": "Entreno libre",
     "flexibleHint": "Entrena cuando quieras",
     "trainingDay": "Día de entreno",
     "activeRecoveryDay": "Recuperación activa",
