@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert, Modal } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { Timestamp } from 'firebase/firestore';
 import { useAuth } from '../../state/AuthContext';
@@ -51,6 +51,7 @@ import { CreateCustomFoodScreen } from './CreateCustomFoodScreen';
 import { CreateRecipeScreen } from './CreateRecipeScreen';
 import { FoodSearchScreen, type NutritionFoodPick } from './FoodSearchScreen';
 import { RecipeQuantityModal } from './RecipeQuantityModal';
+import { FoodQuantityModal } from './FoodQuantityModal';
 import { NutritionWeeklySummaryScreen } from './NutritionWeeklySummaryScreen';
 import { useScreenFocusEffect } from '../../state/ScreenActivity';
 import { countBucket, trackNutritionEvent } from '../../nutrition/analytics';
@@ -111,6 +112,8 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
   const [registeringMealReference, setRegisteringMealReference] = useState<readonly NutritionPlanFoodItem[] | null>(null);
   const [recipeQuantityPick, setRecipeQuantityPick] = useState<NutritionFoodPick | null>(null);
   const [recipeQuantityRecipe, setRecipeQuantityRecipe] = useState<NutritionRecipe<Timestamp> | null>(null);
+  /** Fase C8 — mirrors `recipeQuantityPick`'s role, but for a catalog/custom food: resolves grams/serving-unit BEFORE the `addDiaryFood` call, instead of writing immediately on selection. */
+  const [foodQuantityPick, setFoodQuantityPick] = useState<NutritionFoodPick | null>(null);
 
   // Weekly summary: one bounded Monday-Sunday diary listener and the existing plan/assessment sources.
   const [weeklyLogs, setWeeklyLogs] = useState<NutritionDailyLogDoc[]>([]);
@@ -370,10 +373,18 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
   }, [uid, profile, handleRequestGeneration]);
 
   // --- Diary actions -------------------------------------------------------
-  const openDiary = (slot?: NutritionMealSlot) => {
+  // `slot` is accepted (and passed by `onOpenDiarySlot`) only to keep that
+  // call site distinct from the plain "ver diário" entry point — it must
+  // NEVER feed `diaryFoodTarget`: that state is what makes `FoodSearchScreen`
+  // visible (see its `visible={diaryFoodTarget != null}` below), so setting
+  // it here opened a second native Modal (FoodSearchScreen, "Buscar
+  // Alimento") stacked directly on top of NutritionDiaryScreen's own Modal
+  // as soon as a meal row was tapped on Home — the exact stacked-Modal
+  // freeze/ghost-reopen-on-tab-switch bug already fixed elsewhere in this
+  // file (see mealSwapFlowRegression/stackedModalAuditRegression tests).
+  const openDiary = (_slot?: NutritionMealSlot) => {
     setDiaryDate(todayLocalDate());
     setDiaryVisible(true);
-    if (slot) setDiaryFoodTarget(slot);
     trackNutritionEvent({ name: 'nutrition_diary_day_viewed', properties: { source: 'home' } });
   };
 
@@ -408,8 +419,26 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
    * `RegisterMealScreen` with the slot pre-selected and the option's items
    * shown read-only for reference — the user searches/adds the real foods
    * they ate from the catalog.
+   *
+   * Regression: this is reachable while `MealDetailsScreen` (own `pageSheet`
+   * Modal) is still open — the "Registrar esta opção" button lives inside
+   * it, and so does the "Registrar" CTA on its `MealAlternativeResultScreen`
+   * overlay. Without closing it first, `RegisterMealScreen`'s own Modal
+   * opened STACKED on top of MealDetailsScreen's — two independent native
+   * `<Modal>`s visible at once, the same class of bug already fixed for
+   * `MealDetailsScreen` + `MealFeedbackSheet`: dismissing the inner one
+   * (RegisterMealScreen's back/X) corrupted the outer one's native
+   * presentation/touch chain ("Registrado..." shows, then back-arrow
+   * freezes the screen, then switching tabs pops RegisterMealScreen back
+   * open on its own). Closing the meal-details state here first — mirroring
+   * what `NutritionFavoritesScreen`'s `onUse` already did — guarantees at
+   * most one of those two Modals is ever visible.
    */
   const openRegisterMealForOption = useCallback((slot: NutritionMealSlot, option: NutritionMealOption) => {
+    setMealDetailsSlot(null);
+    setFeedbackVisible(false);
+    setAlternativeVisible(false);
+    setAlternativeState(null);
     setRegisteringMealSlot(slot);
     setRegisteringMealReference(option.foods);
     setRegisteringMealVisible(true);
@@ -700,7 +729,14 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
     <>
       {routeContent}
       {mealDetailsAndModals}
-      <CreateCustomFoodScreen visible={creatingCustomFood} onClose={() => setCreatingCustomFood(false)} onCreated={() => setCreatingCustomFood(false)} />
+      <Modal
+        visible={creatingCustomFood}
+        animationType="slide"
+        onRequestClose={() => setCreatingCustomFood(false)}
+        presentationStyle="pageSheet"
+      >
+        <CreateCustomFoodScreen visible onClose={() => setCreatingCustomFood(false)} onCreated={() => setCreatingCustomFood(false)} />
+      </Modal>
       <CreateRecipeScreen
         visible={creatingRecipe}
         onClose={() => setCreatingRecipe(false)}
@@ -754,31 +790,47 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
             if (uid) void loadNutritionRecipe(uid, food.foodId).then(setRecipeQuantityRecipe);
             return;
           }
-          if (uid && diaryFoodTarget) {
-            const source = foodPickOriginToDiarySource(food.origin as 'catalog' | 'custom' | 'food_log');
-            void addDiaryFood(uid, diaryDate, diaryFoodTarget, source, food.foodId, 100)
-              .then(() => trackNutritionEvent({ name: 'nutrition_diary_item_added', properties: {
-                mealSlot: diaryFoodTarget, operation: source,
-              } }));
-          }
-          setDiaryFoodTarget(null);
+          // Fase C8 — same deferred-write pattern as the recipe branch
+          // above: `FoodQuantityModal` resolves the food's natural unit
+          // (ovo -> "1 unidade (50 g)") or a plain editable grams amount
+          // BEFORE `addDiaryFood` runs, instead of writing 100 g
+          // immediately on selection. `diaryFoodTarget` stays set until
+          // the quantity is confirmed, same as the recipe branch.
+          setFoodQuantityPick(food);
         }}
         overlay={(
-          <RecipeQuantityModal
-            visible={recipeQuantityPick != null}
-            recipeName={recipeQuantityPick?.name ?? ''}
-            recipe={recipeQuantityRecipe}
-            onClose={() => { setRecipeQuantityPick(null); setRecipeQuantityRecipe(null); setDiaryFoodTarget(null); }}
-            onConfirm={(grams) => {
-              if (uid && diaryFoodTarget && recipeQuantityPick) {
-                void addDiaryFood(uid, diaryDate, diaryFoodTarget, 'recipe', recipeQuantityPick.foodId, grams)
-                  .then(() => trackNutritionEvent({ name: 'nutrition_diary_item_added', properties: {
-                    mealSlot: diaryFoodTarget, operation: 'recipe',
-                  } }));
-              }
-              setRecipeQuantityPick(null); setRecipeQuantityRecipe(null); setDiaryFoodTarget(null);
-            }}
-          />
+          <>
+            <RecipeQuantityModal
+              visible={recipeQuantityPick != null}
+              recipeName={recipeQuantityPick?.name ?? ''}
+              recipe={recipeQuantityRecipe}
+              onClose={() => { setRecipeQuantityPick(null); setRecipeQuantityRecipe(null); setDiaryFoodTarget(null); }}
+              onConfirm={(grams) => {
+                if (uid && diaryFoodTarget && recipeQuantityPick) {
+                  void addDiaryFood(uid, diaryDate, diaryFoodTarget, 'recipe', recipeQuantityPick.foodId, grams)
+                    .then(() => trackNutritionEvent({ name: 'nutrition_diary_item_added', properties: {
+                      mealSlot: diaryFoodTarget, operation: 'recipe',
+                    } }));
+                }
+                setRecipeQuantityPick(null); setRecipeQuantityRecipe(null); setDiaryFoodTarget(null);
+              }}
+            />
+            <FoodQuantityModal
+              visible={foodQuantityPick != null}
+              pick={foodQuantityPick}
+              onClose={() => { setFoodQuantityPick(null); setDiaryFoodTarget(null); }}
+              onConfirm={(grams) => {
+                if (uid && diaryFoodTarget && foodQuantityPick) {
+                  const source = foodPickOriginToDiarySource(foodQuantityPick.origin as 'catalog' | 'custom' | 'food_log');
+                  void addDiaryFood(uid, diaryDate, diaryFoodTarget, source, foodQuantityPick.foodId, grams)
+                    .then(() => trackNutritionEvent({ name: 'nutrition_diary_item_added', properties: {
+                      mealSlot: diaryFoodTarget, operation: source,
+                    } }));
+                }
+                setFoodQuantityPick(null); setDiaryFoodTarget(null);
+              }}
+            />
+          </>
         )}
       />
 
@@ -787,6 +839,7 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
         day={todayDiary}
         initialSlot={registeringMealSlot}
         referenceItems={registeringMealReference}
+        mealSlots={profile?.mealSlots ?? []}
         onClose={() => { setRegisteringMealVisible(false); setRegisteringMealSlot(null); setRegisteringMealReference(null); }}
         onAddFood={handleRegisterMealAdd}
         onEditGrams={handleRegisterMealEditGrams}

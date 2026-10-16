@@ -60,8 +60,8 @@ function NuNumRow({ label, value, onChangeText, unit, placeholder = '0', last, e
  * caller re-fetches/selects right after `onCreated`.
  *
  * Renders as a plain absolutely-positioned overlay, not its own
- * `<Modal>` — this is opened both standalone (NutritionShell's "create
- * custom food" sibling) AND nested inside `FoodSearchScreen`'s own
+ * `<Modal>` — its caller supplies the native presentation, either
+ * NutritionShell's standalone sliding `pageSheet` or `FoodSearchScreen`'s own
  * `pageSheet` Modal (its "no results, cadastrar alimento" CTA). Two
  * independent native `<Modal>`s stacked on top of each other is
  * unreliable (the same class of bug fixed for `MealDetailsScreen` +

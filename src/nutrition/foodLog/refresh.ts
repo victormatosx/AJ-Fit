@@ -15,7 +15,10 @@ export interface FoodLogRefreshDiff {
 /**
  * Compares user-visible/searchable content, deliberately excluding import
  * timestamps and source/catalog version labels. A new nightly version alone
- * must not rewrite tens of thousands of unchanged documents.
+ * must not rewrite tens of thousands of unchanged documents. `servings`/
+ * `defaultServingId` ARE included: a source gaining/losing a serving unit
+ * (e.g. the C6 serving-units backfill) is a real content change the refresh
+ * must pick up, not something to silently treat as unchanged.
  */
 function contentSignature(entry: FoodLogEntryBody | FoodLogEntry): string {
   return JSON.stringify({
@@ -25,6 +28,7 @@ function contentSignature(entry: FoodLogEntryBody | FoodLogEntry): string {
     locale: entry.locale, category: entry.category, subCategory: entry.subCategory ?? null,
     nutritionPer100g: entry.nutritionPer100g, status: entry.status, provenance: entry.provenance,
     searchPrefixes: entry.searchPrefixes, searchSourcePriority: entry.searchSourcePriority,
+    servings: entry.servings ?? null, defaultServingId: entry.defaultServingId ?? null,
   });
 }
 

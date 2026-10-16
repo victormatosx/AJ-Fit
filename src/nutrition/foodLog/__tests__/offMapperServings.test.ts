@@ -36,4 +36,14 @@ describe('toOffFoodLogRecord — serving units (Fase C6)', () => {
     const record = toOffFoodLogRecord(baseProduct({ serving_quantity: -5 }), 'v1');
     expect(record.servings).toBeUndefined();
   });
+
+  it('accepts a serving_quantity at the plausible-serving ceiling (600 g, a confirmed single-tray meal)', () => {
+    const record = toOffFoodLogRecord(baseProduct({ serving_size: '1 serving (600 g)', serving_quantity: 600 }), 'v1');
+    expect(record.servings).toEqual([{ id: 'porcao', label: '1 serving (600 g)', quantity: 1, gramEquivalent: 600, provenance: 'provider_official' }]);
+  });
+
+  it('rejects a serving_quantity above the plausible-serving ceiling — bulk package weight mis-entered as serving size', () => {
+    const record = toOffFoodLogRecord(baseProduct({ serving_size: '1000.0g', serving_quantity: 1000 }), 'v1');
+    expect(record.servings).toBeUndefined();
+  });
 });

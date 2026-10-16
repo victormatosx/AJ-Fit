@@ -28,7 +28,12 @@ export function NutritionPlanScreen({
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         <NuSheetHeader title={historical ? t('history.title') : t('plan.title')} onBack={onBack} />
 
-        <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+        {/* 120, not 40 — this screen renders full-bleed behind AppShell's
+            floating tab bar (`FULL_BLEED.tab` in AppShell.tsx), same as
+            `NutritionHomeScreen`/`NutritionWeeklySummaryScreen`, so content
+            has to leave room for it itself or the last section ends up
+            hidden behind the nav bar. */}
+        <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
           {historical ? (
             <View style={{ marginHorizontal: 24, marginTop: 10, padding: 13, borderRadius: 12, backgroundColor: NU.surfaceSubtle, borderWidth: 1, borderColor: NU.hairline, flexDirection: 'row', gap: 10, alignItems: 'center' }}>
               <Icon name="lock" size={14} color={NU.faint} />

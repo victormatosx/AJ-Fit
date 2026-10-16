@@ -16,16 +16,33 @@ export const OFF_ATTRIBUTION_TEXT = 'Dados de Open Food Facts (openfoodfacts.org
   + 'Contribua e saiba mais em https://br.openfoodfacts.org.';
 
 /**
- * Fase C6 ("serving units") — OFF's `serving_quantity` is already
- * grams-normalized by OFF itself (unlike `serving_size`, free text like
- * `"1 lata (350ml)"`), so it needs no density guessing: it IS the gram
- * equivalent. Returns `null` when OFF didn't provide one — never
- * fabricated from `serving_size` text alone.
+ * Fase C6 ("serving units") — OFF's `serving_quantity` is grams-normalized
+ * for solid products (unlike `serving_size`, free text like
+ * `"1 lata (350ml)"`), so it needs no density guessing there. For
+ * liquids, OFF actually stores the raw ml figure in the same field
+ * (e.g. `serving_size: "250 ml"` -> `serving_quantity: 250`), so this is
+ * treated as an approximate 1 g ~= 1 ml equivalent, not a verified mass —
+ * acceptable for water-like beverages, imprecise for denser/less dense
+ * ones. Never widen this to a density-aware conversion without a real
+ * density source; never present it as an exact gram figure in UI copy.
+ * Returns `undefined` when OFF didn't provide one — never fabricated
+ * from `serving_size` text alone.
+ *
+ * `MAX_PLAUSIBLE_SERVING_GRAMS` — Brazil OFF audit (2026-10):
+ * contributor-confirmed "1 serving"/"1 portion" values top out at 600 g
+ * (frozen single-tray meals); every value above that seen in the dataset
+ * (756 g+) was a bulk package weight mis-entered as the serving size
+ * (e.g. a 5 kg rice bag, 1 L milk/juice jugs). The cap rejects those
+ * without touching the many legitimate sub-gram condiment/supplement
+ * servings (tea, sweetener drops, spices) at the other end, which have
+ * no upper-range analogue to confuse them with.
  */
+const MAX_PLAUSIBLE_SERVING_GRAMS = 600;
+
 function offServingUnit(product: RawOffProduct): RawFoodLogRecord['servings'] {
   const grams = typeof product.serving_quantity === 'number' ? product.serving_quantity
     : typeof product.serving_quantity === 'string' ? Number(product.serving_quantity) : null;
-  if (grams == null || !Number.isFinite(grams) || grams <= 0 || grams > 10_000) return undefined;
+  if (grams == null || !Number.isFinite(grams) || grams <= 0 || grams > MAX_PLAUSIBLE_SERVING_GRAMS) return undefined;
   const label = product.serving_size?.trim() || `${grams} g`;
   return [{ id: 'porcao', label: label.length > 60 ? `${grams} g` : label, quantity: 1, gramEquivalent: grams, provenance: 'provider_official' }];
 }

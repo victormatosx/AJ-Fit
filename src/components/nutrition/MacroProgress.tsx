@@ -2,14 +2,11 @@ import React from 'react';
 import { Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { NU, NuRing } from './NuKit';
-import { macroStatus } from '../../nutrition/ui/planView';
 import { displayLineHeight } from '../../theme/tokens';
 import type { NutritionTotals } from '../../types/nutrition';
 
 /** One macro ring — reusable for protein/carbs/fat/fiber. Never punitive (`components.md` §2). */
 export function MacroProgress({ label, value, goal, unit }: { label: string; value: number; goal: number; unit: string }) {
-  const { t } = useTranslation('nutrition');
-  const status = macroStatus(value, goal);
   const pct = goal > 0 ? (value / goal) * 100 : 0;
   return (
     <View style={{ alignItems: 'center', gap: 8, width: 64 }}>
@@ -17,11 +14,13 @@ export function MacroProgress({ label, value, goal, unit }: { label: string; val
         <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 17, lineHeight: displayLineHeight(17), color: NU.white, textTransform: 'uppercase' }}>{Math.round(value)}</Text>
         <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 9.5, color: NU.faint, marginTop: 2 }}>/{Math.round(goal)}{unit}</Text>
       </NuRing>
-      <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 8.5, letterSpacing: 1.1, color: NU.legend, textTransform: 'uppercase' }}>
+      <Text
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.7}
+        style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 8.5, letterSpacing: 1.1, color: NU.legend, textTransform: 'uppercase', width: '100%', textAlign: 'center' }}
+      >
         {label}
-      </Text>
-      <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 8, letterSpacing: 1, color: status === 'above' ? NU.warn : 'rgba(255,255,255,0.55)', marginTop: -4 }}>
-        {t(`home.summary.status.${status}`)}
       </Text>
     </View>
   );

@@ -66,10 +66,11 @@
       "itemCount_one": "{{count}} alimento",
       "itemCount_other": "{{count}} alimentos",
       "empty": "Nada registrado",
-      "openDiaryCta": "Ver diario"
+      "openDiaryCta": "Ver diario",
+      "openPlanCta": "Ver plan completo"
     },
     "quickAccess": {
-      "title": "MIS ALIMENTOS",
+      "title": "MÁS",
       "customFood": "Crear alimento",
       "recipe": "Crear receta",
       "favorites": "Mis favoritos",
@@ -345,13 +346,15 @@
     "title": "Detalles de la comida",
     "options": "OPCIONES EQUIVALENTES",
     "recommendedBadge": "Recomendada",
-    "foods": "ALIMENTOS",
-    "totals": "TOTALES DE LA OPCIÓN",
+    "foods": "ALIMENTOS DE ESTA OPCIÓN",
+    "foodCount_one": "{{count}} alimento",
+    "foodCount_other": "{{count}} alimentos",
+    "totals": "TOTALES DE LA COMIDA",
     "register": "Registrar esta opción",
     "registering": "Registrando…",
     "registered": "Registrado en tu diario de hoy.",
     "registerError": "No pudimos registrar esto ahora.",
-    "swap": "Cambiar esta comida",
+    "swap": "Cambiar comida",
     "favorite": "Favorito",
     "favorited": "Agregado a favoritos.",
     "favoriteError": "No pudimos marcar como favorito ahora."
@@ -390,6 +393,7 @@
     "backToPlan": "Volver al plan"
   },
   "barcodeScan": {
+    "landscapeHint": "Sostén el celular en horizontal y alinea el código de barras dentro del marco.",
     "title": "Escanear código de barras",
     "scanButtonLabel": "Escanear código de barras",
     "permissionExplanation": "Necesitamos la cámara para leer el código de barras del producto.",
