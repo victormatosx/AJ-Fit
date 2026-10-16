@@ -90,8 +90,6 @@ export function TreinoWeekStrip({
             {t(`agenda.weekday.${day.weekday}`)}
           </Text>
           <View
-            accessibilityLabel={t(`agenda.weekday.${day.weekday}`)}
-            accessibilityRole="text"
             style={{
               width: 36,
               height: 36,
