@@ -7,22 +7,21 @@ import { useTheme } from '../../theme';
 import type { Sex } from '../../state/AppState';
 import type { MuscleId } from '../../types/exercise';
 
-const MUSCLE_DOT_FROM = '#4da3ff';
-const MUSCLE_DOT_TO = '#1f6fd6';
-
-function clampByte(value: number): number {
-  return Math.max(0, Math.min(255, Math.round(value)));
-}
-
-/** Linear RGB interpolation between two `#rrggbb` literals — purely visual, the 3-stop "intensity scale" from spec §3.1. */
-function muscleDotColor(index: number, total: number): string {
-  const t = total > 1 ? index / (total - 1) : 0;
-  const from = parseInt(MUSCLE_DOT_FROM.slice(1), 16);
-  const to = parseInt(MUSCLE_DOT_TO.slice(1), 16);
-  const r = clampByte(((from >> 16) & 255) + (((to >> 16) & 255) - ((from >> 16) & 255)) * t);
-  const g = clampByte(((from >> 8) & 255) + (((to >> 8) & 255) - ((from >> 8) & 255)) * t);
-  const b = clampByte((from & 255) + ((to & 255) - (from & 255)) * t);
-  return `rgb(${r}, ${g}, ${b})`;
+/**
+ * Linear RGB interpolation between two `#rrggbb` endpoints. Purely visual —
+ * drives the muscle-dot intensity ramp, whose endpoints come from the theme
+ * so the ramp keeps its "primary muscle reads strongest" direction in both
+ * Dark (bright blue -> deep blue) and Light (deep blue -> brighter blue).
+ */
+function lerpHexColor(from: string, to: string, t: number): string {
+  const channels = (hex: string) => {
+    const value = parseInt(hex.slice(1), 16);
+    return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
+  };
+  const [fromR, fromG, fromB] = channels(from);
+  const [toR, toG, toB] = channels(to);
+  const mix = (a: number, b: number) => Math.round(a + (b - a) * t);
+  return `rgb(${mix(fromR, toR)}, ${mix(fromG, toG)}, ${mix(fromB, toB)})`;
 }
 
 export interface TreinoTodayBlockMuscleItem {
@@ -76,7 +75,7 @@ export function TreinoTodayBlock({
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
         {kicker ? <MonoLabel>{kicker}</MonoLabel> : <View />}
         {sessionLabel && (
-          <Text style={{ fontFamily: theme.fonts.ui, fontSize: 12.5, color: theme.colors.textInactive }}>
+          <Text style={{ fontFamily: theme.fonts.ui, fontSize: 12.5, color: theme.colors.textMuted }}>
             {sessionLabel}
           </Text>
         )}
@@ -100,7 +99,11 @@ export function TreinoTodayBlock({
                       width: 6,
                       height: 6,
                       borderRadius: 3,
-                      backgroundColor: muscleDotColor(index, muscles.length),
+                      backgroundColor: lerpHexColor(
+                        theme.colors.primaryEmphasis,
+                        theme.colors.primary,
+                        muscles.length > 1 ? index / (muscles.length - 1) : 0,
+                      ),
                     }}
                   />
                   <Text
@@ -126,7 +129,7 @@ export function TreinoTodayBlock({
               secondaryMuscles={secondaryMuscles}
               activeColor={theme.colors.primaryEmphasis}
               baseColor="transparent"
-              outlineColor={theme.colors.textEmphasis}
+              outlineColor={theme.colors.iconStrong}
               size={bodyMapSize}
               gap={12}
               frontOffsetX={frontOffsetX}
@@ -158,9 +161,9 @@ export function TreinoTodayBlock({
             >
               <Text style={{ fontFamily: theme.fonts.display, fontSize: 20, lineHeight: 20, color: theme.colors.textPrimary }}>
                 {metric.value}
-                {metric.unit && <Text style={{ fontFamily: theme.fonts.ui, fontSize: 12, color: theme.colors.textInactive }}> {metric.unit}</Text>}
+                {metric.unit && <Text style={{ fontFamily: theme.fonts.ui, fontSize: 12, color: theme.colors.textMuted }}> {metric.unit}</Text>}
               </Text>
-              <Text style={{ fontFamily: theme.fonts.ui, fontSize: 11.5, color: theme.colors.textInactive, marginTop: 5 }}>
+              <Text style={{ fontFamily: theme.fonts.ui, fontSize: 11.5, color: theme.colors.textMuted, marginTop: 5 }}>
                 {metric.label}
               </Text>
             </View>

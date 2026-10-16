@@ -228,6 +228,7 @@ describe('official Light theme', () => {
     const planReady = readFileSync('src/screens/PlanReadyScreen.tsx', 'utf8');
     const home = readFileSync('src/screens/HomeScreen.tsx', 'utf8');
     const workout = readFileSync('src/screens/WorkoutScreen.tsx', 'utf8');
+    const treinoTodayBlock = readFileSync('src/components/treino/TreinoTodayBlock.tsx', 'utf8');
 
     expect(ctaButton).toContain('colors={theme.gradients.brand}');
     expect(ctaButton).toContain('color: theme.colors.primaryForeground');
@@ -238,6 +239,19 @@ describe('official Light theme', () => {
     expect(home).toContain('color: TODAY_WORKOUT_THEME.colors.primaryForeground');
     expect(workout).toContain('backgroundColor: theme.colors.primary');
     expect(workout).toContain('color: theme.colors.primaryForeground');
+    expect(treinoTodayBlock).toContain('backgroundColor: theme.colors.primary');
+    expect(treinoTodayBlock).toContain('color: theme.colors.primaryForeground');
+  });
+
+  it('keeps the theme-aware Treino redesign components free of hardcoded white literals', () => {
+    // The Treino hub follows the live theme (unlike Home's forced-Dark
+    // poster), so a semi-transparent white literal would be illegible on
+    // the Light background. Every faint role must route through a token.
+    const todayBlock = readFileSync('src/components/treino/TreinoTodayBlock.tsx', 'utf8');
+    const weekStrip = readFileSync('src/components/treino/TreinoWeekStrip.tsx', 'utf8');
+
+    expect(todayBlock).not.toMatch(/rgba\(255,\s*255,\s*255/);
+    expect(weekStrip).not.toMatch(/rgba\(255,\s*255,\s*255/);
   });
 
   it('keeps the Today Workout poster on the official Dark artwork in both themes', () => {
