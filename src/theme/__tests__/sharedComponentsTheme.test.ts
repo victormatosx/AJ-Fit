@@ -33,6 +33,7 @@ const PHASE_3_THEME_AWARE_AREAS = [
   'src/components/fitness/PhysicalAssessmentSummaryCard.tsx',
   'src/components/fitness/BodyEvolutionView.tsx',
   'src/components/fitness/LoadsEvolutionView.tsx',
+  'src/components/fitness/ExerciseEvolutionDetail.tsx',
   'src/screens/WorkoutScreen.tsx',
   'src/screens/AssessmentScreen.tsx',
   'src/screens/AuthScreen.tsx',
