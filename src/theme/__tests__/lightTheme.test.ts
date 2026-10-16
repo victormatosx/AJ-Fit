@@ -247,11 +247,15 @@ describe('official Light theme', () => {
     // The Treino hub follows the live theme (unlike Home's forced-Dark
     // poster), so a semi-transparent white literal would be illegible on
     // the Light background. Every faint role must route through a token.
+    const WHITE_LITERAL = /rgba\(255,\s*255,\s*255|#fff\b|#ffffff\b|'white'/i;
+
     const todayBlock = readFileSync('src/components/treino/TreinoTodayBlock.tsx', 'utf8');
     const weekStrip = readFileSync('src/components/treino/TreinoWeekStrip.tsx', 'utf8');
+    const exerciseList = readFileSync('src/components/treino/TreinoExerciseList.tsx', 'utf8');
 
-    expect(todayBlock).not.toMatch(/rgba\(255,\s*255,\s*255/);
-    expect(weekStrip).not.toMatch(/rgba\(255,\s*255,\s*255/);
+    expect(todayBlock).not.toMatch(WHITE_LITERAL);
+    expect(weekStrip).not.toMatch(WHITE_LITERAL);
+    expect(exerciseList).not.toMatch(WHITE_LITERAL);
   });
 
   it('keeps the Today Workout poster on the official Dark artwork in both themes', () => {

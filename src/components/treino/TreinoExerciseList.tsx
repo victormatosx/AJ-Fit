@@ -32,7 +32,11 @@ function ExerciseRow({ index, name, isFirst }: { index: number; name: string; is
           justifyContent: 'center',
         }}
       >
-        <Text style={{ fontFamily: theme.fonts.mono, fontSize: 10, color: theme.colors.textMuted }}>
+        <Text
+          accessibilityElementsHidden
+          importantForAccessibility="no"
+          style={{ fontFamily: theme.fonts.mono, fontSize: 10, color: theme.colors.textMuted }}
+        >
           {String(index + 1).padStart(2, '0')}
         </Text>
       </View>
@@ -87,7 +91,12 @@ export function TreinoExerciseList({
     <View style={{ paddingHorizontal: 22, marginTop: 40 }}>
       <MonoLabel style={{ marginBottom: 16 }}>{title}</MonoLabel>
       {visible.map((exercise, index) => (
-        <ExerciseRow key={exercise.id} index={index} name={exercise.name} isFirst={index === 0} />
+        <ExerciseRow
+          key={`${exercise.id}-${index}`}
+          index={index}
+          name={exercise.name}
+          isFirst={index === 0}
+        />
       ))}
       {expanded && (
         <Animated.View
@@ -100,7 +109,7 @@ export function TreinoExerciseList({
         >
           {hidden.map((exercise, offset) => (
             <ExerciseRow
-              key={exercise.id}
+              key={`${exercise.id}-${visibleCount + offset}`}
               index={visibleCount + offset}
               name={exercise.name}
               isFirst={false}
@@ -116,6 +125,7 @@ export function TreinoExerciseList({
             if (expanded) revealAnim.setValue(0);
             setExpanded((value) => !value);
           }}
+          hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}
           style={{ marginTop: 12, alignItems: 'center', paddingVertical: 6 }}
         >
           <Text

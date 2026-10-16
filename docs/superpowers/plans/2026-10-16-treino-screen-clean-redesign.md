@@ -851,6 +851,8 @@ export function TreinoExerciseList({
 }
 ```
 
+> **ERRATA (aplicada durante a execução):** o `key={exercise.id}` usado nos dois call sites do `ExerciseRow` acima estava **errado**. O `workoutExercisesFromPlan` (`src/screens/workoutScreenPlan.ts`) preenche `id` com o id cru do exercício no catálogo e **não garante unicidade dentro de uma sessão**: supersérie, movimento repetido (aquecimento + série de trabalho) ou colisão de id efetivo após substituição produzem dois itens com o mesmo `id`. Com keys duplicadas, o React reconcilia os dois irmãos em um só e **um exercício prescrito desaparece silenciosamente da lista**. Corrigido para `` key={`${exercise.id}-${index}`} `` (lista visível) e `` key={`${exercise.id}-${visibleCount + offset}`} `` (lista oculta), seguindo a convenção já adotada por `src/screens/TreinoWorkoutDetailSheet.tsx` e `src/screens/MyPlanScreen.tsx`, que identificam esses slots **posicionalmente**. Na mesma correção, o `Pressable` de expandir/recolher recebeu `hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}` (o alvo de toque tinha ~29px, abaixo do mínimo de 44pt iOS / 48dp Android) e o badge numérico "01"/"02" foi escondido da árvore de acessibilidade com `accessibilityElementsHidden` + `importantForAccessibility="no"`, por ser puramente decorativo — mesmo padrão do `TreinoWeekStrip.tsx`.
+
 - [ ] **Step 2: Typecheck**
 
 Run: `npx tsc --noEmit -p . 2>&1 | grep "TreinoExerciseList"`
