@@ -4,7 +4,7 @@
     "subtitle": "Tu secuencia, tu agenda, bajo tu control"
   },
   "currentWorkout": {
-    "continue": "Continuar entreno"
+    "continue": "Reanudar entreno"
   },
   "hero": { "inProgress": "Entreno en curso" },
   "changeWorkout": {
@@ -68,5 +68,21 @@
   "detail": {
     "makeNow": "Hacerlo ahora",
     "makeNowAccessibility": "Iniciar este entreno ahora"
+  },
+  "todayBlock": {
+    "kickerToday": "Entreno de hoy",
+    "kickerNext": "Próximo · {{weekday}}",
+    "sessionLabel": "Entreno {{letter}}",
+    "metrics": {
+      "duration": "Duración",
+      "durationUnit": "min",
+      "exercises": "Ejercicios",
+      "sets": "Series"
+    }
+  },
+  "exercises": {
+    "title": "Ejercicios",
+    "showAll": "Ver todos los {{count}}",
+    "showLess": "Mostrar menos"
   }
 }

@@ -4,7 +4,7 @@
     "subtitle": "Your sequence, your schedule, your call"
   },
   "currentWorkout": {
-    "continue": "Continue workout"
+    "continue": "Resume workout"
   },
   "hero": { "inProgress": "Workout in progress" },
   "changeWorkout": {
@@ -68,5 +68,21 @@
   "detail": {
     "makeNow": "Do it now",
     "makeNowAccessibility": "Start this workout now"
+  },
+  "todayBlock": {
+    "kickerToday": "Today's workout",
+    "kickerNext": "Next · {{weekday}}",
+    "sessionLabel": "Workout {{letter}}",
+    "metrics": {
+      "duration": "Duration",
+      "durationUnit": "min",
+      "exercises": "Exercises",
+      "sets": "Sets"
+    }
+  },
+  "exercises": {
+    "title": "Exercises",
+    "showAll": "View all {{count}}",
+    "showLess": "Show less"
   }
 }
