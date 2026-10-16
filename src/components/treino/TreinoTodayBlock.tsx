@@ -4,8 +4,11 @@ import { MonoLabel } from '../ui/Display';
 import { Icon } from '../ui/Icon';
 import { BodyMuscleMap } from '../fitness/BodyMuscleMap';
 import { useTheme } from '../../theme';
+import { displayLineHeight } from '../../theme/tokens';
 import type { Sex } from '../../state/AppState';
 import type { MuscleId } from '../../types/exercise';
+
+const METRIC_VALUE_SIZE = 20;
 
 /**
  * Linear RGB interpolation between two `#rrggbb` endpoints. Purely visual —
@@ -154,16 +157,34 @@ export function TreinoTodayBlock({
               key={metric.label}
               style={{
                 flex: 1,
+                minWidth: 0,
                 alignItems: 'center',
+                paddingHorizontal: 4,
                 borderLeftWidth: index > 0 ? 1 : 0,
                 borderLeftColor: theme.colors.divider,
               }}
             >
-              <Text style={{ fontFamily: theme.fonts.display, fontSize: 20, lineHeight: 20, color: theme.colors.textPrimary }}>
+              {/* Anton crops its own glyph tops on iOS at any lineHeight below
+                  1.45x (see `displayLineHeight`'s note in theme/tokens.ts) —
+                  never hardcode one next to `fonts.display`. */}
+              <Text
+                numberOfLines={1}
+                style={{
+                  fontFamily: theme.fonts.display,
+                  fontSize: METRIC_VALUE_SIZE,
+                  lineHeight: displayLineHeight(METRIC_VALUE_SIZE),
+                  color: theme.colors.textPrimary,
+                }}
+              >
                 {metric.value}
                 {metric.unit && <Text style={{ fontFamily: theme.fonts.ui, fontSize: 12, color: theme.colors.textMuted }}> {metric.unit}</Text>}
               </Text>
-              <Text style={{ fontFamily: theme.fonts.ui, fontSize: 11.5, color: theme.colors.textMuted, marginTop: 5 }}>
+              <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.85}
+                style={{ fontFamily: theme.fonts.ui, fontSize: 11.5, color: theme.colors.textMuted, marginTop: 5 }}
+              >
                 {metric.label}
               </Text>
             </View>
