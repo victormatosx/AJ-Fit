@@ -98,7 +98,9 @@ describe('Progress truthfulness and retired consistency preview', () => {
     // `ProgressPhotosScreen` locks the vault on unmount. Rendering it beside
     // the other panels instead of instead of them would leave the vault open.
     expect(progress).toContain("view === 'photos' ? (");
-    expect(progress).toContain('<ProgressPhotosScreen pageHeader={pageHeader} />');
+    // Photos shares the exact same blue pill selector as Corpo/Cargas —
+    // no separate header implementation for it anymore.
+    expect(progress).toContain('<ProgressPhotosScreen pageHeader={panelHeader} />');
   });
 
 });

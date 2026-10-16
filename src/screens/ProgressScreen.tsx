@@ -37,9 +37,10 @@ import { useScreenFocusEffect } from '../state/ScreenActivity';
  *     it. `ProgressPhotosScreen` locks the vault when it unmounts, so keeping
  *     all panels mounted would silently leave the vault open after the user
  *     navigated away.
- *  2. `pageHeader` is handed to that panel and rendered inside its FlatList
- *     header, not stacked above it. Lifting it out would create a second
- *     scroll surface and defeat the grid's virtualization.
+ *  2. `panelHeader` (the shared blue pill selector) is handed to that panel
+ *     and rendered inside its FlatList header, not stacked above it.
+ *     Lifting it out would create a second scroll surface and defeat the
+ *     grid's virtualization.
  */
 
 type ProgressView = 'body' | 'loads' | 'photos';
@@ -142,67 +143,7 @@ export function ProgressScreen({
     </View>
   );
 
-  /**
-   * Header for the Photos panel, which renders it inside its own list.
-   * It is intentionally cheap: no data fetching, no animation of its own.
-   *
-   * Deliberately kept as the original underlined tab row rather than the
-   * pill selector the Corpo/Cargas panels use below: Photos is a protected
-   * surface whose rendering must not change, and this header is the only
-   * part of it this screen owns. The two selectors are visually different
-   * on purpose — see `panelHeader`.
-   */
-  const pageHeader = (
-    <View>
-      {title}
-
-      <View
-        style={{
-          flexDirection: 'row',
-          paddingHorizontal: GUTTER,
-          marginBottom: spacing[5],
-          borderBottomWidth: sizes.hairline,
-          borderBottomColor: theme.colors.border,
-        }}
-      >
-        {tabs.map(([key, label]) => {
-          const selected = view === key;
-          return (
-            <Pressable
-              key={key}
-              onPress={() => setView(key)}
-              accessibilityRole="tab"
-              accessibilityLabel={t('progress.accessibility.selectTab', { tab: label })}
-              accessibilityState={{ selected }}
-              style={{
-                paddingVertical: spacing[3],
-                marginRight: spacing[6],
-                borderBottomWidth: 2,
-                // The rule below the row is the baseline; the selected tab
-                // simply paints over it, so nothing shifts on selection.
-                borderBottomColor: selected ? theme.colors.primary : 'transparent',
-                marginBottom: -sizes.hairline,
-              }}
-            >
-              <Text
-                style={{
-                  fontFamily: theme.fonts.mono,
-                  fontSize: 10,
-                  letterSpacing: 2,
-                  textTransform: 'uppercase',
-                  color: selected ? theme.colors.textPrimary : theme.colors.textFaint,
-                }}
-              >
-                {label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-    </View>
-  );
-
-  /** Header for the Corpo/Cargas panels only. Never handed to Photos. */
+  /** Shared header for all three Evolution tabs: eyebrow/title plus the blue pill selector. */
   const panelHeader = (
     <View>
       {title}
@@ -228,7 +169,7 @@ export function ProgressScreen({
             onBack={() => setSelectedExerciseId(null)}
           />
         ) : view === 'photos' ? (
-          <ProgressPhotosScreen pageHeader={pageHeader} />
+          <ProgressPhotosScreen pageHeader={panelHeader} />
         ) : (
           <ScrollView
             style={{ flex: 1 }}
@@ -283,10 +224,11 @@ export function ProgressScreen({
 /**
  * Full-width pill selector with a sliding accent indicator.
  *
- * Used exclusively by the Corpo/Cargas panels — the Photos panel keeps the
- * original underlined row (see `pageHeader`). The indicator is a single
- * absolutely-positioned layer translated between equal-width slots, so the
- * labels themselves never move and nothing reflows on selection.
+ * Shared by all three Evolution tabs (Corpo, Cargas, Fotos) via `panelHeader`
+ * above — there is no separate selector implementation for Photos. The
+ * indicator is a single absolutely-positioned layer translated between
+ * equal-width slots, so the labels themselves never move and nothing
+ * reflows on selection.
  */
 function PillTabs({
   tabs,
