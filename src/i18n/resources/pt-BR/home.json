@@ -178,8 +178,13 @@
   },
   "progress": {
     "header": {
-      "eyebrow": "Seu progresso",
       "title": "Evolução"
+    },
+    "ticker": {
+      "weightSince": "Peso",
+      "lastAssessment": "Última avaliação",
+      "records90d": "Recordes (90d)",
+      "assessmentsLogged": "Avaliações"
     },
     "tabs": {
       "body": "Corpo",
@@ -191,6 +196,8 @@
       "currentWeight": "Peso atual",
       "composition": "Composição",
       "measuredAt": "Medido em {{date}}",
+      "sinceMeasured": "desde {{from}} · medido em {{measured}}",
+      "lastAssessment": "Última avaliação em {{date}}",
       "delta": "{{direction}} {{value}} {{unit}}",
       "singleEntry": "Registre outro peso para ver a curva de evolução.",
       "loading": "Carregando sua evolução…",
@@ -219,6 +226,7 @@
       "measurements": {
         "title": "Medidas",
         "selectLabel": "Dobra cutânea",
+        "since": "desde {{date}}",
         "singleEntry": "Registre essa dobra em outra avaliação para ver a curva de evolução.",
         "empty": "Nenhum registro de {{measurement}} encontrado nas avaliações.",
         "options": {
@@ -245,6 +253,33 @@
       "eyebrow": "Cargas",
       "loading": "Carregando cargas",
       "records90Title": "Recordes nos últimos 90 dias",
+      "records90Meta": "{{count}} em 90 dias",
+      "sessionsCount_one": "{{count}} treino",
+      "sessionsCount_other": "{{count}} treinos",
+      "ago": {
+        "today": "hoje",
+        "days_one": "há {{count}} dia",
+        "days_other": "há {{count}} dias",
+        "weeks_one": "há {{count}} semana",
+        "weeks_other": "há {{count}} semanas",
+        "months_one": "há {{count}} mês",
+        "months_other": "há {{count}} meses"
+      },
+      "filters": {
+        "mostTrained": "Mais feitos",
+        "heaviest": "Mais pesados",
+        "recent": "Recentes",
+        "accessibility": "Ordenar exercícios por {{filter}}"
+      },
+      "muscleGroups": {
+        "title": "Por grupo muscular",
+        "hint": "toque para ver no corpo",
+        "topEyebrow": "Mais evoluiu · {{days}} dias",
+        "eyebrow": "Força · {{days}} dias",
+        "caption": "de carga · melhor marca {{exercise}} {{load}}",
+        "accessibilitySelect": "Exibir {{muscle}} no mapa corporal",
+        "accessibilityMap": "Mapa de força. Grupo em destaque: {{muscle}}"
+      },
       "recordsCount_one": "recorde batido",
       "recordsCount_other": "recordes batidos",
       "topRecords": "Principais recordes",

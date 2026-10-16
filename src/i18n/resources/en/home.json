@@ -178,8 +178,13 @@
   },
   "progress": {
     "header": {
-      "eyebrow": "Your progress",
       "title": "Evolution"
+    },
+    "ticker": {
+      "weightSince": "Weight",
+      "lastAssessment": "Last assessment",
+      "records90d": "Records (90d)",
+      "assessmentsLogged": "Assessments"
     },
     "tabs": {
       "body": "Body",
@@ -191,6 +196,8 @@
       "currentWeight": "Current weight",
       "composition": "Composition",
       "measuredAt": "Measured on {{date}}",
+      "sinceMeasured": "since {{from}} · measured on {{measured}}",
+      "lastAssessment": "Last assessment on {{date}}",
       "delta": "{{direction}} {{value}} {{unit}}",
       "singleEntry": "Log another weight to see your evolution curve.",
       "loading": "Loading your evolution…",
@@ -219,6 +226,7 @@
       "measurements": {
         "title": "Measurements",
         "selectLabel": "Skinfold",
+        "since": "since {{date}}",
         "singleEntry": "Record this skinfold in another assessment to see the evolution curve.",
         "empty": "No {{measurement}} record was found in your assessments.",
         "options": {
@@ -245,6 +253,33 @@
       "eyebrow": "Loads",
       "loading": "Loading loads",
       "records90Title": "Records in the last 90 days",
+      "records90Meta": "{{count}} in 90 days",
+      "sessionsCount_one": "{{count}} workout",
+      "sessionsCount_other": "{{count}} workouts",
+      "ago": {
+        "today": "today",
+        "days_one": "{{count}} day ago",
+        "days_other": "{{count}} days ago",
+        "weeks_one": "{{count}} week ago",
+        "weeks_other": "{{count}} weeks ago",
+        "months_one": "{{count}} month ago",
+        "months_other": "{{count}} months ago"
+      },
+      "filters": {
+        "mostTrained": "Most trained",
+        "heaviest": "Heaviest",
+        "recent": "Recent",
+        "accessibility": "Sort exercises by {{filter}}"
+      },
+      "muscleGroups": {
+        "title": "By muscle group",
+        "hint": "tap to see it on the body",
+        "topEyebrow": "Biggest gain · {{days}} days",
+        "eyebrow": "Strength · {{days}} days",
+        "caption": "of load · best mark {{exercise}} {{load}}",
+        "accessibilitySelect": "Show {{muscle}} on the body map",
+        "accessibilityMap": "Strength map. Highlighted group: {{muscle}}"
+      },
       "recordsCount_one": "record broken",
       "recordsCount_other": "records broken",
       "topRecords": "Top records",
