@@ -5,28 +5,24 @@ import { MonoLabel } from '../ui/Display';
 import { Icon } from '../ui/Icon';
 import { GRID_COLUMNS, GRID_ROWS, type FrequencyWindowViewModel } from '../../home/frequencyHeatmap';
 
-// Matches the design spec's explicit "gap 3" between heatmap cells (section
-// 2.6) — also the single source of truth for `cellSizeForWidth`'s sizing
-// math below, so the rendered gap and the sizing math can never drift apart
-// again (they did briefly during the GitHub-grid restyle).
-const GAP = 3;
-const MAX_CELL = 30;
-// Fixed width of the weekday-letter gutter column — unlike every other
-// column, it is NOT `cellSize`-wide. See `cellSizeForWidth` below.
-const LABEL_GUTTER = 14;
+// Calendar-grid layout (2026-10-08 restyle) — `GRID_COLUMNS` (7, Monday-first
+// weekdays) cells per row, `GAP` between every adjacent cell. Single source
+// of truth for `cellSizeForWidth`'s sizing math below, so the rendered gap
+// and the sizing math can never drift apart.
+const GAP = 6;
+const MAX_CELL = 32;
 // A known Monday — only used to derive Monday-first weekday letters, never as an actual date.
 const WEEKDAY_HEADER_ANCHOR_MONDAY = '2024-01-01';
 
 /**
- * The rendered grid is 1 fixed-width label gutter + `GRID_ROWS` (calendar
- * weeks, rendered as columns) `cellSize`-wide columns, with `GAP` between
- * every adjacent element (`GRID_ROWS` gaps total, since `GRID_ROWS + 1`
- * elements sit side by side). Keep this in sync with the actual JSX below —
- * this is the single place cell size is computed from available width.
+ * The rendered grid is `GRID_COLUMNS`-wide, `cellSize`-tall rows, with `GAP`
+ * between every adjacent column (`GRID_COLUMNS - 1` gaps total). Keep this in
+ * sync with the actual JSX below — this is the single place cell size is
+ * computed from available width.
  */
 function cellSizeForWidth(width: number): number {
   if (width <= 0) return 0;
-  const raw = (width - LABEL_GUTTER - GAP * GRID_ROWS) / GRID_ROWS;
+  const raw = (width - GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS;
   return Math.max(0, Math.min(MAX_CELL, Math.floor(raw)));
 }
 
@@ -110,14 +106,9 @@ export function FrequencyHeatmap({
 
   return (
     <View style={{ paddingHorizontal: 22, paddingVertical: 12, opacity: loading ? 0.55 : 1 }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
-        <MonoLabel>{t('activity.frequency.title').toUpperCase()}</MonoLabel>
-        <Animated.View style={{ opacity: fade }}>
-          <MonoLabel color={'rgba(255,255,255,0.5)'}>{summary}</MonoLabel>
-        </Animated.View>
-      </View>
+      <MonoLabel>{t('activity.frequency.title').toUpperCase()}</MonoLabel>
 
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14, marginTop: 10 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14, marginTop: 14 }}>
         <Pressable
           onPress={source === 'AUTHORITATIVE' ? onPrev : undefined}
           disabled={source !== 'AUTHORITATIVE'}
@@ -143,58 +134,54 @@ export function FrequencyHeatmap({
         </Pressable>
       </View>
 
-      <Animated.View style={{ marginTop: 14, opacity: fade, flexDirection: 'row', gap: GAP }}>
+      <Animated.View style={{ marginTop: 18, opacity: fade }}>
         {cellSize > 0 && freqWindow && (
           <>
-            <View style={{ width: LABEL_GUTTER, justifyContent: 'space-between' }}>
-              {Array.from({ length: GRID_COLUMNS }, (_, i) => i).map((row) => (
-                <View key={row} style={{ height: cellSize, justifyContent: 'center' }}>
-                  {/* GitHub's own convention: label every other weekday row to reduce clutter (Mon/Wed/Fri/Sun here, since rows are Monday-first). */}
-                  {row % 2 === 0 && (
-                    <MonoLabel size={8} color={'rgba(255,255,255,0.32)'}>{weekdayLetter(row, locale)}</MonoLabel>
-                  )}
+            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: GAP, marginBottom: 8 }}>
+              {Array.from({ length: GRID_COLUMNS }, (_, i) => i).map((col) => (
+                <View key={col} style={{ width: cellSize, alignItems: 'center' }}>
+                  <MonoLabel size={10} color={'rgba(255,255,255,0.4)'}>{weekdayLetter(col, locale)}</MonoLabel>
                 </View>
               ))}
             </View>
-            {freqWindow.weeks.map((week, columnIndex) => (
-              // Positional, not date-based: navigating swaps this cell's
-              // props in place instead of unmounting/remounting a brand-new
-              // node for every date, which is what made period navigation
-              // feel heavy.
-              <View key={columnIndex} style={{ gap: GAP }}>
-                {week.map((day, rowIndex) => (
-                  <View
-                    key={rowIndex}
-                    accessibilityLabel={day && (source !== 'CACHE' || !knownThroughLocalDate || day.localDate <= knownThroughLocalDate)
-                      ? (day.completed
-                          ? t('activity.frequency.cellCompleted', { date: formatLocalDate(day.localDate, locale, { day: 'numeric', month: 'long' }) })
-                          : t('activity.frequency.cellEmpty', { date: formatLocalDate(day.localDate, locale, { day: 'numeric', month: 'long' }) }))
-                      : undefined}
-                    style={{
-                      width: cellSize,
-                      height: cellSize,
-                      borderRadius: 3,
-                      backgroundColor: source === 'CACHE' && day && knownThroughLocalDate && day.localDate > knownThroughLocalDate
-                        ? '#020010'
-                        : day?.completed ? '#4da3ff' : 'rgba(255,255,255,0.05)',
-                      borderWidth: day?.isToday ? 1 : 0,
-                      borderColor: 'rgba(77,163,255,0.8)',
-                      opacity: day ? (source === 'CACHE' && knownThroughLocalDate && day.localDate > knownThroughLocalDate ? 0.45 : 1) : 0,
-                    }}
-                  />
-                ))}
-              </View>
-            ))}
+            <View style={{ gap: GAP }}>
+              {freqWindow.weeks.map((week, rowIndex) => (
+                // Positional, not date-based: navigating swaps this cell's
+                // props in place instead of unmounting/remounting a brand-new
+                // node for every date, which is what made period navigation
+                // feel heavy.
+                <View key={rowIndex} style={{ flexDirection: 'row', justifyContent: 'center', gap: GAP }}>
+                  {week.map((day, colIndex) => (
+                    <View
+                      key={colIndex}
+                      accessibilityLabel={day && (source !== 'CACHE' || !knownThroughLocalDate || day.localDate <= knownThroughLocalDate)
+                        ? (day.completed
+                            ? t('activity.frequency.cellCompleted', { date: formatLocalDate(day.localDate, locale, { day: 'numeric', month: 'long' }) })
+                            : t('activity.frequency.cellEmpty', { date: formatLocalDate(day.localDate, locale, { day: 'numeric', month: 'long' }) }))
+                        : undefined}
+                      style={{
+                        width: cellSize,
+                        height: cellSize,
+                        borderRadius: 8,
+                        backgroundColor: source === 'CACHE' && day && knownThroughLocalDate && day.localDate > knownThroughLocalDate
+                          ? '#020010'
+                          : day?.completed ? '#4da3ff' : 'rgba(255,255,255,0.05)',
+                        borderWidth: day?.isToday ? 1.5 : 0,
+                        borderColor: 'rgba(77,163,255,0.8)',
+                        opacity: day ? (source === 'CACHE' && knownThroughLocalDate && day.localDate > knownThroughLocalDate ? 0.45 : 1) : 0,
+                      }}
+                    />
+                  ))}
+                </View>
+              ))}
+            </View>
           </>
         )}
       </Animated.View>
 
-      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 4, marginTop: 12 }}>
-        <MonoLabel size={9} color={'rgba(255,255,255,0.32)'}>{t('activity.frequency.less').toUpperCase()}</MonoLabel>
-        <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.05)' }} />
-        <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: '#4da3ff' }} />
-        <MonoLabel size={9} color={'rgba(255,255,255,0.32)'}>{t('activity.frequency.more').toUpperCase()}</MonoLabel>
-      </View>
+      <Animated.View style={{ marginTop: 14, opacity: fade }}>
+        <MonoLabel color={'rgba(255,255,255,0.5)'}>{summary}</MonoLabel>
+      </Animated.View>
     </View>
   );
 }

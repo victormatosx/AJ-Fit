@@ -4,9 +4,8 @@
     "subtitle": "Your sequence, your schedule, your call"
   },
   "currentWorkout": {
-    "continue": "Continue workout"
+    "continue": "Resume workout"
   },
-  "hero": { "inProgress": "Workout in progress" },
   "changeWorkout": {
     "cta": "Change workout",
     "sheetTitle": "Choose another workout",
@@ -29,7 +28,6 @@
   "agenda": {
     "title": "Training schedule",
     "fixedLabel": "Fixed days",
-    "flexibleLabel": "Free training",
     "flexibleHint": "Train whenever you want",
     "trainingDay": "Training day",
     "activeRecoveryDay": "Active recovery",
@@ -68,5 +66,26 @@
   "detail": {
     "makeNow": "Do it now",
     "makeNowAccessibility": "Start this workout now"
+  },
+  "todayBlock": {
+    "kickerToday": "Today's workout",
+    "kickerNext": "Next · {{weekday}}",
+    "sessionLabel": "Workout {{letter}}",
+    "metrics": {
+      "duration": "Duration",
+      "durationUnit": "min",
+      "exercises": "Exercises",
+      "sets": "Sets"
+    }
+  },
+  "completed": {
+    "button": "Today's workout done",
+    "note": "You already trained today. Next workout is {{when}}.",
+    "noteNoNext": "You already trained today."
+  },
+  "exercises": {
+    "title": "Exercises",
+    "showAll": "View all {{count}}",
+    "showLess": "Show less"
   }
 }

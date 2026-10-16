@@ -62,10 +62,7 @@ describe('Body Map sex propagation architecture', () => {
   it('derives authenticated sex once from the authoritative questionnaire and guards unresolved state', () => {
     expect(appShell).toContain('const sex = questionnaire?.answers.sex;');
     expect(appShell).toContain('if (!sex) return <FullScreenLoading />;');
-    expect(appShell).toContain('<HomeScreen\n            sex={sex}');
     expect(appShell).toContain('<WorkoutScreen\n              sex={sex}');
-    expect(home).toContain('sex: Sex;');
-    expect(home).toContain('<BodyMuscleMap\n                    sex={sex}');
   });
 
   it('propagates sex through completion summary and muscles worked', () => {

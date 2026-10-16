@@ -50,6 +50,13 @@ export interface BodyMuscleMapProps {
   selectableMuscles?: readonly MuscleId[];
   muscleAccessibilityLabel?: (muscle: MuscleId) => string;
   gap?: number;
+  /**
+   * Visual-only horizontal shift of the FRONT silhouette, in px. The back
+   * silhouette never moves. Default `0` is a no-op — every existing call
+   * site (Home's/Treino's Today poster, onboarding, workout summary,
+   * posters) keeps its current layout untouched.
+   */
+  frontOffsetX?: number;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -161,6 +168,7 @@ export function BodyMuscleMap({
   selectableMuscles,
   muscleAccessibilityLabel,
   gap = 6,
+  frontOffsetX = 0,
   style,
 }: BodyMuscleMapProps) {
   const anatomy = getBodyMuscleMapAnatomy(sex);
@@ -186,11 +194,13 @@ export function BodyMuscleMap({
 
   return (
     <View style={[{ flexDirection: 'row', gap }, style]}>
-      <DiagramView
-        diagramKey={bodyMuscleMapDiagramKey(sex, 'front')}
-        diagram={anatomy.front}
-        {...sharedProps}
-      />
+      <View style={frontOffsetX ? { transform: [{ translateX: frontOffsetX }] } : undefined}>
+        <DiagramView
+          diagramKey={bodyMuscleMapDiagramKey(sex, 'front')}
+          diagram={anatomy.front}
+          {...sharedProps}
+        />
+      </View>
       <DiagramView
         diagramKey={bodyMuscleMapDiagramKey(sex, 'back')}
         diagram={anatomy.back}

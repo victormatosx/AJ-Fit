@@ -4,9 +4,8 @@
     "subtitle": "Tu secuencia, tu agenda, bajo tu control"
   },
   "currentWorkout": {
-    "continue": "Continuar entreno"
+    "continue": "Reanudar entreno"
   },
-  "hero": { "inProgress": "Entreno en curso" },
   "changeWorkout": {
     "cta": "Cambiar entreno",
     "sheetTitle": "Elegir otro entreno",
@@ -29,7 +28,6 @@
   "agenda": {
     "title": "Agenda de entreno",
     "fixedLabel": "Días fijos",
-    "flexibleLabel": "Entreno libre",
     "flexibleHint": "Entrena cuando quieras",
     "trainingDay": "Día de entreno",
     "activeRecoveryDay": "Recuperación activa",
@@ -68,5 +66,26 @@
   "detail": {
     "makeNow": "Hacerlo ahora",
     "makeNowAccessibility": "Iniciar este entreno ahora"
+  },
+  "todayBlock": {
+    "kickerToday": "Entreno de hoy",
+    "kickerNext": "Próximo · {{weekday}}",
+    "sessionLabel": "Entreno {{letter}}",
+    "metrics": {
+      "duration": "Duración",
+      "durationUnit": "min",
+      "exercises": "Ejercicios",
+      "sets": "Series"
+    }
+  },
+  "completed": {
+    "button": "Entrenamiento de hoy completado",
+    "note": "Ya entrenaste hoy. El próximo entrenamiento es {{when}}.",
+    "noteNoNext": "Ya entrenaste hoy."
+  },
+  "exercises": {
+    "title": "Ejercicios",
+    "showAll": "Ver todos los {{count}}",
+    "showLess": "Mostrar menos"
   }
 }

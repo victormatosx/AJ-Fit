@@ -228,26 +228,49 @@ describe('official Light theme', () => {
     const planReady = readFileSync('src/screens/PlanReadyScreen.tsx', 'utf8');
     const home = readFileSync('src/screens/HomeScreen.tsx', 'utf8');
     const workout = readFileSync('src/screens/WorkoutScreen.tsx', 'utf8');
+    const treinoTodayBlock = readFileSync('src/components/treino/TreinoTodayBlock.tsx', 'utf8');
 
     expect(ctaButton).toContain('colors={theme.gradients.brand}');
     expect(ctaButton).toContain('color: theme.colors.primaryForeground');
     expect(paywall).toContain('<CtaButton');
     expect(planReady).toContain('backgroundColor: theme.colors.primary');
     expect(planReady).toContain('color: theme.colors.primaryForeground');
-    expect(home).toContain('backgroundColor: TODAY_WORKOUT_THEME.colors.inverseSurface');
-    expect(home).toContain('color: TODAY_WORKOUT_THEME.colors.inverseForeground');
+    expect(home).toContain('backgroundColor: TODAY_WORKOUT_THEME.colors.primary');
+    expect(home).toContain('color: TODAY_WORKOUT_THEME.colors.primaryForeground');
     expect(workout).toContain('backgroundColor: theme.colors.primary');
     expect(workout).toContain('color: theme.colors.primaryForeground');
+    expect(treinoTodayBlock).toContain('backgroundColor: theme.colors.primary');
+    expect(treinoTodayBlock).toContain('color: theme.colors.primaryForeground');
+  });
+
+  it('keeps the theme-aware Treino redesign components free of hardcoded white literals', () => {
+    // The Treino hub follows the live theme (unlike Home's forced-Dark
+    // poster), so a semi-transparent white literal would be illegible on
+    // the Light background. Every faint role must route through a token.
+    const WHITE_LITERAL = /rgba\(255,\s*255,\s*255|#fff\b|#ffffff\b|'white'/i;
+
+    const todayBlock = readFileSync('src/components/treino/TreinoTodayBlock.tsx', 'utf8');
+    const weekStrip = readFileSync('src/components/treino/TreinoWeekStrip.tsx', 'utf8');
+    const exerciseList = readFileSync('src/components/treino/TreinoExerciseList.tsx', 'utf8');
+    const upcomingList = readFileSync('src/components/treino/TreinoUpcomingList.tsx', 'utf8');
+
+    expect(todayBlock).not.toMatch(WHITE_LITERAL);
+    expect(weekStrip).not.toMatch(WHITE_LITERAL);
+    expect(exerciseList).not.toMatch(WHITE_LITERAL);
+    expect(upcomingList).not.toMatch(WHITE_LITERAL);
   });
 
   it('keeps the Today Workout poster on the official Dark artwork in both themes', () => {
     const home = readFileSync('src/screens/HomeScreen.tsx', 'utf8');
 
+    // Flat-card redesign (2026-10-08) dropped the gradient/HUD-corner poster
+    // chrome, but the card's text and CTA still route exclusively through
+    // the fixed `TODAY_WORKOUT_THEME` (= darkTheme) — never the active
+    // app theme — so it stays dark-only in both Light and Dark.
     expect(home).toContain('const TODAY_WORKOUT_THEME = darkTheme;');
-    expect(home).toContain('colors={TODAY_WORKOUT_THEME.gradients.poster}');
-    expect(home).toContain('color={TODAY_WORKOUT_THEME.colors.textPrimary}');
-    expect(home).toContain('backgroundColor: TODAY_WORKOUT_THEME.colors.inverseSurface');
-    expect(home).toContain('color: TODAY_WORKOUT_THEME.colors.inverseForeground');
+    expect(home).toContain('color: TODAY_WORKOUT_THEME.colors.textPrimary');
+    expect(home).toContain('backgroundColor: TODAY_WORKOUT_THEME.colors.primary');
+    expect(home).toContain('color: TODAY_WORKOUT_THEME.colors.primaryForeground');
   });
 
   it('keeps the Start Workout confirmation on the official Dark artwork in both themes', () => {

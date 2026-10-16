@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleProp, ViewStyle, Animated, Image, ImageStyle, StyleSheet } from 'react-native';
+import { View, Text, StyleProp, ViewStyle, Animated, Image, ImageStyle, StyleSheet, AppState } from 'react-native';
 import { useEventListener } from 'expo';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useTheme } from '../../theme';
 import { logWarn } from '../../lib/logger';
+import { configureSilentDemoVideo, observeSilentDemoAppState } from '../../lib/silentDemoVideo';
 import { EXERCISE_FALLBACK_VIDEO_ID } from '../../data/exerciseFallbackVideoMap';
 import type { ExerciseExecution } from '../../types/exercise';
 
@@ -110,11 +111,15 @@ export function ExerciseGif({ id, name, height, aspectRatio, radius = 16, style,
   // when `resolvedSource` changes (that caused a NativeSharedObjectNotFound
   // crash from a stale `player.pause()` call).
   const player = useVideoPlayer(resolvedSource, (p) => {
+    configureSilentDemoVideo(p);
     if (!resolvedSource) return;
-    p.loop = true;
-    p.muted = true;
-    p.play();
+    if (AppState.currentState === 'active' || AppState.currentState === null) p.play();
   });
+
+  useEffect(() => {
+    if (!resolvedSource) return;
+    return observeSilentDemoAppState(player, AppState);
+  }, [player, resolvedSource]);
 
   // `player` gets a fresh identity every time `resolvedSource` changes
   // (see above), so this always listens on the player actually attempting
