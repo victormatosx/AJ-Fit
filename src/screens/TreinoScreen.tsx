@@ -17,6 +17,7 @@ import type { Sex } from '../state/AppState';
 import { deriveSessionMuscles } from '../lib/sessionMuscles';
 import { effectiveNextSessionIndex } from '../scheduleEngine/effectiveNextSessionIndex';
 import { treinoCardSession } from './treinoCardSession';
+import { completedTodayNextLabel } from './completedTodayNote';
 import { buildUpcomingWorkouts, type UpcomingWorkoutViewModel } from '../home/upcomingWorkouts';
 import { buildTreinoWeekStrip } from '../home/treinoWeekStrip';
 import { estimateSessionMinutes } from '../home/sessionDuration';
@@ -182,6 +183,26 @@ export function TreinoScreen({
 
   const ctaLabel = workoutInProgress ? t('currentWorkout.continue') : tHome('todayCard.start');
 
+  // Today's session is done: the start CTA's slot becomes a blocked button
+  // plus a note naming the next workout. `TODAY_COMPLETED` already excludes
+  // `workoutInProgress` (which would have made `canStartNow` true above), so
+  // the two never render together.
+  const showCompletedToday = !canStartNow && resolution.status === 'TODAY_COMPLETED';
+  const completedNextLabel = showCompletedToday
+    ? completedTodayNextLabel({
+        nextWorkoutDate,
+        todayLocalDate,
+        todayLabel: t('agenda.today'),
+        weekdayLabel: (weekday) => t(`agenda.weekday.${weekday}`),
+        locale: i18n.resolvedLanguage ?? i18n.language,
+      })
+    : null;
+  const completedNote = showCompletedToday
+    ? completedNextLabel
+      ? t('completed.note', { when: completedNextLabel })
+      : t('completed.noteNoNext')
+    : null;
+
   const exerciseListItems: TreinoExerciseListItem[] = useMemo(() => {
     if (displayedSessionIndex == null) return [];
     try {
@@ -285,6 +306,8 @@ export function TreinoScreen({
             ctaLabel={ctaLabel}
             ctaDisabled={startPending}
             onPressCta={onStart}
+            completedLabel={showCompletedToday ? t('completed.button') : null}
+            completedNote={completedNote}
           />
 
           <TreinoExerciseList

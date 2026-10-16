@@ -78,6 +78,11 @@
       "sets": "Sets"
     }
   },
+  "completed": {
+    "button": "Today's workout done",
+    "note": "You already trained today. Next workout is {{when}}.",
+    "noteNoNext": "You already trained today."
+  },
   "exercises": {
     "title": "Exercises",
     "showAll": "View all {{count}}",

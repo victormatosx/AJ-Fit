@@ -13,7 +13,8 @@ import { ProfileAvatar } from '../components/ui/ProfileAvatar';
 import type { PrescriptionResult } from '../workoutPrescription/types';
 import { prescriptionOutcomeKey } from '../workoutPrescription/uiOutcome';
 import { resolveSessionDisplayName, type LooseTranslate } from '../workoutPrescription/sessionPresentation';
-import { weekdayOfLocalDate, type ScheduleResolution } from '../scheduleEngine';
+import { localDateInTimezone, weekdayOfLocalDate, type ScheduleResolution } from '../scheduleEngine';
+import { completedTodayNextLabel } from './completedTodayNote';
 import { HomeEvoTicker } from '../components/home/HomeEvoTicker';
 import { CycleProgressBlock } from '../components/home/CycleProgressBlock';
 import { PendingEvolutionBanner } from '../components/home/PendingEvolutionBanner';
@@ -263,6 +264,27 @@ export function HomeScreen({
       })
     : null;
 
+  // Today's session is already done: the CTA's slot shows a blocked button
+  // plus a note naming the next workout, the same treatment the Treino tab
+  // gives it. REST_DAY/ACTIVE_RECOVERY_DAY keep their "próximo treino" row.
+  const completedTodayResolution = !workoutInProgress && scheduleResolution?.status === 'TODAY_COMPLETED'
+    ? scheduleResolution
+    : null;
+  const completedNextLabel = completedTodayResolution
+    ? completedTodayNextLabel({
+        nextWorkoutDate: completedTodayResolution.nextWorkoutDate,
+        todayLocalDate: localDateInTimezone(new Date(), Intl.DateTimeFormat().resolvedOptions().timeZone),
+        todayLabel: tLoose('treino:agenda.today'),
+        weekdayLabel: (weekday) => tLoose(`treino:agenda.weekday.${weekday}`),
+        locale: i18n.resolvedLanguage ?? i18n.language,
+      })
+    : null;
+  const completedTodayNote = completedTodayResolution
+    ? completedNextLabel
+      ? tLoose('treino:completed.note', { when: completedNextLabel })
+      : tLoose('treino:completed.noteNoNext')
+    : null;
+
   // Today's real locale-formatted calendar date. There is no fixed
   // week-of-program countdown because the lifecycle has no such fact.
   const today = new Date();
@@ -446,7 +468,58 @@ export function HomeScreen({
             {!todayActionsReady ? (
               <View style={{ alignSelf: 'stretch', height: 54, marginTop: 24, borderRadius: 16, backgroundColor: TODAY_WORKOUT_THEME.colors.surfaceMuted }} />
             ) : isBlockedToday ? (
-              canAdvanceWorkout ? (
+              completedTodayResolution ? (
+                <View style={{ alignSelf: 'stretch' }}>
+                  {/* Blocked, never actionable: `disabled` (not just a muted
+                      look) is what guarantees no second session can be
+                      started today from here — the Schedule Engine's own
+                      resolution is the real block. */}
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: true }}
+                    disabled
+                    style={{
+                      alignSelf: 'stretch',
+                      marginTop: 24,
+                      paddingVertical: 17,
+                      borderRadius: 18,
+                      backgroundColor: TODAY_WORKOUT_THEME.colors.surfacePressed,
+                      borderWidth: 1,
+                      borderColor: TODAY_WORKOUT_THEME.colors.dividerStrong,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 9,
+                    }}
+                  >
+                    <Icon name="check" size={15} color={TODAY_WORKOUT_THEME.colors.primaryEmphasis} stroke={2.6} />
+                    <Text
+                      numberOfLines={1}
+                      style={{
+                        flexShrink: 1,
+                        fontFamily: theme.fonts.uiSemi,
+                        fontSize: 16,
+                        color: TODAY_WORKOUT_THEME.colors.textSubtle,
+                      }}
+                    >
+                      {tLoose('treino:completed.button')}
+                    </Text>
+                  </Pressable>
+                  {completedTodayNote && (
+                    <Text
+                      style={{
+                        marginTop: 12,
+                        textAlign: 'center',
+                        fontFamily: theme.fonts.ui,
+                        fontSize: 12.5,
+                        color: TODAY_WORKOUT_THEME.colors.textMuted,
+                      }}
+                    >
+                      {completedTodayNote}
+                    </Text>
+                  )}
+                </View>
+              ) : canAdvanceWorkout ? (
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={t('home:schedule.advance.cta', { weekday: advanceWeekday })}

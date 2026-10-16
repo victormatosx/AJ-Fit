@@ -78,6 +78,11 @@
       "sets": "Series"
     }
   },
+  "completed": {
+    "button": "Entrenamiento de hoy completado",
+    "note": "Ya entrenaste hoy. El próximo entrenamiento es {{when}}.",
+    "noteNoNext": "Ya entrenaste hoy."
+  },
   "exercises": {
     "title": "Ejercicios",
     "showAll": "Ver todos los {{count}}",

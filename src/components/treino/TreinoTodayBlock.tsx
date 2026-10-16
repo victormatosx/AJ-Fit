@@ -54,6 +54,8 @@ export function TreinoTodayBlock({
   ctaLabel,
   ctaDisabled,
   onPressCta,
+  completedLabel,
+  completedNote,
 }: {
   kicker: string | null;
   sessionLabel: string | null;
@@ -70,6 +72,13 @@ export function TreinoTodayBlock({
   ctaLabel: string;
   ctaDisabled: boolean;
   onPressCta: () => void;
+  /**
+   * Today's session is already done: the start CTA's slot shows a blocked,
+   * non-interactive button instead. Only read when `ctaVisible` is false —
+   * the two states are mutually exclusive by construction.
+   */
+  completedLabel: string | null;
+  completedNote: string | null;
 }) {
   const { theme } = useTheme();
 
@@ -215,6 +224,52 @@ export function TreinoTodayBlock({
             {ctaLabel}
           </Text>
         </Pressable>
+      )}
+
+      {!ctaVisible && completedLabel && (
+        <>
+          {/* Blocked, never actionable: `disabled` (not just a muted look) is
+              what guarantees no second session can be started today from
+              here — the Schedule Engine's resolution is the real block. */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled: true }}
+            disabled
+            style={{
+              marginTop: 20,
+              paddingVertical: 17,
+              borderRadius: 12,
+              backgroundColor: theme.colors.surfacePressed,
+              borderWidth: 1,
+              borderColor: theme.colors.dividerStrong,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 9,
+            }}
+          >
+            <Icon name="check" size={15} color={theme.colors.primaryEmphasis} stroke={2.6} />
+            <Text
+              numberOfLines={1}
+              style={{ flexShrink: 1, fontFamily: theme.fonts.uiSemi, fontSize: 16, color: theme.colors.textSubtle }}
+            >
+              {completedLabel}
+            </Text>
+          </Pressable>
+          {completedNote && (
+            <Text
+              style={{
+                marginTop: 12,
+                textAlign: 'center',
+                fontFamily: theme.fonts.ui,
+                fontSize: 12.5,
+                color: theme.colors.textMuted,
+              }}
+            >
+              {completedNote}
+            </Text>
+          )}
+        </>
       )}
     </View>
   );
