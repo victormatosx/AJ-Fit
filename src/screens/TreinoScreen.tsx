@@ -89,6 +89,17 @@ export function TreinoScreen({
   const displayedSessionIndex = rawDisplayedSessionIndex != null && plan.sessions[rawDisplayedSessionIndex]
     ? rawDisplayedSessionIndex
     : null;
+  if (rawDisplayedSessionIndex != null && displayedSessionIndex == null) {
+    // Degrading to the empty block is safe but indistinguishable from a real
+    // rest day, so the stale cursor would otherwise be invisible in production.
+    // The cursor itself is persisted unclamped (`resolver.ts`'s SESSION_READY
+    // branch has no modulo), so this is the only place it surfaces.
+    logWarn('treino', 'displayed_session_index_out_of_range', {
+      sessionIndex: rawDisplayedSessionIndex,
+      sessionCount: plan.sessions.length,
+      status: resolution.status,
+    });
+  }
   // Same actionable-CTA set as Home's own "todayCard" (docs §Consistência com
   // Meu Plano): MISSED_SESSION_DECISION_REQUIRED keeps the normal "Iniciar
   // treino" affordance — the decision itself is only asked once the user
