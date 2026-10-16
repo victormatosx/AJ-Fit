@@ -27,10 +27,12 @@ describe('real load-progress wiring', () => {
   });
 
   it('offers the requested search, record list and four time ranges', () => {
-    expect(loadsView).toContain('recordsLast90Days.slice(0, 3)');
+    expect(loadsView).toContain('displayRecords.slice(0, 3)');
     expect(loadsView).toContain('progress.loads.seeAllRecords');
     expect(loadsView).toContain('<TextInput');
-    expect(loadsView).toContain('LOAD_PROGRESS_PERIODS.map');
+
+    const exerciseDetail = readFileSync('src/components/fitness/ExerciseEvolutionDetail.tsx', 'utf8');
+    expect(exerciseDetail).toContain('LOAD_PROGRESS_PERIODS.map');
   });
 
   it('shares Evolution history with the workout without gating workout rendering', () => {

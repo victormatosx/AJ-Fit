@@ -43,9 +43,14 @@ describe('evolution chart interaction', () => {
     expect(bodyView).toContain('displayValue: `${formatWeightFromKg(entry.weightKg, resolvedUnits)}');
     expect(bodyView).toContain('displayValue: `${formatMeasurement(point.value)}');
 
-    expect(loadsView.match(/<EvolutionAreaChart/g)).toHaveLength(1);
-    expect(loadsView).toContain('displayValue: `${formatWorkoutLoadFromKg(point.loadKg');
-    expect(loadsView).toContain('label: dateFormatter.format(localDateAsDate(point.localDate))');
+    // The per-exercise chart moved to its own screen — Cargas itself no
+    // longer renders a chart directly.
+    expect(loadsView.match(/<EvolutionAreaChart/g)).toBeNull();
+
+    const exerciseDetail = readFileSync('src/components/fitness/ExerciseEvolutionDetail.tsx', 'utf8');
+    expect(exerciseDetail.match(/<EvolutionAreaChart/g)).toHaveLength(1);
+    expect(exerciseDetail).toContain('displayValue: `${formatWorkoutLoadFromKg(point.loadKg');
+    expect(exerciseDetail).toContain('label: dateFormatter.format(localDateAsDate(point.localDate))');
   });
 });
 
