@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NutritionErrorState } from '../../components/nutrition/NutritionStates';
@@ -33,7 +33,19 @@ export function NutritionWeeklySummaryScreen({
 
   return (
     <View style={{ flex: 1, backgroundColor: NU.bg }}>
-      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+      {/*
+        `edges={['top']}` only — no `'bottom'`. This screen's content area
+        is NOT behind AppShell's tab bar: in AppShell.tsx, the tab content
+        `<View style={{flex:1}}>` and `<TabBar>` are flex SIBLINGS in the
+        same column, so Yoga already sizes the content view to exactly
+        "screen height minus the tab bar's own (already safe-area-padded)
+        height" — nothing left to compensate for here. Adding a `'bottom'`
+        edge on top of that double-reserves the device's home-indicator
+        inset (it's already spent once, inside the tab bar's own
+        `SafeAreaView edges={['bottom']}`), which is what was pushing this
+        screen's content away from the tab bar with dead empty space.
+      */}
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <NuSheetHeader title={t('weekly.title')} onBack={onBack} />
 
         <View style={{ paddingHorizontal: 24 }}>
@@ -51,7 +63,15 @@ export function NutritionWeeklySummaryScreen({
             <NutritionErrorState title={t('weekly.loadError')} retryLabel={t('home.errorState.cta')} onRetry={onRetry} />
           </View>
         ) : (
-          <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 30 }}>
+          <ScrollView
+            style={{ flex: 1 }}
+            // Plain bottom breathing room for the last section — the
+            // ScrollView's own `flex: 1` already bounds it to exactly the
+            // space above the tab bar (see the SafeAreaView comment above),
+            // so this isn't compensating for anything hidden underneath it.
+            contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 30, paddingBottom: 24 }}
+            showsVerticalScrollIndicator={false}
+          >
             {loading || !summary ? <WeeklySkeleton /> : (
               <>
                 <Overview summary={summary} />
@@ -61,7 +81,7 @@ export function NutritionWeeklySummaryScreen({
                 <WeightSection weight={weight} loading={weightLoading} onOpenProgress={onOpenProgress} />
               </>
             )}
-          </View>
+          </ScrollView>
         )}
       </SafeAreaView>
     </View>

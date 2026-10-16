@@ -55,7 +55,8 @@ export function NutritionHomeScreen({
   onCreateCustomFood: () => void;
   onCreateRecipe: () => void;
 }) {
-  const { t } = useTranslation('nutrition');
+  const { t, i18n } = useTranslation('nutrition');
+  const { t: tHome } = useTranslation('home');
   // Same avatar as Home's header (`src/screens/HomeScreen.tsx`) — real
   // photo/initials, never a fixed placeholder.
   const { user, profile } = useAuth();
@@ -72,7 +73,7 @@ export function NutritionHomeScreen({
   if (state.kind === 'loading') {
     return (
       <View style={{ flex: 1, backgroundColor: NU.bg }}>
-        <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+        <SafeAreaView style={{ flex: 1 }} edges={['top']}>
           <View style={{ padding: 22, gap: 12 }}>
             <SkeletonBlock height={28} style={{ width: '50%' }} />
             <SkeletonBlock height={120} />
@@ -171,14 +172,44 @@ export function NutritionHomeScreen({
   const consumed: NutritionTotals = todayDiary?.totals ?? { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0, fiberG: 0 };
   const next = nextPlanMeal(plan);
   const today = todayLocalDate();
-  const eyebrow = new Intl.DateTimeFormat(undefined, { weekday: 'short', day: '2-digit', month: 'short' }).format(new Date());
+  // Same "{weekday} · {day} {month}" template Home's own header uses
+  // (`home:meta.todayLine`) — standardized across Home/Treino/Dieta instead
+  // of each screen formatting the date with its own raw `Intl` call.
+  const eyebrowLocale = i18n.resolvedLanguage ?? i18n.language;
+  const eyebrowDate = new Date(`${today}T12:00:00Z`);
+  const eyebrow = tHome('meta.todayLine', {
+    weekday: new Intl.DateTimeFormat(eyebrowLocale, { weekday: 'short', timeZone: 'UTC' }).format(eyebrowDate),
+    day: new Intl.DateTimeFormat(eyebrowLocale, { day: '2-digit', timeZone: 'UTC' }).format(eyebrowDate),
+    month: new Intl.DateTimeFormat(eyebrowLocale, { month: 'short', timeZone: 'UTC' }).format(eyebrowDate),
+  }).toUpperCase();
   const followed = diaryFollowedCount(todayDiary);
   const loggedMealCount = plan.meals.filter((meal) => diarySlotSummary(todayDiary, meal.slot) != null).length;
 
   return (
     <View style={{ flex: 1, backgroundColor: NU.bg }}>
-      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-        <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+      {/*
+        `edges={['top']}` only — this screen's content area is a flex
+        SIBLING of AppShell's tab bar (same column, tab bar sized by its own
+        content, this view sized by `flex:1` to exactly what's left above
+        it), not rendered behind it. A `'bottom'` edge here would reserve
+        the device's home-indicator inset a second time — it's already
+        spent once inside the tab bar's own `SafeAreaView edges={['bottom']}`
+        — which is what was pushing this screen's content away from the tab
+        bar with dead empty space. Mirrors the already-correct
+        `src/screens/HomeScreen.tsx` (the real Home tab), which only ever
+        used `edges={['top']}` here.
+      */}
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <ScrollView
+          style={{ flex: 1 }}
+          // 96, not an arbitrary "clear the tab bar" guess — the ScrollView
+          // is already correctly bounded by `flex: 1` above, so this is
+          // purely clearance for the floating "+" button (56px tall, sits
+          // 20px off the bottom, +20px breathing room) so it never overlaps
+          // the last scrolled item.
+          contentContainerStyle={{ paddingBottom: 96 }}
+          showsVerticalScrollIndicator={false}
+        >
           {/* §3.1 — header. Same geometry as Home's/Treino's (22px gutter,
               50px total top offset, 12px bottom gap) so every tab's
               header/ticker block lines up at an identical height. */}
@@ -200,7 +231,7 @@ export function NutritionHomeScreen({
           </View>
 
           {/* §3.2 — scrolling ticker. Same wrapper margins as Home's/Treino's. */}
-          <View style={{ marginTop: 22, marginBottom: 18 }}>
+          <View style={{ marginTop: 4, marginBottom: 18 }}>
             <NutritionTicker
               goalKcal={goals.kcal}
               consumedKcal={consumed.kcal}
@@ -261,6 +292,15 @@ export function NutritionHomeScreen({
                 </Pressable>
               );
             })}
+            <Pressable
+              onPress={state.onOpenFullPlan}
+              accessibilityRole="button"
+              accessibilityLabel={t('home.mealsToday.openPlanCta')}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingTop: 14, borderTopWidth: 1, borderTopColor: NU.hairline }}
+            >
+              <Text style={{ fontFamily: 'Archivo_600SemiBold', fontSize: 12.5, color: NU.secondary }}>{t('home.mealsToday.openPlanCta')}</Text>
+              <Icon name="chevron-right" size={12} color={NU.secondary} />
+            </Pressable>
           </View>
 
           {/* §3.7 — week ring row. */}
@@ -470,7 +510,7 @@ function QuickAccessTile({ icon, label, onPress, wide }: { icon: IconName; label
 function Centered({ children }: { children: React.ReactNode }) {
   return (
     <View style={{ flex: 1, backgroundColor: NU.bg }}>
-      <SafeAreaView style={{ flex: 1, justifyContent: 'center' }} edges={['top', 'bottom']}>
+      <SafeAreaView style={{ flex: 1, justifyContent: 'center' }} edges={['top']}>
         {children}
       </SafeAreaView>
     </View>

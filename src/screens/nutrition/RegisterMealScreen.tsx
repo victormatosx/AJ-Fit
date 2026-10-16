@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TextInput, View,
+  ActivityIndicator, Alert, InputAccessoryView, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TextInput, View,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { Timestamp } from 'firebase/firestore';
@@ -8,7 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon } from '../../components/ui/Icon';
 import { FoodRow } from '../../components/nutrition/FoodRow';
 import { SkeletonBlock } from '../../components/nutrition/NutritionPrimitives';
-import { NU, NuButton, NuCap, NuPanel, NuSelectPill, NuStepper } from '../../components/nutrition/NuKit';
+import { NU, NuButton, NuCap, NuHairline, NuPanel, NuSelectPill, NuStepper } from '../../components/nutrition/NuKit';
 import { useAuth } from '../../state/AuthContext';
 import { listCustomFoods } from '../../services/nutritionFoods';
 import { createLocalFoodLogSearchProvider, ensureFoodLogEntryMaterialized } from '../../services/foodLogCatalog';
@@ -67,7 +67,7 @@ type GramsStep = { mode: 'add'; food: FoodPick } | { mode: 'edit'; item: Nutriti
  * `recommendedPlan != actualIntake` holds with no extra logic here.
  */
 export function RegisterMealScreen({
-  visible, day, initialSlot, referenceItems, onClose, onAddFood, onEditGrams, onRemove, favoriteFoodIds, recentFoodIds, onToggleFavoriteFood,
+  visible, day, initialSlot, referenceItems, mealSlots, onClose, onAddFood, onEditGrams, onRemove, favoriteFoodIds, recentFoodIds, onToggleFavoriteFood,
 }: {
   visible: boolean;
   day: NutritionDailyLogDoc | null;
@@ -75,6 +75,8 @@ export function RegisterMealScreen({
   initialSlot?: NutritionMealSlot | null;
   /** The recommended option's items, shown read-only — diet-quality-v3: never persisted as-is, only a reference while the user adds the real catalog foods they ate. */
   referenceItems?: readonly NutritionPlanFoodItem[] | null;
+  /** The slots the user actually picked in the questionnaire (`NutritionProfile.mealSlots`) — only these render as chips, never the full `NUTRITION_MEAL_SLOTS` set. Falls back to `NUTRITION_MEAL_SLOTS` only if this arrives empty (profile not loaded yet), so the picker is never blank. */
+  mealSlots: readonly NutritionMealSlot[];
   onClose: () => void;
   onAddFood: (slot: NutritionMealSlot, source: NutritionLoggedFoodSource, foodId: string, grams: number) => Promise<void>;
   onEditGrams: (slot: NutritionMealSlot, item: NutritionLoggedFoodItem, grams: number) => Promise<void>;
@@ -84,9 +86,11 @@ export function RegisterMealScreen({
   onToggleFavoriteFood?: (foodId: string) => void;
 }) {
   const { t } = useTranslation('nutrition');
+  const { t: tCommon } = useTranslation('common');
   const { user } = useAuth();
 
-  const [slot, setSlot] = useState<NutritionMealSlot>(initialSlot ?? NUTRITION_MEAL_SLOTS[0]);
+  const slots = mealSlots.length > 0 ? mealSlots : NUTRITION_MEAL_SLOTS;
+  const [slot, setSlot] = useState<NutritionMealSlot>(initialSlot ?? slots[0]);
 
   const [searchText, setSearchText] = useState('');
   const [catalogResults, setCatalogResults] = useState<FoodLogEntry<Timestamp>[]>([]);
@@ -102,6 +106,7 @@ export function RegisterMealScreen({
 
   const [gramsStep, setGramsStep] = useState<GramsStep | null>(null);
   const [gramsText, setGramsText] = useState('100');
+  const gramsInputRef = useRef<TextInput>(null);
   /** Fase C6 — which natural unit (if any) is driving `gramsText`; `null` means manual/plain grams. Selecting a unit recomputes `gramsText`, but it stays a normal editable number afterward. */
   const [selectedServingId, setSelectedServingId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -112,14 +117,14 @@ export function RegisterMealScreen({
 
   useEffect(() => {
     if (!visible) {
-      setSlot(NUTRITION_MEAL_SLOTS[0]); setSearchText(''); setCatalogResults([]); setCursor(null);
+      setSlot(slots[0]); setSearchText(''); setCatalogResults([]); setCursor(null);
       setGramsStep(null); setBusy(false); setSelectedServingId(null);
       setScannerOpen(false); setCreatingFoodFromScan(false);
       return;
     }
-    setSlot(initialSlot ?? NUTRITION_MEAL_SLOTS[0]);
+    setSlot(initialSlot ?? slots[0]);
     if (user) listCustomFoods(user.uid).then(setCustomFoods).catch(() => setCustomFoods([]));
-  }, [visible, user, initialSlot]);
+  }, [visible, user, initialSlot, slots]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -226,6 +231,7 @@ export function RegisterMealScreen({
 
   const confirmGrams = async () => {
     if (!gramsStep || !gramsValid || busy) return;
+    Keyboard.dismiss();
     setBusy(true);
     try {
       if (gramsStep.mode === 'add') {
@@ -260,17 +266,20 @@ export function RegisterMealScreen({
       <View style={{ flex: 1, backgroundColor: NU.bg }}>
         <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
           <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 22, paddingTop: 14 }}>
-              <Text style={{ fontFamily: 'Archivo_700Bold', fontSize: 18, color: NU.white }}>{t('registerMeal.title')}</Text>
-              <Pressable accessibilityRole="button" accessibilityLabel={t('profile.actions.cancel')} onPress={onClose} style={{ padding: 6 }}>
-                <Icon name="x" size={20} color={NU.faint} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 22, paddingTop: 16, paddingBottom: 2 }}>
+              <Text style={{ fontFamily: 'Archivo_700Bold', fontSize: 19, letterSpacing: -0.3, color: NU.white }}>{t('registerMeal.title')}</Text>
+              <Pressable
+                accessibilityRole="button" accessibilityLabel={t('profile.actions.cancel')} onPress={onClose}
+                style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: NU.surfaceSubtleStrong }}
+              >
+                <Icon name="x" size={17} color={NU.secondary} />
               </Pressable>
             </View>
 
-            <View style={{ paddingHorizontal: 22, marginTop: 16 }}>
+            <View style={{ paddingHorizontal: 22, marginTop: 18 }}>
               <NuCap style={{ marginBottom: 10 }}>{t('registerMeal.selectSlot')}</NuCap>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                {NUTRITION_MEAL_SLOTS.map((option) => (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                {slots.map((option) => (
                   <NuSelectPill key={option} on={slot === option} onPress={() => setSlot(option)}>
                     {t(`mealSlots.${option}`)}
                   </NuSelectPill>
@@ -278,19 +287,26 @@ export function RegisterMealScreen({
               </ScrollView>
             </View>
 
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, paddingHorizontal: 22, marginTop: 16 }}>
-              {totalChips.map(([key, value, label]) => (
-                <View key={key} style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10,
-                  backgroundColor: NU.surfaceSubtle, borderWidth: 1, borderColor: NU.hairline }}>
-                  <Text style={{ fontFamily: 'Archivo_700Bold', fontSize: 15, color: NU.white }}>{value}</Text>
-                  <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 9, color: NU.faint, marginTop: 1 }}>
-                    {label.toUpperCase()}
-                  </Text>
-                </View>
-              ))}
+            <View style={{ paddingHorizontal: 22, marginTop: 18 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', borderRadius: 14, borderWidth: 1,
+                borderColor: NU.hairline, backgroundColor: NU.surfaceSubtle, paddingVertical: 13 }}>
+                {totalChips.map(([key, value, label], index) => (
+                  <React.Fragment key={key}>
+                    {index > 0 ? <View style={{ width: 1, alignSelf: 'stretch', marginVertical: 3, backgroundColor: NU.hairline }} /> : null}
+                    <View style={{ flex: 1, alignItems: 'center', paddingHorizontal: 2 }}>
+                      <Text numberOfLines={1} adjustsFontSizeToFit style={{ fontFamily: 'Archivo_700Bold', fontSize: 15.5, color: NU.white }}>
+                        {value}
+                      </Text>
+                      <Text numberOfLines={1} style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 8.5, letterSpacing: 0.4, color: NU.faint, marginTop: 3 }}>
+                        {label.toUpperCase()}
+                      </Text>
+                    </View>
+                  </React.Fragment>
+                ))}
+              </View>
             </View>
 
-            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 22, paddingTop: 20, paddingBottom: 40, gap: 10 }}>
+            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={{ paddingHorizontal: 22, paddingTop: 20, paddingBottom: 40, gap: 10 }}>
               {showReference ? (
                 <View style={{ padding: 14, borderRadius: 12, backgroundColor: NU.surfaceSubtle, gap: 8 }}>
                   <NuCap>{t('registerMeal.referenceTitle')}</NuCap>
@@ -319,7 +335,7 @@ export function RegisterMealScreen({
                   style={{ width: 50, height: 50, alignItems: 'center', justifyContent: 'center', borderRadius: 12,
                     backgroundColor: NU.surfaceSubtleStrong }}
                 >
-                  <Icon name="camera" size={18} color={NU.secondary} />
+                  <Icon name="barcode" size={18} color={NU.secondary} />
                 </Pressable>
               </View>
 
@@ -372,24 +388,31 @@ export function RegisterMealScreen({
 
               <NuCap style={{ marginTop: 8 }}>{t('registerMeal.itemsTitle')}</NuCap>
               {items.length === 0 ? (
-                <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 13, color: NU.faint }}>
+                <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 13, color: NU.faint, paddingVertical: 2 }}>
                   {t('registerMeal.noFoodsYet')}
                 </Text>
-              ) : items.map((item) => (
-                <FoodRow
-                  key={item.id} name={item.snapshot.name} grams={item.grams} kcal={item.snapshot.kcal}
-                  trailing={(
-                    <View style={{ flexDirection: 'row', gap: 14 }}>
-                      <Pressable onPress={() => openEditGrams(item)} accessibilityRole="button" accessibilityLabel={t('diary.editGrams')}>
-                        <Icon name="settings" size={15} color={NU.faint} />
-                      </Pressable>
-                      <Pressable onPress={() => confirmRemove(item)} accessibilityRole="button" accessibilityLabel={t('diary.remove')}>
-                        <Icon name="trash" size={15} color={NU.faint} />
-                      </Pressable>
+              ) : (
+                <View style={{ borderRadius: 14, borderWidth: 1, borderColor: NU.hairline, backgroundColor: NU.surfaceSubtle, paddingHorizontal: 14 }}>
+                  {items.map((item, index) => (
+                    <View key={item.id}>
+                      {index > 0 ? <NuHairline /> : null}
+                      <FoodRow
+                        name={item.snapshot.name} grams={item.grams} kcal={item.snapshot.kcal}
+                        trailing={(
+                          <View style={{ flexDirection: 'row', gap: 14 }}>
+                            <Pressable onPress={() => openEditGrams(item)} accessibilityRole="button" accessibilityLabel={t('diary.editGrams')}>
+                              <Icon name="more-vertical" size={16} color={NU.faint} />
+                            </Pressable>
+                            <Pressable onPress={() => confirmRemove(item)} accessibilityRole="button" accessibilityLabel={t('diary.remove')}>
+                              <Icon name="trash" size={15} color={NU.faint} />
+                            </Pressable>
+                          </View>
+                        )}
+                      />
                     </View>
-                  )}
-                />
-              ))}
+                  ))}
+                </View>
+              )}
             </ScrollView>
 
             <View style={{ padding: 22, borderTopWidth: 1, borderTopColor: NU.hairline }}>
@@ -398,12 +421,30 @@ export function RegisterMealScreen({
           </KeyboardAvoidingView>
         </SafeAreaView>
 
-        <NuPanel visible={gramsStep != null} onClose={() => setGramsStep(null)}>
+        <NuPanel visible={gramsStep != null} avoidKeyboard onClose={() => {
+          if (gramsInputRef.current?.isFocused()) Keyboard.dismiss();
+          else setGramsStep(null);
+        }}>
           {gramsStep ? (
-            <View style={{ gap: 18 }}>
-              <Text style={{ fontFamily: 'Archivo_700Bold', fontSize: 18, color: NU.white, lineHeight: 23 }}>
-                {formatFoodDisplayName(gramsStep.mode === 'add' ? gramsStep.food.name : gramsStep.item.snapshot.name)}
-              </Text>
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="never" keyboardDismissMode="on-drag" contentContainerStyle={{ gap: 18 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Text style={{ flex: 1, fontFamily: 'Archivo_700Bold', fontSize: 18, color: NU.white, lineHeight: 23 }}>
+                  {formatFoodDisplayName(gramsStep.mode === 'add' ? gramsStep.food.name : gramsStep.item.snapshot.name)}
+                </Text>
+                {onToggleFavoriteFood ? (() => {
+                  const stepFoodId = gramsStep.mode === 'add' ? gramsStep.food.foodId : gramsStep.item.foodId;
+                  const stepFavorited = favoriteFoodIds?.includes(stepFoodId);
+                  return (
+                    <Pressable
+                      onPress={() => onToggleFavoriteFood(stepFoodId)} accessibilityRole="button" hitSlop={8}
+                      accessibilityLabel={stepFavorited ? t('favorites.remove') : t('favorites.add')}
+                      accessibilityState={{ selected: Boolean(stepFavorited) }}
+                    >
+                      <Icon name="heart" filled={Boolean(stepFavorited)} size={20} color={stepFavorited ? NU.white : NU.faint} />
+                    </Pressable>
+                  );
+                })() : null}
+              </View>
               {servableUnits.length > 0 ? (
                 <View style={{ gap: 10 }}>
                   <NuCap>{t('registerMeal.unitLabel')}</NuCap>
@@ -420,15 +461,27 @@ export function RegisterMealScreen({
                 </View>
               ) : null}
               <NuStepper
-                value={`${gramsText} ${t('units.gramsShort')}`}
+                value={(
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                    <TextInput
+                      ref={gramsInputRef}
+                      value={gramsText}
+                      onChangeText={setGramsText}
+                      keyboardType="decimal-pad"
+                      returnKeyType="done"
+                      submitBehavior="blurAndSubmit"
+                      onSubmitEditing={Keyboard.dismiss}
+                      inputAccessoryViewID={Platform.OS === 'ios' ? 'register-meal-quantity-done' : undefined}
+                      accessibilityLabel={t('registerMeal.unitGrams')}
+                      selectTextOnFocus
+                      style={{ minWidth: 64, flexShrink: 1, paddingVertical: 6, paddingHorizontal: 2, fontFamily: 'Archivo_700Bold', fontSize: 24, color: NU.white, textAlign: 'center' }}
+                    />
+                    <Text style={{ fontFamily: 'Archivo_700Bold', fontSize: 24, color: NU.white }}> {t('units.gramsShort')}</Text>
+                  </View>
+                )}
                 sub={preview ? `${Math.round(preview.kcal)} ${t('units.kcal')}` : null}
                 onMinus={() => setGramsText(String(Math.max(0, Number(gramsText.replace(',', '.')) - 10)))}
                 onPlus={() => setGramsText(String(Number(gramsText.replace(',', '.')) + 10))}
-              />
-              <TextInput
-                value={gramsText} onChangeText={setGramsText} keyboardType="decimal-pad"
-                style={{ height: 48, borderRadius: 12, paddingHorizontal: 14, backgroundColor: NU.surfaceSubtleStrong,
-                  fontFamily: 'Archivo_400Regular', fontSize: 16, color: NU.white, textAlign: 'center' }}
               />
               {preview ? (
                 <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 12.5, color: NU.faint, textAlign: 'center' }}>
@@ -438,9 +491,18 @@ export function RegisterMealScreen({
               <NuButton onPress={() => { void confirmGrams(); }} disabled={!gramsValid || busy}>
                 {busy ? <ActivityIndicator color="#fff" /> : t('diary.save')}
               </NuButton>
-            </View>
+            </ScrollView>
           ) : null}
         </NuPanel>
+        {Platform.OS === 'ios' && gramsStep ? (
+          <InputAccessoryView nativeID="register-meal-quantity-done">
+            <View style={{ backgroundColor: NU.panel, alignItems: 'flex-end', paddingHorizontal: 20, paddingVertical: 10 }}>
+              <Pressable onPress={Keyboard.dismiss} accessibilityRole="button" accessibilityLabel={tCommon('actions.done')} hitSlop={8}>
+                <Icon name="check" size={24} color={NU.blueHi} />
+              </Pressable>
+            </View>
+          </InputAccessoryView>
+        ) : null}
       </View>
 
       <BarcodeScannerModal

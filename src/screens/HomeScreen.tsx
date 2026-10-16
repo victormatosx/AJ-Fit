@@ -326,7 +326,7 @@ export function HomeScreen({
               resting={restRunning}
               onPress={onStart}
             /> : null}
-            {onOpenSupportCases && (unreadSupportCasesCount > 0 || Boolean(snapshotFrequencyThrough)) && (
+            {onOpenSupportCases && unreadSupportCasesCount > 0 && (
               <SupportInboxButton unreadCasesCount={unreadSupportCasesCount} onPress={onOpenSupportCases} />
             )}
             <Pressable onPress={onOpenProfile} hitSlop={8}>
@@ -342,7 +342,7 @@ export function HomeScreen({
           {/* Real Training Level/Cycle/progress state from Workout Lifecycle V2 —
               Home-only HUD marquee + cycle ring (section 2.2/2.3 of the Home
               redesign). */}
-          <View style={{ marginTop: 22, marginBottom: 18 }}>
+          <View style={{ marginTop: 4, marginBottom: 8 }}>
             <HomeEvoTicker
               viewModel={evolutionViewModel}
               streak={streak}

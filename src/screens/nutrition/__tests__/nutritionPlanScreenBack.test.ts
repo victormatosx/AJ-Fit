@@ -15,13 +15,15 @@ describe('NutritionPlanScreen back navigation', () => {
   });
 
   it('renders a visible, accessible back control that reuses the same pattern as other Nutrition screens', () => {
-    // The redesign factored the back-chevron + centered title into a shared
-    // `NuSheetHeader` (used by every internal Nutrição screen) — the actual
-    // Pressable/Icon live there, with accessibilityRole="button" so it reads
-    // as a button to assistive tech, not just a bare icon.
+    // The redesign factored the header into a shared `NuSheetHeader` (used by
+    // every internal Nutrição screen) — the actual Pressable/Icon live there,
+    // with accessibilityRole="button" so it reads as a button to assistive
+    // tech, not just a bare icon. Standardized to the same close (×) icon
+    // "Criar Alimento"/"Criar Receita"/RegisterMealScreen already used,
+    // instead of a back-chevron only some screens had.
     expect(source).toMatch(/<NuSheetHeader title=\{.*\} onBack=\{onBack\} \/>/);
     expect(nuKitSource).toMatch(/<Pressable onPress=\{onBack\} accessibilityRole="button"/);
-    expect(nuKitSource).toMatch(/<Icon name="arrow-left"/);
+    expect(nuKitSource).toMatch(/<Icon name="x"/);
   });
 
   it('keeps the back control inside the screen header, not gating the scrollable plan content', () => {

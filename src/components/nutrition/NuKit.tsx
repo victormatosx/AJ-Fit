@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Animated, Easing, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle } from 'react-native-svg';
 import { Icon, type IconName } from '../ui/Icon';
@@ -214,7 +214,29 @@ export function NuSelectPill({ on, children, onPress }: { on: boolean; children:
 }
 
 /** `NcPanel` — bottom sheet chrome ONLY (backdrop + sliding panel). Renders as a plain absolute-positioned `View`, never a second native `Modal` — the Nutrition screens already stack secondary sheets this way inside their one real `Modal` (see `NutritionShell.tsx`), and a real nested Modal reintroduces the native-modal-stacking bug those screens' own comments document. */
-export function NuPanel({ visible, onClose, children }: { visible: boolean; onClose: () => void; children: React.ReactNode }) {
+export function NuPanel({ visible, onClose, children, avoidKeyboard = false }: { visible: boolean; onClose: () => void; children: React.ReactNode; avoidKeyboard?: boolean }) {
+  // Same slide-up entrance every other full-screen Nutrição flow gets from
+  // its native `<Modal animationType="slide">` (CreateCustomFoodScreen,
+  // CreateRecipeScreen, RegisterMealScreen itself) — `NuPanel` can't use
+  // that same native Modal (see the stacked-Modal regression this file's
+  // tests guard against), so it reproduces the motion by hand instead.
+  const translateY = useRef(new Animated.Value(60)).current;
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!visible) return;
+    translateY.setValue(60);
+    backdropOpacity.setValue(0);
+    // Spring, not timing+easing — a fixed-duration ease-out still reads as
+    // mechanical (hits 0 and stops dead). A low-damping spring keeps
+    // decelerating smoothly into place, the same "fluid" sheet motion iOS's
+    // own native sheets have, with `overshootClamping` so it settles without bounce.
+    Animated.parallel([
+      Animated.spring(translateY, {
+        toValue: 0, useNativeDriver: true, damping: 22, mass: 0.7, stiffness: 220, overshootClamping: true,
+      }),
+      Animated.timing(backdropOpacity, { toValue: 1, duration: 260, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+    ]).start();
+  }, [visible, translateY, backdropOpacity]);
   if (!visible) return null;
   return (
     // Explicit zIndex/elevation, not just render order: Android resolves
@@ -222,31 +244,38 @@ export function NuPanel({ visible, onClose, children }: { visible: boolean; onCl
     // carry its own elevation could otherwise paint on top of this panel
     // (the same class of bug `RegisterMealScreen`'s pre-redesign grams
     // overlay used to guard against with these exact values).
-    <View style={[StyleSheet.absoluteFill, { zIndex: 50, elevation: 50 }]} pointerEvents="box-none">
-      <Pressable onPress={onClose} style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(2,0,16,0.65)' }]} accessibilityLabel="Fechar" />
-      <View
+    <KeyboardAvoidingView enabled={avoidKeyboard} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={[StyleSheet.absoluteFill, { zIndex: 50, elevation: 50 }]} pointerEvents="box-none">
+      <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(2,0,16,0.65)', opacity: backdropOpacity }]}>
+        <Pressable onPress={onClose} style={StyleSheet.absoluteFill} accessibilityLabel="Fechar" />
+      </Animated.View>
+      <Animated.View
         style={{
-          position: 'absolute', left: 0, right: 0, bottom: 0,
+          ...(avoidKeyboard ? { marginTop: 'auto' as const } : { position: 'absolute' as const, left: 0, right: 0, bottom: 0 }),
           backgroundColor: NU.panel, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)',
           borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingTop: 10, paddingHorizontal: 24, paddingBottom: 34,
+          transform: [{ translateY }],
         }}
       >
         <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.2)', alignSelf: 'center', marginBottom: 20 }} />
         {children}
-      </View>
-    </View>
+      </Animated.View>
+    </KeyboardAvoidingView>
   );
 }
 
-/** `NcSheet` header — the back-chevron / centered-title bar used by every internal Nutrição screen. Pairs with each screen's own existing `<Modal>` — it does not render a `Modal` itself. */
+/** `NcSheet` header — left-aligned title / close (×) button, same layout every "Criar Alimento"/"Criar Receita"/`RegisterMealScreen` header already uses, standardized here so every internal Nutrição screen matches instead of some using a centered-title back-chevron. Pairs with each screen's own existing `<Modal>` — it does not render a `Modal` itself. */
 export function NuSheetHeader({ title, onBack }: { title: string; onBack: () => void }) {
+  // Every caller already renders this inside a `<SafeAreaView edges={['top', ...]}>`
+  // (RegisterMealScreen, FoodSearchScreen, NutritionDiaryScreen, etc.), which
+  // already insets for the status bar/notch — a large fixed `paddingTop` on
+  // top of that double-counts the inset and pushes the header too far down.
+  // This only needs its own small breathing room below the safe area.
   return (
-    <View style={{ paddingTop: 58, paddingHorizontal: 14, paddingBottom: 6, flexDirection: 'row', alignItems: 'center' }}>
-      <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel={title} style={{ width: 42, height: 42, alignItems: 'center', justifyContent: 'center' }}>
-        <Icon name="arrow-left" size={22} color={NU.white} />
+    <View style={{ paddingTop: 8, paddingHorizontal: 22, paddingBottom: 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+      <Text style={{ flex: 1, fontFamily: 'Archivo_700Bold', fontSize: 18, color: NU.white }} numberOfLines={1}>{title}</Text>
+      <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel="Fechar" style={{ padding: 6 }}>
+        <Icon name="x" size={20} color={NU.faint} />
       </Pressable>
-      <Text style={{ flex: 1, textAlign: 'center', fontFamily: 'Archivo_600SemiBold', fontSize: 16, color: NU.white }}>{title}</Text>
-      <View style={{ width: 42 }} />
     </View>
   );
 }
@@ -304,7 +333,7 @@ export function NuThinBar({ value, max, color = NU.strong, tickPct, dashed }: { 
 
 /** `NcStepper` — circular minus/value/plus control. */
 export function NuStepper({ value, sub, onMinus, onPlus, minusDisabled, plusDisabled }: {
-  value: string;
+  value: React.ReactNode;
   sub?: string | null;
   onMinus: () => void;
   onPlus: () => void;
@@ -325,7 +354,7 @@ export function NuStepper({ value, sub, onMinus, onPlus, minusDisabled, plusDisa
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
       {btn('minus', onMinus, minusDisabled)}
       <View style={{ flex: 1, alignItems: 'center' }}>
-        <Text style={{ fontFamily: 'Archivo_700Bold', fontSize: 24, color: NU.white }}>{value}</Text>
+        {typeof value === 'string' ? <Text style={{ fontFamily: 'Archivo_700Bold', fontSize: 24, color: NU.white }}>{value}</Text> : value}
         {sub ? <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 12, color: NU.faint, marginTop: 2 }}>{sub}</Text> : null}
       </View>
       {btn('plus', onPlus, plusDisabled)}

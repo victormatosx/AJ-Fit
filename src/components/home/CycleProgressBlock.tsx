@@ -80,7 +80,7 @@ export function CycleProgressBlock({
   const intermediate = summary.activeLevel === 'INTERMEDIATE';
 
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 22, marginTop: 32 }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 22, marginTop: 8 }}>
       <View style={{ alignItems: 'center', gap: 12 }}>
         {celebration.celebrating ? (
           <EvoRingCelebration

@@ -36,11 +36,15 @@ describe('RegisterMealScreen — single screen, no wizard', () => {
     // `<ScrollView>`/header block with no step/stage state machine —
     // unlike the old flow, there is no `step === 'slot' | 'foods'` branch.
     expect(source).not.toMatch(/step === 'slot'|step === 'foods'|setStep\(/);
-    expect(source).toMatch(/const \[slot, setSlot\] = useState<NutritionMealSlot>\(initialSlot \?\? NUTRITION_MEAL_SLOTS\[0\]\)/);
+    expect(source).toMatch(/const \[slot, setSlot\] = useState<NutritionMealSlot>\(initialSlot \?\? slots\[0\]\)/);
   });
 
-  it('renders all six meal slots as a single pill row (no separate "pick a slot" step)', () => {
-    expect(source).toMatch(/NUTRITION_MEAL_SLOTS\.map\(\(option\) =>/);
+  it('renders only the meal slots the user picked in the questionnaire as a single pill row (no separate "pick a slot" step, no fixed six-slot list)', () => {
+    // `mealSlots` (prop, from `NutritionProfile.mealSlots`) drives the
+    // chips — `NUTRITION_MEAL_SLOTS` (the fixed six-slot constant) is only
+    // a fallback for an empty/not-yet-loaded prop, never the default source.
+    expect(source).toMatch(/const slots = mealSlots\.length > 0 \? mealSlots : NUTRITION_MEAL_SLOTS;/);
+    expect(source).toMatch(/\{slots\.map\(\(option\) =>/);
     expect(source).toMatch(/onPress=\{\(\) => setSlot\(option\)\}/);
   });
 
@@ -77,7 +81,7 @@ describe('RegisterMealScreen — single screen, no wizard', () => {
     // itself (src/components/nutrition/NuKit.tsx) renders a plain absolute
     // `View`, never a `Modal`.
     expect(source.match(/<Modal\b/g)).toHaveLength(1);
-    expect(source).toMatch(/<NuPanel visible=\{gramsStep != null\} onClose=\{\(\) => setGramsStep\(null\)\}>/);
+    expect(source).toMatch(/<NuPanel visible=\{gramsStep != null\} avoidKeyboard onClose=/);
     expect(source).toMatch(/\{gramsStep \? \(/);
   });
 
@@ -139,7 +143,10 @@ describe('RegisterMealScreen — single screen, no wizard', () => {
     expect(source).toMatch(/onPress=\{\(\) => selectServingUnit\(unit\)\}/);
     // The "gramas" chip (manual entry) always renders too, and the grams TextInput is unconditional — never hidden behind the unit picker.
     expect(source).toMatch(/onPress=\{\(\) => selectServingUnit\(null\)\}/);
-    expect(source).toMatch(/value=\{gramsText\} onChangeText=\{setGramsText\}/);
+    const stepper = source.slice(source.indexOf('<NuStepper'), source.indexOf('</NuPanel>'));
+    expect(stepper).toMatch(/value=\{gramsText\}\s+onChangeText=\{setGramsText\}/);
+    expect(stepper.match(/<TextInput\b/g)).toHaveLength(1);
+    expect(stepper.indexOf('<TextInput')).toBeLessThan(stepper.indexOf('onMinus='));
   });
 
   it('has a clear close action and never breaks layout under the keyboard', () => {

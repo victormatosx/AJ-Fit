@@ -1,9 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, Linking, Modal, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, Easing, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import type { Timestamp } from 'firebase/firestore';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon } from '../../components/ui/Icon';
 import { NU, NuButton } from '../../components/nutrition/NuKit';
 import { resolveFoodLogEntryByBarcode } from '../../services/foodLogCatalog';
@@ -33,6 +32,15 @@ type ScanState =
  * materialized server-side (`resolveFoodLogEntryByBarcode` owns that
  * distinction) — this component doesn't care which, it only reports the
  * final `FoodLogEntry`.
+ *
+ * Renders as a plain absolutely-positioned overlay, not its own `<Modal>`
+ * — this is opened exclusively from inside `RegisterMealScreen`'s own
+ * `pageSheet` Modal. Two independent native `<Modal>`s stacked on top of
+ * each other is unreliable (the same class of bug fixed for
+ * `MealDetailsScreen` + `MealFeedbackSheet`): dismissing the inner one
+ * (the X here) can corrupt the outer one's (RegisterMealScreen's) native
+ * presentation/touch chain, leaving it "frozen" to the next tap. A plain
+ * full-bleed View has no such ambiguity.
  */
 export function BarcodeScannerModal({
   visible, onClose, onResolved, onNotFound,
@@ -46,6 +54,7 @@ export function BarcodeScannerModal({
   const { t } = useTranslation('nutrition');
   const [permission, requestPermission] = useCameraPermissions();
   const [state, setState] = useState<ScanState>({ phase: 'scanning' });
+  const [viewport, setViewport] = useState({ width: 0, height: 0 });
   const guardRef = useRef(initialBarcodeScanGuardState());
   const requestIdRef = useRef(0);
 
@@ -106,9 +115,31 @@ export function BarcodeScannerModal({
   if (!visible) return null;
 
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={handleClose} presentationStyle="fullScreen">
-      <View style={{ flex: 1, backgroundColor: '#000' }}>
-        <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+    <View
+      onLayout={({ nativeEvent: { layout } }) => setViewport({ width: layout.width, height: layout.height })}
+      style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 60, elevation: 60, backgroundColor: '#000', overflow: 'hidden' }}
+    >
+      {/* Keep the native preview untransformed: physically turning the phone
+          already turns the camera image. Only the controls/guide rotate in
+          this portrait-locked app, using the actual containing sheet size. */}
+      {permission?.granted ? (
+        <CameraView
+          style={StyleSheet.absoluteFill}
+          facing="back"
+          barcodeScannerSettings={{ barcodeTypes: [...SUPPORTED_BARCODE_TYPES] }}
+          onBarcodeScanned={state.phase === 'scanning' ? handleBarcodeScanned : undefined}
+        />
+      ) : null}
+      <View style={{
+        position: 'absolute',
+        width: viewport.height,
+        height: viewport.width,
+        left: (viewport.width - viewport.height) / 2,
+        top: (viewport.height - viewport.width) / 2,
+        transform: [{ rotate: '90deg' }],
+        opacity: viewport.width > 0 ? 1 : 0,
+      }}>
+        <View style={{ flex: 1, paddingHorizontal: 24, paddingVertical: 12 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 22, paddingTop: 10, zIndex: 10 }}>
             <Text style={{ fontFamily: 'Archivo_600SemiBold', fontSize: 16, color: '#fff' }}>
               {t('barcodeScan.title')}
@@ -132,21 +163,20 @@ export function BarcodeScannerModal({
             </View>
           ) : (
             <View style={{ flex: 1 }}>
-              <CameraView
-                style={{ flex: 1 }}
-                facing="back"
-                barcodeScannerSettings={{ barcodeTypes: [...SUPPORTED_BARCODE_TYPES] }}
-                onBarcodeScanned={state.phase === 'scanning' ? handleBarcodeScanned : undefined}
-              />
               <View
-                style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', padding: 32 }}
+                style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', padding: 12, gap: 12 }}
                 pointerEvents="box-none"
               >
                 {state.phase === 'scanning' ? (
-                  <View style={{ width: '78%', height: 140, borderRadius: 16, borderWidth: 2, borderColor: '#fff', overflow: 'hidden' }}>
+                  <View style={{ width: '78%', maxWidth: 520, height: 110, borderRadius: 16, borderWidth: 2, borderColor: '#fff', overflow: 'hidden' }}>
                     {/* `.aj2-scan` sweep — purely decorative, no state of its own, matches the design's "linha branca de varredura animada". */}
                     <ScanSweep />
                   </View>
+                ) : null}
+                {state.phase === 'scanning' ? (
+                  <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 13, color: '#fff', textAlign: 'center', backgroundColor: 'rgba(0,0,0,0.55)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
+                    {t('barcodeScan.landscapeHint')}
+                  </Text>
                 ) : null}
               </View>
 
@@ -181,9 +211,9 @@ export function BarcodeScannerModal({
               ) : null}
             </View>
           )}
-        </SafeAreaView>
+        </View>
       </View>
-    </Modal>
+    </View>
   );
 }
 
@@ -204,7 +234,7 @@ function ScanSweep() {
     <Animated.View
       style={{
         position: 'absolute', left: '10%', right: '10%', height: 2, backgroundColor: '#fff', opacity: 0.85,
-        transform: [{ translateY: translateY.interpolate({ inputRange: [0, 1], outputRange: [16, 124] }) }],
+        transform: [{ translateY: translateY.interpolate({ inputRange: [0, 1], outputRange: [16, 94] }) }],
       }}
     />
   );

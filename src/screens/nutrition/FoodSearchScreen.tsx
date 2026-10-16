@@ -19,7 +19,8 @@ import { createFederatedFoodLogSearchProvider } from '../../nutrition/foodLog/fe
 import { resolveDefaultServingUnit, nutrientsForServing } from '../../nutrition/catalog/servings';
 import { listNutritionRecipes, calculateStoredRecipeNutrition } from '../../services/nutritionRecipes';
 import type {
-  FoodLogEntry, FoodLogSourceType, NutritionCustomFood, NutritionFoodNutritionValues, NutritionFoodSourceType, NutritionRecipe,
+  FoodLogEntry, FoodLogServingUnit, FoodLogSourceType, NutritionCustomFood, NutritionFoodNutritionValues, NutritionFoodSourceType,
+  NutritionRecipe,
 } from '../../types/nutrition';
 import { countBucket, durationBucket, trackNutritionEvent } from '../../nutrition/analytics';
 import { CreateCustomFoodScreen } from './CreateCustomFoodScreen';
@@ -31,6 +32,9 @@ export interface NutritionFoodPick {
   nutritionPer100g: NutritionFoodNutritionValues;
   /** The resolved item's `source.type` (taco/off/tbca/.../manual) — closed-vocabulary, analytics-only (Fase C3 "search_source_selected"); never shown to the user (round brief Part 17). */
   sourceType?: FoodLogSourceType | NutritionFoodSourceType;
+  /** Fase C8 — carried through from the resolved `FoodLogEntry` so a caller logging straight from this picked result (no own grams/serving step, unlike `RegisterMealScreen`) can still resolve the food's natural unit instead of defaulting to grams. Absent for custom foods/recipes, which have no `FoodLogServingUnit`. */
+  servings?: FoodLogServingUnit[];
+  defaultServingId?: string | null;
 }
 
 /** Shared shape both `searchNutritionCatalog` (NutritionFood) and `searchFoodLogCatalog` (FoodLogEntry) results are mapped into for rendering — only the fields this screen actually displays. */
@@ -233,7 +237,10 @@ export function FoodSearchScreen({
     setMaterializingId(result.id);
     try {
       const materialized = await ensureFoodLogEntryMaterialized(raw);
-      trackedSelect({ foodId: materialized.id, name: materialized.name, origin, nutritionPer100g: materialized.nutritionPer100g, sourceType: materialized.source.type });
+      trackedSelect({
+        foodId: materialized.id, name: materialized.name, origin, nutritionPer100g: materialized.nutritionPer100g,
+        sourceType: materialized.source.type, servings: materialized.servings, defaultServingId: materialized.defaultServingId,
+      });
     } finally {
       setMaterializingId(null);
     }

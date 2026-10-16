@@ -313,6 +313,14 @@ function AppShellContent({
   const activeProgram = prescription.status === 'SUCCESS'
     ? (prescription.plan as WorkoutProgramSnapshot)
     : null;
+  // Latch for the TREINO hub (`TreinoScreen`), docs/23 §8 pattern: once
+  // persistent+materialized, it must never render with a null `plan` just
+  // because `prescription` transiently isn't SUCCESS (e.g. the brief window
+  // before the very first resolution) — the last real plan survives that
+  // window instead of unmounting the screen's content.
+  const treinoHubPlanRef = useRef<WorkoutProgramSnapshot | null>(null);
+  if (activeProgram) treinoHubPlanRef.current = activeProgram;
+  const treinoHubPlan = treinoHubPlanRef.current;
   const schedule = useWorkoutSchedule(activeProgram);
   const execution = useWorkoutExecution(activeProgram, schedule.config?.timezone, schedule.config?.scheduleMode);
   // Manual Substitution (exercise-substitution architecture audit): the same
@@ -2100,23 +2108,40 @@ function AppShellContent({
         {tab === 'workout' && (workoutStartPending || execution.starting || (workoutInProgress && !execution.execution)) && (
           <FullScreenLoading accessibilityLabel={t('preparing.title')} />
         )}
-        {tab === 'workout' && !workoutStartPending && prescription.status === 'SUCCESS'
-          && (!workoutInProgress || !workoutExecutionVisible) && (
-          <TreinoScreen
-            sex={sex}
-            plan={prescription.plan}
-            resolution={schedule.resolution}
-            completedTodaySessionIndex={schedule.completedTodaySessionIndex}
-            scheduleConfig={schedule.config}
-            workoutInProgress={workoutInProgress}
-            startPending={workoutStartPending || execution.starting}
-            onStart={requestStartWorkout}
-            onOpenAgendaEditor={() => setAgendaEditorOpen(true)}
-            onReposition={requestReposition}
-            evolutionViewModel={evolution.viewModel}
-            weekOverview={activitySnapshot.week}
-          />
-        )}
+        {/* TREINO hub: persistent+materialized like Home/Nutrition above —
+            docs/23_navegacao_e_lifecycle.md §15. Previously a bare
+            `tab === 'workout' && <TreinoScreen/>`, which remounted (and
+            re-laid-out) the header/ticker on every single tab entry — the
+            exact "artefato de navegação" the rest of this file's
+            `PersistentScreen` usages already eliminated elsewhere. `active`
+            keeps the same gating the old conditional used (not starting, a
+            resolved plan, and not covered by the full-screen execution
+            surface); the screen itself never needs `prewarm` since
+            `prescription` already resolves before the user can reach this
+            tab from Home. */}
+        <PersistentScreen
+          active={tab === 'workout' && !workoutStartPending && prescription.status === 'SUCCESS'
+            && (!workoutInProgress || !workoutExecutionVisible)}
+          activeStyle={FULL_BLEED.tab}
+          inactiveMode="materialized"
+        >
+          {treinoHubPlan && (
+            <TreinoScreen
+              sex={sex}
+              plan={treinoHubPlan}
+              resolution={schedule.resolution}
+              completedTodaySessionIndex={schedule.completedTodaySessionIndex}
+              scheduleConfig={schedule.config}
+              workoutInProgress={workoutInProgress}
+              startPending={workoutStartPending || execution.starting}
+              onStart={requestStartWorkout}
+              onOpenAgendaEditor={() => setAgendaEditorOpen(true)}
+              onReposition={requestReposition}
+              evolutionViewModel={evolution.viewModel}
+              weekOverview={activitySnapshot.week}
+            />
+          )}
+        </PersistentScreen>
         {tab === 'workout' && !workoutInProgress && agendaEditorOpen && activeProgram && (
           <TreinoAgendaSheet
             initialScheduleMode={schedule.config?.scheduleMode ?? 'fixed'}

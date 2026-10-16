@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import { Icon } from '../ui/Icon';
 import { NU, NuButton, NuCap } from './NuKit';
 import { foodNames, recommendedOption } from '../../nutrition/ui/planView';
-import { displayLineHeight } from '../../theme/tokens';
 import type { NutritionMeal } from '../../types/nutrition';
 
 /**
@@ -24,39 +23,48 @@ export function MealCard({
   const slotLabel = t(`mealSlots.${meal.slot}`);
 
   if (variant === 'next') {
-    const cols: [string, number, string][] = [
-      [t('units.kcal'), Math.round(option.totals.kcal), ''],
-      [t('home.summary.protein'), Math.round(option.totals.proteinG), 'g'],
-      [t('home.summary.carbs'), Math.round(option.totals.carbsG), 'g'],
-      [t('home.summary.fat'), Math.round(option.totals.fatG), 'g'],
+    const gramsShort = t('units.gramsShort');
+    const cols: [string, string][] = [
+      [`${Math.round(option.totals.kcal)}`, t('units.kcal')],
+      [`${Math.round(option.totals.proteinG)}${gramsShort}`, t('home.summary.protein')],
+      [`${Math.round(option.totals.carbsG)}${gramsShort}`, t('home.summary.carbs')],
+      [`${Math.round(option.totals.fatG)}${gramsShort}`, t('home.summary.fat')],
     ];
     return (
-      <View style={{ marginTop: 36, paddingTop: 24, paddingHorizontal: 24, borderTopWidth: 1, borderTopColor: NU.hairline }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
+      <View style={{ marginTop: 24, marginHorizontal: 22, padding: 18, borderRadius: 20, backgroundColor: NU.surfaceSubtle, borderWidth: 1, borderColor: NU.hairline }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <NuCap>{t('home.nextMeal.title')}</NuCap>
-          <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 12.5, color: NU.faint }}>{slotLabel}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: NU.surfaceSubtleStrong, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', flexShrink: 1, maxWidth: '55%' }}>
+            <Text style={{ fontFamily: 'Archivo_600SemiBold', fontSize: 12, color: NU.secondary }} numberOfLines={1}>{slotLabel}</Text>
+            <Icon name="chevron-right" size={11} color={NU.faint} />
+          </View>
         </View>
         {/* The design shows a composed "dish name" here (e.g. "Panqueca de
             banana com whey") — `NutritionMealOption` has no such field, only
             `foods[]`/`totals` (diet-quality-v3: free-form AI items, never a
             named dish). Showing the food list as the headline instead,
             exactly what this card showed before the redesign (the slot name
-            already sits in the row above). */}
-        <Text style={{ fontFamily: 'Archivo_700Bold', fontSize: 18, color: NU.white, marginTop: 12, lineHeight: 24 }} numberOfLines={2}>
+            already sits in the chip above). */}
+        <Text style={{ fontFamily: 'Archivo_700Bold', fontSize: 19, color: NU.white, marginTop: 14, lineHeight: 25 }} numberOfLines={3}>
           {foodNames(meal)}
         </Text>
-        <View style={{ flexDirection: 'row', marginTop: 20, paddingVertical: 14, borderTopWidth: 1, borderBottomWidth: 1, borderColor: NU.hairline }}>
-          {cols.map(([label, value, unit], i) => (
-            <View key={label} style={{ flex: 1, alignItems: 'center', borderLeftWidth: i ? 1 : 0, borderLeftColor: NU.hairline }}>
-              <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-                <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 20, lineHeight: displayLineHeight(20), color: NU.white, textTransform: 'uppercase' }}>{value}</Text>
-                {unit ? <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 12, color: NU.faint }}>{unit}</Text> : null}
+        <View style={{ flexDirection: 'row', marginTop: 18, paddingTop: 16, borderTopWidth: 1, borderTopColor: NU.hairline }}>
+          {cols.map(([value, label], i) => (
+            <React.Fragment key={label}>
+              {i > 0 ? <View style={{ width: 1, alignSelf: 'stretch', backgroundColor: NU.hairline }} /> : null}
+              <View style={{ flex: 1, alignItems: 'center' }}>
+                <Text style={{ fontFamily: 'Archivo_700Bold', fontSize: 16, color: NU.white }}>{value}</Text>
+                <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 10.5, color: NU.faint, marginTop: 3 }} numberOfLines={1}>{label}</Text>
               </View>
-              <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 11.5, color: NU.faint, marginTop: 5 }}>{label}</Text>
-            </View>
+            </React.Fragment>
           ))}
         </View>
-        <NuButton icon="plus" onPress={onPress} style={{ marginTop: 20 }}>{t('home.nextMeal.openCta')}</NuButton>
+        <NuButton ghost icon="plus" onPress={onPress} style={{ marginTop: 18, width: '100%' }} accessibilityLabel={t('home.nextMeal.openCta')}>
+          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Text style={{ fontFamily: 'Archivo_600SemiBold', fontSize: 14.5, color: NU.white }}>{t('home.nextMeal.openCta')}</Text>
+            <Icon name="chevron-right" size={14} color={NU.faint} />
+          </View>
+        </NuButton>
       </View>
     );
   }

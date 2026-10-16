@@ -125,9 +125,14 @@ export function TreinoScreen({
   const showBodyMap = sessionMuscles.primary.length > 0;
   const todayLocalDate = localDateInTimezone(new Date(), scheduleConfig?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone);
   const nextWorkoutDate = 'nextWorkoutDate' in resolution ? resolution.nextWorkoutDate : null;
-  const headerDateLabel = new Intl.DateTimeFormat(i18n.resolvedLanguage ?? i18n.language, { weekday: 'short', day: '2-digit', month: 'short', timeZone: 'UTC' })
-    .format(new Date(`${todayLocalDate}T12:00:00Z`))
-    .toUpperCase();
+  // Same "{weekday} · {day} {month}" template Home's own header uses
+  // (`home:meta.todayLine`) — standardized across Home/Treino/Dieta instead
+  // of each screen formatting the date with its own raw `Intl` call.
+  const headerDateLabel = tHome('meta.todayLine', {
+    weekday: new Intl.DateTimeFormat(i18n.resolvedLanguage ?? i18n.language, { weekday: 'short', timeZone: 'UTC' }).format(new Date(`${todayLocalDate}T12:00:00Z`)),
+    day: new Intl.DateTimeFormat(i18n.resolvedLanguage ?? i18n.language, { day: '2-digit', timeZone: 'UTC' }).format(new Date(`${todayLocalDate}T12:00:00Z`)),
+    month: new Intl.DateTimeFormat(i18n.resolvedLanguage ?? i18n.language, { month: 'short', timeZone: 'UTC' }).format(new Date(`${todayLocalDate}T12:00:00Z`)),
+  }).toUpperCase();
 
   const trainingDays = scheduleConfig?.trainingDays ?? [];
   const upcoming = buildUpcomingWorkouts({
@@ -252,9 +257,29 @@ export function TreinoScreen({
 
   return (
     <ScreenBg>
-      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+      {/*
+        `edges={['top']}` only — this screen's content area is a flex
+        SIBLING of AppShell's tab bar (same column, tab bar sized by its own
+        content, this view sized by `flex: 1` to exactly what's left above
+        it), not rendered behind it. A `'bottom'` edge here reserves the
+        device's home-indicator inset a second time — already spent once
+        inside the tab bar's own `SafeAreaView edges={['bottom']}` — which
+        pushed this screen's content away from the tab bar with dead empty
+        space. Mirrors the already-correct `src/screens/HomeScreen.tsx`.
+      */}
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        {/*
+          `style={{ flex: 1 }}` on the ScrollView: without it, the
+          ScrollView sizes to its own content instead of the space `flex: 1`
+          above leaves for it, and `ScreenBg`'s `overflow: 'hidden'` (a
+          shared component, out of scope to change here) then clips
+          whatever doesn't fit instead of it being scrollable — the exact
+          "elementos cortados" symptom. 24, not 112 — plain bottom breathing
+          room for the last card, not a guess at the tab bar's height.
+        */}
         <ScrollView
-          contentContainerStyle={{ paddingBottom: 112 }}
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingBottom: 24 }}
           showsVerticalScrollIndicator={false}
         >
           {/* Same header geometry as Home's (`src/screens/HomeScreen.tsx`) —
@@ -264,7 +289,7 @@ export function TreinoScreen({
           <View style={{ paddingHorizontal: 22, paddingTop: 50 - 10, paddingBottom: 12, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
             <View>
               <MonoLabel color={theme.colors.textFaint}>{headerDateLabel}</MonoLabel>
-              <Display size={34} style={{ marginTop: 8 }}>{t('header.title')}</Display>
+              <Display size={34} style={{ marginTop: 8 }}>{t('header.title')}.</Display>
             </View>
             <ProfileAvatar
               displayName={headerDisplayName}
@@ -274,7 +299,7 @@ export function TreinoScreen({
             />
           </View>
 
-          <View style={{ marginTop: 22, marginBottom: 18 }}>
+          <View style={{ marginTop: 4, marginBottom: 18 }}>
             <EvolutionTicker viewModel={evolutionViewModel} />
           </View>
 

@@ -8,7 +8,7 @@
     "supper": "Ceia"
   },
   "home": {
-    "title": "Nutrição",
+    "title": "Dieta",
     "loading": "Carregando sua nutrição…",
     "noProfile": {
       "title": "Monte seu Perfil Nutricional",
@@ -66,10 +66,11 @@
       "itemCount_one": "{{count}} alimento",
       "itemCount_other": "{{count}} alimentos",
       "empty": "Nada registrado",
-      "openDiaryCta": "Ver diário"
+      "openDiaryCta": "Ver diário",
+      "openPlanCta": "Ver plano completo"
     },
     "quickAccess": {
-      "title": "MEUS ALIMENTOS",
+      "title": "MAIS",
       "customFood": "Criar alimento",
       "recipe": "Criar receita",
       "favorites": "Meus favoritos",
@@ -345,13 +346,15 @@
     "title": "Detalhes da refeição",
     "options": "OPÇÕES EQUIVALENTES",
     "recommendedBadge": "Recomendada",
-    "foods": "ALIMENTOS",
-    "totals": "TOTAIS DA OPÇÃO",
+    "foods": "ALIMENTOS DESTA OPÇÃO",
+    "foodCount_one": "{{count}} alimento",
+    "foodCount_other": "{{count}} alimentos",
+    "totals": "TOTAIS DA REFEIÇÃO",
     "register": "Registrar esta opção",
     "registering": "Registrando…",
     "registered": "Registrado no seu diário de hoje.",
     "registerError": "Não foi possível registrar agora.",
-    "swap": "Trocar esta refeição",
+    "swap": "Trocar refeição",
     "favorite": "Favoritar",
     "favorited": "Adicionado aos favoritos.",
     "favoriteError": "Não foi possível favoritar agora."
@@ -390,6 +393,7 @@
     "backToPlan": "Voltar para o plano"
   },
   "barcodeScan": {
+    "landscapeHint": "Segure o celular na horizontal e alinhe o código de barras na moldura.",
     "title": "Escanear código de barras",
     "scanButtonLabel": "Escanear código de barras",
     "permissionExplanation": "Precisamos da câmera para ler o código de barras do produto.",

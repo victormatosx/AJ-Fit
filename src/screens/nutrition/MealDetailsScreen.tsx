@@ -3,7 +3,7 @@ import { ActivityIndicator, Modal, ScrollView, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MealOptionCard } from '../../components/nutrition/MealOptionCard';
-import { NU, NuButton, NuCap, NuSheetHeader } from '../../components/nutrition/NuKit';
+import { NU, NuCap, NuSheetHeader } from '../../components/nutrition/NuKit';
 import { recommendedOption } from '../../nutrition/ui/planView';
 import { displayLineHeight } from '../../theme/tokens';
 import type { NutritionMeal, NutritionMealOption } from '../../types/nutrition';
@@ -50,9 +50,15 @@ export function MealDetailsScreen({
   }, [meal?.slot]);
 
   // `NutritionMealOption` carries no per-slot min/max kcal range (only a
-  // single fixed `totals` per option) — "META DA REFEIÇÃO" below shows the
-  // recommended option's own kcal as one value instead of a fabricated range.
-  const goalKcal = meal ? Math.round(recommendedOption(meal).totals.kcal) : null;
+  // single fixed `totals` per option) — "TOTAIS DA REFEIÇÃO" below shows the
+  // recommended option's own totals as one value instead of a fabricated range.
+  const summaryTotals = meal ? recommendedOption(meal).totals : null;
+  const goalKcal = summaryTotals ? Math.round(summaryTotals.kcal) : null;
+  const macroCols: [string, string][] = summaryTotals ? [
+    [`${Math.round(summaryTotals.proteinG)}${t('units.gramsShort')}`, t('home.summary.protein')],
+    [`${Math.round(summaryTotals.carbsG)}${t('units.gramsShort')}`, t('home.summary.carbs')],
+    [`${Math.round(summaryTotals.fatG)}${t('units.gramsShort')}`, t('home.summary.fat')],
+  ] : [];
 
   return (
     <Modal visible={meal != null} animationType="slide" onRequestClose={onClose} presentationStyle="pageSheet">
@@ -70,36 +76,42 @@ export function MealDetailsScreen({
                     <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 14, color: NU.faint }}> {t('units.kcal')}</Text>
                   </View>
                 ) : null}
+                {macroCols.length ? (
+                  <View style={{ flexDirection: 'row', marginTop: 18, alignSelf: 'stretch' }}>
+                    {macroCols.map(([value, label], i) => (
+                      <React.Fragment key={label}>
+                        {i > 0 ? <View style={{ width: 1, alignSelf: 'stretch', backgroundColor: NU.hairline }} /> : null}
+                        <View style={{ flex: 1, alignItems: 'center' }}>
+                          <Text style={{ fontFamily: 'Archivo_700Bold', fontSize: 18, color: NU.white }}>{value}</Text>
+                          <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 10.5, color: NU.faint, marginTop: 3 }} numberOfLines={1}>{label}</Text>
+                        </View>
+                      </React.Fragment>
+                    ))}
+                  </View>
+                ) : null}
               </View>
 
               <View style={{ marginTop: 34 }}>
-                <NuCap style={{ marginBottom: 10 }}>{t('mealDetails.options')}</NuCap>
-                {meal.options.map((option, index) => (
-                  <View key={option.id} style={{ marginTop: index ? 28 : 0 }}>
-                    <MealOptionCard
-                      option={option}
-                      recommended={option.id === meal.recommendedOptionId}
-                      onRegister={readOnly || !onRegister ? undefined : () => {
-                        onRegister(option);
-                        setConfirmation(t('mealDetails.registered'));
-                      }}
-                      registering={registeringOptionId === option.id}
-                      onFavorite={readOnly || !onFavorite ? undefined : () => {
-                        onFavorite(option);
-                        setConfirmation(t('mealDetails.favorited'));
-                      }}
-                      favoriting={favoritingOptionId === option.id}
-                      favorited={favoritedOptionIds.includes(option.id)}
-                    />
-                  </View>
-                ))}
+                {meal.options.map((option, index) => {
+                  const recommended = option.id === meal.recommendedOptionId;
+                  return (
+                    <View key={option.id} style={{ marginTop: index ? 28 : 0 }}>
+                      <MealOptionCard
+                        option={option}
+                        recommended={recommended}
+                        showRecommendedBadge={false}
+                        showSummaryBox={false}
+                        onRegister={readOnly || !onRegister ? undefined : () => {
+                          onRegister(option);
+                          setConfirmation(t('mealDetails.registered'));
+                        }}
+                        registering={registeringOptionId === option.id}
+                        onSwap={readOnly || !onSwap || !recommended ? undefined : onSwap}
+                      />
+                    </View>
+                  );
+                })}
               </View>
-
-              {!readOnly && onSwap ? (
-                <NuButton ghost icon="swap" onPress={onSwap} style={{ marginTop: 20 }}>
-                  {t('mealDetails.swap')}
-                </NuButton>
-              ) : null}
 
               {confirmation ? (
                 <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 12.5, color: NU.blueHi, textAlign: 'center', marginTop: 16 }}>

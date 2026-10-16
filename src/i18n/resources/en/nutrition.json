@@ -66,10 +66,11 @@
       "itemCount_one": "{{count}} food",
       "itemCount_other": "{{count}} foods",
       "empty": "Nothing logged",
-      "openDiaryCta": "View diary"
+      "openDiaryCta": "View diary",
+      "openPlanCta": "View full plan"
     },
     "quickAccess": {
-      "title": "MY FOODS",
+      "title": "MORE",
       "customFood": "Create food",
       "recipe": "Create recipe",
       "favorites": "My favorites",
@@ -345,13 +346,15 @@
     "title": "Meal details",
     "options": "EQUIVALENT OPTIONS",
     "recommendedBadge": "Recommended",
-    "foods": "FOODS",
-    "totals": "OPTION TOTALS",
+    "foods": "FOODS IN THIS OPTION",
+    "foodCount_one": "{{count}} food",
+    "foodCount_other": "{{count}} foods",
+    "totals": "MEAL TOTALS",
     "register": "Log this option",
     "registering": "Logging…",
     "registered": "Logged to today's diary.",
     "registerError": "We couldn't log this right now.",
-    "swap": "Swap this meal",
+    "swap": "Swap meal",
     "favorite": "Favorite",
     "favorited": "Added to favorites.",
     "favoriteError": "We couldn't favorite this right now."
@@ -390,6 +393,7 @@
     "backToPlan": "Back to plan"
   },
   "barcodeScan": {
+    "landscapeHint": "Hold your phone horizontally and align the barcode inside the frame.",
     "title": "Scan barcode",
     "scanButtonLabel": "Scan barcode",
     "permissionExplanation": "We need camera access to read the product's barcode.",

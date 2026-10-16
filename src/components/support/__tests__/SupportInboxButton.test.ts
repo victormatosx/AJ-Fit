@@ -23,8 +23,9 @@ describe('SupportInboxButton — badge contract', () => {
     expect(source).toContain('{hasUnread && (');
   });
 
-  it('has no stale badge; snapshot Home keeps a stable zero-count navigation icon', () => {
-    expect(homeSource).toContain('unreadSupportCasesCount > 0 || Boolean(snapshotFrequencyThrough)');
+  it('only mounts the Home inbox button when there are unread messages, including snapshot Home', () => {
+    expect(homeSource).toContain('{onOpenSupportCases && unreadSupportCasesCount > 0 && (');
+    expect(homeSource).not.toContain('unreadSupportCasesCount > 0 || Boolean(snapshotFrequencyThrough)');
     expect(homeSource).not.toContain('opacity: unreadSupportCasesCount');
     expect(homeSource).not.toContain('pointerEvents={unreadSupportCasesCount');
   });
