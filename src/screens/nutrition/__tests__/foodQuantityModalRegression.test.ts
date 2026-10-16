@@ -58,7 +58,7 @@ describe('food quantity regression: diary "+" no longer writes a hardcoded 100 g
   });
 
   it('FoodQuantityModal is rendered in the overlay slot alongside RecipeQuantityModal, both inside one Modal', () => {
-    const overlayStart = shellSource.indexOf('overlay={(');
+    const overlayStart = shellSource.indexOf('overlay={(', shellSource.indexOf('<FoodSearchScreen'));
     const overlayEnd = shellSource.indexOf('/>\n\n      <RegisterMealScreen', overlayStart);
     const body = shellSource.slice(overlayStart, overlayEnd >= 0 ? overlayEnd : overlayStart + 2000);
     expect(body).toMatch(/<RecipeQuantityModal/);
@@ -75,21 +75,17 @@ describe('food quantity regression: diary "+" no longer writes a hardcoded 100 g
     expect(body).not.toMatch(/addDiaryFood\([^)]*,\s*100\)/);
   });
 
-  it('closes the panel synchronously in the same handler that fires the write, preventing a double-tap from logging twice', () => {
-    // Same mechanism RecipeQuantityModal's onConfirm already relies on:
-    // `setFoodQuantityPick(null)` makes `visible={foodQuantityPick != null}`
-    // false on the very same tick as the write, so the button that was
-    // just pressed is gone before a second tap could land.
+  it('guards duplicate taps synchronously and closes after the write succeeds', () => {
     const confirmStart = shellSource.indexOf('onConfirm={(grams) => {', shellSource.indexOf('<FoodQuantityModal'));
     const confirmEnd = shellSource.indexOf('}}', confirmStart);
     const body = shellSource.slice(confirmStart, confirmEnd);
-    expect(body).toMatch(/setFoodQuantityPick\(null\); setDiaryFoodTarget\(null\);/);
+    expect(body).toMatch(/diaryAddInFlight\.current = true/);
+    expect(body).toMatch(/closeDiaryFoodSearch\(\);/);
   });
 
-  it('onClose also clears foodQuantityPick, so cancelling never leaves a stale pick to write later', () => {
-    const closeMatch = shellSource.match(/<FoodQuantityModal[\s\S]*?onClose=\{\(\) => \{ ([^}]*) \}\}/);
-    expect(closeMatch?.[1]).toMatch(/setFoodQuantityPick\(null\)/);
-    expect(closeMatch?.[1]).toMatch(/setDiaryFoodTarget\(null\)/);
+  it('onClose clears the quantity pick while retaining the search destination', () => {
+    const closeMatch = shellSource.match(/<FoodQuantityModal[\s\S]*?onClose=\{\(\) => \{ if \(!addingDiaryFood\) setFoodQuantityPick\(null\); \}\}/);
+    expect(closeMatch).not.toBeNull();
   });
 
   it('FoodQuantityModal resolves the default natural unit (not a hardcoded 100) when the pick has servings', () => {
@@ -105,7 +101,7 @@ describe('food quantity regression: diary "+" no longer writes a hardcoded 100 g
 
   it('only calls onConfirm after explicit user confirmation, gated on valid grams', () => {
     expect(modalSource).toMatch(/onPress=\{\(\) => \{ if \(gramsValid\) onConfirm\(gramsValue\); \}\}/);
-    expect(modalSource).toMatch(/disabled=\{!gramsValid\}/);
+    expect(modalSource).toMatch(/disabled=\{!gramsValid \|\| saving\}/);
   });
 
   it('offers unit pills (servable units + a plain grams option) exactly like RegisterMealScreen\'s own grams step', () => {
@@ -117,7 +113,7 @@ describe('food quantity regression: diary "+" no longer writes a hardcoded 100 g
 
   it('renders through the shared NuPanel overlay, never a second native <Modal>', () => {
     expect(modalSource).not.toMatch(/<Modal\b/);
-    expect(modalSource).toMatch(/<NuPanel visible=\{visible\} onClose=\{onClose\}>/);
+    expect(modalSource).toMatch(/<NuPanel visible=\{visible\} onClose=\{onClose\} avoidKeyboard>/);
   });
 
   it('reuses the same unit-resolution and math utilities RegisterMealScreen already uses, instead of a divergent implementation', () => {

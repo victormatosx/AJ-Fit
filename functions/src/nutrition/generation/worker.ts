@@ -68,6 +68,8 @@ export async function processNutritionGenerationJob(
   const user = db.collection('users').doc(uid);
   const ref = user.collection('nutritionGenerationJobs').doc(generationId);
   if (!(await claim(db, ref, Timestamp.now()))) return false;
+  let stage = 'context';
+  logInfo('nutrition.generation', 'job_started', { generationId, stage });
   try {
     await requireNutritionGenerationRollout(db, uid);
     const context = await loadGenerationContext(db, uid);
@@ -80,18 +82,15 @@ export async function processNutritionGenerationJob(
       provider, context.profile, context.engine, context.physical.goal, foodNames,
       async (audit) => {
         observedAttempt = audit.attempt;
+        logInfo('nutrition.generation', 'attempt_completed', { generationId, attempt: audit.attempt,
+          stage: audit.result ? 'validation' : 'provider', failureCode: audit.code,
+          durationMs: audit.latencyMs, fallback: audit.fallback,
+          validationScope: audit.validationIssue?.scope, slot: audit.validationIssue?.slot,
+          nutrients: audit.validationIssue?.nutrients });
         await recordAiOperation(db, { ownerUid: uid, generationId, operation: 'full_plan',
           defaultModel: audit.fallback ? NUTRITION_AI_MODELS.fallback : NUTRITION_AI_MODELS.fullPlan,
           attempt: audit.attempt, result: audit.result, code: audit.code, fallback: audit.fallback, latencyMs: audit.latencyMs });
-        // Cloud Logging only, NEVER Firestore/nutritionAiOperations — this is
-        // the MODEL's own short policy statement for a refusal (never diet
-        // content, never a reflection of the request), truncated at the
-        // source in provider.ts. The only way to diagnose a real refusal
-        // pattern without ever persisting prompt/output anywhere queryable.
-        if (audit.code === 'AI_SAFETY_VALIDATION_FAILED' && audit.refusalReason) {
-          logWarn('nutrition.generation', 'ai_refusal', { generationId, attempt: audit.attempt,
-            refusalReason: audit.refusalReason });
-        }
+        // Never log free-form model refusals: they can echo user input.
         // `lastFailureCode` intentionally only tracks a NON-final attempt's
         // failure (attempt < 3) — generateValidatedPlan reads it back as
         // `previousFailureCode` purely to decide whether the LAST attempt
@@ -104,13 +103,15 @@ export async function processNutritionGenerationJob(
         if (audit.code && audit.attempt < 3) await ref.update({ status: 'running', retryCount: audit.attempt - 1,
           lastFailureCode: audit.code, updatedAt: Timestamp.now() });
       },
-      async (currentAttempt) => { await ref.update({ status: 'validating', retryCount: currentAttempt - 1,
+      async (currentAttempt) => { stage = 'validation'; await ref.update({ status: 'validating', retryCount: currentAttempt - 1,
         updatedAt: Timestamp.now() }); },
-      { startAttempt, previousFailureCode: typeof previousFailureCode === 'string'
+      { startAttempt, generationId, previousFailureCode: typeof previousFailureCode === 'string'
         ? previousFailureCode as AttemptCode : undefined,
-      onBeforeAttempt: async (currentAttempt) => { await ref.update({ aiAttemptCount: currentAttempt,
+      onBeforeAttempt: async (currentAttempt) => { stage = 'provider'; await ref.update({ aiAttemptCount: currentAttempt,
         updatedAt: Timestamp.now() }); } },
     );
+        stage = 'persistence';
+        logInfo('nutrition.generation', 'persistence_started', { generationId, stage });
         const now = Timestamp.now();
         const planRef = user.collection('nutritionPlans').doc(generationId);
         const rateRef = db.collection('nutritionRateLimits').doc(uid);
@@ -144,7 +145,8 @@ export async function processNutritionGenerationJob(
             retryCount: attempt - 1, leaseUntil: null, nextAttemptAt: null });
           tx.update(rateRef, { activeGenerationId: null, activePlanId: generationId, updatedAt: now });
         });
-        logInfo('nutrition.generation', 'job_completed', { generationId, attempts: attempt, fallback });
+        logInfo('nutrition.generation', 'job_completed', { generationId, stage: 'completed', attempts: attempt, fallback,
+          durationMs: Date.now() - operationStartedAt });
         await trackNutritionBackendEvent({ name: 'nutrition_generation_completed', properties: {
           durationBucket: durationBucket(Date.now() - operationStartedAt),
           retryCountBucket: countBucket(attempt - 1), fallbackUsed: fallback,
@@ -152,6 +154,8 @@ export async function processNutritionGenerationJob(
         } });
         return true;
   } catch (error) {
+    logWarn('nutrition.generation', 'job_stage_failed', { generationId, stage,
+      failureCode: errorCode(error), durationMs: Date.now() - operationStartedAt });
     const transientCode = typeof error === 'object' && error !== null && 'code' in error
       ? (error as { code: unknown }).code : null;
     if (typeof transientCode === 'number' && [4, 8, 10, 13, 14].includes(transientCode)) {

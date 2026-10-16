@@ -47,6 +47,8 @@
       }
     },
     "nextMeal": {
+      "showAllFoods": "Ver todos los alimentos (+{{count}})",
+      "collapseFoods": "Contraer lista",
       "title": "PRÓXIMA COMIDA",
       "recommended": "Recomendado",
       "openCta": "Ver comida"
@@ -62,6 +64,7 @@
       "summaryCta": "Resumen"
     },
     "mealsToday": {
+      "nextMeal": "Próxima comida",
       "title": "COMIDAS DE HOY",
       "itemCount_one": "{{count}} alimento",
       "itemCount_other": "{{count}} alimentos",
@@ -71,10 +74,15 @@
     },
     "quickAccess": {
       "title": "MÁS",
+      "customFoodDescription": "Añade un alimento personalizado a tu colección.",
       "customFood": "Crear alimento",
+      "recipeDescription": "Guarda tus recetas para usarlas cuando quieras.",
       "recipe": "Crear receta",
+      "favoritesDescription": "Accede a tus alimentos y recetas favoritos.",
       "favorites": "Mis favoritos",
+      "savedMealsDescription": "Consulta las comidas que guardaste para volver a usarlas.",
       "savedMeals": "Comidas guardadas",
+      "historyDescription": "Accede a tus planes de alimentación anteriores.",
       "history": "Historial de planes"
     },
     "pregnancyBlock": {
@@ -88,7 +96,24 @@
     }
   },
   "weekly": {
+    "aboutAverage": "Sobre la media diaria",
+    "macroTargetsAverage": "Metas calculadas sobre la media de los {{count}} días con metas disponibles.",
+    "dailyAverage": "Media diaria",
+    "dailyTarget": "Meta diaria",
+    "averageDailyTarget": "Meta media diaria",
+    "averageCoverage": "Media basada en {{count}} de 7 días con registros.",
+    "targetUnavailable": "Meta no disponible",
+    "dailyConsumption": "Consumo diario",
+    "futureDay": "Día futuro",
+    "noRecordDay": "Sin registro",
+    "dayTarget": "Meta {{value}}",
+    "individualTargets": "Las marcas indican las metas disponibles de cada día.",
+    "macroAverages": "Macronutrientes (media diaria)",
+    "noWeeklyWeight": "No hay mediciones de peso disponibles esta semana.",
+    "openProgressCompact": "Ver en Evolución",
     "title": "Resumen semanal",
+    "emptyBody": "Empieza a registrar tus comidas para seguir tu alimentación y ver tu progreso.",
+    "registerMeal": "Registrar comida",
     "thisWeek": "Esta semana",
     "open": "Ver resumen",
     "back": "Volver a Nutrición",
@@ -470,6 +495,11 @@
     "gramsShort": "g"
   },
   "diary": {
+    "addError": "No se pudo añadir el alimento. Inténtalo de nuevo.",
+    "remaining": "Faltan {{value}} kcal",
+    "overGoal": "Por encima de la meta: {{value}} kcal",
+    "emptyMeal": "Ningún alimento registrado.",
+    "foodActions": "Opciones de {{name}}",
     "title": "Diario alimentario",
     "today": "Hoy",
     "yesterday": "Ayer",

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Animated, Easing, Keyboard, Modal, Platform, Pressable, ScrollView, Text, TextInput, TouchableWithoutFeedback, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { Timestamp } from 'firebase/firestore';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,7 +9,7 @@ import { CtaButton } from '../../components/ui/CtaButton';
 import { Icon } from '../../components/ui/Icon';
 import { FoodRow } from '../../components/nutrition/FoodRow';
 import { SkeletonBlock } from '../../components/nutrition/NutritionPrimitives';
-import { NU, NuButton, NuSheetHeader } from '../../components/nutrition/NuKit';
+import { NU, NuButton, NuPanel, NuSheetHeader } from '../../components/nutrition/NuKit';
 import { useTheme } from '../../theme';
 import { useAuth } from '../../state/AuthContext';
 import { searchNutritionCatalog, listCustomFoods } from '../../services/nutritionFoods';
@@ -77,9 +77,11 @@ const localFoodLogSearchProvider = createFederatedFoodLogSearchProvider({
  */
 export function FoodSearchScreen({
   visible, onClose, onSelect, excludeIds = [], includeRecipes = false, catalog = 'generation', variant = 'profile',
-  favoriteFoodIds, recentFoodIds, favoriteRecipeIds, onToggleFavoriteFood, onToggleFavoriteRecipe, overlay,
+  favoriteFoodIds, recentFoodIds, favoriteRecipeIds, onToggleFavoriteFood, onToggleFavoriteRecipe, overlay, presentation = 'modal',
 }: {
   visible: boolean;
+  /** Embed in the Diary's native modal using the quantity panel's shared chrome. */
+  presentation?: 'modal' | 'sheet';
   onClose: () => void;
   onSelect: (food: NutritionFoodPick) => void;
   excludeIds?: readonly string[];
@@ -118,6 +120,9 @@ export function FoodSearchScreen({
   const { t } = useTranslation('nutrition');
   const { user } = useAuth();
   const [text, setText] = useState('');
+  const [searchExpanded, setSearchExpanded] = useState(false);
+  const searchInputRef = useRef<TextInput>(null);
+  const sheetHeight = useRef(new Animated.Value(45)).current;
   const [results, setResults] = useState<CatalogSearchResult[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -142,8 +147,45 @@ export function FoodSearchScreen({
   }, [visible, user, includeRecipes]);
 
   useEffect(() => {
-    if (!visible) { setText(''); setResults([]); setCursor(null); setError(false); }
-  }, [visible]);
+    if (presentation === 'sheet') {
+      setSearchExpanded(false);
+      if (visible) Keyboard.dismiss();
+    }
+    if (!visible) {
+      searchRequestRef.current++;
+      setText(''); setResults([]); setCursor(null); setError(false); setLoading(false); setCreatingFood(false);
+    }
+  }, [visible, presentation]);
+
+  const dismissSearchKeyboard = useCallback(() => {
+    searchInputRef.current?.blur();
+    Keyboard.dismiss();
+    setSearchExpanded(false);
+  }, []);
+
+  useEffect(() => {
+    if (presentation !== 'sheet' || !visible) return;
+    const subscription = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => {
+      searchInputRef.current?.blur();
+      setSearchExpanded(false);
+    });
+    return () => subscription.remove();
+  }, [presentation, visible]);
+
+  useEffect(() => {
+    if (presentation !== 'sheet' || !visible) {
+      sheetHeight.setValue(45);
+      return;
+    }
+    const transition = Animated.timing(sheetHeight, {
+      toValue: searchExpanded ? 90 : 45,
+      duration: 320,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false, // Height changes the available space for the scrollable results.
+    });
+    transition.start();
+    return () => transition.stop();
+  }, [presentation, visible, searchExpanded, sheetHeight]);
 
   const favoriteIdSet = useMemo(() => (favoriteFoodIds ? new Set(favoriteFoodIds) : undefined), [favoriteFoodIds]);
   const recentIdSet = useMemo(() => (recentFoodIds ? new Set(recentFoodIds) : undefined), [recentFoodIds]);
@@ -186,9 +228,10 @@ export function FoodSearchScreen({
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!visible) return;
     debounceRef.current = setTimeout(() => runSearch(text), DEBOUNCE_MS);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [text, runSearch]);
+  }, [visible, text, runSearch]);
 
   const loadMore = () => {
     if (!cursor || loadingMore) return;
@@ -226,6 +269,7 @@ export function FoodSearchScreen({
   const trackedSelect = useCallback((pick: NutritionFoodPick) => {
     trackNutritionEvent({ name: 'nutrition_catalog_item_selected',
       properties: { catalogMode: catalog, origin: pick.origin, ...(pick.sourceType ? { source: pick.sourceType } : {}) } });
+    Keyboard.dismiss();
     onSelect(pick);
   }, [catalog, onSelect]);
 
@@ -241,6 +285,8 @@ export function FoodSearchScreen({
         foodId: materialized.id, name: materialized.name, origin, nutritionPer100g: materialized.nutritionPer100g,
         sourceType: materialized.source.type, servings: materialized.servings, defaultServingId: materialized.defaultServingId,
       });
+    } catch {
+      setError(true);
     } finally {
       setMaterializingId(null);
     }
@@ -252,6 +298,8 @@ export function FoodSearchScreen({
     try {
       const nutritionPer100g = await calculateStoredRecipeNutrition(user.uid, recipe.id);
       trackedSelect({ foodId: recipe.id, name: recipe.name, origin: 'recipe', nutritionPer100g });
+    } catch {
+      setError(true);
     } finally {
       setSelectingRecipeId(null);
     }
@@ -318,13 +366,11 @@ export function FoodSearchScreen({
     />
   );
 
-  // Exactly one native `<Modal>` for this screen regardless of `variant` —
-  // only the chrome/content inside it differs. Two independent native
-  // Modals able to be visible at once is the documented anti-pattern this
-  // feature's own `stackedModalAuditRegression.test.ts` guards against.
+  // Share search content between the standalone picker and the Diary's
+  // embedded sheet. Sheet presentation never creates another native Modal.
   const body = variant === 'nutrition' ? (
-    <View style={{ flex: 1, backgroundColor: NU.bg }}>
-      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+    <View style={{ flex: 1, backgroundColor: presentation === 'sheet' ? NU.panel : NU.bg }}>
+      <SafeAreaView style={{ flex: 1 }} edges={presentation === 'sheet' ? [] : ['top', 'bottom']}>
         <NuSheetHeader title={t('foodSearch.title')} onBack={onClose} />
 
         <View
@@ -335,12 +381,14 @@ export function FoodSearchScreen({
         >
           <Icon name="search" size={17} color={NU.faint} />
           <TextInput
+            ref={searchInputRef}
             value={text}
             onChangeText={setText}
             placeholder={t('foodSearch.placeholder')}
             placeholderTextColor={NU.faint}
             style={{ flex: 1, fontFamily: 'Archivo_400Regular', fontSize: 15.5, color: NU.white }}
-            autoFocus
+            autoFocus={presentation !== 'sheet'}
+            onFocus={() => setSearchExpanded(true)}
             returnKeyType="search"
           />
           {text.length > 0 ? (
@@ -398,7 +446,8 @@ export function FoodSearchScreen({
             placeholder={t('foodSearch.placeholder')}
             placeholderTextColor={theme.colors.inputPlaceholder}
             style={{ flex: 1, fontFamily: theme.fonts.ui, fontSize: 15, color: theme.colors.inputText }}
-            autoFocus
+            autoFocus={presentation !== 'sheet'}
+            onFocus={() => setSearchExpanded(true)}
             returnKeyType="search"
           />
         </View>
@@ -428,6 +477,22 @@ export function FoodSearchScreen({
       </SafeAreaView>
     </ScreenBg>
   );
+
+  if (presentation === 'sheet') {
+    return (
+      <>
+        <NuPanel visible={visible} onClose={searchExpanded ? dismissSearchKeyboard : onClose} avoidKeyboard
+          animatedHeight={sheetHeight.interpolate({ inputRange: [45, 90], outputRange: ['45%', '90%'] })}
+          contentStyle={{ paddingHorizontal: 0, paddingBottom: 16 }}>
+          <TouchableWithoutFeedback onPress={dismissSearchKeyboard} accessible={false}>
+            {body}
+          </TouchableWithoutFeedback>
+        </NuPanel>
+        {visible ? createCustomFoodOverlay : null}
+        {visible ? overlay : null}
+      </>
+    );
+  }
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose} presentationStyle="pageSheet">

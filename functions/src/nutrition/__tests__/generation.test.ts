@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
+import * as backendLogger from '../../lib/logger';
 import type { NutritionEngineOutput, NutritionProfile } from '../shared/types/nutrition';
 import { OpenAiNutritionProvider, OPENAI_PLAN_SCHEMA, OPENAI_REQUEST_TIMEOUT_MS, type NutritionAiProvider } from '../ai/provider';
 import { NUTRITION_AI_MODELS } from '../ai/config';
@@ -270,5 +271,66 @@ describe('resolveNutritionWeightKg — brand-new account with no assessment yet 
     // which `loadGenerationContext`'s existing validation still rejects downstream.
     expect(resolveNutritionWeightKg(null, 'not-a-number')).toEqual({ weightKg: 'not-a-number', source: 'questionnaire' });
     expect(resolveNutritionWeightKg(undefined, 0)).toEqual({ weightKg: 0, source: 'questionnaire' });
+  });
+});
+
+describe('incident regression — rejected nutrient proportions', () => {
+  it('confirms repair context in the outgoing payload while logging only presence flags', async () => {
+    const info = vi.spyOn(backendLogger, 'logInfo').mockImplementation(() => {});
+    try {
+      const fetcher = vi.fn().mockImplementation(async () => new Response(JSON.stringify({
+        status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(output()) }] }],
+      }), { status: 200 }));
+      const feedback = JSON.stringify({ failureCode: 'AI_MACRO_VALIDATION_FAILED', scope: 'meal',
+        slot: 'breakfast', nutrients: ['proteinG:above_max'], previousPlan: output() });
+      await new OpenAiNutritionProvider('test-key', fetcher).generatePlan({ profile, engine, goal,
+        foodNames: noNames, feedback, trace: { generationId: 'job-repair', attempt: 2 } });
+      const payload = JSON.parse(fetcher.mock.calls[0][1].body);
+      expect(JSON.parse(payload.input[2].content).retryFeedback).toBe(feedback);
+      expect(info).toHaveBeenCalledWith('nutrition.generation', 'ai_request_started', expect.objectContaining({
+        generationId: 'job-repair', attempt: 2, retryFeedbackPresent: true, repairCandidatePresent: true,
+      }));
+      expect(JSON.stringify(info.mock.calls)).not.toContain('Mingau');
+    } finally { info.mockRestore(); }
+  });
+  it('preserves rejection and repairs the rejected candidate while keeping audit diagnostics free of food content', async () => {
+    const wrong = output();
+    wrong.meals[0].foods[0].estimatedNutrition.proteinG = 40;
+    wrong.meals[0].foods[0].estimatedNutrition.fiberG = 1;
+    const provider = fakeProvider(wrong, output());
+    const audits: unknown[] = [];
+    const generated = await generateValidatedPlan(provider, profile, engine, goal, noNames,
+      async (audit) => { audits.push(audit.validationIssue); }, async () => {}, { generationId: 'diagnostic-job' });
+    expect(generated.attempt).toBe(2);
+    expect(audits[0]).toEqual({ scope: 'meal', slot: 'breakfast',
+      nutrients: ['proteinG:above_max', 'fiberG:below_min'] });
+    const retry = vi.mocked(provider.generatePlan).mock.calls[1][0];
+    expect(JSON.parse(retry.feedback!)).toEqual({ failureCode: 'AI_MACRO_VALIDATION_FAILED',
+      scope: 'meal', slot: 'breakfast', nutrients: ['proteinG:above_max', 'fiberG:below_min'], previousPlan: wrong });
+    expect(JSON.stringify(audits)).not.toContain('Mingau');
+    expect(retry.trace).toEqual({ generationId: 'diagnostic-job', attempt: 2 });
+    expect(() => validateAndBuildPlan(wrong, profile.mealSlots, engine)).toThrow('meal_target_deviation');
+  });
+
+  it.each([400, 401, 403, 404, 429, 500])('classifies HTTP %s and retries only transient provider responses', async (httpStatus) => {
+    const fetcher = vi.fn().mockImplementation(async () => new Response(
+      JSON.stringify({ error: { code: httpStatus === 429 ? 'rate_limit_exceeded' : 'provider_failure',
+        message: 'private body must never be logged' } }), { status: httpStatus }));
+    const provider = new OpenAiNutritionProvider('private-key', fetcher);
+    const audits: unknown[] = [];
+    await expect(generateValidatedPlan(provider, profile, engine, goal, noNames,
+      async (audit) => { audits.push(audit); })).rejects.toMatchObject({
+      code: httpStatus === 429 ? 'AI_RATE_LIMIT' : 'AI_PROVIDER_ERROR',
+    });
+    expect(fetcher).toHaveBeenCalledTimes(httpStatus === 429 || httpStatus >= 500 ? 3 : 1);
+    expect(audits).toHaveLength(fetcher.mock.calls.length);
+  });
+
+  it('does not retry insufficient_quota even though the HTTP status is 429', async () => {
+    const fetcher = vi.fn().mockImplementation(async () => new Response(
+      JSON.stringify({ error: { code: 'insufficient_quota' } }), { status: 429 }));
+    await expect(generateValidatedPlan(new OpenAiNutritionProvider('key', fetcher), profile, engine, goal, noNames))
+      .rejects.toMatchObject({ code: 'AI_RATE_LIMIT' });
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
 });

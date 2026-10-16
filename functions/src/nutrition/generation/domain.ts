@@ -20,8 +20,14 @@ import { TOLERANCE_PERCENT } from '../shared/nutrition/engine/constants';
  * `AI_EXCLUDED_FOOD` (catalog-ID lookups) no longer exist as failure modes.
  */
 export type FailureCode = 'AI_SCHEMA_INVALID' | 'AI_SAFETY_VALIDATION_FAILED' | 'AI_MACRO_VALIDATION_FAILED';
+export interface ValidationIssue {
+  scope: 'meal' | 'daily';
+  slot?: NutritionMealSlot;
+  nutrients: string[];
+}
 export class PlanValidationError extends Error {
-  constructor(readonly code: FailureCode, readonly retryable: boolean, message: string) { super(message); }
+  constructor(readonly code: FailureCode, readonly retryable: boolean, message: string,
+    readonly issue?: ValidationIssue) { super(message); }
 }
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -159,7 +165,13 @@ export function buildMealOptions(
         if (validMealTotals(adjustedTotal, target)) { items = proposal; total = adjustedTotal; corrected = true; }
       }
     }
-    if (!validMealTotals(total, target)) throw new PlanValidationError('AI_MACRO_VALIDATION_FAILED', true, 'meal_target_deviation');
+    if (!validMealTotals(total, target)) {
+      const nutrients = (['kcal', 'proteinG', 'carbsG', 'fatG', 'fiberG'] as const)
+        .filter((key) => target[key] && !within(total[key], target[key]!))
+        .map((key) => `${key}:${total[key] < target[key]!.min ? 'below_min' : 'above_max'}`);
+      throw new PlanValidationError('AI_MACRO_VALIDATION_FAILED', true, 'meal_target_deviation',
+        { scope: 'meal', slot, nutrients });
+    }
     return {
       id: `${slot}-${optionIndex + 1}`,
       foods: items.map((item) => ({
@@ -205,7 +217,8 @@ export function validateAndBuildPlan(
     || !delta(daily.carbsG, engine.macros.carbsG, TOLERANCE_PERCENT.carbohydrates)
     || !delta(daily.fatG, engine.macros.fatG, TOLERANCE_PERCENT.fat)
     || !delta(daily.fiberG, engine.macros.fiberG, TOLERANCE_PERCENT.fiber)) {
-    throw new PlanValidationError('AI_MACRO_VALIDATION_FAILED', true, 'daily_target_deviation');
+    throw new PlanValidationError('AI_MACRO_VALIDATION_FAILED', true, 'daily_target_deviation',
+      { scope: 'daily', nutrients: [] });
   }
   return { meals, dailyTotals: daily, corrected };
 }

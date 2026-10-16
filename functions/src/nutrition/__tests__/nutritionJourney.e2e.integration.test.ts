@@ -104,17 +104,23 @@ function validAlternativeOutput(seed: Seed) {
 async function waitForObservedStatus(ref: DocumentReference, terminal: string) {
   const observed: string[] = [];
   let unsubscribe: () => void = () => {};
+  let firstSnapshot!: () => void;
+  const ready = new Promise<void>((resolve) => { firstSnapshot = resolve; });
   const reached = new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`status timeout: ${observed.join(',')}`)), 5_000);
     unsubscribe = ref.onSnapshot((snapshot) => {
       const status = snapshot.get('status');
       if (typeof status === 'string') observed.push(status);
+      firstSnapshot();
       if (status === terminal) {
         clearTimeout(timer);
         resolve();
       }
     }, reject);
   });
+  // Attach before starting the worker; otherwise the initial snapshot may
+  // already be `running`, making the assertion about observing `queued` race.
+  await Promise.race([ready, reached]);
   return { observed, reached, stop: () => unsubscribe() };
 }
 

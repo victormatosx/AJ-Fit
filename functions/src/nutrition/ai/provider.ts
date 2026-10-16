@@ -3,7 +3,7 @@ import {
   type MealNutritionTarget, type NutritionEngineOutput, type NutritionGoal, type NutritionProfile,
 } from '../shared/types/nutrition';
 import type { NutritionPromptFoodNames } from '../generation/foodNames';
-import { logWarn } from '../../lib/logger';
+import { logInfo, logWarn } from '../../lib/logger';
 import { AI_SCHEMA_VERSION, NUTRITION_AI_MODELS } from './config';
 import {
   FULL_PLAN_SYSTEM_PROMPT, fullPlanContext, MEAL_ALTERNATIVE_SYSTEM_PROMPT, mealAlternativeContext,
@@ -25,6 +25,7 @@ export const OPENAI_REQUEST_TIMEOUT_MS = 90_000;
 export interface AiUsage { inputTokens: number | null; outputTokens: number | null; cachedInputTokens: number | null }
 export interface AiResult { output: unknown; model: string; usage: AiUsage; latencyMs: number }
 export interface FullPlanRequest {
+  trace?: { generationId: string; attempt: number };
   profile: NutritionProfile;
   engine: NutritionEngineOutput;
   goal: NutritionGoal;
@@ -48,13 +49,8 @@ export interface NutritionAiProvider {
 export class NutritionAiProviderError extends Error {
   constructor(readonly code: 'AI_SCHEMA_INVALID' | 'AI_RATE_LIMIT' | 'AI_PROVIDER_ERROR' | 'AI_SAFETY_VALIDATION_FAILED',
     readonly retryable: boolean,
-    /**
-     * The MODEL's own short policy statement for why it refused (from the
-     * Responses API's `refusal` field) — never diet content, never a
-     * reflection of the request. Truncated defensively; logged (Cloud
-     * Logging only, never Firestore/`nutritionAiOperations`) so a real
-     * refusal pattern is diagnosable without ever persisting prompt/output.
-     */
+    /** Bounded refusal for internal audit consumers; never log free-form text,
+     * since a model refusal can echo sensitive input. */
     readonly refusalReason?: string) { super(code); }
 }
 
@@ -135,8 +131,11 @@ export class OpenAiNutritionProvider implements NutritionAiProvider {
 
   private async callResponsesApi(
     model: string, developerPrompt: string, userContent: string, schemaName: string, schema: object,
+    trace: { generationId?: string; attempt?: number;
+      retryFeedbackPresent?: boolean; repairCandidatePresent?: boolean } = {},
   ): Promise<AiResult> {
     const started = Date.now();
+    logInfo('nutrition.generation', 'ai_request_started', { ...trace, model, stage: 'provider' });
     const response = await this.fetcher('https://api.openai.com/v1/responses', {
       method: 'POST', signal: AbortSignal.timeout(OPENAI_REQUEST_TIMEOUT_MS),
       headers: { Authorization: `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' },
@@ -166,8 +165,17 @@ export class OpenAiNutritionProvider implements NutritionAiProvider {
         text: { format: { type: 'json_schema', name: schemaName, strict: true, schema } },
       }),
     });
-    if (!response.ok) throw new NutritionAiProviderError(response.status === 429 ? 'AI_RATE_LIMIT' : 'AI_PROVIDER_ERROR',
-      response.status === 429 || response.status >= 500);
+    if (!response.ok) {
+      const body = await response.json().catch(() => null) as { error?: { code?: unknown; type?: unknown } } | null;
+      const safeEnum = (value: unknown) => typeof value === 'string' && /^[a-zA-Z0-9_-]{1,80}$/.test(value) ? value : null;
+      logWarn('nutrition.generation', 'ai_http_error', { ...trace, model, httpStatus: response.status,
+        openAiErrorCode: safeEnum(body?.error?.code), openAiErrorType: safeEnum(body?.error?.type),
+        durationMs: Date.now() - started });
+      throw new NutritionAiProviderError(response.status === 429 ? 'AI_RATE_LIMIT' : 'AI_PROVIDER_ERROR',
+        (response.status === 429 && body?.error?.code !== 'insufficient_quota') || response.status >= 500);
+    }
+    logInfo('nutrition.generation', 'ai_http_completed', { ...trace, model,
+      httpStatus: response.status, durationMs: Date.now() - started });
     const payload = await response.json() as ResponsePayload;
     const contents = payload.output?.flatMap((item) => item.content ?? []) ?? [];
     const refusal = contents.find((item) => item.type === 'refusal' || typeof item.refusal === 'string');
@@ -183,7 +191,7 @@ export class OpenAiNutritionProvider implements NutritionAiProvider {
       // schema violation without digging through Firestore (see `max_output_
       // tokens`'s comment above for the incident that motivated this).
       logWarn('nutrition.generation', 'ai_response_not_completed', {
-        model, status: payload.status ?? null, incompleteReason: payload.incomplete_details?.reason ?? null,
+        ...trace, model, status: payload.status ?? null, incompleteReason: payload.incomplete_details?.reason ?? null,
       });
       throw new NutritionAiProviderError('AI_SCHEMA_INVALID', true);
     }
@@ -197,9 +205,13 @@ export class OpenAiNutritionProvider implements NutritionAiProvider {
 
   async generatePlan(request: FullPlanRequest): Promise<AiResult> {
     const model = request.fallback ? NUTRITION_AI_MODELS.fallback : NUTRITION_AI_MODELS.fullPlan;
+    let repairCandidatePresent = false;
+    try { repairCandidatePresent = Boolean(JSON.parse(request.feedback ?? 'null')?.previousPlan); }
+    catch { /* Older retries may contain only a technical error enum. */ }
     return this.callResponsesApi(model, FULL_PLAN_SYSTEM_PROMPT,
       fullPlanContext(request.profile, request.engine, request.goal, request.foodNames, request.feedback),
-      `nutrition_plan_${AI_SCHEMA_VERSION.replaceAll('.', '_')}`, OPENAI_PLAN_SCHEMA);
+      `nutrition_plan_${AI_SCHEMA_VERSION.replaceAll('.', '_')}`, OPENAI_PLAN_SCHEMA,
+      { ...request.trace, retryFeedbackPresent: Boolean(request.feedback), repairCandidatePresent });
   }
 
   async generateMealAlternative(request: MealAlternativeRequest): Promise<AiResult> {

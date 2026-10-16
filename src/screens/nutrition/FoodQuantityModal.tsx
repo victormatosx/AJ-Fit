@@ -33,9 +33,10 @@ export interface FoodQuantityPick {
  * `overlay` slot while its own `pageSheet` Modal stays open.
  */
 export function FoodQuantityModal({
-  visible, pick, onClose, onConfirm,
+  visible, pick, onClose, onConfirm, saving = false,
 }: {
   visible: boolean;
+  saving?: boolean;
   pick: FoodQuantityPick | null;
   onClose: () => void;
   onConfirm: (grams: number) => void;
@@ -63,7 +64,7 @@ export function FoodQuantityModal({
   const preview = pick && gramsValid ? nutrientsForGrams(pick.nutritionPer100g, gramsValue) : null;
 
   return (
-    <NuPanel visible={visible} onClose={onClose}>
+    <NuPanel visible={visible} onClose={onClose} avoidKeyboard>
       {pick ? (
         <View style={{ gap: 18 }}>
           <Text style={{ fontFamily: 'Archivo_700Bold', fontSize: 18, color: NU.white, lineHeight: 23 }}>
@@ -102,7 +103,7 @@ export function FoodQuantityModal({
               {`${Math.round(preview.kcal)} ${t('units.kcal')} · ${preview.proteinG.toFixed(1)} g ${t('registerMeal.proteinShort')}`}
             </Text>
           ) : null}
-          <NuButton onPress={() => { if (gramsValid) onConfirm(gramsValue); }} disabled={!gramsValid}>
+          <NuButton onPress={() => { if (gramsValid) onConfirm(gramsValue); }} disabled={!gramsValid || saving}>
             {t('diary.save')}
           </NuButton>
         </View>

@@ -1,9 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { errorReason, logError, logInfo, sanitizeLogContext, sanitizeLogText } from '../logger';
+import { errorReason, logError, logInfo, logOperationalInfo, sanitizeLogContext, sanitizeLogText } from '../logger';
 
 afterEach(() => vi.restoreAllMocks());
 
 describe('client logging policy', () => {
+  it('keeps sanitized operational facts visible in release without enabling other INFO logs', () => {
+    (globalThis as unknown as { __DEV__: boolean }).__DEV__ = false;
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    logOperationalInfo('nutrition.generation', 'request_started', { generationId: 'job-1', token: 'private' });
+    logInfo('subscription', 'unchanged_policy');
+    expect(info).toHaveBeenCalledExactlyOnceWith('[nutrition.generation] request_started', {
+      generationId: 'job-1', token: '[redacted]',
+    });
+  });
   it('extracts only safe callable reason enums from details or message', () => {
     expect(errorReason({ details: { reason: 'reposition_current_session_index_out_of_range' } }))
       .toBe('reposition_current_session_index_out_of_range');

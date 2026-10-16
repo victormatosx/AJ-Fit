@@ -21,18 +21,19 @@ import type { NutritionGenerationJobDoc } from '../../services/nutritionGenerati
 const STAGE_ORDER: readonly GenerationStageKey[] = ['queued', 'running', 'validating', 'completing'];
 
 export function NutritionGeneratingScreen({
-  job, onRetry, onBack, retrying,
+  job, onRetry, onBack, retrying, observationFailed = false,
 }: {
   job: NutritionGenerationJobDoc | null;
   onRetry: () => void;
   onBack: () => void;
   retrying: boolean;
+  observationFailed?: boolean;
 }) {
   const { t } = useTranslation('nutrition');
 
-  if (job?.status === 'failed') {
-    const copyKey = generationFailureCopyKey(job.errorCode);
-    const retryable = isGenerationRetryable(job.errorCode);
+  if (observationFailed || job?.status === 'failed') {
+    const copyKey = observationFailed ? 'genericError' : generationFailureCopyKey(job?.errorCode);
+    const retryable = observationFailed || isGenerationRetryable(job?.errorCode);
     return (
       <View style={{ flex: 1, backgroundColor: NU.bg }}>
         <SafeAreaView style={{ flex: 1, justifyContent: 'center' }} edges={['top', 'bottom']}>

@@ -111,6 +111,12 @@ export function logDebug(scope: string, message: string, context?: LogContext): 
 
 export function logInfo(scope: string, message: string, context?: LogContext): void {
   if (!isDevelopment()) return;
+  logOperationalInfo(scope, message, context);
+}
+
+/** Release-visible operational facts. Callers must supply bounded event names
+ * and technical metadata only; never profile, questionnaire or model content. */
+export function logOperationalInfo(scope: string, message: string, context?: LogContext): void {
   const safeContext = sanitizeLogContext(context);
   const line = `[${sanitizeLogText(scope)}] ${sanitizeLogText(message)}`;
   safeContext

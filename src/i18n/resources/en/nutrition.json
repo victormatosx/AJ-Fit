@@ -47,6 +47,8 @@
       }
     },
     "nextMeal": {
+      "showAllFoods": "Show all foods (+{{count}})",
+      "collapseFoods": "Collapse list",
       "title": "NEXT MEAL",
       "recommended": "Recommended",
       "openCta": "View meal"
@@ -62,6 +64,7 @@
       "summaryCta": "Summary"
     },
     "mealsToday": {
+      "nextMeal": "Next meal",
       "title": "TODAY'S MEALS",
       "itemCount_one": "{{count}} food",
       "itemCount_other": "{{count}} foods",
@@ -71,10 +74,15 @@
     },
     "quickAccess": {
       "title": "MORE",
+      "customFoodDescription": "Add a custom food to your collection.",
       "customFood": "Create food",
+      "recipeDescription": "Save your recipes to use whenever you like.",
       "recipe": "Create recipe",
+      "favoritesDescription": "Access your favorite foods and recipes.",
       "favorites": "My favorites",
+      "savedMealsDescription": "View meals you saved to use again.",
       "savedMeals": "Saved meals",
+      "historyDescription": "Access your previous meal plans.",
       "history": "Plan history"
     },
     "pregnancyBlock": {
@@ -88,7 +96,24 @@
     }
   },
   "weekly": {
+    "aboutAverage": "About the daily average",
+    "macroTargetsAverage": "Goals are averaged over the {{count}} days with available goals.",
+    "dailyAverage": "Daily average",
+    "dailyTarget": "Daily goal",
+    "averageDailyTarget": "Average daily goal",
+    "averageCoverage": "Average based on {{count}} of 7 days with logs.",
+    "targetUnavailable": "Goal unavailable",
+    "dailyConsumption": "Daily intake",
+    "futureDay": "Future day",
+    "noRecordDay": "No log",
+    "dayTarget": "Goal {{value}}",
+    "individualTargets": "Markers show each day’s available goal.",
+    "macroAverages": "Macronutrients (daily average)",
+    "noWeeklyWeight": "No weight measurements available this week.",
+    "openProgressCompact": "View in Progress",
     "title": "Weekly summary",
+    "emptyBody": "Start logging your meals to track your nutrition and see your progress.",
+    "registerMeal": "Log meal",
     "thisWeek": "This week",
     "open": "View summary",
     "back": "Back to Nutrition",
@@ -470,6 +495,11 @@
     "gramsShort": "g"
   },
   "diary": {
+    "addError": "Could not add the food. Please try again.",
+    "remaining": "{{value}} kcal remaining",
+    "overGoal": "Over goal: {{value}} kcal",
+    "emptyMeal": "No foods logged.",
+    "foodActions": "Options for {{name}}",
     "title": "Food diary",
     "today": "Today",
     "yesterday": "Yesterday",
