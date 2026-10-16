@@ -234,8 +234,8 @@ describe('official Light theme', () => {
     expect(paywall).toContain('<CtaButton');
     expect(planReady).toContain('backgroundColor: theme.colors.primary');
     expect(planReady).toContain('color: theme.colors.primaryForeground');
-    expect(home).toContain('backgroundColor: TODAY_WORKOUT_THEME.colors.inverseSurface');
-    expect(home).toContain('color: TODAY_WORKOUT_THEME.colors.inverseForeground');
+    expect(home).toContain('backgroundColor: TODAY_WORKOUT_THEME.colors.primary');
+    expect(home).toContain('color: TODAY_WORKOUT_THEME.colors.primaryForeground');
     expect(workout).toContain('backgroundColor: theme.colors.primary');
     expect(workout).toContain('color: theme.colors.primaryForeground');
   });
@@ -243,11 +243,14 @@ describe('official Light theme', () => {
   it('keeps the Today Workout poster on the official Dark artwork in both themes', () => {
     const home = readFileSync('src/screens/HomeScreen.tsx', 'utf8');
 
+    // Flat-card redesign (2026-10-08) dropped the gradient/HUD-corner poster
+    // chrome, but the card's text and CTA still route exclusively through
+    // the fixed `TODAY_WORKOUT_THEME` (= darkTheme) — never the active
+    // app theme — so it stays dark-only in both Light and Dark.
     expect(home).toContain('const TODAY_WORKOUT_THEME = darkTheme;');
-    expect(home).toContain('colors={TODAY_WORKOUT_THEME.gradients.poster}');
-    expect(home).toContain('color={TODAY_WORKOUT_THEME.colors.textPrimary}');
-    expect(home).toContain('backgroundColor: TODAY_WORKOUT_THEME.colors.inverseSurface');
-    expect(home).toContain('color: TODAY_WORKOUT_THEME.colors.inverseForeground');
+    expect(home).toContain('color: TODAY_WORKOUT_THEME.colors.textPrimary');
+    expect(home).toContain('backgroundColor: TODAY_WORKOUT_THEME.colors.primary');
+    expect(home).toContain('color: TODAY_WORKOUT_THEME.colors.primaryForeground');
   });
 
   it('keeps the Start Workout confirmation on the official Dark artwork in both themes', () => {

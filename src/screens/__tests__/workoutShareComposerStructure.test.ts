@@ -389,12 +389,13 @@ describe('post-workout share architecture', () => {
     expect(creative).toContain('new Date()');
   });
 
-  it('highlights the Feed Post BodyMap in the same color Home uses for its own body map', () => {
+  it('highlights the Feed Post BodyMap with the shared primaryEmphasis token', () => {
+    // Home's "Today" card dropped its own BodyMuscleMap in the flat-card
+    // redesign (2026-10-08) — the Feed Post composer still reuses the
+    // component and must keep using the semantic `primaryEmphasis` token
+    // rather than a one-off literal color.
     const creative = posterSources.PosterCreative;
     expect(creative).toContain('activeColor={theme.colors.primaryEmphasis}');
-    // Home's own BodyMuscleMap uses this exact same token (`TODAY_WORKOUT_THEME.colors.primaryEmphasis`, darkTheme).
-    const home = readFileSync(new URL('../HomeScreen.tsx', import.meta.url), 'utf8');
-    expect(home).toContain('activeColor={TODAY_WORKOUT_THEME.colors.primaryEmphasis}');
   });
 
   it('gives the BodyMap panel an even 50/50 split with the info column above it', () => {

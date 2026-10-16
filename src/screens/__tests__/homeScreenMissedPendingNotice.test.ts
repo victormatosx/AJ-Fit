@@ -43,7 +43,7 @@ describe('HomeScreen — missed-session pending notice', () => {
     );
     const badgeIdx = HOME_SCREEN_CODE.indexOf('{showMissedPendingNotice && (');
     expect(badgeIdx).toBeGreaterThan(-1);
-    const badgeEndIdx = HOME_SCREEN_CODE.indexOf('\n              )}', badgeIdx);
+    const badgeEndIdx = HOME_SCREEN_CODE.indexOf('\n            )}', badgeIdx);
     expect(badgeEndIdx).toBeGreaterThan(badgeIdx);
     const badgeBlock = HOME_SCREEN_CODE.slice(badgeIdx, badgeEndIdx);
     // The icon only measures its own position and opens the info popover —

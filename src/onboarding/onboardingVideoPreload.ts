@@ -1,7 +1,7 @@
 import { createVideoPlayer, type VideoPlayer } from 'expo-video';
 import { guidedWorkoutShowcaseSlides, type GuidedWorkoutSlideId } from '../data/guidedWorkoutShowcase';
+import { configureSilentDemoVideo } from '../lib/silentDemoVideo';
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires -- static asset require, path fixed at build time
 const METHODOLOGY_VIDEO_SOURCE = require('../../assets/videos/methodology-workout.mp4');
 
 /**
@@ -17,8 +17,7 @@ const guidedWorkoutPlayers: Partial<Record<GuidedWorkoutSlideId, VideoPlayer>> =
 
 function createLoopingMutedPlayer(source: number): VideoPlayer {
   const player = createVideoPlayer(source);
-  player.loop = true;
-  player.muted = true;
+  configureSilentDemoVideo(player);
   return player;
 }
 
