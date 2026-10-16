@@ -1,5 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, ScrollView, Text, View } from 'react-native';
+import {
+  Animated,
+  Easing,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
@@ -7,8 +16,9 @@ import { ScreenBg } from '../components/ui/ScreenBg';
 import { ProgressPhotosScreen } from './ProgressPhotosScreen';
 import { BodyEvolutionView } from '../components/fitness/BodyEvolutionView';
 import { LoadsEvolutionView } from '../components/fitness/LoadsEvolutionView';
+import { ExerciseEvolutionDetail } from '../components/fitness/ExerciseEvolutionDetail';
 import { Display, Slash } from '../components/ui/Display';
-import { motion, sizes, spacing } from '../theme/tokens';
+import { motion, radii, sizes, spacing } from '../theme/tokens';
 import { useTheme } from '../theme';
 import { useAuth } from '../state/AuthContext';
 import { useAssessments } from '../hooks/useAssessments';
@@ -35,6 +45,8 @@ import { useScreenFocusEffect } from '../state/ScreenActivity';
 type ProgressView = 'body' | 'loads' | 'photos';
 
 const GUTTER = sizes.screenGutter;
+/** Inset of the pill selector's indicator from its track, on all four sides. */
+const PILL_PADDING = 4;
 
 export function ProgressScreen({
   onOpenAssessment,
@@ -47,8 +59,13 @@ export function ProgressScreen({
 } = {}) {
   const { t } = useTranslation('home');
   const { theme } = useTheme();
-  const { user } = useAuth();
+  const { user, questionnaire } = useAuth();
+  // Same authoritative source AppShell reads for every other body map. Left
+  // nullable on purpose: the panels drop the map rather than flash the male
+  // anatomy while the questionnaire resolves.
+  const sex = questionnaire?.answers.sex ?? null;
   const [view, setView] = useState<ProgressView>('body');
+  const [selectedExerciseId, setSelectedExerciseId] = useState<string | null>(null);
 
   const {
     assessments,
@@ -72,6 +89,10 @@ export function ProgressScreen({
     error: loadsError,
     refresh: refreshLoads,
   } = useLoadProgressState();
+
+  const selectedExercise = selectedExerciseId
+    ? loadExercises.find((exercise) => exercise.exerciseId === selectedExerciseId) ?? null
+    : null;
 
   const tabs: [ProgressView, string][] = [
     ['body', t('progress.tabs.body')],
@@ -112,28 +133,34 @@ export function ProgressScreen({
     void refreshLoads();
   });
 
+  const title = (
+    <View style={{ paddingHorizontal: GUTTER, paddingTop: spacing[3], paddingBottom: spacing[5] }}>
+      <Slash style={{ marginBottom: spacing[2.5] }}>
+        {t('progress.header.eyebrow').toUpperCase()}
+      </Slash>
+      <Display size={40}>{t('progress.header.title').toUpperCase()}</Display>
+    </View>
+  );
+
   /**
-   * Header lives here because the Photos panel renders it inside its list.
+   * Header for the Photos panel, which renders it inside its own list.
    * It is intentionally cheap: no data fetching, no animation of its own.
+   *
+   * Deliberately kept as the original underlined tab row rather than the
+   * pill selector the Corpo/Cargas panels use below: Photos is a protected
+   * surface whose rendering must not change, and this header is the only
+   * part of it this screen owns. The two selectors are visually different
+   * on purpose — see `panelHeader`.
    */
   const pageHeader = (
     <View>
-      <View style={{ paddingHorizontal: GUTTER, paddingTop: spacing[3], paddingBottom: spacing[5] }}>
-        <Slash style={{ marginBottom: spacing[2.5] }}>
-          {t('progress.header.eyebrow').toUpperCase()}
-        </Slash>
-        <Display size={40}>{t('progress.header.title').toUpperCase()}</Display>
-      </View>
+      {title}
 
       <View
         style={{
           flexDirection: 'row',
           paddingHorizontal: GUTTER,
-          // Zero when the active panel is a locked preview: that gap used to
-          // leave a clean, un-blurred strip between the tab row and the
-          // blurred content starting below it. The blur must start exactly
-          // at this row's bottom edge instead.
-          marginBottom: isCurrentViewLocked ? 0 : spacing[5],
+          marginBottom: spacing[5],
           borderBottomWidth: sizes.hairline,
           borderBottomColor: theme.colors.border,
         }}
@@ -175,10 +202,32 @@ export function ProgressScreen({
     </View>
   );
 
+  /** Header for the Corpo/Cargas panels only. Never handed to Photos. */
+  const panelHeader = (
+    <View>
+      {title}
+      <PillTabs
+        tabs={tabs}
+        view={view}
+        onSelect={(next) => { setView(next); setSelectedExerciseId(null); }}
+        // Zero when the active panel is a locked preview: that gap would
+        // otherwise leave a clean, un-blurred strip between the selector
+        // and the blurred content. The blur must start right below it.
+        style={{ marginBottom: isCurrentViewLocked ? 0 : spacing[5] }}
+      />
+    </View>
+  );
+
   return (
     <ScreenBg>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        {view === 'photos' ? (
+        {selectedExercise ? (
+          <ExerciseEvolutionDetail
+            exercise={selectedExercise}
+            todayLocalDate={todayLocalDate}
+            onBack={() => setSelectedExerciseId(null)}
+          />
+        ) : view === 'photos' ? (
           <ProgressPhotosScreen pageHeader={pageHeader} />
         ) : (
           <ScrollView
@@ -189,7 +238,7 @@ export function ProgressScreen({
             scrollEnabled={!isCurrentViewLocked}
             showsVerticalScrollIndicator={false}
           >
-            {pageHeader}
+            {panelHeader}
             <PanelFade viewKey={view} fillHeight={isCurrentViewLocked}>
               {view === 'body' ? (
                 // Corpo shows the user's own assessments when there are any.
@@ -208,6 +257,7 @@ export function ProgressScreen({
                   importedWeightsError={importedWeightsError}
                   onRetry={handleRetry}
                   onOpenAssessment={onOpenAssessment}
+                  sex={sex}
                 />
               ) : (
                 <LoadsEvolutionView
@@ -218,6 +268,8 @@ export function ProgressScreen({
                   error={loadsError}
                   onRetry={handleLoadsRetry}
                   onStartWorkout={onStartWorkout}
+                  onSelectExercise={setSelectedExerciseId}
+                  sex={sex}
                 />
               )}
             </PanelFade>
@@ -225,6 +277,106 @@ export function ProgressScreen({
         )}
       </SafeAreaView>
     </ScreenBg>
+  );
+}
+
+/**
+ * Full-width pill selector with a sliding accent indicator.
+ *
+ * Used exclusively by the Corpo/Cargas panels — the Photos panel keeps the
+ * original underlined row (see `pageHeader`). The indicator is a single
+ * absolutely-positioned layer translated between equal-width slots, so the
+ * labels themselves never move and nothing reflows on selection.
+ */
+function PillTabs({
+  tabs,
+  view,
+  onSelect,
+  style,
+}: {
+  tabs: [ProgressView, string][];
+  view: ProgressView;
+  onSelect: (view: ProgressView) => void;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const { theme } = useTheme();
+  const { t } = useTranslation('home');
+  const [trackWidth, setTrackWidth] = useState(0);
+  const offset = useRef(new Animated.Value(0)).current;
+
+  const index = tabs.findIndex(([key]) => key === view);
+  const slotWidth = trackWidth > 0 ? trackWidth / tabs.length : 0;
+
+  useEffect(() => {
+    Animated.timing(offset, {
+      toValue: index * slotWidth,
+      duration: motion.duration.normal,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [index, offset, slotWidth]);
+
+  return (
+    <View style={[{ paddingHorizontal: GUTTER }, style]}>
+      <View
+        onLayout={(event) => setTrackWidth(event.nativeEvent.layout.width - PILL_PADDING * 2)}
+        style={{
+          flexDirection: 'row',
+          padding: PILL_PADDING,
+          borderRadius: radii.pill,
+          borderWidth: sizes.hairline,
+          borderColor: theme.colors.border,
+          backgroundColor: theme.colors.surfaceMuted,
+        }}
+      >
+        {slotWidth > 0 ? (
+          <Animated.View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              top: PILL_PADDING,
+              bottom: PILL_PADDING,
+              left: PILL_PADDING,
+              width: slotWidth,
+              borderRadius: radii.pill,
+              backgroundColor: theme.colors.primary,
+              transform: [{ translateX: offset }],
+            }}
+          />
+        ) : null}
+
+        {tabs.map(([key, label]) => {
+          const selected = view === key;
+          return (
+            <Pressable
+              key={key}
+              onPress={() => onSelect(key)}
+              accessibilityRole="tab"
+              accessibilityLabel={t('progress.accessibility.selectTab', { tab: label })}
+              accessibilityState={{ selected }}
+              style={{
+                flex: 1,
+                minHeight: 44,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text
+                style={{
+                  fontFamily: theme.fonts.mono,
+                  fontSize: 10.5,
+                  letterSpacing: 1.8,
+                  textTransform: 'uppercase',
+                  color: selected ? theme.colors.primaryForeground : theme.colors.textMuted,
+                }}
+              >
+                {label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
   );
 }
 
