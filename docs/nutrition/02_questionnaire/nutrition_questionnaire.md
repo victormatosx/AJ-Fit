@@ -1,5 +1,19 @@
 # AJ Fit Nutrition — Questionário Nutricional
 
+> Revisão de interface (2026-10-16): a ordem implementada é ritmo, peso-alvo,
+> atividade fora do treino, refeições, alimentos a incluir, alimentos a excluir
+> (com padrão alimentar opcional), alergias, suplementos e variedade. A pergunta
+> de categoria nutricional continua condicional. Não há páginas independentes
+> de padrão alimentar, alimentos habituais, gestação ou amamentação.
+> `omnivore` representa nenhuma seleção; vegetarian/vegan/pescatarian são
+> mutuamente exclusivos e podem combinar com exclusões específicas.
+> Alimentos habituais e flags de segurança existentes permanecem armazenados.
+> A revisão não exige confirmação de gestação/amamentação. Flags
+> históricas são preservadas apenas para compatibilidade e não bloqueiam geração.
+> As seções históricas abaixo descrevem o contrato persistido original; esta
+> revisão prevalece para apresentação e coleta. Não há migração destrutiva.
+
+
 ## 1. Objetivo
 
 Este documento define o questionário nutricional da V1 do AJ Fit.
@@ -298,23 +312,7 @@ A ausência dessas perguntas não autoriza a IA a produzir dietas terapêuticas 
 
 ### 5.10 Gestação e lactação
 
-#### Gestação
-
-- pré-preencher a pergunta de gestação com `Quiz.pregnancyScreening` apenas na criação inicial do Perfil Nutricional (snapshot imutável, usado uma única vez como ponto de partida);
-- a partir da criação, o estado de gestação vive e é editável em `nutritionProfile/current.pregnant`;
-- bloquear geração automática na V1 com base no valor atual em `nutritionProfile/current`.
-
-#### Lactação / amamentação
-
-O perfil nutricional deve coletar se a usuária está amamentando.
-
-O estado de lactação vive em `nutritionProfile/current.breastfeeding`, como estado atual e editável — não existe fonte prévia confiável no restante do AJ Fit para esse dado.
-
-Usuárias em lactação não são elegíveis para geração automática de dieta na V1.
-
-Quando houver bloqueio, o produto deve orientar acompanhamento profissional adequado.
-
-Ambos os gates (gravidez e lactação) são revalidados a partir de `nutritionProfile/current` a cada nova geração, e nenhum dos dois pode ter bypass.
+Não há perguntas ou confirmação dessas condições. `pregnant` e `breastfeeding` permanecem armazenados por compatibilidade, sem afetar geração/regeneração ou alternativas e sem envio à IA. Não há bloqueio no cliente, backend ou engine.
 
 ---
 

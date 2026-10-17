@@ -30,7 +30,7 @@ describe.skipIf(!process.env.FIRESTORE_EMULATOR_HOST)('meal alternative + plan r
     const lunchTarget = context.engine.mealTargets[1];
     // Diet-quality-v3 (2026-10-10): no catalog seeding needed — the AI's
     // alternative is free-form, matched directly against the deterministic target.
-    const altItem = (name: string) => ({ name, quantity: 150, unit: 'g', preparationNote: '',
+    const altItem = (name: string) => ({ name, ingredients: [{ name, origin: 'plant' as const }], quantity: 150, unit: 'g', preparationNote: '',
       estimatedNutrition: { kcal: lunchTarget.kcal.target, proteinG: lunchTarget.proteinG.target,
         carbsG: lunchTarget.carbsG.target, fatG: lunchTarget.fatG.target, fiberG: lunchTarget.fiberG?.target ?? 0 },
       allergens: [] });

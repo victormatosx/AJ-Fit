@@ -1,20 +1,17 @@
+import { HttpsError } from 'firebase-functions/v2/https';
 import type { Firestore } from 'firebase-admin/firestore';
 
-/**
- * Diet-quality-v3 (2026-10-10): the ONLY remaining read of `nutritionFoods`
- * from the generation pipeline — a plain id->name lookup so the prompt can
- * show the user's preferred/usual/excluded foods BY NAME instead of an
- * opaque catalog id. Purely for prompt display: it never gates, filters, or
- * blocks generation — a missing/unresolved id is silently dropped, never an
- * error.
- */
-export async function resolveFoodNames(db: Firestore, ids: readonly string[]): Promise<Map<string, string>> {
+/** Resolve catalog IDs to names. Missing inclusion preferences may be ignored;
+ * an unresolved hard exclusion blocks generation before contacting AI. */
+export async function resolveFoodNames(db: Firestore, ids: readonly string[], uid?: string): Promise<Map<string, string>> {
   const unique = [...new Set(ids)];
-  const docs = await Promise.all(unique.map((id) => db.collection('nutritionFoods').doc(id).get()));
+  const docs = await Promise.all(unique.map((id) => (id.startsWith('custom_') && uid
+    ? db.collection('users').doc(uid).collection('nutritionFoods').doc(id)
+    : db.collection('nutritionFoods').doc(id)).get()));
   const names = new Map<string, string>();
   for (const doc of docs) {
     const name = doc.data()?.name;
-    if (typeof name === 'string' && name.length > 0) names.set(doc.id, name);
+    if (typeof name === 'string' && name.trim().length > 0) names.set(doc.id, name.trim());
   }
   return names;
 }
@@ -26,9 +23,12 @@ export interface NutritionPromptFoodNames {
 }
 
 export async function resolvePromptFoodNames(
-  db: Firestore, profile: { preferredFoodIds: readonly string[]; usualFoodIds: readonly string[]; excludedFoodIds: readonly string[] },
+  db: Firestore, profile: { preferredFoodIds: readonly string[]; usualFoodIds: readonly string[]; excludedFoodIds: readonly string[] }, uid?: string,
 ): Promise<NutritionPromptFoodNames> {
-  const names = await resolveFoodNames(db, [...profile.preferredFoodIds, ...profile.usualFoodIds, ...profile.excludedFoodIds]);
+  const names = await resolveFoodNames(db, [...profile.preferredFoodIds, ...profile.usualFoodIds, ...profile.excludedFoodIds], uid);
   const resolve = (ids: readonly string[]) => ids.map((id) => names.get(id)).filter((name): name is string => Boolean(name));
+  if (profile.excludedFoodIds.some((id) => !names.has(id))) {
+    throw new HttpsError('failed-precondition', 'INVALID_NUTRITION_PROFILE');
+  }
   return { preferred: resolve(profile.preferredFoodIds), usual: resolve(profile.usualFoodIds), excluded: resolve(profile.excludedFoodIds) };
 }

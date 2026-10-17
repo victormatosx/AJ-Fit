@@ -1,24 +1,15 @@
+import { foodRestrictionViolation } from './restrictions';
 import {
   NUTRITION_FOOD_ALLERGENS,
   type NutritionFoodNutritionValues, type NutritionMeal, type NutritionMealOption,
   type NutritionMealSlot, type NutritionEngineOutput, type MealNutritionTarget,
-  type NutritionTotals, type NutritionFoodAllergen, NUTRITION_MEAL_SLOTS,
+  type DietaryPattern, type NutritionTotals, type NutritionFoodAllergen, NUTRITION_MEAL_SLOTS,
 } from '../shared/types/nutrition';
 import { roundNutritionValues, sumNutritionValues, validateNutritionValues } from '../shared/nutrition/catalog/math';
 import { TOLERANCE_PERCENT } from '../shared/nutrition/engine/constants';
 
-/**
- * Diet-quality-v3 (2026-10-10, "PLANO RECOMENDADO != CONSUMO REGISTRADO"):
- * generation no longer resolves anything against `nutritionFoods`. There is
- * no candidate builder, no `foodId`, no `generationStatus`/`preparation`
- * gate here anymore — the AI invents foods freely from its own knowledge.
- * The backend's only remaining jobs are: (1) validate the AI's own output
- * is structurally well-formed, (2) enforce the one deterministic safety
- * check left — the AI's self-declared `allergens` per item against
- * `excludedAllergens` — and (3) validate/correct the AI's own estimated
- * macros against the Engine's deterministic targets. `AI_UNKNOWN_FOOD` and
- * `AI_EXCLUDED_FOOD` (catalog-ID lookups) no longer exist as failure modes.
- */
+/** Free-form AI meals require composition metadata and pass dietary, exclusion,
+ * allergen and macro validation before persistence. Catalog IDs are not generated. */
 export type FailureCode = 'AI_SCHEMA_INVALID' | 'AI_SAFETY_VALIDATION_FAILED' | 'AI_MACRO_VALIDATION_FAILED';
 export interface ValidationIssue {
   scope: 'meal' | 'daily';
@@ -38,6 +29,10 @@ function exactKeys(value: Record<string, unknown>, keys: string[]): boolean {
 }
 
 /** The AI's raw, self-estimated item — IS the final persisted shape (`NutritionPlanFoodItem`), just not yet validated. */
+const INGREDIENT_ORIGINS = ['plant', 'mineral', 'dairy', 'egg', 'fish', 'shellfish', 'terrestrial_animal', 'other_animal', 'unknown'] as const;
+type IngredientOrigin = typeof INGREDIENT_ORIGINS[number];
+export interface FoodRestrictions { dietaryPattern: DietaryPattern; excludedFoodNames: readonly string[] }
+
 export interface RawAiFoodItem {
   name: string;
   quantity: number;
@@ -45,6 +40,7 @@ export interface RawAiFoodItem {
   preparationNote: string;
   estimatedNutrition: { kcal: number; proteinG: number; carbsG: number; fatG: number; fiberG: number };
   allergens: string[];
+  ingredients: { name: string; origin: IngredientOrigin }[];
 }
 export interface RawMealOptions { recommendedOptionIndex: number; options: { foods: RawAiFoodItem[] }[] }
 
@@ -52,7 +48,11 @@ export interface RawMealOptions { recommendedOptionIndex: number; options: { foo
 export interface RawAiFullPlanMeal { slot: NutritionMealSlot; foods: RawAiFoodItem[] }
 
 function validRawFoodItem(value: unknown): value is RawAiFoodItem {
-  if (!record(value) || !exactKeys(value, ['name', 'quantity', 'unit', 'preparationNote', 'estimatedNutrition', 'allergens'])) return false;
+  if (!record(value) || !exactKeys(value, ['name', 'quantity', 'unit', 'preparationNote', 'estimatedNutrition', 'allergens', 'ingredients'])) return false;
+  if (!Array.isArray(value.ingredients) || value.ingredients.length < 1 || value.ingredients.length > 30
+    || value.ingredients.some((ingredient) => !record(ingredient) || !exactKeys(ingredient, ['name', 'origin'])
+      || typeof ingredient.name !== 'string' || !ingredient.name.trim() || ingredient.name.length > 120
+      || !INGREDIENT_ORIGINS.includes(ingredient.origin as IngredientOrigin))) return false;
   if (typeof value.name !== 'string' || value.name.length < 1 || value.name.length > 120) return false;
   if (typeof value.quantity !== 'number' || !Number.isFinite(value.quantity) || value.quantity <= 0 || value.quantity > 5000) return false;
   if (typeof value.unit !== 'string' || value.unit.length < 1 || value.unit.length > 24) return false;
@@ -133,25 +133,16 @@ function scaleFoodItem(item: RawAiFoodItem, factor: number): RawAiFoodItem {
 
 export interface BuiltMealOptions { options: NutritionMealOption[]; recommendedOptionId: string; corrected: boolean }
 
-/**
- * The only option-assembly path, shared by a full plan's per-meal loop and a
- * standalone meal alternative. The AI's own `estimatedNutrition` per item is
- * the only source of macros now — there is no catalog snapshot to resolve.
- * The ONE deterministic safety check left is each item's self-declared
- * `allergens` against `excludedAllergens`; everything else (cultural
- * coherence, "is this a real/affordable food") is the prompt's job, not the
- * validator's.
- */
+/** Shared safety and macro validation for every full-plan and alternative option. */
 export function buildMealOptions(
   slot: NutritionMealSlot, raw: RawMealOptions, target: MealNutritionTarget,
-  excludedAllergens: readonly NutritionFoodAllergen[], allowCorrection: boolean,
+  excludedAllergens: readonly NutritionFoodAllergen[], allowCorrection: boolean, restrictions?: FoodRestrictions,
 ): BuiltMealOptions {
   let corrected = false;
   const options = raw.options.map((option, optionIndex) => {
     for (const item of option.foods) {
-      if (item.allergens.some((allergen) => excludedAllergens.includes(allergen as NutritionFoodAllergen))) {
-        throw new PlanValidationError('AI_SAFETY_VALIDATION_FAILED', false, 'unsafe_allergen');
-      }
+      const violation = foodRestrictionViolation(item, excludedAllergens, restrictions);
+      if (violation) throw new PlanValidationError('AI_SAFETY_VALIDATION_FAILED', false, violation);
     }
     const calculate = (items: readonly RawAiFoodItem[]) => totals(roundNutritionValues(sumNutritionValues(
       items.map((item) => item.estimatedNutrition))));
@@ -191,7 +182,7 @@ export interface ValidatedPlan { meals: NutritionMeal[]; dailyTotals: NutritionT
 /** The only plan assembly path — the AI's own macro estimates are validated/corrected against the Engine's deterministic targets, never recomputed from a catalog. */
 export function validateAndBuildPlan(
   raw: unknown, mealSlots: readonly NutritionMealSlot[], engine: NutritionEngineOutput,
-  excludedAllergens: readonly NutritionFoodAllergen[] = [], allowCorrection = true,
+  excludedAllergens: readonly NutritionFoodAllergen[] = [], allowCorrection = true, restrictions?: FoodRestrictions,
 ): ValidatedPlan {
   const output = parseAiOutput(raw);
   if (output.meals.length !== mealSlots.length
@@ -205,7 +196,7 @@ export function validateAndBuildPlan(
     // same macro-correction/validation path as a meal alternative's 2-3
     // options, with no behavioral difference beyond the option count.
     const raw: RawMealOptions = { recommendedOptionIndex: 0, options: [{ foods: meal.foods }] };
-    const built = buildMealOptions(meal.slot, raw, engine.mealTargets[mealIndex], excludedAllergens, allowCorrection);
+    const built = buildMealOptions(meal.slot, raw, engine.mealTargets[mealIndex], excludedAllergens, allowCorrection, restrictions);
     corrected = corrected || built.corrected;
     return { slot: meal.slot, recommendedOptionId: built.recommendedOptionId, options: built.options };
   });
@@ -232,8 +223,8 @@ export interface ValidatedMealAlternative { options: NutritionMealOption[]; reco
  */
 export function validateAndBuildMealAlternative(
   raw: unknown, slot: NutritionMealSlot, target: MealNutritionTarget,
-  excludedAllergens: readonly NutritionFoodAllergen[] = [], allowCorrection = true,
+  excludedAllergens: readonly NutritionFoodAllergen[] = [], allowCorrection = true, restrictions?: FoodRestrictions,
 ): ValidatedMealAlternative {
   const raw2 = parseAiMealAlternativeOutput(raw);
-  return buildMealOptions(slot, raw2, target, excludedAllergens, allowCorrection);
+  return buildMealOptions(slot, raw2, target, excludedAllergens, allowCorrection, restrictions);
 }

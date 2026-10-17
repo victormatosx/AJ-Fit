@@ -153,7 +153,7 @@ export async function requestNutritionMealAlternativeHandler(
     const mealIndex = context.profile.mealSlots.indexOf(slot);
     if (mealIndex === -1) throw new Error('INVALID_NUTRITION_CONTEXT');
     const target = context.engine.mealTargets[mealIndex];
-    const foodNames = await resolvePromptFoodNames(db, context.profile);
+    const foodNames = await resolvePromptFoodNames(db, context.profile, uid);
 
     const { validated, result, attempt, fallback } = await generateValidatedMealAlternative(
       provider, context.profile, slot, target, recommendedOptionFoodNames(meal),
@@ -169,11 +169,15 @@ export async function requestNutritionMealAlternativeHandler(
 
     const createdAt = Timestamp.now();
     const saved = await db.runTransaction(async (tx) => {
-      const [lock, currentPlan, rate, existing] = await Promise.all([
+      const [lock, currentPlan, rate, existing, latestProfile] = await Promise.all([
         tx.get(deletionLockRef), tx.get(planRef), tx.get(rateRef), tx.get(alternativeRef),
+        tx.get(user.collection('nutritionProfile').doc('current')),
       ]);
       if (lock.exists) throw new HttpsError('failed-precondition', 'ACCOUNT_INACTIVE');
       if (existing.exists) return responseFrom(existing.data()!);
+      if (!latestProfile.get('updatedAt')?.isEqual(context.profile.updatedAt)) {
+        throw new HttpsError('aborted', 'MEAL_ALTERNATIVE_STALE_REQUEST');
+      }
       if (!currentPlan.exists || currentPlan.get('status') !== 'active') {
         throw new HttpsError('failed-precondition', 'PLAN_NOT_FOUND');
       }

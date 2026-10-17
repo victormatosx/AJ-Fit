@@ -1,3 +1,6 @@
+import { auth } from '../lib/firebase';
+import { readOnboardingDraft, bindOnboardingHealthSnapshot } from '../onboarding/draftStorage';
+import { captureOnboardingNutrition, bindNutritionSnapshot, recoverOnboardingNutritionProvisioning } from '../services/onboardingNutritionHandoff';
 import React, {
   createContext,
   useCallback,
@@ -246,7 +249,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     const outcome = await withFirestoreRetry(
-      (attempt) => Promise.all([getUserProfile(uid), getLatestQuestionnaire(uid, attempt)]),
+      async (attempt) => {
+        const loaded = await Promise.all([getUserProfile(uid), getLatestQuestionnaire(uid, attempt)]);
+        if (loaded[0] === null && auth.currentUser?.uid === uid) {
+          await recoverOnboardingNutritionProvisioning(auth.currentUser);
+          return Promise.all([getUserProfile(uid), getLatestQuestionnaire(uid, attempt)]);
+        }
+        return loaded;
+      },
       {
         onAttempt: ({ attempt, error, retryable }) => {
           if (!error) return;
@@ -488,6 +498,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const signUpStartedAt = Date.now();
           assertNewAccountEligibility({ answers, legalAccepted });
           // Single, authoritative creation flow — runs exactly once per account.
+          const nutritionSnapshot = await captureOnboardingNutrition(legalAccepted);
+          const healthSnapshot = nutritionSnapshot ?? await readOnboardingDraft(true);
           const newUser = await signUpWithEmail(email, password, name);
           // Start delivery immediately after Firebase Auth creates the password
           // user. Capture a failure as data so profile provisioning still
@@ -496,8 +508,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .then(() => null)
             .catch((error: unknown) => error);
           try {
+            await bindNutritionSnapshot(newUser.uid, nutritionSnapshot);
+            await bindOnboardingHealthSnapshot(newUser.uid, healthSnapshot).catch((error) => logAuthError('onboarding:health-bind', error));
             const provisionStartedAt = Date.now();
-            const questionnaireId = await provisionNewUser(newUser, { name, answers, legalAccepted });
+            const questionnaireId = await provisionNewUser(newUser, { name, answers, legalAccepted, nutritionSessionId: nutritionSnapshot?.sessionId ?? undefined });
             logInfo('auth', 'signup_provision_completed', {
               durationMs: Date.now() - provisionStartedAt,
               found: Boolean(questionnaireId),
@@ -583,7 +597,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           logInfo('auth', 'signup_completed', { durationMs: Date.now() - signUpStartedAt });
         }),
       signIn: (email, password) => identityOperationFlight.run(async () => {
+        const healthSnapshot = await readOnboardingDraft();
         const authedUser = await signInWithEmail(email, password);
+        await bindOnboardingHealthSnapshot(authedUser.uid, healthSnapshot).catch((error) => logAuthError('onboarding:health-bind', error));
         try {
           setUser(authedUser);
           await loadUserState(authedUser.uid);
@@ -601,9 +617,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // (`socialAuth.ts`'s Camada A), which deliberately reports
           // `isNewUser: false` when it cannot know for certain, so this exact
           // `getUserProfile` check below always runs instead of being skipped.
+          const healthSnapshot = await readOnboardingDraft();
+          const nutritionSnapshot = answers ? await captureOnboardingNutrition(legalAccepted) : null;
           const socialResult = await socialSignIn(provider);
           const authedUser = socialResult.user;
+          await bindOnboardingHealthSnapshot(authedUser.uid, nutritionSnapshot ?? healthSnapshot).catch((error) => logAuthError('onboarding:health-bind', error));
           try {
+            if (!answers) await recoverOnboardingNutritionProvisioning(authedUser);
             const existingProfile = socialResult.isNewUser
               ? null
               : await getUserProfile(authedUser.uid);
@@ -614,10 +634,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               legalAccepted,
             });
             if (admission === 'requires-provisioning') {
+              await bindNutritionSnapshot(authedUser.uid, nutritionSnapshot);
               const questionnaireId = await provisionNewUser(authedUser, {
                 answers,
                 name: name ?? undefined,
                 legalAccepted,
+                nutritionSessionId: nutritionSnapshot?.sessionId ?? undefined,
               });
               // Mirrors `signUp`'s exact Phase 3 bridge above — reuses the
               // Analysis screen's pre-auth `prepared` result instead of

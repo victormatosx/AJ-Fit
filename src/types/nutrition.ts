@@ -145,15 +145,9 @@ export const NUTRITION_SUPPLEMENT_IDS = [
 ] as const;
 export type NutritionSupplementId = (typeof NUTRITION_SUPPLEMENT_IDS)[number];
 
-/**
- * Safety-gate blockers (`canonical/nutrition_constraints.json`
- * `eligibility.blockingGates`). Both are **current state**, owned by
- * `NutritionProfile` itself (`pregnant`/`breastfeeding` below) — never read
- * from `Quiz.pregnancyScreening` after the profile's first creation (see
- * `docs/nutrition/07_backend/firestore_schema.md` §3.1).
- */
-export const NUTRITION_ELIGIBILITY_BLOCKERS = ['pregnancy', 'lactation'] as const;
-export type NutritionEligibilityBlocker = (typeof NUTRITION_ELIGIBILITY_BLOCKERS)[number];
+/** No pregnancy/lactation eligibility gates are active. Historical blocker values remain readable. */
+export const NUTRITION_ELIGIBILITY_BLOCKERS = [] as const;
+export type NutritionEligibilityBlocker = 'pregnancy' | 'lactation';
 
 export type NutritionFoodId = string;
 
@@ -176,6 +170,7 @@ export interface NutritionProfile<TTimestamp = unknown> {
   dietaryPattern: DietaryPattern;
 
   preferredFoodIds: NutritionFoodId[];
+  /** Historical inclusion preferences, preserved without a separate questionnaire page. */
   usualFoodIds: NutritionFoodId[];
   /** Hard exclusion — always wins over `preferredFoodIds`/`usualFoodIds` on conflict (`answer_schema.md` §9). */
   excludedFoodIds: NutritionFoodId[];
@@ -185,11 +180,8 @@ export interface NutritionProfile<TTimestamp = unknown> {
   supplements: NutritionSupplementId[];
 
   /**
-   * Current state, not an inherited/immutable snapshot. `pregnant` is
-   * pre-filled once from `Quiz.pregnancyScreening` when this document is
-   * first created; `breastfeeding` has no prior AJ Fit source at all. Both
-   * live and are revalidated here on every generation, never reread from
-   * `Quiz` afterwards (`07_backend/firestore_schema.md` §3.1).
+   * Legacy state retained for storage compatibility only. These fields do not
+   * gate generation and never enter diet AI requests or workout generation.
    */
   pregnant: boolean;
   breastfeeding: boolean;
@@ -272,11 +264,8 @@ export interface WorkoutNutritionContext {
 
 /**
  * `NutritionEngineInput.inherited` per `03_nutrition_engine/nutrition_engine_contract.md`
- * (updated). Deliberately excludes `pregnancyStatus` — per
- * `07_backend/firestore_schema.md` §3.1, pregnancy/lactation are current
- * state owned by `NutritionProfile`, not something "inherited" from an
- * external source. The engine reads them from
- * `NutritionProfile.pregnant`/`.breastfeeding` instead.
+ * Excludes pregnancy/lactation: historical flags remain in NutritionProfile
+ * only for storage compatibility and are not consumed by the engine.
  */
 export interface NutritionEngineInheritedContext {
   sex: Sex;
@@ -755,8 +744,8 @@ export interface NutritionPlanVersions {
  * §7, with `unknown` fields replaced by concrete types. Deliberately has no
  * `inherited.pregnancyStatus` — pregnancy/lactation are not an "inherited"
  * field (see `NutritionEngineInheritedContext`). The pregnant/breastfeeding
- * VALUE actually used for a given generation is still captured, but as part
- * of `nutritionAnswers` (`NutritionProfile`) below, not `inherited`.
+ * historical values remain captured as part of `nutritionAnswers` for
+ * compatibility, without affecting eligibility or AI requests.
  */
 export interface NutritionGenerationProfileSnapshot<TTimestamp = unknown> {
   questionnaireVersion: number;

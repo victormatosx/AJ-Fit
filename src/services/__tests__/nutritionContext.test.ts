@@ -27,7 +27,24 @@ describe('Nutrition physical context', () => {
     expect(result).toMatchObject({ ageYears: 26, heightCm: 170,
       sources: { birthDate: 'questionnaire', height: 'questionnaire' } });
   });
-  it('requires assessment weight, sex and goal', () => {
+  it('uses questionnaire weight when no assessment exists', () => {
+    expect(resolveNutritionPhysicalContextFromSources(profile, { ...quiz, weight: 72.5 }, []))
+      .toMatchObject({ weightKg: 72.5, sources: { weight: 'questionnaire' } });
+  });
+  it('prefers the latest assessment over the weight originally entered in the questionnaire', () => {
+    expect(resolveNutritionPhysicalContextFromSources(profile, { ...quiz, weight: 80 }, assessments))
+      .toMatchObject({ weightKg: 64, sources: { weight: 'assessment' } });
+  });
+  it.each([0, -1, NaN, Infinity])('falls back to questionnaire weight when the latest assessment is invalid (%s)', (weight) => {
+    expect(resolveNutritionPhysicalContextFromSources(profile, { ...quiz, weight: 72 }, [{ ...assessments[1], weight }]))
+      .toMatchObject({ weightKg: 72, sources: { weight: 'questionnaire' } });
+  });
+  it('breaks measured-date ties using the most recently created assessment', () => {
+    expect(resolveNutritionPhysicalContextFromSources(profile, quiz, [
+      { ...assessments[0], measuredAt: newer, weight: 65 }, assessments[1],
+    ])?.weightKg).toBe(65);
+  });
+  it('requires a valid weight from either source, sex and goal', () => {
     expect(resolveNutritionPhysicalContextFromSources(profile, quiz, [])).toBeNull();
     expect(resolveNutritionPhysicalContextFromSources(profile, { ...quiz, sex: null }, assessments)).toBeNull();
     expect(resolveNutritionPhysicalContextFromSources(profile, { ...quiz, goal: null }, assessments)).toBeNull();

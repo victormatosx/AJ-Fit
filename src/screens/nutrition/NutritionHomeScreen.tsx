@@ -31,7 +31,7 @@ export type NutritionHomeState =
   | { kind: 'error'; onRetry: () => void }
   | { kind: 'requestError'; copyKey: NutritionHomeRequestErrorKey; onRetry: () => void; onBack: () => void }
   | { kind: 'noProfile'; onCreateProfile: () => void }
-  | { kind: 'noPlan'; safetyBlocked: boolean; onCreatePlan: () => void; onEditProfile: () => void }
+  | { kind: 'noPlan'; onCreatePlan: () => void; onEditProfile: () => void }
   | { kind: 'generating'; onOpenGenerating: () => void }
   | {
     kind: 'plan'; plan: NutritionPlanDoc; todayDiary: NutritionDailyLogDoc | null;
@@ -123,23 +123,10 @@ export function NutritionHomeScreen({
   if (state.kind === 'noPlan') {
     return (
       <Centered>
-        {state.safetyBlocked ? (
-          <View style={{
-            padding: 16, borderRadius: 14, backgroundColor: 'rgba(255,138,128,0.1)',
-            borderWidth: 1, borderColor: 'rgba(255,138,128,0.35)', marginBottom: 18, width: '100%',
-          }}>
-            <Text style={{ fontFamily: 'Archivo_700Bold', fontSize: 14, color: NU.danger }}>
-              {t('home.pregnancyBlock.title')}
-            </Text>
-            <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 13, color: NU.danger, marginTop: 6, lineHeight: 19 }}>
-              {t('home.pregnancyBlock.body')}
-            </Text>
-          </View>
-        ) : null}
         <EmptyNutritionState
           icon="apple" title={t('home.noPlan.title')} body={t('home.noPlan.body')}
-          ctaLabel={state.safetyBlocked ? undefined : t('home.noPlan.cta')}
-          onPress={state.safetyBlocked ? undefined : state.onCreatePlan}
+          ctaLabel={t('home.noPlan.cta')}
+          onPress={state.onCreatePlan}
         />
         <Pressable onPress={state.onEditProfile} accessibilityRole="button" style={{ marginTop: 16 }}>
           <Text style={{ fontFamily: 'Archivo_600SemiBold', fontSize: 14, color: NU.secondary }}>{t('home.noPlan.editProfile')}</Text>

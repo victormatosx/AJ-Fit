@@ -13,3 +13,8 @@ export async function loadNutritionRolloutConfig(): Promise<NutritionRolloutConf
     return NUTRITION_ROLLOUT_FAIL_SAFE_CONFIG;
   }
 }
+
+export async function loadOnboardingAutomaticGenerationFlag(): Promise<unknown> {
+  try { return (await getDoc(doc(db, 'nutritionRolloutConfig', 'onboardingAutomatic'))).data(); }
+  catch { return null; }
+}

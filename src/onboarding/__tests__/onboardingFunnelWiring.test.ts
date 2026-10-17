@@ -6,6 +6,8 @@ const appRoot = readFileSync(new URL('../../../App.tsx', import.meta.url), 'utf8
 const funnelScreen = read('screens/OnboardingFunnelScreen.tsx');
 const devNav = read('components/onboarding/DevFunnelNavigator.tsx');
 const premiumGate = read('lib/premiumGate.ts');
+const recovery = read('components/OnboardingNutritionRuntime.tsx');
+const healthHandoff = read('services/onboardingHealthHandoff.ts');
 const healthStepScreen = read('screens/onboarding/HealthIntegrationOnboardingScreen.tsx');
 
 describe('App.tsx <-> onboarding funnel wiring', () => {
@@ -14,7 +16,8 @@ describe('App.tsx <-> onboarding funnel wiring', () => {
   });
 
   it('only clears the anonymous draft once both user and questionnaire are real', () => {
-    expect(appRoot).toContain('if (user && questionnaire) void clearOnboardingDraft();');
+    expect(recovery).toContain('if (!user || !questionnaire) return;');
+    expect(recovery.indexOf('await clearOnboardingDraft(')).toBeGreaterThan(recovery.indexOf('await transferOnboardingNutrition(uid)'));
   });
 
   it('collapses the pre-auth funnel into a single RootScreenId', () => {
@@ -53,8 +56,8 @@ describe('Fase 5 — health integration is a native questionnaire step, not a po
 
   it('plan calls onAuthRequested directly — healthIntegration no longer follows it in sequence', () => {
     const handlerBody = funnelScreen.slice(
-      funnelScreen.indexOf('const handlePlanContinue = () => {'),
-      funnelScreen.indexOf('};', funnelScreen.indexOf('const handlePlanContinue = () => {')),
+      funnelScreen.indexOf('const handlePlanContinue = async () => {'),
+      funnelScreen.indexOf('};', funnelScreen.indexOf('const handlePlanContinue = async () => {')),
     );
     expect(handlerBody).toContain('void onForcedQuestionnaireDone();');
     expect(handlerBody).toContain('onAuthRequested(');
@@ -64,30 +67,23 @@ describe('Fase 5 — health integration is a native questionnaire step, not a po
     // The only two onAuthRequested call sites are presentation's "already
     // have an account" link and plan's continue action.
     const occurrences = funnelScreen.match(/onAuthRequested\(\{ origin:/g) ?? [];
-    expect(occurrences).toHaveLength(2);
+    expect(occurrences).toHaveLength(3);
     const caseIdx = funnelScreen.indexOf("case 'healthIntegration':");
     const nextCaseIdx = funnelScreen.indexOf('case ', caseIdx + 1);
     expect(funnelScreen.slice(caseIdx, nextCaseIdx)).toContain('onNext={goNext}');
   });
 
   it('App.tsx never fabricates a connection — it only records the pre-auth choice into per-uid persistence', () => {
-    expect(appRoot).toContain('markHealthIntegrationOnboardingPendingConfirmation');
-    expect(appRoot).toContain('markHealthIntegrationOnboardingStepSeen');
+    expect(healthHandoff).toContain('markHealthIntegrationOnboardingPendingConfirmation');
+    expect(healthHandoff).toContain('markHealthIntegrationOnboardingStepSeen');
     expect(appRoot).not.toContain('.connect()');
     expect(appRoot).not.toContain('requestHealthPermissions');
   });
 
   it('the draft is only ever cleared AFTER the choice is consumed, never racing it', () => {
-    const effectBody = appRoot.slice(
-      appRoot.indexOf('const healthIntegrationChoiceConsumedUidRef'),
-      appRoot.indexOf("const repairHydratedUidRef"),
-    );
-    const consumeIdx = effectBody.indexOf('readOnboardingDraft()');
-    const finallyIdx = effectBody.indexOf('.finally(');
-    const clearIdx = effectBody.indexOf('void clearOnboardingDraft()', finallyIdx);
-    expect(consumeIdx).toBeGreaterThan(-1);
-    expect(finallyIdx).toBeGreaterThan(consumeIdx);
-    expect(clearIdx).toBeGreaterThan(finallyIdx);
+    expect(recovery.indexOf('await clearOnboardingDraft(')).toBeGreaterThan(
+      recovery.indexOf('await consumeCapturedOnboardingHealthChoice(uid'));
+    expect(recovery).not.toContain('.finally(');
   });
 
   it('the questionnaire step itself never imports the native hook — it only records a choice, pre-auth', () => {

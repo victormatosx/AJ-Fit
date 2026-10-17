@@ -1285,6 +1285,19 @@ service cloud.firestore {
       // docs/12 §10). Somente o Admin SDK pode excluir.
       allow delete: if false;
 
+      // Only the initial user-creation batch may opt in. Existing accounts
+      // cannot enroll retrospectively; backend alone records the initial job.
+      match /onboardingNutritionState/{stateId} {
+        allow read: if stateId == 'current' && isOwner(userId) && accountActive(userId);
+        allow create: if stateId == 'current' && isOwner(userId) && accountActive(userId)
+          && request.resource.data.keys().hasOnly(['sessionId', 'createdAt'])
+          && request.resource.data.sessionId is string
+          && request.resource.data.sessionId.size() >= 8 && request.resource.data.sessionId.size() <= 100
+          && request.resource.data.createdAt == request.time
+          && !exists(/databases/$(database)/documents/users/$(userId))
+          && getAfter(/databases/$(database)/documents/users/$(userId)).data.metadata.createdAt == request.time;
+        allow update, delete: if false;
+      }
       match /nutritionProfile/{profileId} {
         allow read: if profileId == 'current' && isOwner(userId) && accountActive(userId);
         allow create: if profileId == 'current' && isOwner(userId) && accountActive(userId)
@@ -3339,7 +3352,7 @@ service cloud.firestore {
       allow write: if false;
     }
     match /nutritionRolloutConfig/{configId} {
-      allow read: if configId == 'active' && isSignedIn() && accountActive(request.auth.uid);
+      allow read: if configId in ['active', 'onboardingAutomatic'] && isSignedIn() && accountActive(request.auth.uid);
       allow write: if false;
     }
     match /nutritionAiOperations/{operationId} {

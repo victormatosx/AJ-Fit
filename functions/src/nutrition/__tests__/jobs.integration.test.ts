@@ -31,7 +31,7 @@ describe.skipIf(!process.env.FIRESTORE_EMULATOR_HOST)('nutrition job Firestore t
     // seeding needed at all, just items whose self-estimated nutrition
     // matches each meal's deterministic target exactly.
     const itemFor = (target: typeof context.engine.mealTargets[number], name: string) => ({
-      name, quantity: 100, unit: 'g', preparationNote: '',
+      name, ingredients: [{ name, origin: 'plant' as const }], quantity: 100, unit: 'g', preparationNote: '',
       estimatedNutrition: { kcal: target.kcal.target, proteinG: target.proteinG.target,
         carbsG: target.carbsG.target, fatG: target.fatG.target, fiberG: target.fiberG?.target ?? 0 },
       allergens: [],
@@ -78,9 +78,9 @@ describe.skipIf(!process.env.FIRESTORE_EMULATOR_HOST)('nutrition job Firestore t
     expect((await user.collection('nutritionPlans').where('status', '==', 'active').get()).size).toBe(1);
     const jobCount = (await user.collection('nutritionGenerationJobs').get()).size;
     await user.collection('nutritionProfile').doc('current').update({ pregnant: true });
-    await expect(requestNutritionPlanGenerationHandler(request('request-0004'), db)).rejects.toThrow('INELIGIBLE_PREGNANCY');
+    expect((await loadGenerationContext(db, uid)).engine.eligible).toBe(true);
     await user.collection('nutritionProfile').doc('current').update({ pregnant: false, breastfeeding: true });
-    await expect(requestNutritionPlanGenerationHandler(request('request-0004'), db)).rejects.toThrow('INELIGIBLE_BREASTFEEDING');
+    expect((await loadGenerationContext(db, uid)).engine.eligible).toBe(true);
     await user.collection('nutritionProfile').doc('current').update({ breastfeeding: false });
     await user.collection('questionnaires').doc('q1').update({ 'answers.goal': 'strength' });
     await expect(requestNutritionPlanGenerationHandler(request('request-0004'), db)).rejects.toThrow('INVALID_NUTRITION_CONTEXT');
@@ -96,6 +96,15 @@ describe.skipIf(!process.env.FIRESTORE_EMULATOR_HOST)('nutrition job Firestore t
     await user.collection('nutritionProfile').doc('current').update({ pregnant: false, breastfeeding: false });
     await user.collection('questionnaires').doc('q1').update({ 'answers.goal': 'health', 'answers.height': 175 });
     await db.collection('nutritionRolloutConfig').doc('active').update({ 'nutritionPlanGenerationEnabled.enabled': true });
+    await db.collection('nutritionRateLimits').doc(uid).update({ lastRequestedAt: Timestamp.fromMillis(0) });
+    const profileRace = await requestNutritionPlanGenerationHandler(request('request-profile-race'), db);
+    expect(await processNutritionGenerationJob(uid, profileRace.generationId, { generatePlan: async () => {
+      await user.collection('nutritionProfile').doc('current').update({ dietaryPattern: 'vegan', updatedAt: Timestamp.now() });
+      return { output, model: 'fake', usage: { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0 }, latencyMs: 1 };
+    } }, db)).toBe(false);
+    expect((await user.collection('nutritionPlans').doc(profileRace.generationId).get()).exists).toBe(false);
+    expect((await user.collection('nutritionPlans').where('status', '==', 'active').get()).size).toBe(1);
+    await user.collection('nutritionProfile').doc('current').update({ dietaryPattern: 'omnivore', updatedAt: Timestamp.now() });
     await db.collection('nutritionRateLimits').doc(uid).update({ lastRequestedAt: Timestamp.fromMillis(0) });
     const deletionRace = await requestNutritionPlanGenerationHandler(request('request-deletion-race'), db);
     const deletionRaceProvider: NutritionAiProvider = { generatePlan: async () => {

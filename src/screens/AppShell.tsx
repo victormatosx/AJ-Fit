@@ -1017,6 +1017,9 @@ function AppShellContent({
       setTab(pendingIntent.tab);
       consumeIntent(pendingIntent);
     } else if (pendingIntent.type === 'nutrition-tab') {
+      if (pendingIntent.recipientUid && pendingIntent.recipientUid !== user?.uid) { consumeIntent(pendingIntent); return; }
+      // A cold-start push must survive the asynchronous feature-rollout read.
+      if (nutritionEnabled === null) return;
       if (nutritionEnabled === true) {
         setNutritionNavigationRequest((current) => ({
           destination: pendingIntent.destination,
@@ -1031,6 +1034,7 @@ function AppShellContent({
     overlayOpen,
     pendingIntent,
     nutritionEnabled,
+    user?.uid,
     requestStartWorkout,
     showEvolutionUnlock,
     startWorkoutFlow,

@@ -23,6 +23,7 @@ type DeepLinkSource = 'initial-url' | 'url-event' | 'notification';
 
 type DeepLinkContextValue = {
   pendingIntent: DeepLinkIntent | null;
+  openNutritionPlan: () => void;
   consumeIntent: (intent: DeepLinkIntent) => void;
 };
 
@@ -112,7 +113,7 @@ export function DeepLinkProvider({ children }: { children: React.ReactNode }) {
       if (payload?.type === 'NUTRITION_DAILY_LOG_REMINDER') {
         enqueueIntent({ type: 'nutrition-tab', destination: 'diary' }, 'notification');
       } else if (payload?.type === 'NUTRITION_PLAN_READY') {
-        enqueueIntent({ type: 'nutrition-tab', destination: 'plan' }, 'notification');
+        enqueueIntent({ type: 'nutrition-tab', destination: 'plan', ...(payload.recipientUid ? { recipientUid: payload.recipientUid } : {}) }, 'notification');
       } else if (payload?.type === 'NUTRITION_WEEKLY_SUMMARY') {
         enqueueIntent({ type: 'nutrition-tab', destination: 'weekly' }, 'notification');
       }
@@ -135,7 +136,7 @@ export function DeepLinkProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <DeepLinkContext.Provider value={{ pendingIntent, consumeIntent }}>
+    <DeepLinkContext.Provider value={{ pendingIntent, consumeIntent, openNutritionPlan: () => enqueueIntent({ type: 'nutrition-tab', destination: 'plan' }, 'notification') }}>
       {children}
     </DeepLinkContext.Provider>
   );

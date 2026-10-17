@@ -109,12 +109,11 @@ function updateForTicket(
 async function priorRetryableInstallationIds(
   db: Firestore,
   dispatchId: string,
-): Promise<Set<string>> {
+): Promise<{ retryable: Set<string>; known: boolean }> {
   const snapshot = await dispatchRef(db, dispatchId)
     .collection(NOTIFICATION_DELIVERIES_SUBCOLLECTION)
-    .where('status', '==', 'FAILED_RETRYABLE')
     .get();
-  return new Set(snapshot.docs.map((document) => document.id));
+  return { known: snapshot.docs.length > 0, retryable: new Set(snapshot.docs.filter((document) => document.get('status') === 'FAILED_RETRYABLE').map((document) => document.id)) };
 }
 
 async function persistAttempt(
@@ -322,7 +321,7 @@ export async function dispatchNotification(
       ? { allowed: true as const }
       : await dependencies.preflight?.(request, now) ?? { allowed: true as const };
     if (!preflight.allowed) {
-      if (request.type === 'CAMPAIGN' && preflight.defer) {
+      if (['CAMPAIGN', 'NUTRITION_PLAN_READY'].includes(request.type) && preflight.defer) {
         await deferCampaignClaim(dependencies.db, claim.dispatchId, claim.claimToken, now);
         return { status: 'DUPLICATE', dispatchId: claim.dispatchId };
       }
@@ -352,16 +351,19 @@ export async function dispatchNotification(
 
     let targets = selection.eligible;
     let staleRetryableIds: string[] = [];
+    let hasPriorDeliveries = false;
     if (claim.outcome === 'RETRY_ALLOWED') {
-      const retryableIds = await priorRetryableInstallationIds(dependencies.db, claim.dispatchId);
-      if (retryableIds.size > 0) {
+      const prior = await priorRetryableInstallationIds(dependencies.db, claim.dispatchId);
+      const retryableIds = prior.retryable;
+      hasPriorDeliveries = prior.known;
+      if (prior.known) {
         const eligibleIds = new Set(selection.eligible.map((device) => device.installationId));
         targets = selection.eligible.filter((device) => retryableIds.has(device.installationId));
         staleRetryableIds = [...retryableIds].filter((id) => !eligibleIds.has(id));
       }
     }
 
-    if (targets.length === 0 && staleRetryableIds.length === 0) {
+    if (targets.length === 0 && staleRetryableIds.length === 0 && !hasPriorDeliveries) {
       const written = await markDispatchOutcome(
         dependencies.db,
         claim.dispatchId,
@@ -408,6 +410,15 @@ export async function dispatchNotification(
         return { status: latest.defer ? 'DUPLICATE' : 'SUPPRESSED_BY_POLICY', dispatchId: claim.dispatchId };
       }
     }
+    // Fence a worker whose lease was recovered while it was reading dependencies.
+    const stillOwned = await dependencies.db.runTransaction(async (tx) => {
+      const ref = dispatchRef(dependencies.db, claim.dispatchId);
+      const current = await tx.get(ref);
+      if (current.get('status') !== 'CLAIMED' || current.get('claimToken') !== claim.claimToken) return false;
+      tx.update(ref, { updatedAt: dependencies.now() });
+      return true;
+    });
+    if (!stillOwned) return { status: 'DUPLICATE', dispatchId: claim.dispatchId };
     const tickets = targets.length > 0
       ? await dependencies.expoClient.send(targets.map((device) => ({
           to: device.expoPushToken,

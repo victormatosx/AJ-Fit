@@ -85,11 +85,6 @@
       "historyDescription": "Accede a tus planes de alimentación anteriores.",
       "history": "Historial de planes"
     },
-    "pregnancyBlock": {
-      "title": "Se recomienda seguimiento especializado",
-      "body": "Durante el embarazo o la lactancia, la generación automática de dietas no está disponible en AJ Fit. Recomendamos seguimiento con un nutricionista para orientación segura y personalizada.",
-      "ack": "Entendido"
-    },
     "disabled": {
       "title": "Nutrición aún no disponible",
       "body": "Esta función se está habilitando por etapas y todavía no llegó a tu cuenta."
@@ -203,8 +198,12 @@
       "targetWeightKg": {
         "title": "¿Tienes un peso objetivo en mente?",
         "subtitle": "Este campo es opcional.",
-        "placeholder": "Peso objetivo (kg)",
-        "skip": "Prefiero no decirlo"
+        "placeholder": "Peso objetivo ({{unit}})",
+        "skip": "Prefiero no decirlo",
+        "currentWeight": "Peso actual",
+        "label": "Peso objetivo ({{unit}})",
+        "invalid": "Introduce un peso válido, mayor que cero y hasta {{max}} {{unit}}.",
+        "unavailable": "No disponible"
       },
       "nonTrainingActivityLevel": {
         "title": "¿Cómo es tu actividad fuera del entrenamiento?",
@@ -226,22 +225,17 @@
           "vegetarian": "Vegetariano",
           "vegan": "Vegano",
           "pescatarian": "Pescetariano"
-        }
+        },
+        "subtitle": "Opcional. Elige un patrón o tócalo de nuevo para desmarcar. También se respetarán las exclusiones individuales."
       },
       "preferredFoodIds": {
-        "title": "Alimentos que prefieres",
+        "title": "Alimentos que quieres incluir",
         "subtitle": "Priorizaremos estos alimentos en tus comidas.",
         "addCta": "Agregar alimento",
         "empty": "Todavía no agregaste alimentos."
       },
-      "usualFoodIds": {
-        "title": "Alimentos que sueles comer",
-        "subtitle": "Esto ayuda a armar un plan más fácil de seguir.",
-        "addCta": "Agregar alimento",
-        "empty": "Todavía no agregaste alimentos."
-      },
       "excludedFoodIds": {
-        "title": "Alimentos que quieres excluir",
+        "title": "Alimentos que no quieres en tu dieta",
         "subtitle": "Estos alimentos nunca aparecerán en tu plan.",
         "addCta": "Agregar alimento",
         "empty": "Ningún alimento excluido."
@@ -272,16 +266,6 @@
           "other": "Otro"
         }
       },
-      "pregnant": {
-        "title": "¿Estás embarazada?",
-        "yes": "Sí",
-        "no": "No"
-      },
-      "breastfeeding": {
-        "title": "¿Estás amamantando?",
-        "yes": "Sí",
-        "no": "No"
-      },
       "varietyPreference": {
         "title": "¿Prefieres variedad o repetir las mismas comidas?",
         "options": {
@@ -305,8 +289,7 @@
       "supplements": "Suplementos",
       "variety": "Variedad",
       "none": "Ninguno",
-      "cta": "Crear mi dieta",
-      "safetyBlocked": "Generación bloqueada — mira el aviso de arriba."
+      "cta": "Crear mi dieta"
     },
     "errors": {
       "invalid": "Revisa las respuestas marcadas antes de continuar.",
@@ -443,7 +426,10 @@
     "loadMore": "Cargar más",
     "offline": "Sin conexión. Mostrando alimentos recientes.",
     "error": "No pudimos buscar ahora.",
-    "recipeBadge": "Receta"
+    "recipeBadge": "Receta",
+    "clearSearch": "Borrar búsqueda",
+    "retry": "Intentar de nuevo",
+    "selectionLimit": "Puedes seleccionar hasta {{count}} alimentos. Quita uno para añadir otro."
   },
   "customFood": {
     "title": "Crear alimento",
@@ -570,5 +556,27 @@
     "readOnlyBanner": "Viendo un plan archivado — solo lectura.",
     "empty": "Todavía no hay planes.",
     "createdAt": "Creado el"
+  },
+  "onboarding": {
+    "requestFailedTitle": "No se pudo iniciar tu plan",
+    "requestFailedBody": "Tus respuestas siguen guardadas. La solicitud automática se detuvo. Revisa tu acceso e inténtalo de nuevo.",
+    "waitingTitle": "La preparación de tu plan aún no comenzó",
+    "waitingBody": "Tus respuestas están guardadas. Esperamos la confirmación de acceso y la disponibilidad del servicio. Puedes intentarlo de nuevo.",
+    "automaticDisabledTitle": "Tus respuestas están guardadas",
+    "automaticDisabledBody": "La preparación automática está desactivada. Puedes solicitar tu plan cuando la generación esté disponible.",
+    "recovery": "Tus respuestas están guardadas. No pudimos terminar de preparar tu plan todavía.",
+    "retry": "Intentar de nuevo",
+    "discard": "Descartar respuestas guardadas",
+    "discardTitle": "¿Descartar respuestas?",
+    "discardBody": "Esto solo elimina las respuestas locales pendientes.",
+    "cancel": "Cancelar",
+    "preparingTitle": "Tu dieta se está preparando",
+    "preparingBody": "Estamos creando tu plan personalizado según tus respuestas.",
+    "preparingNote": "Puedes seguir usando AJ Fit. Te avisaremos en la app cuando tu dieta esté lista.",
+    "readyTitle": "¡Tu dieta está lista!",
+    "readyBody": "Tu plan de alimentación ya está disponible.",
+    "dismiss": "Cerrar",
+    "pendingAccount": "Hay respuestas pendientes de transferir. Entra en la cuenta del registro o descártalas para empezar de nuevo.",
+    "signIn": "Iniciar sesión"
   }
 }

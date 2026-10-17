@@ -31,7 +31,7 @@ const engine: NutritionEngineOutput = {
 /** A free-form AI item — no foodId, self-estimated nutrition, self-declared allergens. */
 function item(name: string, kcal: number, proteinG: number, carbsG: number, fatG: number, fiberG: number,
   allergens: string[] = []) {
-  return { name, quantity: 100, unit: 'g', preparationNote: '',
+  return { name, ingredients: [{ name, origin: 'plant' as const }], quantity: 100, unit: 'g', preparationNote: '',
     estimatedNutrition: { kcal, proteinG, carbsG, fatG, fiberG }, allergens };
 }
 /** `scale` uniformly scales ALL of one item's macros away from the exact target — exercises the deterministic scale-and-recheck correction (every field must land back in range together, not just kcal). */
@@ -121,7 +121,7 @@ describe('prompt payload — backend sends numbers/safety, AI gets freedom over 
     expect(payload.usualFoodNames).toEqual(['Feijão']);
     expect(payload.excludedFoodNames).toEqual(['Amendoim']);
     expect(payload.excludedAllergens).toEqual(['milk']);
-    expect(payload.wheyAccepted).toBe(true);
+    expect(payload.wheyAccepted).toBe(false);
     expect(payload).not.toHaveProperty('candidates');
   });
 
@@ -332,5 +332,70 @@ describe('incident regression — rejected nutrient proportions', () => {
     await expect(generateValidatedPlan(new OpenAiNutritionProvider('key', fetcher), profile, engine, goal, noNames))
       .rejects.toMatchObject({ code: 'AI_RATE_LIMIT' });
     expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('dietary restrictions across generation, regeneration and meal alternatives', () => {
+  function composed(name: string, origin: import('../generation/domain').RawAiFoodItem['ingredients'][number]['origin']) {
+    return { ...item(name, 400, 20, 50, 10, 10), ingredients: [{ name, origin }] };
+  }
+  function plantPlan() {
+    const plan = output();
+    plan.meals[1].foods[0].name = 'Arroz com feijão';
+    plan.meals[1].foods[0].ingredients = [{ name: 'Arroz', origin: 'plant' }, { name: 'Feijão', origin: 'plant' }];
+    return plan;
+  }
+  it.each(['omnivore', 'vegetarian', 'vegan', 'pescatarian'] as const)('accepts compatible meals for %s on repeated generations', async (dietaryPattern) => {
+    const generatePlan = fakeProvider(plantPlan(), plantPlan());
+    for (let i = 0; i < 2; i++) {
+      expect((await generateValidatedPlan(generatePlan, { ...profile, dietaryPattern }, engine, goal, noNames)).attempt).toBe(1);
+    }
+    const request = vi.mocked(generatePlan.generatePlan).mock.calls[0][0];
+    expect(request.profile).not.toHaveProperty('pregnant');
+    expect(request.profile).not.toHaveProperty('breastfeeding');
+  });
+  it.each([
+    ['vegetarian', 'Frango', 'terrestrial_animal'], ['vegetarian', 'Tilápia', 'fish'],
+    ['vegetarian', 'Camarão', 'shellfish'], ['vegan', 'Iogurte', 'dairy'], ['vegan', 'Ovo', 'egg'],
+    ['vegan', 'Whey', 'dairy'], ['vegan', 'Mel', 'other_animal'], ['pescatarian', 'Carne bovina', 'terrestrial_animal'],
+    ['pescatarian', 'Caldo sem composição conhecida', 'unknown'], ['vegan', 'Queijo', 'plant'],
+  ] as const)('blocks %s with %s even when allergens are omitted', async (dietaryPattern, name, origin) => {
+    const plan = plantPlan();
+    plan.meals[0].foods[0] = composed(name, origin) as ReturnType<typeof item>;
+    const provider = fakeProvider(plan);
+    await expect(generateValidatedPlan(provider, { ...profile, dietaryPattern }, engine, goal, noNames))
+      .rejects.toMatchObject({ code: 'AI_SAFETY_VALIDATION_FAILED' });
+    expect(provider.generatePlan).toHaveBeenCalledTimes(1);
+  });
+  it('allows lacto-ovo vegetarian meals and seafood for pescatarians', () => {
+    for (const [dietaryPattern, name, origin] of [
+      ['vegetarian', 'Iogurte', 'dairy'], ['vegetarian', 'Ovo', 'egg'], ['pescatarian', 'Tilápia', 'fish'],
+      ['pescatarian', 'Camarão', 'shellfish'], ['vegan', 'Leite de coco', 'plant'], ['vegan', 'Carne de soja', 'plant'],
+    ] as const) {
+      const plan = plantPlan();
+      plan.meals[0].foods[0] = composed(name, origin) as ReturnType<typeof item>;
+      expect(() => validateAndBuildPlan(plan, profile.mealSlots, engine, [], true, { dietaryPattern, excludedFoodNames: [] })).not.toThrow();
+    }
+  });
+  it('combines hard ingredient exclusions, allergies and dietary pattern, overriding preferred foods', async () => {
+    const plan = plantPlan();
+    const names = { preferred: ['Feijão'], usual: [], excluded: ['Feijão, cozido'] };
+    await expect(generateValidatedPlan(fakeProvider(plan), { ...profile, dietaryPattern: 'vegan' }, engine, goal, names))
+      .rejects.toMatchObject({ code: 'AI_SAFETY_VALIDATION_FAILED' });
+    plan.meals[0].foods[0] = composed('Leite de soja', 'plant') as ReturnType<typeof item>;
+    await expect(generateValidatedPlan(fakeProvider(plan), { ...profile, dietaryPattern: 'vegan', excludedAllergens: ['soy'] }, engine, goal, noNames))
+      .rejects.toMatchObject({ code: 'AI_SAFETY_VALIDATION_FAILED' });
+  });
+  it('fails closed on missing composition metadata', () => {
+    const plan = output();
+    delete (plan.meals[0].foods[0] as Partial<ReturnType<typeof item>>).ingredients;
+    expect(() => validateAndBuildPlan(plan, profile.mealSlots, engine)).toThrow('invalid_schema');
+  });
+  it('keeps legacy safety state out of both HTTP AI contexts', () => {
+    for (const payload of [fullPlanContext(profile, engine, goal, noNames),
+      mealAlternativeContext(profile, engine.mealTargets[0], [], goal, noNames)]) {
+      expect(JSON.parse(payload)).not.toHaveProperty('pregnant');
+      expect(JSON.parse(payload)).not.toHaveProperty('breastfeeding');
+    }
   });
 });

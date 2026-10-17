@@ -1,11 +1,16 @@
+import { NutritionErrorState } from '../../components/nutrition/NutritionStates';
+import { readInitialNutritionRequest, subscribeInitialNutritionRequest, runInitialNutritionRequest, resolveInitialNutritionRequestPresentation, type InitialNutritionRequestState } from '../../services/initialNutritionRequest';
+import { requestInitialNutritionPlanGeneration } from '../../services/nutritionGeneration';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Keyboard, Modal } from 'react-native';
+import { Alert, AppState, Keyboard, Modal } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { Timestamp } from 'firebase/firestore';
 import { useAuth } from '../../state/AuthContext';
 import { loadNutritionRolloutConfig, nutritionFlagEnabled } from '../../nutrition/rollout';
 import { resolveNutritionPhysicalContext } from '../../services/nutritionContext';
-import { loadNutritionProfile, createNutritionProfile, updateNutritionProfile, type NutritionProfileAnswers } from '../../services/nutritionProfile';
+import { createNutritionProfile, updateNutritionProfile, type NutritionProfileAnswers } from '../../services/nutritionProfile';
 import {
   requestNutritionPlanGeneration, subscribeToActiveNutritionGenerationJob, subscribeToNutritionGenerationJob,
   type NutritionGenerationJobDoc,
@@ -27,7 +32,7 @@ import type {
   NutritionGoal, NutritionLoggedFoodItem, NutritionLoggedFoodSource, NutritionMealOption, NutritionMealSlot,
   NutritionPlanFoodItem, NutritionProfile as NutritionProfileType, NutritionRecipe,
 } from '../../types/nutrition';
-import { isSafetyBlocked, type ProfileDraft } from '../../nutrition/ui/profileSteps';
+import { type ProfileDraft } from '../../nutrition/ui/profileSteps';
 import { foodPickOriginToDiarySource } from '../../nutrition/ui/diaryModel';
 import { mapGenerationRequestError, type GenerationRequestErrorKey } from '../../nutrition/ui/generationStage';
 import { endOfLocalWeek, todayLocalDate, shiftLocalDate, isFutureLocalDate, startOfLocalWeek } from '../../nutrition/ui/localDate';
@@ -78,7 +83,9 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
 
   const [generationEnabled, setGenerationEnabled] = useState(false);
   const [profile, setProfile] = useState<NutritionProfileType<Timestamp> | null>(null);
+  const [currentWeightKg, setCurrentWeightKg] = useState<number | null>(null);
   const [goal, setGoal] = useState<NutritionGoal | null>(null);
+  const [profileLoaded, setProfileLoaded] = useState(false);
   const [baseLoaded, setBaseLoaded] = useState(false);
   const [baseError, setBaseError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
@@ -92,7 +99,22 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
   const [job, setJob] = useState<NutritionGenerationJobDoc | null>(null);
   const [generationObservationFailed, setGenerationObservationFailed] = useState(false);
   const generationRequestInFlight = useRef(false);
+  // `activeJob`/`generationId` momentarily go back to null the instant a job
+  // flips to 'completed' (the job and the plan-becomes-active write commit
+  // together on the backend, but the client's two independent `onSnapshot`
+  // listeners for them do not necessarily deliver in the same tick) — so
+  // `!plan && !generationId && !activeJob` below can be true for one frame
+  // even though a plan was just produced. Once this session has observed
+  // any job at all, remember it, so that frame falls through to home's own
+  // `loading`/`noPlan` state (correct either way) instead of back to the
+  // "automatic generation disabled" copy, which a job having existed makes
+  // misleading regardless of the `onboardingAutomatic` rollout flag.
+  const sawGenerationActivityRef = useRef(false);
+  if (activeJob || job || generationId) sawGenerationActivityRef.current = true;
 
+  const [enrollmentLoaded, setEnrollmentLoaded] = useState(false);
+  const [initialPending, setInitialPending] = useState(false);
+  const [initialRequest, setInitialRequest] = useState<InitialNutritionRequestState | null>(null);
   const [route, setRoute] = useState<Route>({ name: 'home' });
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -165,9 +187,49 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
   const {
     assessments, loading: assessmentsLoading, error: assessmentsError, refresh: refreshAssessments,
   } = useAssessments(uid);
+  const latestAssessmentWeightKg = assessments[0]?.weight ?? null;
   const currentWeekStart = startOfLocalWeek();
   const selectedWeekStart = route.name === 'weekly' ? route.weekStartLocalDate : currentWeekStart;
   const selectedWeekEnd = endOfLocalWeek(selectedWeekStart);
+
+  useEffect(() => {
+    if (!uid) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const read = () => { void readInitialNutritionRequest(uid).then((state) => {
+      if (cancelled) return;
+      setInitialRequest(state);
+      if (timer) clearTimeout(timer);
+      if (state.status === 'requesting' && state.nextAt > Date.now()) timer = setTimeout(read, state.nextAt - Date.now() + 1);
+    }).catch(() => { if (!cancelled) setInitialRequest({ status: 'failed', attempts: 3, nextAt: 0 }); }); };
+    read();
+    const stop = subscribeInitialNutritionRequest(read);
+    const appState = AppState.addEventListener('change', (state) => { if (state === 'active') read(); });
+    return () => { cancelled = true; stop(); if (timer) clearTimeout(timer); appState.remove(); };
+  }, [uid]);
+
+  useEffect(() => {
+    if (!uid) return;
+    setProfileLoaded(false);
+    return onSnapshot(doc(db, 'users', uid, 'nutritionProfile', 'current'), (snapshot) => {
+      setProfile(snapshot.exists() ? snapshot.data() as NutritionProfileType<Timestamp> : null);
+      setProfileLoaded(true);
+    }, () => { setBaseError(true); setProfileLoaded(true); });
+  }, [uid, reloadKey]);
+
+  useEffect(() => {
+    if (!uid) return;
+    setEnrollmentLoaded(false);
+    return onSnapshot(doc(db, 'users', uid, 'onboardingNutritionState', 'current'), (snapshot) => {
+      setEnrollmentLoaded(true);
+      const value = snapshot.data();
+      setInitialPending(Boolean(value && !value.autoGenerationId && !value.autoSkipped));
+      const id = value?.latestGenerationId ?? value?.autoGenerationId;
+      if (typeof id === 'string') {
+        setGenerationId(id);
+      }
+    }, () => { setBaseError(true); setEnrollmentLoaded(true); });
+  }, [uid, reloadKey]);
 
   useEffect(() => {
     if (!navigationRequest) return;
@@ -192,17 +254,17 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
     if (!uid) return;
     let cancelled = false;
     setBaseError(false);
-    Promise.all([loadNutritionRolloutConfig(), loadNutritionProfile(uid), resolveNutritionPhysicalContext(uid)])
-      .then(([config, loadedProfile, physical]) => {
+    Promise.all([loadNutritionRolloutConfig(), resolveNutritionPhysicalContext(uid)])
+      .then(([config, physical]) => {
         if (cancelled) return;
         setGenerationEnabled(nutritionFlagEnabled(uid, 'nutritionPlanGenerationEnabled', config));
-        setProfile(loadedProfile);
         setGoal(physical?.goal ?? null);
+        setCurrentWeightKg(physical?.weightKg ?? null);
         setBaseLoaded(true);
       })
       .catch(() => { if (!cancelled) { setBaseError(true); setBaseLoaded(true); } });
     return () => { cancelled = true; };
-  }, [uid, reloadKey]);
+  }, [uid, reloadKey, latestAssessmentWeightKg]);
 
   useEffect(() => {
     if (!uid) {
@@ -265,11 +327,13 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
 
   useEffect(() => {
     if (!uid || !generationId) { setJob(null); return; }
+    setJob(null);
     setGenerationObservationFailed(false);
     // A monitor timeout never fails the backend job or submits another AI request.
     const timer = setTimeout(() => setGenerationObservationFailed(true), 12 * 60 * 1000);
     const unsubscribe = subscribeToNutritionGenerationJob(uid, generationId, (next) => {
       setJob(next);
+      if (next?.status === 'failed') setRoute({ name: 'generating' });
       if (!next) setGenerationObservationFailed(true);
       if (next?.status === 'completed' || next?.status === 'failed') {
         clearTimeout(timer);
@@ -280,7 +344,7 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
   }, [uid, generationId, reloadKey]);
 
   useEffect(() => {
-    if (job?.status === 'completed') { setGenerationId(null); setRoute({ name: 'home' }); }
+    if (job?.status === 'completed') { setGenerationId(null); setRoute((current) => current.name === 'generating' ? { name: 'home' } : current); }
   }, [job?.status]);
 
   // Today's diary — drives NutritionHome's real consumption summary.
@@ -372,7 +436,7 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
         mode: profile ? 'edit' : 'create', mealSlotCountBucket: countBucket(draft.mealSlots?.length ?? 0),
       } });
       setReloadKey((key) => key + 1);
-      if (isFirstCreation && !isSafetyBlocked(draft)) {
+      if (isFirstCreation) {
         // `handleRequestGeneration` never throws — it catches its own
         // errors into `requestError` state and returns false. Without
         // checking that return value, a failed request left `route`
@@ -573,7 +637,7 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
     setHistoryVisible(true);
   };
 
-  if (!uid || !baseLoaded || !activeJobLoaded) {
+  if (!uid || !baseLoaded || !profileLoaded || !enrollmentLoaded || !activeJobLoaded) {
     return <NutritionHomeScreen state={{ kind: 'loading' }} onCreateCustomFood={() => {}} onCreateRecipe={() => {}} />;
   }
 
@@ -586,7 +650,6 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
     );
   }
 
-  const safetyBlocked = profile ? isSafetyBlocked(profile) : false;
 
   // Every route branch below renders only the route-specific screen as
   // `routeContent` — it never `return`s directly. All overlay modals
@@ -608,6 +671,7 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
     routeContent = (
       <NutritionProfileScreen
         profile={profile}
+        currentWeightKg={currentWeightKg}
         inheritedGoal={goal ?? 'health'}
         mode={route.mode}
         onCancel={() => setRoute({ name: 'home' })}
@@ -618,7 +682,20 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
         onToggleFavoriteFood={handleToggleFavoriteFood}
       />
     );
-  } else if (route.name === 'generating') {
+  } else if (initialPending && !plan && !generationId && !activeJob && !sawGenerationActivityRef.current) {
+    const pending = resolveInitialNutritionRequestPresentation(initialRequest, generationEnabled, Boolean(profile));
+    const disabled = pending.kind === 'disabled';
+    const failed = pending.kind === 'failed';
+    routeContent = <NutritionErrorState
+      title={t(disabled ? 'onboarding.automaticDisabledTitle' : failed ? 'onboarding.requestFailedTitle' : 'onboarding.waitingTitle')}
+      body={t(disabled ? 'onboarding.automaticDisabledBody' : failed ? 'onboarding.requestFailedBody' : 'onboarding.waitingBody')}
+      retryLabel={pending.canRetry ? t('onboarding.retry') : undefined}
+      onRetry={pending.canRetry ? () => {
+        if (disabled) void handleRequestGeneration();
+        else void runInitialNutritionRequest(uid, requestInitialNutritionPlanGeneration, true);
+      } : undefined}
+    />;
+  } else if (route.name === 'generating' || (generationId != null && !job)) {
     routeContent = (
       <NutritionGeneratingScreen
         job={job ?? activeJob}
@@ -725,7 +802,7 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
         ? (!planLoaded
           ? { kind: 'loading' }
           : {
-            kind: 'noPlan', safetyBlocked,
+            kind: 'noPlan',
             onCreatePlan: generationEnabled ? () => { void handleRequestGeneration(); } : () => {},
             onEditProfile: () => setRoute({ name: 'profile', mode: 'edit' }),
           })

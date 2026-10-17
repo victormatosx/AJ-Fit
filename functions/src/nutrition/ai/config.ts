@@ -17,8 +17,8 @@ export const NUTRITION_AI_MODELS = {
   fallback: 'gpt-6.1-sol',
 } as const;
 // v3: one recommended option per meal on initial generation, alternatives generated on-demand only (2026-10-10 cost pass).
-export const PROMPT_VERSION = 'nutrition-full-plan-v3.1.0';
-export const AI_SCHEMA_VERSION = '3.0.0';
+export const PROMPT_VERSION = 'nutrition-full-plan-v3.2.0';
+export const AI_SCHEMA_VERSION = '3.1.0';
 /** `NutritionPlanVersions.foodCatalogVersion` is vestigial since generation stopped reading `nutritionFoods` (diet-quality-v3) — kept only for schema stability. */
 export const FOOD_CATALOG_VERSION_PLACEHOLDER = 'unused-since-diet-quality-v3';
 export const MAX_AI_ATTEMPTS = 3; // initial + two retries, fallback consumes the last attempt

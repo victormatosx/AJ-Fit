@@ -73,7 +73,7 @@ async function seedEligibleUser(uid: string) {
 
 /** Diet-quality-v3 (2026-10-10): no catalog/foodId — a free-form item whose self-estimated nutrition matches a meal's deterministic target exactly. */
 function planItem(target: Seed['context']['engine']['mealTargets'][number], name: string) {
-  return { name, quantity: 100, unit: 'g', preparationNote: '',
+  return { name, ingredients: [{ name, origin: 'plant' as const }], quantity: 100, unit: 'g', preparationNote: '',
     estimatedNutrition: { kcal: target.kcal.target, proteinG: target.proteinG.target,
       carbsG: target.carbsG.target, fatG: target.fatG.target, fiberG: target.fiberG?.target ?? 1 },
     allergens: [] };
@@ -301,16 +301,28 @@ describe.skipIf(!enabled)('Nutrition complete journey (Firestore Emulator)', () 
     expect((await db.collection('notificationDispatches').where('uid', '==', seed.uid).get()).empty).toBe(true);
   }, 40_000);
 
-  it('blocks safety, rollout and deletion before queueing a job with stable client-facing codes', async () => {
+  it.each([
+    { pregnant: true, breastfeeding: false },
+    { pregnant: false, breastfeeding: true },
+    { pregnant: true, breastfeeding: true },
+  ])('generates without confirmation or a block for legacy flags %j', async (legacyFlags) => {
+    const seed = await seedEligibleUser(`nutrition-legacy-${randomUUID()}`);
+    await seed.user.collection('nutritionProfile').doc('current').update(legacyFlags);
+    const job = await requestNutritionPlanGenerationHandler(callable(seed.uid, { requestId: randomUUID() }), db);
+    const generatePlan = vi.fn().mockResolvedValue({ output: validPlanOutput(seed), model: 'fake',
+      usage: { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0 }, latencyMs: 1 });
+    expect(await processNutritionGenerationJob(seed.uid, job.generationId, { generatePlan }, db)).toBe(true);
+    expect((await seed.user.collection('nutritionPlans').doc(job.generationId).get()).get('status')).toBe('active');
+    expect(generatePlan.mock.calls[0][0].profile).not.toHaveProperty('pregnant');
+    expect(generatePlan.mock.calls[0][0].profile).not.toHaveProperty('breastfeeding');
+    expect((await seed.user.collection('nutritionProfile').doc('current').get()).data()).toMatchObject(legacyFlags);
+  });
+
+  it('blocks invalid context, rollout and deletion before queueing a job with stable client-facing codes', async () => {
     const seed = await seedEligibleUser(`nutrition-gates-${randomUUID()}`);
     const request = () => requestNutritionPlanGenerationHandler(
       callable(seed.uid, { requestId: `gate-${randomUUID()}` }), db,
     );
-    await seed.user.collection('nutritionProfile').doc('current').update({ pregnant: true });
-    await expect(request()).rejects.toThrow('INELIGIBLE_PREGNANCY');
-    await seed.user.collection('nutritionProfile').doc('current').update({ pregnant: false, breastfeeding: true });
-    await expect(request()).rejects.toThrow('INELIGIBLE_BREASTFEEDING');
-    await seed.user.collection('nutritionProfile').doc('current').update({ breastfeeding: false });
     await seed.user.collection('questionnaires').doc('q1').update({ 'answers.goal': 'strength' });
     await expect(request()).rejects.toThrow('INVALID_NUTRITION_CONTEXT');
     await seed.user.collection('questionnaires').doc('q1').update({ 'answers.goal': 'health' });

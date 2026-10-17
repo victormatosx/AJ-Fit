@@ -25,6 +25,9 @@ import type {
 } from '../expoPushClient';
 import {
   claimDispatch,
+  recoverAbandonedClaims,
+  dispatchIdFor,
+  CLAIM_STALE_AFTER_MS,
   markDispatchOutcome,
   NotificationIdempotencyConflictError,
 } from '../idempotency';
@@ -949,6 +952,52 @@ describe.skipIf(!enabled)('push foundation — Firestore Emulator', () => {
       expect(expo.send).toHaveBeenCalledTimes(1);
     });
 
+    it('recovers an abandoned claim once, preserves live claims, and tolerates redelivery', async () => {
+      await seedEligibleDevice();
+      const expo = fakeExpo(); const request = qaRequest();
+      await claimDispatch(db, request, now);
+      await runDispatchRetries(dependencies(expo));
+      expect(expo.send).not.toHaveBeenCalled();
+      now = Timestamp.fromMillis(now.toMillis() + CLAIM_STALE_AFTER_MS + 1);
+      await Promise.all([runDispatchRetries(dependencies(expo)), runDispatchRetries(dependencies(expo))]);
+      expect(expo.send).toHaveBeenCalledTimes(1);
+      expect((await dispatchNotification(request, dependencies(expo))).status).toBe('DUPLICATE');
+    });
+    it('does not resend a ticket persisted before an abandoned parent claim is recovered', async () => {
+      await seedEligibleDevice();
+      const expo = fakeExpo(); const request = qaRequest();
+      const first = await dispatchNotification(request, dependencies(expo));
+      await db.collection(NOTIFICATION_DISPATCHES_COLLECTION).doc(first.dispatchId).update({ status: 'CLAIMED', claimToken: 'abandoned', updatedAt: now });
+      now = Timestamp.fromMillis(now.toMillis() + CLAIM_STALE_AFTER_MS + 1);
+      await runDispatchRetries(dependencies(expo));
+      expect(expo.send).toHaveBeenCalledTimes(1);
+      expect((await db.collection(NOTIFICATION_DISPATCHES_COLLECTION).doc(first.dispatchId).get()).get('status')).toBe('PENDING_RECEIPTS');
+    });
+    it('keeps one logical dispatch after an unknown provider outcome, with bounded retries', async () => {
+      await seedEligibleDevice();
+      const expo = fakeExpo();
+      vi.mocked(expo.send).mockRejectedValueOnce(new Error('response lost after send'));
+      const request = qaRequest();
+      const first = { dispatchId: dispatchIdFor(request.idempotencyKey) };
+      await expect(dispatchNotification(request, dependencies(expo))).rejects.toThrow('response lost after send');
+      expect((await db.collection(NOTIFICATION_DISPATCHES_COLLECTION).doc(first.dispatchId).get()).get('status')).toBe('RETRY_SCHEDULED');
+      now = Timestamp.fromMillis(now.toMillis() + 3600000);
+      await runDispatchRetries(dependencies(expo));
+      expect(expo.send).toHaveBeenCalledTimes(2);
+      expect(vi.mocked(expo.send).mock.calls[0][0][0].data.notificationId).toBe(vi.mocked(expo.send).mock.calls[1][0][0].data.notificationId);
+      expect((await db.collection(NOTIFICATION_DISPATCHES_COLLECTION).doc(first.dispatchId).get()).get('attemptCount')).toBe(2);
+    });
+    it('fences an old sender after its claim is recovered by another worker', async () => {
+      await seedEligibleDevice(); const expo = fakeExpo();
+      const deps = dependencies(expo);
+      deps.preflight = async () => {
+        now = Timestamp.fromMillis(now.toMillis() + CLAIM_STALE_AFTER_MS + 1);
+        expect(await recoverAbandonedClaims(db, now, 10)).toBe(1);
+        return { allowed: true };
+      };
+      expect((await dispatchNotification(qaRequest(), deps)).status).toBe('DUPLICATE');
+      expect(expo.send).not.toHaveBeenCalled();
+    });
     it('retries only the failed delivery after persistent backoff becomes due', async () => {
       await seedEligibleDevice();
       const firstExpo = fakeExpo({

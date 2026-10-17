@@ -1,3 +1,5 @@
+import { buildNutritionPlanReadyNotification } from '../contentPolicy';
+import { claimDispatch } from '../idempotency';
 import { randomUUID } from 'node:crypto';
 import { Timestamp } from 'firebase-admin/firestore';
 import { describe, expect, it } from 'vitest';
@@ -65,4 +67,33 @@ describe.skipIf(!process.env.FIRESTORE_EMULATOR_HOST)('nutrition notifications (
     await expect(dispatchNutritionPlanReady(uid, generationId, db, mondayMorning))
       .resolves.toMatchObject({ status: 'DUPLICATE' });
   });
+  it('deduplicates replays with additive routing fields against the historical semantic hash', async () => {
+    const uid = `nutrition-historical-${randomUUID()}`;
+    const current = buildNutritionPlanReadyNotification({ uid, generationId: randomUUID(), locale: 'pt-BR', initialOnboarding: true });
+    const old = { ...current, data: { generationId: current.data!.generationId } };
+    await claimDispatch(db, old, mondayMorning);
+    expect((await claimDispatch(db, current, mondayMorning)).outcome).toBe('DUPLICATE_IN_PROGRESS');
+    const malicious = { ...current, data: { ...current.data, recipientUid: 'someone-else' } };
+    await expect(claimDispatch(db, malicious, mondayMorning)).rejects.toThrow('notification_idempotency_contract_conflict');
+  });
+  it('defers a completed first diet through quiet hours using the existing retry queue', async () => {
+    const uid = `nutrition-quiet-${randomUUID()}`;
+    const generationId = randomUUID();
+    const root = db.collection('users').doc(uid);
+    await root.set({ preferences: { language: 'pt-BR' } });
+    await root.collection('workoutProgramState').doc('scheduleConfig').set({ timezone: 'America/Sao_Paulo' });
+    await root.collection('nutritionGenerationJobs').doc(generationId).set({ status: 'completed', planId: generationId, initialOnboarding: true });
+    await root.collection('nutritionPlans').doc(generationId).set({ status: 'active', generationId });
+    const night = Timestamp.fromDate(new Date('2026-10-05T03:00:00.000Z'));
+    const deferred = await dispatchNutritionPlanReady(uid, generationId, db, night);
+    expect(deferred?.status).toBe('DUPLICATE');
+    const queued = await db.collection('notificationDispatches').doc(deferred!.dispatchId).get();
+    expect(queued.get('status')).toBe('RETRY_SCHEDULED');
+    expect(queued.get('attemptCount')).toBe(0);
+    expect(queued.get('nextAttemptAt').toMillis()).toBeGreaterThan(night.toMillis());
+    expect(queued.get('request.data.initialOnboarding')).toBe('true');
+    expect(queued.get('request.title')).toBe('Sua dieta está pronta!');
+    expect(await dispatchNutritionPlanReady(uid, generationId, db, mondayMorning)).toMatchObject({ status: 'NO_ELIGIBLE_DEVICE' });
+  });
+
 });

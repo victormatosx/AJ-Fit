@@ -2,12 +2,9 @@
   "schemaVersion": "1.0.0",
   "eligibility": {
     "minimumAgeHandledByGlobalProductAccess": true,
-    "blockingGates": [
-      "pregnancy",
-      "lactation"
-    ],
-    "pregnancyAndLactationStateSource": "nutritionProfile/current",
-    "pregnancyAndLactationStateSourceNote": "Quiz.pregnancyScreening is an immutable onboarding snapshot and is used only to pre-fill nutritionProfile/current the first time it is created. The authoritative current value for both gates always lives in nutritionProfile/current and must be re-read and revalidated before every generation, not assumed from the Quiz.",
+    "blockingGates": [],
+    "pregnancyAndLactationStateSource": "nutritionProfile/current (legacy storage only)",
+    "pregnancyAndLactationStateSourceNote": "Legacy flags do not gate generation and do not require confirmation, per product request 2026-10-16.",
     "onBlockedGeneration": {
       "callAi": false,
       "allowBypass": false,

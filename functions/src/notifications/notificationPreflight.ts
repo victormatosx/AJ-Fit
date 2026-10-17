@@ -123,7 +123,7 @@ export async function runNotificationPreflight(
     const clock = dailyLocalClock(now.toDate(), schedule.data()?.timezone);
     if (!clock || clock.minuteOfDay < EVENT_NOTIFICATION_START_MINUTE
       || clock.minuteOfDay >= EVENT_NOTIFICATION_END_MINUTE) {
-      return { allowed: false, reason: 'QUIET_HOURS' };
+      return { allowed: false, reason: 'QUIET_HOURS', defer: true };
     }
     return { allowed: true };
   }

@@ -1,6 +1,10 @@
 # AJ Fit Nutrition — Regras de Segurança Nutricional
 
-Implementação de geração: o callable e o worker revalidam gravidez, lactação, meta resolvida, contexto físico e perfil antes da primeira chamada OpenAI. `excludedAllergens` é uma lista estruturada opcional do `nutritionProfile/current`; alimento global com `allergens: null` ou fibra desconhecida nunca entra no subset de geração. Exclusões por ID e alergênicos têm prioridade sobre preferências. O worker exige pelo menos dois candidatos de categoria compatível por slot antes de consumir tokens.
+Implementação de geração (2026-10-16, ajuste solicitado pelo produto): não há confirmação ou bloqueios de gravidez/amamentação na interface, callable, worker ou engine. Os campos históricos permanecem apenas para compatibilidade de armazenamento, sem envio à IA ou uso pelo treino.
+
+A IA compõe alimentos livres, com ingredientes/origens obrigatórios na resposta (schema 3.1.0). O backend valida alergênicos, padrões alimentares, exclusões por nome/ingredientes e macros, tanto para plano quanto alternativas. Composição desconhecida é rejeitada para padrões restritivos; exclusões de catálogo sem nome resolvido bloqueiam antes da chamada. Restrições vencem preferências/suplementos. Mudança de perfil durante a chamada impede persistir o resultado.
+
+Limite técnico: a composição e os alergênicos continuam declarados pela IA. A verificação por nomes cobre ingredientes comuns e não equivale à certificação independente de cada receita/produto. Nenhuma garantia absoluta de ausência de ingredientes ocultos é possível com geração livre; não usar esse mecanismo como validação clínica ou de rotulagem.
 
 ## 1. Princípio
 
@@ -13,7 +17,7 @@ A IA nunca pode:
 - aumentar agressividade além dos limites;
 - ignorar exclusões;
 - ignorar alergênicos;
-- gerar plano para usuário inelegível.
+- ignorar validações do perfil e contexto físico.
 
 Em conflito entre IA e regra determinística:
 
@@ -21,19 +25,9 @@ Em conflito entre IA e regra determinística:
 
 ---
 
-## 2. Gates de bloqueio da V1
+## 2. Elegibilidade
 
-A geração de dieta é bloqueada quando:
-
-- usuário está grávida;
-- usuário está em lactação/amamentação.
-
-Comportamento:
-
-1. não chamar IA;
-2. não gerar plano parcial;
-3. não oferecer bypass;
-4. recomendar acompanhamento profissional.
+Gestação e amamentação não são coletadas e não bloqueiam geração, regeneração ou alternativas. Valores históricos positivos são preservados sem efeito na elegibilidade. Não existe confirmação de ausência dessas condições na revisão.
 
 ---
 

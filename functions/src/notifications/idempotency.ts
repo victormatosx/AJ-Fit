@@ -153,7 +153,7 @@ export async function claimDispatch(
     }
 
     const data = snapshot.data() ?? {};
-    if (data.contractHash !== expectedContractHash) {
+    if (data.contractHash !== expectedContractHash && !historicalNutritionReplay(data, dispatchId, request)) {
       throw new NotificationIdempotencyConflictError(dispatchId);
     }
 
@@ -250,11 +250,11 @@ export async function deferCampaignClaim(
   return db.runTransaction(async (tx) => {
     const snapshot = await tx.get(ref);
     const data = snapshot.data();
-    if (!data || data.type !== 'CAMPAIGN' || data.status !== 'CLAIMED' || data.claimToken !== claimToken) return false;
+    if (!data || !['CAMPAIGN', 'NUTRITION_PLAN_READY'].includes(data.type) || data.status !== 'CLAIMED' || data.claimToken !== claimToken) return false;
     tx.update(ref, {
       status: 'RETRY_SCHEDULED', claimToken: null,
       attemptCount: Math.max(0, Number(data.attemptCount ?? 1) - 1),
-      nextAttemptAt: now, lastErrorClass: 'CAMPAIGN_PAUSED', terminalReason: null, updatedAt: now,
+      nextAttemptAt: data.type === 'CAMPAIGN' ? now : Timestamp.fromMillis(now.toMillis() + 5 * 60 * 1000), lastErrorClass: data.type === 'CAMPAIGN' ? 'CAMPAIGN_PAUSED' : 'QUIET_HOURS', terminalReason: null, updatedAt: now,
     });
     return true;
   });
@@ -314,4 +314,37 @@ export function persistedDispatchRequest(
     return null;
   }
   return { request: parsed, dispatchMode };
+}
+
+/** Accept only additive routing fields; preserve the persisted historical hash/request. */
+function historicalNutritionReplay(data: FirebaseFirestore.DocumentData, id: string, incoming: NotificationDispatchRequest): boolean {
+  const stored = persistedDispatchRequest(data, id)?.request;
+  if (!stored || stored.type !== 'NUTRITION_PLAN_READY' || incoming.type !== stored.type) return false;
+  if (stored.uid !== incoming.uid || stored.category !== incoming.category
+    || stored.notificationId !== incoming.notificationId || stored.sourceIdentity !== incoming.sourceIdentity
+    || stored.intent !== incoming.intent || stored.idempotencyKey !== incoming.idempotencyKey
+    || stored.data?.generationId !== incoming.data?.generationId) return false;
+  return [stored, incoming].every((request) => Object.keys(request.data ?? {}).every((key) =>
+    ['generationId', 'recipientUid', 'initialOnboarding'].includes(key))
+    && (request.data?.recipientUid === undefined || request.data.recipientUid === request.uid));
+}
+
+/** Turn expired claims into durable retries. A live owner is fenced transactionally. */
+export async function recoverAbandonedClaims(db: Firestore, now: Timestamp, batchSize: number): Promise<number> {
+  const staleBefore = Timestamp.fromMillis(now.toMillis() - CLAIM_STALE_AFTER_MS);
+  const snapshots = await db.collection(NOTIFICATION_DISPATCHES_COLLECTION)
+    .where('status', '==', 'CLAIMED').where('updatedAt', '<', staleBefore).orderBy('updatedAt').limit(batchSize).get();
+  let recovered = 0;
+  for (const snapshot of snapshots.docs) {
+    const changed = await db.runTransaction(async (tx) => {
+      const current = await tx.get(snapshot.ref);
+      const at = current.get('updatedAt');
+      if (current.get('status') !== 'CLAIMED' || !(at instanceof Timestamp) || at.toMillis() >= staleBefore.toMillis()) return false;
+      tx.update(snapshot.ref, { status: 'RETRY_SCHEDULED', claimToken: null, nextAttemptAt: now,
+        updatedAt: now, lastErrorClass: 'ABANDONED_CLAIM' });
+      return true;
+    });
+    if (changed) recovered++;
+  }
+  return recovered;
 }

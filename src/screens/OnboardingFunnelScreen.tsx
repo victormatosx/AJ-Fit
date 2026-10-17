@@ -1,5 +1,11 @@
+import { Alert, Keyboard, KeyboardAvoidingView, Platform, Text, Pressable, View } from 'react-native';
+import { randomUUID } from 'expo-crypto';
+import { NutritionProfileQuestion } from './nutrition/NutritionProfileScreen';
+import { canContinueProfileStep, isProfileDraftComplete, type ProfileStepId } from '../nutrition/ui/profileSteps';
+import { nutritionDraftAnswers } from '../onboarding/nutritionDraft';
+import { useUnits } from '../state/UnitsContext';
+import { validateCustomFoodInput } from '../services/nutritionFoods';
 import React, { useEffect, useRef, useState } from 'react';
-import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useOnboardingFunnel, type OnboardingFunnelMode } from '../onboarding/useOnboardingFunnel';
 import { FUNNEL_QUESTIONS } from '../onboarding/questionDefs';
@@ -50,6 +56,9 @@ export function OnboardingFunnelScreen({
 }) {
   const { theme } = useTheme();
   const { t } = useTranslation('quiz');
+  const { t: tn } = useTranslation('nutrition');
+  const { resolvedUnits } = useUnits();
+  const [draftError, setDraftError] = useState(false);
   const funnel = useOnboardingFunnel(mode);
   const {
     currentStepId, name, setName, healthIntegrationChoice, setHealthIntegrationChoice,
@@ -135,7 +144,7 @@ export function OnboardingFunnelScreen({
     [],
   );
 
-  const handlePlanContinue = () => {
+  const handlePlanContinue = async () => {
     logOnboardingEvent({ name: 'plan_ready_cta_pressed' });
     if (mode === 'forcedQuestionnaire') {
       // healthIntegration never appears in this mode (see steps.ts) — goes
@@ -146,7 +155,10 @@ export function OnboardingFunnelScreen({
     // healthIntegration now sits earlier in the funnel (see steps.ts), so
     // 'plan' is the last step before auth — call onAuthRequested directly
     // instead of goNext().
-    onAuthRequested({ origin: 'planCompleted', name });
+    try {
+      await funnel.flushDraft();
+      onAuthRequested({ origin: 'planCompleted', name });
+    } catch { setDraftError(true); }
   };
 
   const renderQuestion = () => {
@@ -206,7 +218,49 @@ export function OnboardingFunnelScreen({
     );
   };
 
+  if (!hydrated) return <View style={{ flex: 1, backgroundColor: theme.colors.background }} />;
+  if (funnel.pendingTransfer) return <View style={{ flex: 1, justifyContent: 'center', padding: 24, gap: 20, backgroundColor: theme.colors.background }}>
+    <Text style={{ color: theme.colors.textPrimary }}>{tn('onboarding.pendingAccount')}</Text>
+    <Pressable onPress={() => onAuthRequested({ origin: 'directLogin' })}><Text style={{ color: theme.colors.primaryEmphasis }}>{tn('onboarding.signIn')}</Text></Pressable>
+    <Pressable onPress={() => Alert.alert(tn('onboarding.discardTitle'), tn('onboarding.discardBody'), [
+      { text: tn('onboarding.cancel'), style: 'cancel' },
+      { text: tn('onboarding.discard'), style: 'destructive', onPress: () => { void funnel.discardPendingTransfer().catch(() => setDraftError(true)); } },
+    ])}><Text style={{ color: theme.colors.textMuted }}>{tn('onboarding.discard')}</Text></Pressable>
+  </View>;
+
   let content: React.ReactNode = null;
+  if (currentStepId.startsWith('nutrition_') && quiz.goal) {
+    const step = currentStepId.slice('nutrition_'.length) as ProfileStepId;
+    const draft = nutritionDraftAnswers(funnel.nutrition);
+    const nutritionUnits = funnel.nutrition.targetWeightText ? funnel.nutrition.targetWeightUnits : resolvedUnits;
+    content = <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <QuestionStepScreen key={currentStepId} question={{ id: currentStepId, kind: 'choice', options: [] }}
+        title={tn(`profile.questions.${step}.title`)} subtitle={null}
+        value={null} onChange={() => {}} onBack={canGoBack ? goBack : null}
+        stepNumber={progress.current} totalSteps={progress.total}
+        canContinueOverride={canContinueProfileStep(step, draft, quiz.goal)}
+        onNext={() => {
+          Keyboard.dismiss();
+          if (step === 'varietyPreference') {
+            if (!isProfileDraftComplete(quiz.goal!, draft)) return;
+            funnel.setNutrition({ ...funnel.nutrition, completed: true });
+          }
+          goNext();
+        }}
+        answerControl={<NutritionProfileQuestion step={step} draft={draft} inputUnits={nutritionUnits} hideTitle currentWeightKg={quiz.weight}
+          targetWeightText={funnel.nutrition.targetWeightText}
+          onTargetWeightText={(targetWeightText) => funnel.setNutrition((prev) => ({ ...prev, targetWeightText, targetWeightUnits: nutritionUnits }))}
+          onChange={(answers) => funnel.setNutrition((prev) => ({ ...prev, answers, completed: false }))}
+          localFoods={funnel.nutrition.customFoods}
+          onCreateLocalFood={async (input) => {
+            validateCustomFoodInput(input);
+            const id = `custom_${randomUUID()}`;
+            funnel.setNutrition((prev) => ({ ...prev, customFoods: [...prev.customFoods, { id, ...input }] }));
+            return id;
+          }} />}
+      />
+    </KeyboardAvoidingView>;
+  }
 
   switch (currentStepId) {
     case 'presentation':
@@ -315,12 +369,15 @@ export function OnboardingFunnelScreen({
     // RootScreenId values App.tsx owns directly. They exist in
     // ONBOARDING_STEPS purely for progress/dev-nav bookkeeping.
     default:
-      content = null;
+      // Nutrition steps are composed above. Keep that content instead of
+      // replacing it with an empty screen; root-owned steps start as null.
+      break;
   }
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <AnimatedStepContainer stepKey={currentStepId}>{content}</AnimatedStepContainer>
+      {draftError ? <Text accessibilityRole="alert" style={{ color: theme.colors.formErrorText }}>{tn('profile.errors.saveFailed')}</Text> : null}
       {__DEV__ && <DevFunnelNavigator currentStepId={currentStepId} onJump={jumpTo} />}
     </View>
   );

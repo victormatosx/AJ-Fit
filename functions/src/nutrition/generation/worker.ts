@@ -73,7 +73,7 @@ export async function processNutritionGenerationJob(
   try {
     await requireNutritionGenerationRollout(db, uid);
     const context = await loadGenerationContext(db, uid);
-    const foodNames = await resolvePromptFoodNames(db, context.profile);
+    const foodNames = await resolvePromptFoodNames(db, context.profile, uid);
     const claimedJob = await ref.get();
     const usedAttempts = claimedJob.get('aiAttemptCount');
     const startAttempt = typeof usedAttempts === 'number' && Number.isInteger(usedAttempts) ? usedAttempts + 1 : 1;
@@ -116,9 +116,11 @@ export async function processNutritionGenerationJob(
         const planRef = user.collection('nutritionPlans').doc(generationId);
         const rateRef = db.collection('nutritionRateLimits').doc(uid);
         await db.runTransaction(async (tx) => {
-          const [job, rate, existingPlan, deletionLock] = await Promise.all([
+          const [job, rate, existingPlan, deletionLock, latestProfile] = await Promise.all([
             tx.get(ref), tx.get(rateRef), tx.get(planRef), tx.get(db.collection('accountDeletionLocks').doc(uid)),
+            tx.get(user.collection('nutritionProfile').doc('current')),
           ]);
+          if (!latestProfile.get('updatedAt')?.isEqual(context.profile.updatedAt)) throw new Error('STALE_GENERATION');
           if (deletionLock.exists || rate.get('activeGenerationId') !== generationId
             || job.get('status') !== 'validating' || existingPlan.exists) throw new Error('STALE_GENERATION');
           const oldId = rate.get('activePlanId');

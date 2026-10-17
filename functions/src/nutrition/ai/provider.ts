@@ -24,9 +24,16 @@ export const OPENAI_REQUEST_TIMEOUT_MS = 90_000;
 
 export interface AiUsage { inputTokens: number | null; outputTokens: number | null; cachedInputTokens: number | null }
 export interface AiResult { output: unknown; model: string; usage: AiUsage; latencyMs: number }
+/** Safety flags stay inside deterministic eligibility checks, never in AI requests. */
+export type NutritionAiProfile = Omit<NutritionProfile, 'pregnant' | 'breastfeeding' | 'updatedAt'>;
+export function nutritionAiProfile(profile: NutritionProfile): NutritionAiProfile {
+  const { pregnant: _pregnant, breastfeeding: _breastfeeding, updatedAt: _updatedAt, ...answers } = profile;
+  return answers;
+}
+
 export interface FullPlanRequest {
   trace?: { generationId: string; attempt: number };
-  profile: NutritionProfile;
+  profile: NutritionAiProfile;
   engine: NutritionEngineOutput;
   goal: NutritionGoal;
   foodNames: NutritionPromptFoodNames;
@@ -34,7 +41,7 @@ export interface FullPlanRequest {
   fallback?: boolean;
 }
 export interface MealAlternativeRequest {
-  profile: NutritionProfile;
+  profile: NutritionAiProfile;
   target: MealNutritionTarget;
   avoidFoodNames: readonly string[];
   goal: NutritionGoal;
@@ -63,7 +70,7 @@ export class NutritionAiProviderError extends Error {
 // this schema.
 const FOOD_ITEM_SCHEMA = {
   type: 'object', additionalProperties: false,
-  required: ['name', 'quantity', 'unit', 'preparationNote', 'estimatedNutrition', 'allergens'],
+  required: ['name', 'quantity', 'unit', 'preparationNote', 'estimatedNutrition', 'allergens', 'ingredients'],
   properties: {
     name: { type: 'string' },
     quantity: { type: 'number' },
@@ -76,6 +83,12 @@ const FOOD_ITEM_SCHEMA = {
         fatG: { type: 'number' }, fiberG: { type: 'number' },
       },
     },
+    ingredients: { type: 'array', minItems: 1, maxItems: 30, items: {
+      type: 'object', additionalProperties: false, required: ['name', 'origin'], properties: {
+        name: { type: 'string' },
+        origin: { type: 'string', enum: ['plant', 'mineral', 'dairy', 'egg', 'fish', 'shellfish', 'terrestrial_animal', 'other_animal', 'unknown'] },
+      },
+    } },
     allergens: { type: 'array', items: { type: 'string', enum: [...NUTRITION_FOOD_ALLERGENS] } },
   },
 } as const;

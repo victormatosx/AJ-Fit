@@ -1,7 +1,7 @@
 import type {
   MealNutritionTarget, NutritionGoal, NutritionMealSlot, NutritionProfile,
 } from '../shared/types/nutrition';
-import { NutritionAiProviderError, type AiResult, type NutritionAiProvider } from '../ai/provider';
+import { nutritionAiProfile, NutritionAiProviderError, type AiResult, type NutritionAiProvider } from '../ai/provider';
 import { MAX_AI_ATTEMPTS } from '../ai/config';
 import { PlanValidationError, validateAndBuildMealAlternative, type ValidatedMealAlternative } from './domain';
 import { classifyAttemptError, GenerationAttemptsExhausted, type AttemptAudit, type AttemptCode } from './attempts';
@@ -27,7 +27,7 @@ export async function generateValidatedMealAlternative(
     const started = Date.now();
     let result: AiResult | null = null;
     try {
-      result = await provider.generateMealAlternative({ profile, target, avoidFoodNames, goal, foodNames,
+      result = await provider.generateMealAlternative({ profile: nutritionAiProfile(profile), target, avoidFoodNames, goal, foodNames,
         feedback: attempt > 1 ? lastCode : feedback, fallback });
     } catch (error) {
       lastCode = classifyAttemptError(error);
@@ -37,7 +37,7 @@ export async function generateValidatedMealAlternative(
     }
     let validated: ValidatedMealAlternative;
     try {
-      validated = validateAndBuildMealAlternative(result.output, slot, target, profile.excludedAllergens);
+      validated = validateAndBuildMealAlternative(result.output, slot, target, profile.excludedAllergens, true, { dietaryPattern: profile.dietaryPattern, excludedFoodNames: foodNames.excluded });
     } catch (error) {
       lastCode = classifyAttemptError(error);
       await onAttempt({ attempt, fallback, result, code: lastCode, latencyMs: Date.now() - started });

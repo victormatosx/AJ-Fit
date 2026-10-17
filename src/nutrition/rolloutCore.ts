@@ -36,3 +36,9 @@ export function nutritionFlagEnabled(uid: string, flag: keyof NutritionRolloutCo
   if (flag === 'nutritionEnabled') return true;
   return config[flag].enabled && nutritionRolloutBucket(uid, flag) < config[flag].percentage;
 }
+
+/** Separate document: old clients keep the exact two-flag `active` contract. Missing is OFF. */
+export function onboardingAutomaticGenerationEnabled(uid: string, value: unknown): boolean {
+  return validFlag(value) && value.enabled
+    && nutritionRolloutBucket(uid, 'nutritionPlanGenerationEnabled') < value.percentage;
+}

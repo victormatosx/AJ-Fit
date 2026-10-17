@@ -296,3 +296,20 @@ describe('strict mode (hardening ON) — progress updates on the legitimate curr
     await assertSucceeds(updateDoc(otherRef, { updatedAt: serverTimestamp() }));
   });
 });
+
+// Nutrition's independent switch must not broaden workout configuration access.
+describe('workoutExecutionProtocolConfig configuration scope', () => {
+  it('denies non-active documents and anonymous access, even when documents exist', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      for (const id of ['active', 'onboardingAutomatic', 'unknown']) {
+        await setDoc(doc(context.firestore(), 'workoutExecutionProtocolConfig', id), { schemaVersion: 1 });
+      }
+    });
+    await assertSucceeds(getDoc(doc(dbFor(UID), 'workoutExecutionProtocolConfig', 'active')));
+    for (const id of ['onboardingAutomatic', 'unknown']) {
+      await assertFails(getDoc(doc(dbFor(UID), 'workoutExecutionProtocolConfig', id)));
+      await assertFails(setDoc(doc(dbFor(UID), 'workoutExecutionProtocolConfig', id), { schemaVersion: 1 }));
+    }
+    await assertFails(getDoc(doc(testEnv.unauthenticatedContext().firestore(), 'workoutExecutionProtocolConfig', 'active')));
+  });
+});

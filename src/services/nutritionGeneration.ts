@@ -89,3 +89,10 @@ export function subscribeToActiveNutritionGenerationJob(
     },
   );
 }
+
+/** Automatic enrollment is checked once per account by the existing backend job transaction. */
+export async function requestInitialNutritionPlanGeneration(): Promise<{ generationId: string; status?: 'skipped' | 'disabled' }> {
+  return (await httpsCallable<{ intent: string }, { generationId: string; status?: 'skipped' | 'disabled' }>(
+    functions, REQUEST_NUTRITION_PLAN_GENERATION_CALLABLE,
+  )({ intent: 'initial_onboarding' })).data;
+}

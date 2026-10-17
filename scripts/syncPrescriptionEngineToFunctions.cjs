@@ -42,7 +42,11 @@ const TS_FILES = [
     'canonicalMusclePriorityV127', 'musclePriorityV127', 'generationVersion',
     'validationV127', 'safetyV127', 'engineV127', 'generatePrescription', 'index']],
   ['data', ['exercisesSeedData']],
-  ['types', ['exercise']],
+  ['types', ['exercise', 'nutrition', 'units']],
+  // Onboarding step IDs now reference the shared, pure nutrition question domain.
+  ['nutrition/ui', ['profileSteps']],
+  ['nutrition/engine', ['resolveGoalCategory', 'errors']],
+  ['units', ['weightConversions']],
   ['lib', ['questionnaireSchema']],
   ['onboarding', ['steps']],
   ['workoutLifecycle', ['types', 'prescriptionInputs']],

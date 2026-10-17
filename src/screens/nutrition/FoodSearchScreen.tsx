@@ -19,7 +19,7 @@ import { createFederatedFoodLogSearchProvider } from '../../nutrition/foodLog/fe
 import { resolveDefaultServingUnit, nutrientsForServing } from '../../nutrition/catalog/servings';
 import { listNutritionRecipes, calculateStoredRecipeNutrition } from '../../services/nutritionRecipes';
 import type {
-  FoodLogEntry, FoodLogServingUnit, FoodLogSourceType, NutritionCustomFood, NutritionFoodNutritionValues, NutritionFoodSourceType,
+  FoodLogEntry, FoodLogServingUnit, FoodLogSourceType, NutritionCustomFood, NutritionFood, NutritionFoodNutritionValues, NutritionFoodSourceType,
   NutritionRecipe,
 } from '../../types/nutrition';
 import { countBucket, durationBucket, trackNutritionEvent } from '../../nutrition/analytics';
@@ -77,11 +77,18 @@ const localFoodLogSearchProvider = createFederatedFoodLogSearchProvider({
  */
 export function FoodSearchScreen({
   visible, onClose, onSelect, excludeIds = [], includeRecipes = false, catalog = 'generation', variant = 'profile',
-  favoriteFoodIds, recentFoodIds, favoriteRecipeIds, onToggleFavoriteFood, onToggleFavoriteRecipe, overlay, presentation = 'modal',
+  favoriteFoodIds, recentFoodIds, favoriteRecipeIds, onToggleFavoriteFood, onToggleFavoriteRecipe, overlay, presentation = 'modal', onRequestCreateFood, catalogSearch, localFoods,
 }: {
+  catalogSearch?: (text: string, options: { cursor?: string }) => Promise<{
+    foods: Pick<NutritionFood<Timestamp>, 'id' | 'name' | 'brand' | 'nutritionPer100g' | 'source'>[];
+    nextCursor: string | null;
+  }>;
+  localFoods?: readonly Pick<NutritionCustomFood<Timestamp>, 'id' | 'name' | 'nutritionPer100g'>[];
   visible: boolean;
-  /** Embed in the Diary's native modal using the quantity panel's shared chrome. */
-  presentation?: 'modal' | 'sheet';
+  /** Modal search, diary sheet, or an inline field/results within the caller's page. */
+  presentation?: 'modal' | 'sheet' | 'inline';
+  /** Inline callers own the custom-food overlay outside their page's ScrollView. */
+  onRequestCreateFood?: () => void;
   onClose: () => void;
   onSelect: (food: NutritionFoodPick) => void;
   excludeIds?: readonly string[];
@@ -129,7 +136,7 @@ export function FoodSearchScreen({
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(false);
   const [lastSearchHadZeroResults, setLastSearchHadZeroResults] = useState(false);
-  const [customFoods, setCustomFoods] = useState<NutritionCustomFood<Timestamp>[]>([]);
+  const [customFoods, setCustomFoods] = useState<Pick<NutritionCustomFood<Timestamp>, 'id' | 'name' | 'nutritionPer100g'>[]>([]);
   const [recipes, setRecipes] = useState<NutritionRecipe<Timestamp>[]>([]);
   const [selectingRecipeId, setSelectingRecipeId] = useState<string | null>(null);
   const [creatingFood, setCreatingFood] = useState(false);
@@ -141,10 +148,11 @@ export function FoodSearchScreen({
   const [materializingId, setMaterializingId] = useState<string | null>(null);
 
   useEffect(() => {
+    if (localFoods) { setCustomFoods([...localFoods]); return; }
     if (!visible || !user) return;
     listCustomFoods(user.uid).then(setCustomFoods).catch(() => setCustomFoods([]));
     if (includeRecipes) listNutritionRecipes(user.uid).then(setRecipes).catch(() => setRecipes([]));
-  }, [visible, user, includeRecipes]);
+  }, [visible, user, includeRecipes, localFoods]);
 
   useEffect(() => {
     if (presentation === 'sheet') {
@@ -153,7 +161,7 @@ export function FoodSearchScreen({
     }
     if (!visible) {
       searchRequestRef.current++;
-      setText(''); setResults([]); setCursor(null); setError(false); setLoading(false); setCreatingFood(false);
+      setText(''); setResults([]); setCursor(null); setError(false); setLoading(false); setLoadingMore(false); setCreatingFood(false);
     }
   }, [visible, presentation]);
 
@@ -198,10 +206,10 @@ export function FoodSearchScreen({
         nextCursor,
       };
     })
-    : searchNutritionCatalog(query, { cursor: cursorId }).then(({ foods, nextCursor }) => ({
+    : (catalogSearch ?? searchNutritionCatalog)(query, { cursor: cursorId }).then(({ foods, nextCursor }) => ({
       results: foods.map((food): CatalogSearchResult => ({ id: food.id, name: food.name, brandName: food.brand?.name, nutritionPer100g: food.nutritionPer100g, sourceType: food.source.type })),
       nextCursor,
-    }))), [catalog, favoriteIdSet, recentIdSet]);
+    }))), [catalog, favoriteIdSet, recentIdSet, catalogSearch]);
 
   const runSearch = useCallback((query: string) => {
     const requestId = ++searchRequestRef.current;
@@ -269,9 +277,12 @@ export function FoodSearchScreen({
   const trackedSelect = useCallback((pick: NutritionFoodPick) => {
     trackNutritionEvent({ name: 'nutrition_catalog_item_selected',
       properties: { catalogMode: catalog, origin: pick.origin, ...(pick.sourceType ? { source: pick.sourceType } : {}) } });
-    Keyboard.dismiss();
+    if (presentation === 'inline') {
+      searchRequestRef.current++;
+      setText(''); setResults([]); setCursor(null); setError(false); setLoading(false); setLoadingMore(false);
+    } else Keyboard.dismiss();
     onSelect(pick);
-  }, [catalog, onSelect]);
+  }, [catalog, onSelect, presentation]);
 
   /** Materializes a possibly-fresh external (`fatsecret`) result into `foodLogCatalog` before resolving its final id — a no-op read for every local-sourced result. */
   const selectFoodLogResult = async (result: CatalogSearchResult) => {
@@ -309,7 +320,7 @@ export function FoodSearchScreen({
   // state value and piece of logic below this point is shared identically
   // by both render paths.
   const resultsList = (nu: boolean) => (
-    <View style={nu ? undefined : { paddingHorizontal: 12 }}>
+    <View style={nu || presentation === 'inline' ? undefined : { paddingHorizontal: 12 }}>
       {visibleCustom.map((food) => (
         <FoodRow key={food.id} name={food.name} origin="custom"
           kcal={food.nutritionPer100g.kcal} proteinG={food.nutritionPer100g.proteinG} per100g
@@ -365,6 +376,51 @@ export function FoodSearchScreen({
       }}
     />
   );
+
+  if (presentation === 'inline') {
+    if (!visible) return null;
+    return (
+      <View style={{ gap: 10 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14,
+          minHeight: 52, borderRadius: theme.radii.lg, backgroundColor: theme.colors.inputBackground,
+          borderWidth: 1, borderColor: theme.colors.inputBorder }}>
+          <Icon name="search" size={18} color={theme.colors.inputIcon} />
+          <TextInput
+            ref={searchInputRef} value={text}
+            onChangeText={(value) => {
+              searchRequestRef.current++;
+              setText(value); setResults([]); setCursor(null); setError(false); setLoading(value.trim().length >= 2); setLoadingMore(false);
+            }}
+            accessibilityLabel={t('foodSearch.placeholder')}
+            placeholder={t('foodSearch.placeholder')} placeholderTextColor={theme.colors.inputPlaceholder}
+            style={{ flex: 1, minHeight: 50, fontFamily: theme.fonts.ui, fontSize: 15, color: theme.colors.inputText }}
+            autoCorrect={false} returnKeyType="search" onSubmitEditing={() => runSearch(text)}
+          />
+          {text.length > 0 ? <Pressable onPress={() => {
+            searchRequestRef.current++; setText(''); setResults([]); setCursor(null); setError(false); setLoading(false); setLoadingMore(false);
+            searchInputRef.current?.focus();
+          }} accessibilityRole="button" accessibilityLabel={t('foodSearch.clearSearch')} hitSlop={8}>
+            <Icon name="x" size={16} color={theme.colors.textFaint} />
+          </Pressable> : null}
+        </View>
+        {text.length > 0 && text.trim().length < 2 ? (
+          <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textFaint }}>{t('foodSearch.typeMore')}</Text>
+        ) : loading ? (
+          <ActivityIndicator accessibilityLabel={t('foodSearch.title')} color={theme.colors.primaryEmphasis} />
+        ) : error ? (
+          <View style={{ gap: 8 }}>
+            <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.feedbackErrorTextStrong }}>{t('foodSearch.error')}</Text>
+            <CtaButton onPress={() => runSearch(text)}>{t('foodSearch.retry')}</CtaButton>
+          </View>
+        ) : showEmpty ? (
+          <View style={{ gap: 10 }}>
+            <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textFaint }}>{t('foodSearch.empty')}</Text>
+            {onRequestCreateFood ? <CtaButton onPress={() => { Keyboard.dismiss(); onRequestCreateFood(); }}>{t('foodSearch.emptyCta')}</CtaButton> : null}
+          </View>
+        ) : text.trim().length >= 2 ? resultsList(false) : null}
+      </View>
+    );
+  }
 
   // Share search content between the standalone picker and the Diary's
   // embedded sheet. Sheet presentation never creates another native Modal.

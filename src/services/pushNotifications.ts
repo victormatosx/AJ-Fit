@@ -60,6 +60,8 @@ export type PushNotificationType = (typeof PUSH_NOTIFICATION_TYPES)[number];
 export interface PushPayload {
   type: PushNotificationType;
   notificationId: string;
+  initialOnboarding?: boolean;
+  generationId?: string;
   caseId?: string;
   messageId?: string;
   campaignId?: string;
@@ -167,6 +169,11 @@ export function parsePushPayload(value: unknown): PushPayload | null {
     return { type: 'CAMPAIGN', notificationId, campaignId, campaignRunId, destination: destination as 'home' | 'workout' | 'progress' | 'profile', ...(recipientUid ? { recipientUid } : {}) };
   }
   if (support && (!caseId || !messageId)) return null;
+  if (type === 'NUTRITION_PLAN_READY') return { type, notificationId,
+    ...(nonEmptyString(value.generationId) ? { generationId: nonEmptyString(value.generationId) } : {}),
+    ...(nonEmptyString(value.recipientUid) ? { recipientUid: nonEmptyString(value.recipientUid) } : {}),
+    ...(value.initialOnboarding === 'true' ? { initialOnboarding: true } : {}) };
+
   return support
     ? { type: type as PushNotificationType, notificationId, caseId, messageId }
     : { type: type as PushNotificationType, notificationId };
@@ -541,8 +548,8 @@ export function createPushNotificationsService(
           const isAlreadyOpenSupportCase =
             payload?.caseId !== undefined && payload.caseId === foregroundSupportCaseId;
           return {
-            shouldShowBanner: !isAlreadyOpenSupportCase,
-            shouldShowList: !isAlreadyOpenSupportCase,
+            shouldShowBanner: !isAlreadyOpenSupportCase && !payload?.initialOnboarding,
+            shouldShowList: !isAlreadyOpenSupportCase && !payload?.initialOnboarding,
             shouldPlaySound: false,
             shouldSetBadge: false,
           };

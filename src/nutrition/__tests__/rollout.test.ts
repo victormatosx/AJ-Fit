@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { isValidNutritionRolloutConfig, nutritionFlagEnabled, nutritionRolloutBucket,
-  NUTRITION_ROLLOUT_FAIL_SAFE_CONFIG } from '../rollout';
+  NUTRITION_ROLLOUT_FAIL_SAFE_CONFIG, onboardingAutomaticGenerationEnabled } from '../rollout';
 
 vi.mock('../../lib/firebase', () => ({ db: {} }));
 
@@ -19,4 +19,13 @@ describe('Nutrition rollout', () => {
       nutritionEnabled: enabled, nutritionPlanGenerationEnabled: enabled,
     })).toBe(true);
   });
+});
+
+it('keeps automatic generation independently disabled without changing the historical active contract', () => {
+  const legacy = { nutritionEnabled: enabled, nutritionPlanGenerationEnabled: enabled };
+  expect(isValidNutritionRolloutConfig(legacy)).toBe(true);
+  expect(nutritionFlagEnabled('u', 'nutritionPlanGenerationEnabled', legacy)).toBe(true);
+  expect(onboardingAutomaticGenerationEnabled('u', undefined)).toBe(false);
+  expect(onboardingAutomaticGenerationEnabled('u', { ...enabled, enabled: false })).toBe(false);
+  expect(onboardingAutomaticGenerationEnabled('u', enabled)).toBe(true);
 });

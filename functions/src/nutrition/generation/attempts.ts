@@ -1,5 +1,5 @@
 import type { NutritionEngineOutput, NutritionGoal, NutritionProfile } from '../shared/types/nutrition';
-import { NutritionAiProviderError, type AiResult, type NutritionAiProvider } from '../ai/provider';
+import { nutritionAiProfile, NutritionAiProviderError, type AiResult, type NutritionAiProvider } from '../ai/provider';
 import { MAX_AI_ATTEMPTS } from '../ai/config';
 import { PlanValidationError, validateAndBuildPlan, type ValidatedPlan, type FailureCode, type ValidationIssue } from './domain';
 import type { NutritionPromptFoodNames } from './foodNames';
@@ -40,7 +40,7 @@ export async function generateValidatedPlan(
     let result: AiResult | null = null;
     await options.onBeforeAttempt?.(attempt);
     try {
-      result = await provider.generatePlan({ profile, engine, goal, foodNames,
+      result = await provider.generatePlan({ profile: nutritionAiProfile(profile), engine, goal, foodNames,
         ...(options.generationId ? { trace: { generationId: options.generationId, attempt } } : {}),
         feedback: attempt > 1 ? feedback ?? lastCode : undefined, fallback });
     } catch (error) {
@@ -54,7 +54,7 @@ export async function generateValidatedPlan(
     await onValidating(attempt);
     let validated: ValidatedPlan;
     try {
-      validated = validateAndBuildPlan(result.output, profile.mealSlots, engine, profile.excludedAllergens);
+      validated = validateAndBuildPlan(result.output, profile.mealSlots, engine, profile.excludedAllergens, true, { dietaryPattern: profile.dietaryPattern, excludedFoodNames: foodNames.excluded });
     } catch (error) {
       lastCode = classifyAttemptError(error);
       const validationIssue = error instanceof PlanValidationError ? error.issue : undefined;
