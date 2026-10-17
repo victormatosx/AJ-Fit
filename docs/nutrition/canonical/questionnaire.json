@@ -1,6 +1,9 @@
 {
   "schemaVersion": "1.0.0",
   "questionnaireVersion": 1,
+  "uiRevision": 2,
+  "pageOrder": ["progressionPace", "targetWeightKg", "nonTrainingActivityLevel", "mealSlots", "preferredFoodIds", "excludedFoodIds", "excludedAllergens", "supplements", "varietyPreference"],
+  "pageOrderNote": "nutritionGoalCategory is prepended only for ambiguous inherited goals; final review has no pregnancy/lactation acknowledgment.",
   "name": "nutrition_profile",
   "displayName": "Perfil nutricional",
   "cta": "Criar minha dieta",
@@ -75,8 +78,10 @@
     },
     {
       "id": "dietaryPattern",
+      "page": "excludedFoodIds",
+      "emptySelectionValue": "omnivore",
       "type": "single_select",
-      "required": true,
+      "required": false,
       "options": [
         "omnivore",
         "vegetarian",
@@ -92,6 +97,7 @@
     },
     {
       "id": "usualFoodIds",
+      "collection": "legacy_storage_only",
       "type": "food_selection",
       "required": false
     },
@@ -126,13 +132,15 @@
     },
     {
       "id": "pregnant",
+      "collection": "legacy_storage_only",
       "type": "boolean",
       "required": true,
       "semantics": "current_state_not_snapshot",
-      "prefillSource": "quiz_pregnancy_screening_initial_only"
+      "storageOnly": true
     },
     {
       "id": "breastfeeding",
+      "collection": "legacy_storage_only",
       "type": "boolean",
       "required": true,
       "semantics": "current_state_not_snapshot"
@@ -149,8 +157,8 @@
     }
   ],
   "pregnancyAndLactationStateOwner": "nutritionProfile/current",
-  "pregnancyInitialPrefillSource": "quiz_pregnancy_screening",
-  "pregnancyInitialPrefillSourceNote": "Quiz.pregnancyScreening is an immutable onboarding snapshot and must only be used to pre-fill pregnant/breastfeeding the first time nutritionProfile/current is created. It is never read again after that; the current value always lives in nutritionProfile/current and must be revalidated before every generation.",
+  "pregnancyInitialPrefillSource": null,
+  "pregnancyInitialPrefillSourceNote": "Historical flags are preserved for compatibility, never enter AI requests and no longer block generation. No confirmation is collected.",
   "medicalConditionsCollectedInV1": false,
   "freeTextQuestion": false,
   "languages": [

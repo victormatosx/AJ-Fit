@@ -6,6 +6,8 @@ import {
 import { db } from '../lib/firebase';
 import { functions } from '../lib/firebaseFunctions';
 import type { NutritionGenerationJob } from '../types/nutrition';
+import { randomUUID } from 'expo-crypto';
+import { errorCode, errorReason, logOperationalInfo as logInfo, logWarn } from '../lib/logger';
 
 const REQUEST_NUTRITION_PLAN_GENERATION_CALLABLE = 'requestNutritionPlanGeneration';
 
@@ -19,12 +21,23 @@ export interface RequestNutritionPlanGenerationResult { generationId: string }
  * to UX copy — never re-implemented here.
  */
 export async function requestNutritionPlanGeneration(
-  requestId?: string,
+  requestId: string = randomUUID(),
 ): Promise<RequestNutritionPlanGenerationResult> {
   const callable = httpsCallable<{ requestId?: string } | undefined, RequestNutritionPlanGenerationResult>(
     functions, REQUEST_NUTRITION_PLAN_GENERATION_CALLABLE,
   );
-  return (await callable(requestId ? { requestId } : undefined)).data;
+  const started = Date.now();
+  logInfo('nutrition.generation', 'request_started', { requestId, stage: 'backend' });
+  try {
+    const result = (await callable({ requestId })).data;
+    logInfo('nutrition.generation', 'request_completed', { requestId, generationId: result.generationId,
+      durationMs: Date.now() - started });
+    return result;
+  } catch (error) {
+    logWarn('nutrition.generation', 'request_failed', { requestId, failureCode: errorCode(error),
+      failureReason: errorReason(error), durationMs: Date.now() - started });
+    throw error;
+  }
 }
 
 export type NutritionGenerationJobDoc = NutritionGenerationJob<Timestamp> & { generationId: string };
@@ -37,8 +50,16 @@ export function subscribeToNutritionGenerationJob(
 ): Unsubscribe {
   return onSnapshot(
     doc(db, 'users', uid, 'nutritionGenerationJobs', generationId),
-    (snapshot) => onJob(snapshot.exists() ? { ...(snapshot.data() as NutritionGenerationJob<Timestamp>), generationId } : null),
-    (error) => onError?.(error),
+    (snapshot) => {
+      const job = snapshot.exists() ? { ...(snapshot.data() as NutritionGenerationJob<Timestamp>), generationId } : null;
+      logInfo('nutrition.generation', 'job_observed', { generationId, stage: job?.status ?? 'missing',
+        failureCode: job?.errorCode });
+      onJob(job);
+    },
+    (error) => {
+      logWarn('nutrition.generation', 'job_observation_failed', { generationId, failureCode: errorCode(error) });
+      onError?.(error);
+    },
   );
 }
 
@@ -62,6 +83,16 @@ export function subscribeToActiveNutritionGenerationJob(
       const first = snapshot.docs[0];
       onJob(first ? { ...(first.data() as NutritionGenerationJob<Timestamp>), generationId: first.id } : null);
     },
-    (error) => onError?.(error),
+    (error) => {
+      logWarn('nutrition.generation', 'active_job_observation_failed', { failureCode: errorCode(error) });
+      onError?.(error);
+    },
   );
+}
+
+/** Automatic enrollment is checked once per account by the existing backend job transaction. */
+export async function requestInitialNutritionPlanGeneration(): Promise<{ generationId: string; status?: 'skipped' | 'disabled' }> {
+  return (await httpsCallable<{ intent: string }, { generationId: string; status?: 'skipped' | 'disabled' }>(
+    functions, REQUEST_NUTRITION_PLAN_GENERATION_CALLABLE,
+  )({ intent: 'initial_onboarding' })).data;
 }

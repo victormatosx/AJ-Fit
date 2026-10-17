@@ -25,9 +25,10 @@ import type { NutritionRecipe } from '../../types/nutrition';
  * redesign's own version of that same plain-View overlay chrome.
  */
 export function RecipeQuantityModal({
-  visible, recipeName, recipe, onClose, onConfirm,
+  visible, recipeName, recipe, onClose, onConfirm, saving = false,
 }: {
   visible: boolean;
+  saving?: boolean;
   recipeName: string;
   /** `null` while the recipe doc is still loading, or for a recipe with no `servings` at all. */
   recipe: Pick<NutritionRecipe, 'ingredients' | 'finalWeightG' | 'servings'> | null;
@@ -48,7 +49,7 @@ export function RecipeQuantityModal({
   const valid = grams != null && isPositiveGrams(grams);
 
   return (
-    <NuPanel visible={visible} onClose={onClose}>
+    <NuPanel visible={visible} onClose={onClose} avoidKeyboard>
       <Text style={{ fontFamily: 'Archivo_700Bold', fontSize: 18, color: NU.white }}>{recipeName}</Text>
 
       {hasServings ? (
@@ -73,7 +74,7 @@ export function RecipeQuantityModal({
         {mode === 'grams' ? t('recipe.gramsHint') : t('recipe.portionsHint')}
       </Text>
 
-      <NuButton onPress={() => { if (valid && grams != null) onConfirm(grams); }} disabled={!valid} style={{ marginTop: 22 }}>
+      <NuButton onPress={() => { if (valid && grams != null) onConfirm(grams); }} disabled={!valid || saving} style={{ marginTop: 22 }}>
         {t('diary.save')}
       </NuButton>
     </NuPanel>

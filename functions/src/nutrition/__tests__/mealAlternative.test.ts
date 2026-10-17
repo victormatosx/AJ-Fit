@@ -19,7 +19,7 @@ const target: MealNutritionTarget = {
 };
 function item(name: string, kcal: number, proteinG: number, carbsG: number, fatG: number, fiberG: number,
   allergens: string[] = []) {
-  return { name, quantity: 150, unit: 'g', preparationNote: '',
+  return { name, ingredients: [{ name, origin: 'plant' as const }], quantity: 150, unit: 'g', preparationNote: '',
     estimatedNutrition: { kcal, proteinG, carbsG, fatG, fiberG }, allergens };
 }
 /** `scale` uniformly scales ALL of one item's macros away from the exact target — exercises the deterministic scale-and-recheck correction (every field must land back in range together, not just kcal). */
@@ -131,5 +131,23 @@ describe('meal alternative provider schema', () => {
     await provider.generateMealAlternative!(request);
     await provider.generateMealAlternative!({ ...request, fallback: true });
     expect(calls[0]).not.toBe(calls[1]);
+  });
+});
+
+describe('alternative dietary restrictions', () => {
+  it.each(['vegetarian', 'vegan', 'pescatarian'] as const)('rejects terrestrial meat for %s in any alternative', async (dietaryPattern) => {
+    const provider = fakeProvider(output());
+    await expect(generateValidatedMealAlternative(provider, { ...profile, dietaryPattern }, 'lunch', target, [], 'health', noNames, undefined))
+      .rejects.toMatchObject({ code: 'AI_SAFETY_VALIDATION_FAILED' });
+  });
+  it('keeps exclusions and allergies above inclusion preferences and strips legacy flags', async () => {
+    const provider = fakeProvider(output(1, 'Arroz com feijão'));
+    await expect(generateValidatedMealAlternative(provider, { ...profile, dietaryPattern: 'vegan' }, 'lunch', target, [], 'health',
+      { preferred: ['Feijão'], usual: [], excluded: ['Feijão'] }, undefined)).rejects.toMatchObject({ code: 'AI_SAFETY_VALIDATION_FAILED' });
+    const request = vi.mocked(provider.generateMealAlternative!).mock.calls[0][0];
+    expect(request.profile).not.toHaveProperty('pregnant');
+    expect(request.profile).not.toHaveProperty('breastfeeding');
+    await expect(generateValidatedMealAlternative(fakeProvider(output(1, 'Tofu')), { ...profile, dietaryPattern: 'vegan', excludedAllergens: ['soy'] },
+      'lunch', target, [], 'health', noNames, undefined)).rejects.toMatchObject({ code: 'AI_SAFETY_VALIDATION_FAILED' });
   });
 });

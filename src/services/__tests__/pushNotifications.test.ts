@@ -321,3 +321,21 @@ describe('push payload parsing', () => {
     },
   );
 });
+
+
+describe('initial diet foreground payload', () => {
+  it('preserves opaque identity for deduplication without nutrition answers', () => {
+    expect(parsePushPayload({ type: 'NUTRITION_PLAN_READY', notificationId: 'id', generationId: 'generation', recipientUid: 'user', initialOnboarding: 'true' }))
+      .toEqual({ type: 'NUTRITION_PLAN_READY', notificationId: 'id', generationId: 'generation', recipientUid: 'user', initialOnboarding: true });
+  });
+  it('suppresses the native foreground alert for an initial diet handled by the in-app banner', async () => {
+    const { service, notifications } = fixture();
+    const dispose = service.initializeRuntime();
+    const handler = notifications.setNotificationHandler.mock.calls[0]?.[0] as { handleNotification(value: unknown): Promise<unknown> };
+    expect(await handler.handleNotification({ request: { identifier: 'ready', content: { data: {
+      type: 'NUTRITION_PLAN_READY', notificationId: 'ready', generationId: 'g', initialOnboarding: 'true',
+    } } } })).toMatchObject({ shouldShowBanner: false, shouldShowList: false });
+    dispose();
+  });
+
+});

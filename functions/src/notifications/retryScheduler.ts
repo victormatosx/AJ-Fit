@@ -3,7 +3,7 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 
 import { logFunctionError, logInfo, logWarn } from '../lib/logger';
 import { defaultDependencies, dispatchNotification, type DispatcherDependencies } from './dispatcher';
-import { persistedDispatchRequest } from './idempotency';
+import { persistedDispatchRequest, recoverAbandonedClaims } from './idempotency';
 import { NOTIFICATION_DISPATCHES_COLLECTION } from './schema';
 
 const SCOPE = 'notifications.retryScheduler';
@@ -39,6 +39,7 @@ export async function runDispatchRetries(
   batchSize = DISPATCH_RETRY_BATCH_SIZE,
 ): Promise<DispatchRetryResult> {
   const now = dependencies.now();
+  await recoverAbandonedClaims(dependencies.db, now, batchSize);
   const cursorRef = dependencies.db.collection('notificationSchedulerState').doc('retryCursor');
   const cursor = await cursorRef.get();
   let lastAt = cursor.get('nextAttemptAt') as Timestamp | null;

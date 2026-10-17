@@ -1,5 +1,13 @@
 # AJ Fit Nutrition — Dependências do Questionário
 
+> Revisão 2026-10-16: padrão alimentar fica na página de exclusões e pode estar
+> vazio (`omnivore`). Alimentos habituais são apenas legado. As páginas de
+> gestação/amamentação e a confirmação de elegibilidade foram removidas.
+> Flags históricas são preservadas para compatibilidade, sem bloqueio de geração.
+> As dependências de treino continuam usando suas próprias triagens, sem ler
+> o perfil nutricional. Esta revisão prevalece sobre as regras históricas abaixo.
+
+
 ## 1. Objetivo
 
 Este documento define quando cada pergunta nutricional deve aparecer, quais dados dependem do perfil existente do AJ Fit e quais respostas alteram elegibilidade ou geração.

@@ -44,7 +44,7 @@ import {
  * component itself.
  */
 export function QuestionStepScreen({
-  question,
+  question, title, subtitle,
   value,
   onChange,
   onNext,
@@ -59,6 +59,7 @@ export function QuestionStepScreen({
   stretchAnswerControl,
   canContinueOverride,
 }: {
+  title?: string; subtitle?: string | null;
   question: Question;
   value: unknown;
   onChange: (v: unknown) => void;
@@ -106,9 +107,9 @@ export function QuestionStepScreen({
   const outlineSvgH = 220;
   const outlineN = String(stepNumber).padStart(2, '0');
 
-  const questionTitle = tLoose(`quiz:${question.id}.title`).toUpperCase();
+  const questionTitle = (title ?? tLoose(`quiz:${question.id}.title`)).toUpperCase();
   const questionSubKey = `quiz:${question.id}.sub`;
-  const questionSub = i18n.exists(questionSubKey) ? tLoose(questionSubKey) : null;
+  const questionSub = subtitle !== undefined ? subtitle : i18n.exists(questionSubKey) ? tLoose(questionSubKey) : null;
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background, overflow: 'hidden' }}>
@@ -216,6 +217,7 @@ export function QuestionStepScreen({
                     : undefined
               }
               showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
             >
               {inlineAnswerControl ? (
                 stretchAnswerControl

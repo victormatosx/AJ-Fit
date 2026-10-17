@@ -1,11 +1,16 @@
+import { NutritionErrorState } from '../../components/nutrition/NutritionStates';
+import { readInitialNutritionRequest, subscribeInitialNutritionRequest, runInitialNutritionRequest, resolveInitialNutritionRequestPresentation, type InitialNutritionRequestState } from '../../services/initialNutritionRequest';
+import { requestInitialNutritionPlanGeneration } from '../../services/nutritionGeneration';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Modal } from 'react-native';
+import { Alert, AppState, Keyboard, Modal } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { Timestamp } from 'firebase/firestore';
 import { useAuth } from '../../state/AuthContext';
 import { loadNutritionRolloutConfig, nutritionFlagEnabled } from '../../nutrition/rollout';
 import { resolveNutritionPhysicalContext } from '../../services/nutritionContext';
-import { loadNutritionProfile, createNutritionProfile, updateNutritionProfile, type NutritionProfileAnswers } from '../../services/nutritionProfile';
+import { createNutritionProfile, updateNutritionProfile, type NutritionProfileAnswers } from '../../services/nutritionProfile';
 import {
   requestNutritionPlanGeneration, subscribeToActiveNutritionGenerationJob, subscribeToNutritionGenerationJob,
   type NutritionGenerationJobDoc,
@@ -27,7 +32,7 @@ import type {
   NutritionGoal, NutritionLoggedFoodItem, NutritionLoggedFoodSource, NutritionMealOption, NutritionMealSlot,
   NutritionPlanFoodItem, NutritionProfile as NutritionProfileType, NutritionRecipe,
 } from '../../types/nutrition';
-import { isSafetyBlocked, type ProfileDraft } from '../../nutrition/ui/profileSteps';
+import { type ProfileDraft } from '../../nutrition/ui/profileSteps';
 import { foodPickOriginToDiarySource } from '../../nutrition/ui/diaryModel';
 import { mapGenerationRequestError, type GenerationRequestErrorKey } from '../../nutrition/ui/generationStage';
 import { endOfLocalWeek, todayLocalDate, shiftLocalDate, isFutureLocalDate, startOfLocalWeek } from '../../nutrition/ui/localDate';
@@ -78,7 +83,9 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
 
   const [generationEnabled, setGenerationEnabled] = useState(false);
   const [profile, setProfile] = useState<NutritionProfileType<Timestamp> | null>(null);
+  const [currentWeightKg, setCurrentWeightKg] = useState<number | null>(null);
   const [goal, setGoal] = useState<NutritionGoal | null>(null);
+  const [profileLoaded, setProfileLoaded] = useState(false);
   const [baseLoaded, setBaseLoaded] = useState(false);
   const [baseError, setBaseError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
@@ -90,7 +97,24 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
   const [activeJobLoaded, setActiveJobLoaded] = useState(false);
   const [generationId, setGenerationId] = useState<string | null>(null);
   const [job, setJob] = useState<NutritionGenerationJobDoc | null>(null);
+  const [generationObservationFailed, setGenerationObservationFailed] = useState(false);
+  const generationRequestInFlight = useRef(false);
+  // `activeJob`/`generationId` momentarily go back to null the instant a job
+  // flips to 'completed' (the job and the plan-becomes-active write commit
+  // together on the backend, but the client's two independent `onSnapshot`
+  // listeners for them do not necessarily deliver in the same tick) — so
+  // `!plan && !generationId && !activeJob` below can be true for one frame
+  // even though a plan was just produced. Once this session has observed
+  // any job at all, remember it, so that frame falls through to home's own
+  // `loading`/`noPlan` state (correct either way) instead of back to the
+  // "automatic generation disabled" copy, which a job having existed makes
+  // misleading regardless of the `onboardingAutomatic` rollout flag.
+  const sawGenerationActivityRef = useRef(false);
+  if (activeJob || job || generationId) sawGenerationActivityRef.current = true;
 
+  const [enrollmentLoaded, setEnrollmentLoaded] = useState(false);
+  const [initialPending, setInitialPending] = useState(false);
+  const [initialRequest, setInitialRequest] = useState<InitialNutritionRequestState | null>(null);
   const [route, setRoute] = useState<Route>({ name: 'home' });
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -113,6 +137,8 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
   const [recipeQuantityPick, setRecipeQuantityPick] = useState<NutritionFoodPick | null>(null);
   const [recipeQuantityRecipe, setRecipeQuantityRecipe] = useState<NutritionRecipe<Timestamp> | null>(null);
   /** Fase C8 — mirrors `recipeQuantityPick`'s role, but for a catalog/custom food: resolves grams/serving-unit BEFORE the `addDiaryFood` call, instead of writing immediately on selection. */
+  const diaryAddInFlight = useRef(false);
+  const [addingDiaryFood, setAddingDiaryFood] = useState(false);
   const [foodQuantityPick, setFoodQuantityPick] = useState<NutritionFoodPick | null>(null);
 
   // Weekly summary: one bounded Monday-Sunday diary listener and the existing plan/assessment sources.
@@ -161,9 +187,49 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
   const {
     assessments, loading: assessmentsLoading, error: assessmentsError, refresh: refreshAssessments,
   } = useAssessments(uid);
+  const latestAssessmentWeightKg = assessments[0]?.weight ?? null;
   const currentWeekStart = startOfLocalWeek();
   const selectedWeekStart = route.name === 'weekly' ? route.weekStartLocalDate : currentWeekStart;
   const selectedWeekEnd = endOfLocalWeek(selectedWeekStart);
+
+  useEffect(() => {
+    if (!uid) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const read = () => { void readInitialNutritionRequest(uid).then((state) => {
+      if (cancelled) return;
+      setInitialRequest(state);
+      if (timer) clearTimeout(timer);
+      if (state.status === 'requesting' && state.nextAt > Date.now()) timer = setTimeout(read, state.nextAt - Date.now() + 1);
+    }).catch(() => { if (!cancelled) setInitialRequest({ status: 'failed', attempts: 3, nextAt: 0 }); }); };
+    read();
+    const stop = subscribeInitialNutritionRequest(read);
+    const appState = AppState.addEventListener('change', (state) => { if (state === 'active') read(); });
+    return () => { cancelled = true; stop(); if (timer) clearTimeout(timer); appState.remove(); };
+  }, [uid]);
+
+  useEffect(() => {
+    if (!uid) return;
+    setProfileLoaded(false);
+    return onSnapshot(doc(db, 'users', uid, 'nutritionProfile', 'current'), (snapshot) => {
+      setProfile(snapshot.exists() ? snapshot.data() as NutritionProfileType<Timestamp> : null);
+      setProfileLoaded(true);
+    }, () => { setBaseError(true); setProfileLoaded(true); });
+  }, [uid, reloadKey]);
+
+  useEffect(() => {
+    if (!uid) return;
+    setEnrollmentLoaded(false);
+    return onSnapshot(doc(db, 'users', uid, 'onboardingNutritionState', 'current'), (snapshot) => {
+      setEnrollmentLoaded(true);
+      const value = snapshot.data();
+      setInitialPending(Boolean(value && !value.autoGenerationId && !value.autoSkipped));
+      const id = value?.latestGenerationId ?? value?.autoGenerationId;
+      if (typeof id === 'string') {
+        setGenerationId(id);
+      }
+    }, () => { setBaseError(true); setEnrollmentLoaded(true); });
+  }, [uid, reloadKey]);
 
   useEffect(() => {
     if (!navigationRequest) return;
@@ -188,17 +254,17 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
     if (!uid) return;
     let cancelled = false;
     setBaseError(false);
-    Promise.all([loadNutritionRolloutConfig(), loadNutritionProfile(uid), resolveNutritionPhysicalContext(uid)])
-      .then(([config, loadedProfile, physical]) => {
+    Promise.all([loadNutritionRolloutConfig(), resolveNutritionPhysicalContext(uid)])
+      .then(([config, physical]) => {
         if (cancelled) return;
         setGenerationEnabled(nutritionFlagEnabled(uid, 'nutritionPlanGenerationEnabled', config));
-        setProfile(loadedProfile);
         setGoal(physical?.goal ?? null);
+        setCurrentWeightKg(physical?.weightKg ?? null);
         setBaseLoaded(true);
       })
       .catch(() => { if (!cancelled) { setBaseError(true); setBaseLoaded(true); } });
     return () => { cancelled = true; };
-  }, [uid, reloadKey]);
+  }, [uid, reloadKey, latestAssessmentWeightKg]);
 
   useEffect(() => {
     if (!uid) {
@@ -261,11 +327,24 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
 
   useEffect(() => {
     if (!uid || !generationId) { setJob(null); return; }
-    return subscribeToNutritionGenerationJob(uid, generationId, setJob);
-  }, [uid, generationId]);
+    setJob(null);
+    setGenerationObservationFailed(false);
+    // A monitor timeout never fails the backend job or submits another AI request.
+    const timer = setTimeout(() => setGenerationObservationFailed(true), 12 * 60 * 1000);
+    const unsubscribe = subscribeToNutritionGenerationJob(uid, generationId, (next) => {
+      setJob(next);
+      if (next?.status === 'failed') setRoute({ name: 'generating' });
+      if (!next) setGenerationObservationFailed(true);
+      if (next?.status === 'completed' || next?.status === 'failed') {
+        clearTimeout(timer);
+        setGenerationObservationFailed(false);
+      }
+    }, () => { clearTimeout(timer); setGenerationObservationFailed(true); });
+    return () => { clearTimeout(timer); unsubscribe(); };
+  }, [uid, generationId, reloadKey]);
 
   useEffect(() => {
-    if (job?.status === 'completed') { setGenerationId(null); setRoute({ name: 'home' }); }
+    if (job?.status === 'completed') { setGenerationId(null); setRoute((current) => current.name === 'generating' ? { name: 'home' } : current); }
   }, [job?.status]);
 
   // Today's diary — drives NutritionHome's real consumption summary.
@@ -324,7 +403,8 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
   }, [route.name]);
 
   const handleRequestGeneration = useCallback(async (): Promise<boolean> => {
-    if (requesting) return false;
+    if (generationRequestInFlight.current) return false;
+    generationRequestInFlight.current = true;
     setRequesting(true);
     setRequestError(null);
     try {
@@ -335,11 +415,13 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
       return true;
     } catch (error) {
       setRequestError(mapGenerationRequestError(error));
+      setRoute({ name: 'home' });
       return false;
     } finally {
+      generationRequestInFlight.current = false;
       setRequesting(false);
     }
-  }, [requesting]);
+  }, []);
 
   const handleSubmitProfile = useCallback(async (draft: ProfileDraft) => {
     if (!uid) return;
@@ -354,7 +436,7 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
         mode: profile ? 'edit' : 'create', mealSlotCountBucket: countBucket(draft.mealSlots?.length ?? 0),
       } });
       setReloadKey((key) => key + 1);
-      if (isFirstCreation && !isSafetyBlocked(draft)) {
+      if (isFirstCreation) {
         // `handleRequestGeneration` never throws — it catches its own
         // errors into `requestError` state and returns false. Without
         // checking that return value, a failed request left `route`
@@ -373,19 +455,24 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
   }, [uid, profile, handleRequestGeneration]);
 
   // --- Diary actions -------------------------------------------------------
-  // `slot` is accepted (and passed by `onOpenDiarySlot`) only to keep that
-  // call site distinct from the plain "ver diário" entry point — it must
-  // NEVER feed `diaryFoodTarget`: that state is what makes `FoodSearchScreen`
-  // visible (see its `visible={diaryFoodTarget != null}` below), so setting
-  // it here opened a second native Modal (FoodSearchScreen, "Buscar
-  // Alimento") stacked directly on top of NutritionDiaryScreen's own Modal
-  // as soon as a meal row was tapped on Home — the exact stacked-Modal
-  // freeze/ghost-reopen-on-tab-switch bug already fixed elsewhere in this
-  // file (see mealSwapFlowRegression/stackedModalAuditRegression tests).
+  // Home meal rows only open the Diary. The per-meal "Adicionar alimento"
+  // action opens search inside that same native Modal, retaining the selected date.
   const openDiary = (_slot?: NutritionMealSlot) => {
     setDiaryDate(todayLocalDate());
     setDiaryVisible(true);
     trackNutritionEvent({ name: 'nutrition_diary_day_viewed', properties: { source: 'home' } });
+  };
+
+  // The Diary owns the native Modal; search and quantity render as plain panels inside it.
+  const openDiaryFoodSearch = (slot: NutritionMealSlot) => {
+    setDiaryFoodTarget(slot);
+  };
+  const closeDiaryFoodSearch = () => {
+    Keyboard.dismiss();
+    setDiaryFoodTarget(null);
+    setRecipeQuantityPick(null);
+    setRecipeQuantityRecipe(null);
+    setFoodQuantityPick(null);
   };
 
   // --- Register Meal (single-screen manual logging, always "today") -------
@@ -550,7 +637,7 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
     setHistoryVisible(true);
   };
 
-  if (!uid || !baseLoaded || !activeJobLoaded) {
+  if (!uid || !baseLoaded || !profileLoaded || !enrollmentLoaded || !activeJobLoaded) {
     return <NutritionHomeScreen state={{ kind: 'loading' }} onCreateCustomFood={() => {}} onCreateRecipe={() => {}} />;
   }
 
@@ -563,7 +650,6 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
     );
   }
 
-  const safetyBlocked = profile ? isSafetyBlocked(profile) : false;
 
   // Every route branch below renders only the route-specific screen as
   // `routeContent` — it never `return`s directly. All overlay modals
@@ -585,6 +671,7 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
     routeContent = (
       <NutritionProfileScreen
         profile={profile}
+        currentWeightKg={currentWeightKg}
         inheritedGoal={goal ?? 'health'}
         mode={route.mode}
         onCancel={() => setRoute({ name: 'home' })}
@@ -595,12 +682,29 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
         onToggleFavoriteFood={handleToggleFavoriteFood}
       />
     );
-  } else if (route.name === 'generating') {
+  } else if (initialPending && !plan && !generationId && !activeJob && !sawGenerationActivityRef.current) {
+    const pending = resolveInitialNutritionRequestPresentation(initialRequest, generationEnabled, Boolean(profile));
+    const disabled = pending.kind === 'disabled';
+    const failed = pending.kind === 'failed';
+    routeContent = <NutritionErrorState
+      title={t(disabled ? 'onboarding.automaticDisabledTitle' : failed ? 'onboarding.requestFailedTitle' : 'onboarding.waitingTitle')}
+      body={t(disabled ? 'onboarding.automaticDisabledBody' : failed ? 'onboarding.requestFailedBody' : 'onboarding.waitingBody')}
+      retryLabel={pending.canRetry ? t('onboarding.retry') : undefined}
+      onRetry={pending.canRetry ? () => {
+        if (disabled) void handleRequestGeneration();
+        else void runInitialNutritionRequest(uid, requestInitialNutritionPlanGeneration, true);
+      } : undefined}
+    />;
+  } else if (route.name === 'generating' || (generationId != null && !job)) {
     routeContent = (
       <NutritionGeneratingScreen
         job={job ?? activeJob}
+        observationFailed={generationObservationFailed}
         retrying={requesting}
-        onRetry={() => { void handleRequestGeneration(); }}
+        onRetry={() => {
+          if (generationObservationFailed) setReloadKey((key) => key + 1);
+          else void handleRequestGeneration();
+        }}
         onBack={() => setRoute({ name: 'home' })}
       />
     );
@@ -698,7 +802,7 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
         ? (!planLoaded
           ? { kind: 'loading' }
           : {
-            kind: 'noPlan', safetyBlocked,
+            kind: 'noPlan',
             onCreatePlan: generationEnabled ? () => { void handleRequestGeneration(); } : () => {},
             onEditProfile: () => setRoute({ name: 'profile', mode: 'edit' }),
           })
@@ -760,77 +864,100 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
         onClose={() => setDiaryVisible(false)}
         onPrevDay={() => setDiaryDate((date) => shiftLocalDate(date, -1))}
         onNextDay={() => setDiaryDate((date) => (isFutureLocalDate(shiftLocalDate(date, 1)) ? date : shiftLocalDate(date, 1)))}
-        onAddFood={(slot) => { setDiaryFoodTarget(slot); }}
+        onAddFood={(slot) => openDiaryFoodSearch(slot)}
         onEditGrams={(slot, item, grams) => {
           if (!uid) return;
           void updateDiaryEntryGrams(uid, diaryDate, slot, item.id, item.source, item.foodId, grams);
         }}
         onRemove={(slot, itemId) => { if (uid) void removeDiaryEntry(uid, diaryDate, slot, itemId); }}
         onMove={(slot, itemId, toSlot) => { if (uid) void moveDiaryEntry(uid, diaryDate, slot, toSlot, itemId); }}
-      />
-      <FoodSearchScreen
-        visible={diaryFoodTarget != null}
-        variant="nutrition"
-        includeRecipes
-        catalog="logging"
-        favoriteFoodIds={favoriteFoodIds}
-        recentFoodIds={recentFoodIds}
-        favoriteRecipeIds={favoriteRecipeIds}
-        onToggleFavoriteFood={handleToggleFavoriteFood}
-        onToggleFavoriteRecipe={handleToggleFavoriteRecipe}
-        onClose={() => setDiaryFoodTarget(null)}
-        onSelect={(food) => {
-          if (food.origin === 'recipe') {
-            // Round brief §9 — a recipe can be logged by grams OR, when it
-            // has `servings`, by portion; `RecipeQuantityModal` resolves
-            // the actual gram amount before the normal addDiaryFood below
-            // ever runs. `diaryFoodTarget` stays set (not cleared here) so
-            // the slot survives until the quantity is confirmed.
-            setRecipeQuantityPick(food);
-            if (uid) void loadNutritionRecipe(uid, food.foodId).then(setRecipeQuantityRecipe);
-            return;
-          }
-          // Fase C8 — same deferred-write pattern as the recipe branch
-          // above: `FoodQuantityModal` resolves the food's natural unit
-          // (ovo -> "1 unidade (50 g)") or a plain editable grams amount
-          // BEFORE `addDiaryFood` runs, instead of writing 100 g
-          // immediately on selection. `diaryFoodTarget` stays set until
-          // the quantity is confirmed, same as the recipe branch.
-          setFoodQuantityPick(food);
-        }}
+        onDismissOverlay={diaryFoodTarget != null ? () => {
+          if (addingDiaryFood) return;
+          if (foodQuantityPick) setFoodQuantityPick(null);
+          else if (recipeQuantityPick) { setRecipeQuantityPick(null); setRecipeQuantityRecipe(null); }
+          else closeDiaryFoodSearch();
+        } : undefined}
         overlay={(
-          <>
-            <RecipeQuantityModal
-              visible={recipeQuantityPick != null}
-              recipeName={recipeQuantityPick?.name ?? ''}
-              recipe={recipeQuantityRecipe}
-              onClose={() => { setRecipeQuantityPick(null); setRecipeQuantityRecipe(null); setDiaryFoodTarget(null); }}
-              onConfirm={(grams) => {
-                if (uid && diaryFoodTarget && recipeQuantityPick) {
-                  void addDiaryFood(uid, diaryDate, diaryFoodTarget, 'recipe', recipeQuantityPick.foodId, grams)
-                    .then(() => trackNutritionEvent({ name: 'nutrition_diary_item_added', properties: {
-                      mealSlot: diaryFoodTarget, operation: 'recipe',
-                    } }));
-                }
-                setRecipeQuantityPick(null); setRecipeQuantityRecipe(null); setDiaryFoodTarget(null);
-              }}
-            />
-            <FoodQuantityModal
-              visible={foodQuantityPick != null}
-              pick={foodQuantityPick}
-              onClose={() => { setFoodQuantityPick(null); setDiaryFoodTarget(null); }}
-              onConfirm={(grams) => {
-                if (uid && diaryFoodTarget && foodQuantityPick) {
-                  const source = foodPickOriginToDiarySource(foodQuantityPick.origin as 'catalog' | 'custom' | 'food_log');
-                  void addDiaryFood(uid, diaryDate, diaryFoodTarget, source, foodQuantityPick.foodId, grams)
-                    .then(() => trackNutritionEvent({ name: 'nutrition_diary_item_added', properties: {
-                      mealSlot: diaryFoodTarget, operation: source,
-                    } }));
-                }
-                setFoodQuantityPick(null); setDiaryFoodTarget(null);
-              }}
-            />
-          </>
+          <FoodSearchScreen
+            visible={diaryFoodTarget != null}
+            variant="nutrition"
+            presentation="sheet"
+            includeRecipes
+            catalog="logging"
+            favoriteFoodIds={favoriteFoodIds}
+            recentFoodIds={recentFoodIds}
+            favoriteRecipeIds={favoriteRecipeIds}
+            onToggleFavoriteFood={handleToggleFavoriteFood}
+            onToggleFavoriteRecipe={handleToggleFavoriteRecipe}
+            onClose={addingDiaryFood ? () => {} : closeDiaryFoodSearch}
+            onSelect={(food) => {
+              if (food.origin === 'recipe') {
+                // Round brief §9 — a recipe can be logged by grams OR, when it
+                // has `servings`, by portion; `RecipeQuantityModal` resolves
+                // the actual gram amount before the normal addDiaryFood below
+                // ever runs. `diaryFoodTarget` stays set (not cleared here) so
+                // the slot survives until the quantity is confirmed.
+                setRecipeQuantityPick(food);
+                if (uid) void loadNutritionRecipe(uid, food.foodId).then(setRecipeQuantityRecipe);
+                return;
+              }
+              // Fase C8 — same deferred-write pattern as the recipe branch
+              // above: `FoodQuantityModal` resolves the food's natural unit
+              // (ovo -> "1 unidade (50 g)") or a plain editable grams amount
+              // BEFORE `addDiaryFood` runs, instead of writing 100 g
+              // immediately on selection. `diaryFoodTarget` stays set until
+              // the quantity is confirmed, same as the recipe branch.
+              setFoodQuantityPick(food);
+            }}
+            overlay={(
+              <>
+                <RecipeQuantityModal
+                  visible={recipeQuantityPick != null}
+                  recipeName={recipeQuantityPick?.name ?? ''}
+                  recipe={recipeQuantityRecipe}
+                  saving={addingDiaryFood}
+                  onClose={() => { if (addingDiaryFood) return; setRecipeQuantityPick(null); setRecipeQuantityRecipe(null); }}
+                  onConfirm={(grams) => {
+                    if (uid && diaryFoodTarget && recipeQuantityPick && !diaryAddInFlight.current) {
+                      diaryAddInFlight.current = true;
+                      setAddingDiaryFood(true);
+                      void addDiaryFood(uid, diaryDate, diaryFoodTarget, 'recipe', recipeQuantityPick.foodId, grams)
+                        .then(() => {
+                          trackNutritionEvent({ name: 'nutrition_diary_item_added', properties: {
+                            mealSlot: diaryFoodTarget, operation: 'recipe',
+                          } });
+                          closeDiaryFoodSearch();
+                        })
+                        .catch(() => Alert.alert(t('diary.addError')))
+                        .finally(() => { diaryAddInFlight.current = false; setAddingDiaryFood(false); });
+                    }
+                  }}
+                />
+                <FoodQuantityModal
+                  visible={foodQuantityPick != null}
+                  pick={foodQuantityPick}
+                  saving={addingDiaryFood}
+                  onClose={() => { if (!addingDiaryFood) setFoodQuantityPick(null); }}
+                  onConfirm={(grams) => {
+                    if (uid && diaryFoodTarget && foodQuantityPick && !diaryAddInFlight.current) {
+                      diaryAddInFlight.current = true;
+                      setAddingDiaryFood(true);
+                      const source = foodPickOriginToDiarySource(foodQuantityPick.origin as 'catalog' | 'custom' | 'food_log');
+                      void addDiaryFood(uid, diaryDate, diaryFoodTarget, source, foodQuantityPick.foodId, grams)
+                        .then(() => {
+                          trackNutritionEvent({ name: 'nutrition_diary_item_added', properties: {
+                            mealSlot: diaryFoodTarget, operation: source,
+                          } });
+                          closeDiaryFoodSearch();
+                        })
+                        .catch(() => Alert.alert(t('diary.addError')))
+                        .finally(() => { diaryAddInFlight.current = false; setAddingDiaryFood(false); });
+                    }
+                  }}
+                />
+              </>
+            )}
+          />
         )}
       />
 

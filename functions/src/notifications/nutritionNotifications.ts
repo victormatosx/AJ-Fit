@@ -149,11 +149,11 @@ export async function dispatchNutritionPlanReady(
     return null;
   }
   const clock = dailyLocalClock(now.toDate(), schedule.data()?.timezone);
-  if (!clock || clock.minuteOfDay < EVENT_NOTIFICATION_START_MINUTE
-    || clock.minuteOfDay >= EVENT_NOTIFICATION_END_MINUTE) return null;
+  if (!clock) return null;
   const request = buildNutritionPlanReadyNotification({
     uid,
     generationId,
+    initialOnboarding: job.get('initialOnboarding') === true,
     locale: policy.locale,
   });
   return dispatchNotification(request, {
@@ -168,7 +168,7 @@ export async function dispatchNutritionPlanReady(
 }
 
 export const onNutritionGenerationCompleted = onDocumentUpdated(
-  'users/{uid}/nutritionGenerationJobs/{generationId}',
+  { document: 'users/{uid}/nutritionGenerationJobs/{generationId}', retry: true },
   async (event) => {
     if (event.data?.before.get('status') === 'completed'
       || event.data?.after.get('status') !== 'completed') return;

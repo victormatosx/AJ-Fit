@@ -21,18 +21,19 @@ import type { NutritionGenerationJobDoc } from '../../services/nutritionGenerati
 const STAGE_ORDER: readonly GenerationStageKey[] = ['queued', 'running', 'validating', 'completing'];
 
 export function NutritionGeneratingScreen({
-  job, onRetry, onBack, retrying,
+  job, onRetry, onBack, retrying, observationFailed = false,
 }: {
   job: NutritionGenerationJobDoc | null;
   onRetry: () => void;
   onBack: () => void;
   retrying: boolean;
+  observationFailed?: boolean;
 }) {
   const { t } = useTranslation('nutrition');
 
-  if (job?.status === 'failed') {
-    const copyKey = generationFailureCopyKey(job.errorCode);
-    const retryable = isGenerationRetryable(job.errorCode);
+  if (observationFailed || job?.status === 'failed') {
+    const copyKey = observationFailed ? 'genericError' : generationFailureCopyKey(job?.errorCode);
+    const retryable = observationFailed || isGenerationRetryable(job?.errorCode);
     return (
       <View style={{ flex: 1, backgroundColor: NU.bg }}>
         <SafeAreaView style={{ flex: 1, justifyContent: 'center' }} edges={['top', 'bottom']}>
@@ -49,19 +50,20 @@ export function NutritionGeneratingScreen({
     );
   }
 
-  const stageKey = generationStageKey(job?.status ?? 'queued');
-  const currentIndex = STAGE_ORDER.indexOf(stageKey);
+  const stageKey = job ? generationStageKey(job.status) : null;
+  const currentIndex = stageKey ? STAGE_ORDER.indexOf(stageKey) : -1;
 
   return (
     <View style={{ flex: 1, backgroundColor: NU.bg }}>
       <SafeAreaView style={{ flex: 1, paddingHorizontal: 22 }} edges={['top', 'bottom']}>
         <View style={{ paddingTop: 34 }}>
-          <NuCap>{t('generating.title')}</NuCap>
-          <Text style={{ fontFamily: 'Archivo_700Bold', fontSize: 22, color: NU.white, marginTop: 14, lineHeight: 28 }}>
+          <NuCap>{t('onboarding.preparingTitle')}</NuCap>
+          <Text style={{ fontFamily: 'Archivo_400Regular', color: NU.faint, marginTop: 12 }}>{t('onboarding.preparingBody')}</Text>
+          {stageKey ? <Text style={{ fontFamily: 'Archivo_700Bold', fontSize: 22, color: NU.white, marginTop: 14, lineHeight: 28 }}>
             {t(`generating.stages.${stageKey}`)}
-          </Text>
+          </Text> : null}
 
-          <View style={{ marginTop: 28 }}>
+          {job ? <View style={{ marginTop: 28 }}>
             {STAGE_ORDER.map((stage, index) => {
               const done = index < currentIndex || (retrying && index <= currentIndex);
               const current = index === currentIndex && !retrying;
@@ -89,10 +91,10 @@ export function NutritionGeneratingScreen({
                 </View>
               );
             })}
-          </View>
+          </View> : null}
 
           <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 13, lineHeight: 20, color: NU.faint, marginTop: 24 }}>
-            {t('generating.leaveScreenNote')}
+            {t('onboarding.preparingNote')}
           </Text>
         </View>
       </SafeAreaView>

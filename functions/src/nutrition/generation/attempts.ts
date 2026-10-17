@@ -1,7 +1,7 @@
 import type { NutritionEngineOutput, NutritionGoal, NutritionProfile } from '../shared/types/nutrition';
-import { NutritionAiProviderError, type AiResult, type NutritionAiProvider } from '../ai/provider';
+import { nutritionAiProfile, NutritionAiProviderError, type AiResult, type NutritionAiProvider } from '../ai/provider';
 import { MAX_AI_ATTEMPTS } from '../ai/config';
-import { PlanValidationError, validateAndBuildPlan, type ValidatedPlan, type FailureCode } from './domain';
+import { PlanValidationError, validateAndBuildPlan, type ValidatedPlan, type FailureCode, type ValidationIssue } from './domain';
 import type { NutritionPromptFoodNames } from './foodNames';
 
 export type AttemptCode = FailureCode | 'AI_TIMEOUT' | 'AI_RATE_LIMIT' | 'AI_RETRY_EXHAUSTED' | 'AI_PROVIDER_ERROR';
@@ -9,6 +9,7 @@ export interface AttemptAudit {
   attempt: number; fallback: boolean; result: AiResult | null; code: AttemptCode | null; latencyMs: number;
   /** Only ever set for AI_SAFETY_VALIDATION_FAILED — see NutritionAiProviderError.refusalReason. */
   refusalReason?: string;
+  validationIssue?: ValidationIssue;
 }
 export class GenerationAttemptsExhausted extends Error {
   constructor(readonly code: AttemptCode) { super(code); }
@@ -27,9 +28,11 @@ export async function generateValidatedPlan(
   goal: NutritionGoal, foodNames: NutritionPromptFoodNames,
   onAttempt: (audit: AttemptAudit) => Promise<void> = async () => {},
   onValidating: (attempt: number) => Promise<void> = async () => {},
-  options: { startAttempt?: number; previousFailureCode?: AttemptCode; onBeforeAttempt?: (attempt: number) => Promise<void> } = {},
+  options: { startAttempt?: number; previousFailureCode?: AttemptCode; generationId?: string;
+    onBeforeAttempt?: (attempt: number) => Promise<void> } = {},
 ): Promise<{ validated: ValidatedPlan; result: AiResult; attempt: number; fallback: boolean }> {
   let lastCode: AttemptCode = options.previousFailureCode ?? 'AI_RETRY_EXHAUSTED';
+  let feedback: string | undefined;
   for (let attempt = options.startAttempt ?? 1; attempt <= MAX_AI_ATTEMPTS; attempt++) {
     const fallback = attempt === MAX_AI_ATTEMPTS
       && ['AI_SCHEMA_INVALID', 'AI_MACRO_VALIDATION_FAILED'].includes(lastCode);
@@ -37,10 +40,12 @@ export async function generateValidatedPlan(
     let result: AiResult | null = null;
     await options.onBeforeAttempt?.(attempt);
     try {
-      result = await provider.generatePlan({ profile, engine, goal, foodNames,
-        feedback: attempt > 1 ? lastCode : undefined, fallback });
+      result = await provider.generatePlan({ profile: nutritionAiProfile(profile), engine, goal, foodNames,
+        ...(options.generationId ? { trace: { generationId: options.generationId, attempt } } : {}),
+        feedback: attempt > 1 ? feedback ?? lastCode : undefined, fallback });
     } catch (error) {
       lastCode = classifyAttemptError(error);
+      feedback = undefined;
       await onAttempt({ attempt, fallback, result, code: lastCode, latencyMs: Date.now() - started,
         refusalReason: error instanceof NutritionAiProviderError ? error.refusalReason : undefined });
       if ((error instanceof PlanValidationError || error instanceof NutritionAiProviderError) && !error.retryable) break;
@@ -49,10 +54,16 @@ export async function generateValidatedPlan(
     await onValidating(attempt);
     let validated: ValidatedPlan;
     try {
-      validated = validateAndBuildPlan(result.output, profile.mealSlots, engine, profile.excludedAllergens);
+      validated = validateAndBuildPlan(result.output, profile.mealSlots, engine, profile.excludedAllergens, true, { dietaryPattern: profile.dietaryPattern, excludedFoodNames: foodNames.excluded });
     } catch (error) {
       lastCode = classifyAttemptError(error);
-      await onAttempt({ attempt, fallback, result, code: lastCode, latencyMs: Date.now() - started });
+      const validationIssue = error instanceof PlanValidationError ? error.issue : undefined;
+      // Repair the actual rejected candidate instead of asking for a fresh
+      // plan with a context-free error code. This stays in memory and goes
+      // only to the provider; it must never enter logs or job documents.
+      feedback = validationIssue ? JSON.stringify({ failureCode: lastCode, ...validationIssue,
+        previousPlan: result.output }) : lastCode;
+      await onAttempt({ attempt, fallback, result, code: lastCode, latencyMs: Date.now() - started, validationIssue });
       if (error instanceof PlanValidationError && !error.retryable) break;
       continue;
     }

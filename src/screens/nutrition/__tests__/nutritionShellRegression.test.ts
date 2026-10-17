@@ -121,7 +121,8 @@ describe('NutritionShell integration regressions', () => {
     expect(start).toBeGreaterThan(-1);
     const body = source.slice(start, end);
     expect(body).not.toMatch(/\breturn\s*[(<]/);
-    expect(body.match(/routeContent = /g)?.length).toBe(4);
+    expect(body).toContain('resolveInitialNutritionRequestPresentation');
+    expect(body.match(/routeContent = /g)?.length).toBe(5);
   });
 
   it('renders routeContent together with every overlay modal in one return, so none of them can unmount independently of its own visible flag', () => {
@@ -143,5 +144,37 @@ describe('NutritionShell integration regressions', () => {
     const modalsStart = source.indexOf('const mealDetailsAndModals = plan ?');
     expect(modalsStart).toBeGreaterThan(-1);
     expect(modalsStart).toBeLessThan(finalReturnStart);
+  });
+
+  it('never re-shows "automatic generation disabled" once a job has been observed this session, even if generationId/activeJob momentarily clear back to null', () => {
+    // Regression: the job flipping to 'completed' and the plan becoming
+    // 'active' commit in the same backend transaction, but the client
+    // observes them through two independent `onSnapshot` listeners that
+    // do not necessarily deliver in the same tick. The instant the job
+    // listener's 'completed' update lands, `generationId` is nulled and
+    // `activeJob`'s query already excludes a completed job — for that one
+    // frame, `!plan && !generationId && !activeJob` can be true even
+    // though a plan was just produced, which must not resurrect the
+    // onboardingAutomatic-disabled copy (a job existing makes that message
+    // wrong regardless of the rollout flag).
+    expect(source).toMatch(/if \(activeJob \|\| job \|\| generationId\) sawGenerationActivityRef\.current = true;/);
+    const gateMatch = source.match(/else if \(initialPending[^)]*\)\s*\{/);
+    expect(gateMatch?.[0]).toContain('!activeJob');
+    expect(gateMatch?.[0]).toContain('!sawGenerationActivityRef.current');
+  });
+
+  it('keeps tracking an active or just-finished job even when the onboardingAutomatic rollout flag is off, since that flag only gates the first automatic attempt — not a manual retry', () => {
+    // The manual retry path (`handleRequestGeneration`, used by the
+    // "Tentar novamente" button on the disabled-copy branch) calls
+    // `requestNutritionPlanGeneration` with no `intent`, so the backend's
+    // `onboardingAutomatic` gate (which only applies when
+    // `intent === 'initial_onboarding'`) never blocks it. The UI must keep
+    // following that job via the plain `activeJob`/`generationId`
+    // subscriptions, not via any onboardingAutomatic-derived state.
+    const activeJobEffectStart = source.indexOf('subscribeToActiveNutritionGenerationJob(uid');
+    const activeJobEffectEnd = source.indexOf('}, [uid]);', activeJobEffectStart);
+    const activeJobEffectBody = source.slice(activeJobEffectStart, activeJobEffectEnd);
+    expect(activeJobEffectBody).not.toMatch(/onboardingAutomatic|generationEnabled/);
+    expect(activeJobEffectBody).toMatch(/setActiveJob\(next\)/);
   });
 });

@@ -47,6 +47,8 @@
       }
     },
     "nextMeal": {
+      "showAllFoods": "Ver todos os alimentos (+{{count}})",
+      "collapseFoods": "Recolher lista",
       "title": "PRÓXIMA REFEIÇÃO",
       "recommended": "Recomendado",
       "openCta": "Ver refeição"
@@ -62,6 +64,7 @@
       "summaryCta": "Resumo"
     },
     "mealsToday": {
+      "nextMeal": "Próxima refeição",
       "title": "REFEIÇÕES DO DIA",
       "itemCount_one": "{{count}} alimento",
       "itemCount_other": "{{count}} alimentos",
@@ -71,16 +74,16 @@
     },
     "quickAccess": {
       "title": "MAIS",
+      "customFoodDescription": "Adicione um alimento personalizado ao seu acervo.",
       "customFood": "Criar alimento",
+      "recipeDescription": "Salve suas receitas para usar sempre que quiser.",
       "recipe": "Criar receita",
+      "favoritesDescription": "Acesse seus alimentos e receitas favoritos.",
       "favorites": "Meus favoritos",
+      "savedMealsDescription": "Veja as refeições que você salvou para usar novamente.",
       "savedMeals": "Refeições salvas",
+      "historyDescription": "Acesse seus planos de alimentação anteriores.",
       "history": "Histórico de planos"
-    },
-    "pregnancyBlock": {
-      "title": "Acompanhamento especializado recomendado",
-      "body": "Durante a gravidez ou amamentação, a geração automática de dieta fica indisponível no AJ Fit. Recomendamos acompanhamento com um nutricionista para orientações seguras e personalizadas.",
-      "ack": "Entendi"
     },
     "disabled": {
       "title": "Nutrição ainda não disponível",
@@ -88,7 +91,24 @@
     }
   },
   "weekly": {
+    "aboutAverage": "Sobre a média diária",
+    "macroTargetsAverage": "Metas calculadas pela média dos {{count}} dias com metas disponíveis.",
+    "dailyAverage": "Média diária",
+    "dailyTarget": "Meta diária",
+    "averageDailyTarget": "Meta média diária",
+    "averageCoverage": "Média baseada em {{count}} de 7 dias com registros.",
+    "targetUnavailable": "Meta indisponível",
+    "dailyConsumption": "Consumo diário",
+    "futureDay": "Dia futuro",
+    "noRecordDay": "Sem registro",
+    "dayTarget": "Meta {{value}}",
+    "individualTargets": "As marcas indicam as metas disponíveis de cada dia.",
+    "macroAverages": "Macronutrientes (média diária)",
+    "noWeeklyWeight": "Nenhuma medição de peso disponível nesta semana.",
+    "openProgressCompact": "Ver em Evolução",
     "title": "Resumo semanal",
+    "emptyBody": "Comece a registrar suas refeições para acompanhar sua alimentação e ver seu progresso.",
+    "registerMeal": "Registrar refeição",
     "thisWeek": "Esta semana",
     "open": "Ver resumo",
     "back": "Voltar para Nutrição",
@@ -178,8 +198,12 @@
       "targetWeightKg": {
         "title": "Tem um peso-alvo em mente?",
         "subtitle": "Esse campo é opcional.",
-        "placeholder": "Peso-alvo (kg)",
-        "skip": "Prefiro não informar"
+        "placeholder": "Peso-alvo ({{unit}})",
+        "skip": "Prefiro não informar",
+        "currentWeight": "Peso atual",
+        "label": "Peso-alvo ({{unit}})",
+        "invalid": "Informe um peso válido, maior que zero e até {{max}} {{unit}}.",
+        "unavailable": "Não disponível"
       },
       "nonTrainingActivityLevel": {
         "title": "Como é sua atividade fora do treino?",
@@ -201,22 +225,17 @@
           "vegetarian": "Vegetariano",
           "vegan": "Vegano",
           "pescatarian": "Pescetariano"
-        }
+        },
+        "subtitle": "Opcional. Escolha um padrão ou toque novamente para desmarcar. As exclusões abaixo também serão respeitadas."
       },
       "preferredFoodIds": {
-        "title": "Alimentos que você prefere",
+        "title": "Alimentos que deseja incluir",
         "subtitle": "Vamos priorizar esses alimentos nas suas refeições.",
         "addCta": "Adicionar alimento",
         "empty": "Nenhum alimento adicionado ainda."
       },
-      "usualFoodIds": {
-        "title": "Alimentos que você já costuma comer",
-        "subtitle": "Isso ajuda a montar um plano mais fácil de seguir.",
-        "addCta": "Adicionar alimento",
-        "empty": "Nenhum alimento adicionado ainda."
-      },
       "excludedFoodIds": {
-        "title": "Alimentos que você quer excluir",
+        "title": "Alimentos que não quer na dieta",
         "subtitle": "Esses alimentos nunca vão aparecer no seu plano.",
         "addCta": "Adicionar alimento",
         "empty": "Nenhum alimento excluído."
@@ -247,16 +266,6 @@
           "other": "Outro"
         }
       },
-      "pregnant": {
-        "title": "Você está gestante?",
-        "yes": "Sim",
-        "no": "Não"
-      },
-      "breastfeeding": {
-        "title": "Você está amamentando?",
-        "yes": "Sim",
-        "no": "Não"
-      },
       "varietyPreference": {
         "title": "Você prefere variedade ou repetir as mesmas refeições?",
         "options": {
@@ -280,8 +289,7 @@
       "supplements": "Suplementos",
       "variety": "Variedade",
       "none": "Nenhum",
-      "cta": "Criar minha dieta",
-      "safetyBlocked": "Geração bloqueada — veja o aviso acima."
+      "cta": "Criar minha dieta"
     },
     "errors": {
       "invalid": "Revise as respostas marcadas antes de continuar.",
@@ -397,8 +405,8 @@
     "title": "Escanear código de barras",
     "scanButtonLabel": "Escanear código de barras",
     "permissionExplanation": "Precisamos da câmera para ler o código de barras do produto.",
-    "permissionRequest": "Permitir câmera",
-    "permissionOpenSettings": "Abrir configurações",
+    "permissionRequest": "Permitir Câmera",
+    "permissionOpenSettings": "Permitir Câmera",
     "resolving": "Procurando produto…",
     "notFoundTitle": "Produto ainda não encontrado",
     "notFoundBody": "Não encontramos esse código de barras em nenhuma fonte disponível.",
@@ -418,7 +426,10 @@
     "loadMore": "Carregar mais",
     "offline": "Sem conexão. Mostrando alimentos recentes.",
     "error": "Não foi possível buscar agora.",
-    "recipeBadge": "Receita"
+    "recipeBadge": "Receita",
+    "clearSearch": "Limpar busca",
+    "retry": "Tentar novamente",
+    "selectionLimit": "Você pode selecionar até {{count}} alimentos. Remova um para adicionar outro."
   },
   "customFood": {
     "title": "Criar alimento",
@@ -470,6 +481,11 @@
     "gramsShort": "g"
   },
   "diary": {
+    "addError": "Não foi possível adicionar o alimento. Tente novamente.",
+    "remaining": "Faltam {{value}} kcal",
+    "overGoal": "Acima da meta: {{value}} kcal",
+    "emptyMeal": "Nenhum alimento registrado.",
+    "foodActions": "Opções de {{name}}",
     "title": "Diário alimentar",
     "today": "Hoje",
     "yesterday": "Ontem",
@@ -540,5 +556,27 @@
     "readOnlyBanner": "Visualizando um plano arquivado — somente leitura.",
     "empty": "Nenhum plano encontrado ainda.",
     "createdAt": "Criado em"
+  },
+  "onboarding": {
+    "requestFailedTitle": "Não foi possível iniciar sua dieta",
+    "requestFailedBody": "Suas respostas continuam salvas. A solicitação automática foi interrompida. Confira seu acesso e tente novamente quando desejar.",
+    "waitingTitle": "Sua dieta ainda não começou a ser preparada",
+    "waitingBody": "Suas respostas estão salvas. Aguardamos a confirmação de acesso e a disponibilidade do serviço. Se necessário, tente novamente.",
+    "automaticDisabledTitle": "Suas respostas estão salvas",
+    "automaticDisabledBody": "A preparação automática está desativada no momento. Você pode solicitar sua dieta quando a geração estiver disponível.",
+    "recovery": "Suas respostas de dieta estão preservadas. Não foi possível concluir a preparação agora.",
+    "retry": "Tentar novamente",
+    "discard": "Descartar preenchimento salvo",
+    "discardTitle": "Descartar respostas de dieta?",
+    "discardBody": "Essa ação remove apenas o preenchimento local ainda pendente.",
+    "cancel": "Cancelar",
+    "preparingTitle": "Sua dieta está sendo preparada",
+    "preparingBody": "Estamos montando seu plano alimentar personalizado com base nas suas respostas.",
+    "preparingNote": "Você pode continuar usando o AJ Fit normalmente. Avisaremos no aplicativo quando sua dieta estiver pronta.",
+    "readyTitle": "Sua dieta está pronta!",
+    "readyBody": "Seu plano alimentar já está disponível.",
+    "dismiss": "Dispensar",
+    "pendingAccount": "Existe um preenchimento de dieta pendente de transferência. Entre na conta usada no cadastro para recuperá-lo, ou descarte para recomeçar.",
+    "signIn": "Entrar na minha conta"
   }
 }

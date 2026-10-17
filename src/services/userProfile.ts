@@ -273,7 +273,7 @@ export function hasMeaningfulAnswers(answers?: QuestionnaireAnswers | null): boo
  */
 export async function provisionNewUser(
   user: User,
-  input: { name?: string; answers?: QuestionnaireAnswers | null; legalAccepted?: boolean },
+  input: { name?: string; answers?: QuestionnaireAnswers | null; legalAccepted?: boolean; nutritionSessionId?: string },
 ): Promise<string | null> {
   assertNewAccountEligibility(input);
   return writeInitialUserDocuments(user, input);
@@ -281,7 +281,7 @@ export async function provisionNewUser(
 
 async function writeInitialUserDocuments(
   user: User,
-  input: { name?: string; answers?: QuestionnaireAnswers | null },
+  input: { name?: string; answers?: QuestionnaireAnswers | null; nutritionSessionId?: string },
 ): Promise<string | null> {
   const batch = writeBatch(db);
   let questionnaireId: string | null = null;
@@ -328,6 +328,11 @@ async function writeInitialUserDocuments(
     });
   }
 
+  if (input.nutritionSessionId && questionnaireId) {
+    batch.set(doc(db, 'users', user.uid, 'onboardingNutritionState', 'current'), {
+      sessionId: input.nutritionSessionId, createdAt: serverTimestamp(),
+    });
+  }
   await batch.commit();
   return questionnaireId;
 }

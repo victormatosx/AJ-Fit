@@ -25,7 +25,6 @@ import { calculateMacros } from './calculateMacros';
 import { calculateRmr } from './calculateRmr';
 import { calculateTdee } from './calculateTdee';
 import { distributeMeals } from './distributeMeals';
-import { NutritionEngineError } from './errors';
 import { resolveGoalCategory } from './resolveGoalCategory';
 import { validateNutritionEngineInput } from './validateInput';
 
@@ -45,38 +44,20 @@ export interface EligibilityResult {
   blockers: NutritionEligibilityBlocker[];
 }
 
-/**
- * Pure eligibility check — never throws. Lets a caller check gates (e.g.
- * to decide UI state) without paying for/risking the full calculation.
- * `calculateNutritionTargets` below performs this same check internally
- * and throws instead, since it cannot produce normal targets when blocked
- * (`09_safety/nutrition_safety_rules.md` §2 — no bypass).
- */
-export function resolveEligibility(input: NutritionEngineInput): EligibilityResult {
-  const blockers: NutritionEligibilityBlocker[] = [];
-  if (input.nutritionProfile.pregnant) blockers.push('pregnancy');
-  if (input.nutritionProfile.breastfeeding) blockers.push('lactation');
-  return { eligible: blockers.length === 0, blockers };
+/** Legacy eligibility API: historical pregnancy/lactation fields no longer gate generation. */
+export function resolveEligibility(_input: NutritionEngineInput): EligibilityResult {
+  return { eligible: true, blockers: [] };
 }
 
 /**
  * Main entry point. Deterministic: same input + same rule versions always
  * produce the same output (no randomness, no current-time/hidden-state
  * reads, no I/O). Throws `NutritionEngineError` — never a silent default —
- * when the input is invalid, the user is ineligible (pregnancy/lactation,
- * no bypass), the goal cannot be resolved, or macro allocation is
+ * when the input is invalid, the goal cannot be resolved, or macro allocation is
  * infeasible.
  */
 export function calculateNutritionTargets(input: NutritionEngineInput): NutritionEngineOutput {
   validateNutritionEngineInput(input);
-
-  const { eligible, blockers } = resolveEligibility(input);
-  if (!eligible) {
-    if (blockers.includes('pregnancy')) {
-      throw new NutritionEngineError('INELIGIBLE_PREGNANCY', 'User is pregnant — automatic generation is blocked, no bypass.');
-    }
-    throw new NutritionEngineError('INELIGIBLE_BREASTFEEDING', 'User is breastfeeding — automatic generation is blocked, no bypass.');
-  }
 
   const { inherited, workout, nutritionProfile } = input;
   const goalCategory = resolveGoalCategory(inherited.goal, nutritionProfile);

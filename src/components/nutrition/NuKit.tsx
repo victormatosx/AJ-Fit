@@ -214,7 +214,7 @@ export function NuSelectPill({ on, children, onPress }: { on: boolean; children:
 }
 
 /** `NcPanel` — bottom sheet chrome ONLY (backdrop + sliding panel). Renders as a plain absolute-positioned `View`, never a second native `Modal` — the Nutrition screens already stack secondary sheets this way inside their one real `Modal` (see `NutritionShell.tsx`), and a real nested Modal reintroduces the native-modal-stacking bug those screens' own comments document. */
-export function NuPanel({ visible, onClose, children, avoidKeyboard = false }: { visible: boolean; onClose: () => void; children: React.ReactNode; avoidKeyboard?: boolean }) {
+export function NuPanel({ visible, onClose, children, avoidKeyboard = false, contentStyle, animatedHeight }:  { visible: boolean; onClose: () => void; children: React.ReactNode; avoidKeyboard?: boolean; contentStyle?: StyleProp<ViewStyle>; animatedHeight?: Animated.WithAnimatedValue<ViewStyle>['height'] }) {
   // Same slide-up entrance every other full-screen Nutrição flow gets from
   // its native `<Modal animationType="slide">` (CreateCustomFoodScreen,
   // CreateRecipeScreen, RegisterMealScreen itself) — `NuPanel` can't use
@@ -248,16 +248,23 @@ export function NuPanel({ visible, onClose, children, avoidKeyboard = false }: {
       <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(2,0,16,0.65)', opacity: backdropOpacity }]}>
         <Pressable onPress={onClose} style={StyleSheet.absoluteFill} accessibilityLabel="Fechar" />
       </Animated.View>
-      <Animated.View
-        style={{
-          ...(avoidKeyboard ? { marginTop: 'auto' as const } : { position: 'absolute' as const, left: 0, right: 0, bottom: 0 }),
-          backgroundColor: NU.panel, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)',
-          borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingTop: 10, paddingHorizontal: 24, paddingBottom: 34,
-          transform: [{ translateY }],
-        }}
-      >
-        <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.2)', alignSelf: 'center', marginBottom: 20 }} />
-        {children}
+      {/* Layout stays on a separate JS-driven node. Native entrance transforms
+          must never promote the node carrying animated height to the native driver. */}
+      <Animated.View style={{
+        ...(avoidKeyboard ? { marginTop: 'auto' as const } : { position: 'absolute' as const, left: 0, right: 0, bottom: 0 }),
+        height: animatedHeight,
+      }}>
+        <Animated.View
+          style={[{
+            flex: animatedHeight != null ? 1 : undefined,
+            backgroundColor: NU.panel, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)',
+            borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingTop: 10, paddingHorizontal: 24, paddingBottom: 34,
+            transform: [{ translateY }],
+          }, contentStyle]}
+        >
+          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.2)', alignSelf: 'center', marginBottom: 20 }} />
+          {children}
+        </Animated.View>
       </Animated.View>
     </KeyboardAvoidingView>
   );

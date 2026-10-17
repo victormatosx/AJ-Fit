@@ -39,6 +39,18 @@ afterAll(async () => env.cleanup());
 beforeEach(async () => env.clearFirestore());
 
 describe('Nutrition Rules', () => {
+  it('keeps the onboarding automatic rollout authenticated and backend-write-only without changing active', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'nutritionRolloutConfig', 'onboardingAutomatic'), { schemaVersion: 1, enabled: false, percentage: 0 });
+    });
+    await assertSucceeds(getDoc(doc(db('alice'), 'nutritionRolloutConfig', 'onboardingAutomatic')));
+    await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), 'nutritionRolloutConfig', 'onboardingAutomatic')));
+    await assertFails(setDoc(doc(db('alice'), 'nutritionRolloutConfig', 'onboardingAutomatic'), { schemaVersion: 1, enabled: true, percentage: 100 }));
+    await assertFails(getDoc(doc(db('alice'), 'nutritionRolloutConfig', 'unknown')));
+    await env.withSecurityRulesDisabled(async (ctx) => setDoc(doc(ctx.firestore(), 'accountDeletionLocks/alice'), { status: 'REQUESTED' }));
+    await assertFails(getDoc(doc(db('alice'), 'nutritionRolloutConfig', 'onboardingAutomatic')));
+  });
+
   it('allows owner profile create, read and update and rejects cross-user access', async () => {
     const ref = doc(db('alice'), path('alice', 'nutritionProfile', 'current'));
     await assertSucceeds(setDoc(ref, profile()));

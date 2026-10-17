@@ -17,7 +17,7 @@ import { nextPlanMeal } from '../../nutrition/ui/planView';
 import { diaryFollowedCount, diarySlotSummary } from '../../nutrition/ui/diaryModel';
 import { isFutureLocalDate, todayLocalDate } from '../../nutrition/ui/localDate';
 import { isGenerationRequestErrorRetryable, type GenerationRequestErrorKey } from '../../nutrition/ui/generationStage';
-import type { NutritionMealSlot, NutritionTotals } from '../../types/nutrition';
+import { NUTRITION_MEAL_SLOTS, type NutritionMealSlot, type NutritionTotals } from '../../types/nutrition';
 import type { NutritionPlanDoc } from '../../services/nutritionPlans';
 import type { NutritionDailyLogDoc } from '../../services/nutritionDiary';
 import { displayLineHeight } from '../../theme/tokens';
@@ -31,7 +31,7 @@ export type NutritionHomeState =
   | { kind: 'error'; onRetry: () => void }
   | { kind: 'requestError'; copyKey: NutritionHomeRequestErrorKey; onRetry: () => void; onBack: () => void }
   | { kind: 'noProfile'; onCreateProfile: () => void }
-  | { kind: 'noPlan'; safetyBlocked: boolean; onCreatePlan: () => void; onEditProfile: () => void }
+  | { kind: 'noPlan'; onCreatePlan: () => void; onEditProfile: () => void }
   | { kind: 'generating'; onOpenGenerating: () => void }
   | {
     kind: 'plan'; plan: NutritionPlanDoc; todayDiary: NutritionDailyLogDoc | null;
@@ -123,23 +123,10 @@ export function NutritionHomeScreen({
   if (state.kind === 'noPlan') {
     return (
       <Centered>
-        {state.safetyBlocked ? (
-          <View style={{
-            padding: 16, borderRadius: 14, backgroundColor: 'rgba(255,138,128,0.1)',
-            borderWidth: 1, borderColor: 'rgba(255,138,128,0.35)', marginBottom: 18, width: '100%',
-          }}>
-            <Text style={{ fontFamily: 'Archivo_700Bold', fontSize: 14, color: NU.danger }}>
-              {t('home.pregnancyBlock.title')}
-            </Text>
-            <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 13, color: NU.danger, marginTop: 6, lineHeight: 19 }}>
-              {t('home.pregnancyBlock.body')}
-            </Text>
-          </View>
-        ) : null}
         <EmptyNutritionState
           icon="apple" title={t('home.noPlan.title')} body={t('home.noPlan.body')}
-          ctaLabel={state.safetyBlocked ? undefined : t('home.noPlan.cta')}
-          onPress={state.safetyBlocked ? undefined : state.onCreatePlan}
+          ctaLabel={t('home.noPlan.cta')}
+          onPress={state.onCreatePlan}
         />
         <Pressable onPress={state.onEditProfile} accessibilityRole="button" style={{ marginTop: 16 }}>
           <Text style={{ fontFamily: 'Archivo_600SemiBold', fontSize: 14, color: NU.secondary }}>{t('home.noPlan.editProfile')}</Text>
@@ -254,40 +241,58 @@ export function NutritionHomeScreen({
 
           {/* §3.6 — today's meals. */}
           <View style={{ marginTop: 40, paddingHorizontal: 22 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 2 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 2 }}>
               <NuCap>{t('home.mealsToday.title')}</NuCap>
-              <Pressable onPress={state.onOpenDiary} accessibilityRole="button" accessibilityLabel={t('home.mealsToday.openDiaryCta')} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Pressable onPress={state.onOpenDiary} accessibilityRole="button" accessibilityLabel={t('home.mealsToday.openDiaryCta')} style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
                 <Text style={{ fontFamily: 'Archivo_600SemiBold', fontSize: 12, color: NU.secondary }}>{t('home.mealsToday.openDiaryCta')}</Text>
                 <Icon name="chevron-right" size={12} color={NU.secondary} />
               </Pressable>
             </View>
-            {plan.meals.map((meal, index) => {
+            {[...plan.meals].sort((a, b) => NUTRITION_MEAL_SLOTS.indexOf(a.slot) - NUTRITION_MEAL_SLOTS.indexOf(b.slot)).map((meal, index) => {
               const summary = diarySlotSummary(todayDiary, meal.slot);
-              const isNext = next?.slot === meal.slot;
+              const isNext = !summary && next?.slot === meal.slot;
+              const secondaryLabel = summary
+                ? t('home.mealsToday.itemCount', { count: summary.itemCount })
+                : isNext ? t('home.mealsToday.nextMeal') : t('home.mealsToday.empty');
               return (
                 <Pressable
                   key={meal.slot}
                   onPress={() => state.onOpenDiarySlot(meal.slot)}
                   accessibilityRole="button"
                   accessibilityLabel={t(`mealSlots.${meal.slot}`)}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, borderTopWidth: index ? 1 : 0, borderTopColor: NU.hairline }}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 16, minHeight: 64, paddingVertical: 12, borderTopWidth: index ? 1 : 0, borderTopColor: NU.hairline }}
                 >
-                  <View style={{
-                    width: 8, height: 8, borderRadius: 4, flexShrink: 0,
-                    backgroundColor: summary ? NU.white : 'transparent',
-                    borderWidth: summary ? 0 : 1, borderColor: 'rgba(255,255,255,0.3)',
-                  }} />
+                  <View
+                    accessible={false}
+                    importantForAccessibility="no-hide-descendants"
+                    style={{
+                      width: 22, height: 22, borderRadius: 11, flexShrink: 0,
+                      alignItems: 'center', justifyContent: 'center',
+                      backgroundColor: summary ? NU.blue : 'transparent',
+                      borderWidth: summary ? 0 : 1.5, borderColor: isNext ? NU.blueHi : NU.faint,
+                    }}
+                  >
+                    {summary ? <Icon name="check" size={14} color={NU.white} stroke={2.2} /> : null}
+                  </View>
                   <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={{ fontFamily: 'Archivo_600SemiBold', fontSize: 14.5, color: NU.white }}>
+                    <Text style={{ fontFamily: 'Archivo_600SemiBold', fontSize: 14.5, lineHeight: 20, color: NU.white }}>
                       {t(`mealSlots.${meal.slot}`)}
                     </Text>
-                    <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 12, color: NU.faint, marginTop: 3 }}>
-                      {summary ? t('home.mealsToday.itemCount', { count: summary.itemCount }) : isNext ? t('home.nextMeal.title') : t('home.mealsToday.empty')}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
+                      {isNext ? <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: NU.blueHi, flexShrink: 0 }} /> : null}
+                      <Text style={{ flexShrink: 1, fontFamily: 'Archivo_400Regular', fontSize: 12, lineHeight: 17, color: isNext ? NU.blueHi : NU.faint }}>
+                        {secondaryLabel}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={{ minWidth: 40, alignItems: 'flex-end', flexShrink: 0 }}>
+                    <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 17, lineHeight: displayLineHeight(17), color: summary ? NU.white : NU.faint }}>
+                      {summary ? Math.round(summary.kcal) : '—'}
+                    </Text>
+                    <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 11, lineHeight: 16, color: NU.faint }}>
+                      {t('units.kcal')}
                     </Text>
                   </View>
-                  <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 17, lineHeight: displayLineHeight(17), color: summary ? NU.white : NU.faintest, textTransform: 'uppercase' }}>
-                    {summary ? Math.round(summary.kcal) : '—'}
-                  </Text>
                   <Icon name="chevron-right" size={15} color={NU.faintest} />
                 </Pressable>
               );
@@ -296,7 +301,7 @@ export function NutritionHomeScreen({
               onPress={state.onOpenFullPlan}
               accessibilityRole="button"
               accessibilityLabel={t('home.mealsToday.openPlanCta')}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingTop: 14, borderTopWidth: 1, borderTopColor: NU.hairline }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 44, paddingVertical: 14, borderTopWidth: 1, borderTopColor: NU.hairline }}
             >
               <Text style={{ fontFamily: 'Archivo_600SemiBold', fontSize: 12.5, color: NU.secondary }}>{t('home.mealsToday.openPlanCta')}</Text>
               <Icon name="chevron-right" size={12} color={NU.secondary} />
@@ -306,7 +311,7 @@ export function NutritionHomeScreen({
           {/* §3.7 — week ring row. */}
           <NutritionWeekRow summary={state.weeklySummary} loading={state.weeklyLoading} today={today} onOpenWeekly={state.onOpenWeekly} />
 
-          <View style={{ marginHorizontal: 22, marginTop: 24, marginBottom: 10 }}>
+          <View style={{ marginHorizontal: 22, marginTop: 24 }}>
             <WeeklySummaryCard
               summary={state.weeklySummary}
               weight={state.weeklyWeight}
@@ -316,14 +321,14 @@ export function NutritionHomeScreen({
           </View>
 
           {/* §3.8 — shortcuts. */}
-          <View style={{ marginTop: 30, paddingHorizontal: 22 }}>
+          <View style={{ marginTop: 24, paddingHorizontal: 22 }}>
             <NuCap style={{ marginBottom: 10 }}>{t('home.quickAccess.title')}</NuCap>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              <QuickAccessTile icon="plus" label={t('home.quickAccess.customFood')} onPress={onCreateCustomFood} />
-              <QuickAccessTile icon="plus" label={t('home.quickAccess.recipe')} onPress={onCreateRecipe} />
-              <QuickAccessTile icon="heart" label={t('home.quickAccess.favorites')} onPress={state.onOpenFavorites} />
-              <QuickAccessTile icon="star" label={t('home.quickAccess.savedMeals')} onPress={state.onOpenMealFavorites} />
-              <QuickAccessTile icon="file-text" label={t('home.quickAccess.history')} onPress={state.onOpenHistory} wide />
+            <View style={{ gap: 8 }}>
+              <QuickAccessRow icon="plus" label={t('home.quickAccess.customFood')} description={t('home.quickAccess.customFoodDescription')} onPress={onCreateCustomFood} />
+              <QuickAccessRow icon="utensils" label={t('home.quickAccess.recipe')} description={t('home.quickAccess.recipeDescription')} onPress={onCreateRecipe} />
+              <QuickAccessRow icon="heart" label={t('home.quickAccess.favorites')} description={t('home.quickAccess.favoritesDescription')} onPress={state.onOpenFavorites} />
+              <QuickAccessRow icon="star" label={t('home.quickAccess.savedMeals')} description={t('home.quickAccess.savedMealsDescription')} onPress={state.onOpenMealFavorites} />
+              <QuickAccessRow icon="file-text" label={t('home.quickAccess.history')} description={t('home.quickAccess.historyDescription')} onPress={state.onOpenHistory} />
             </View>
           </View>
         </ScrollView>
@@ -489,20 +494,28 @@ function NutritionWeekRow({
   );
 }
 
-function QuickAccessTile({ icon, label, onPress, wide }: { icon: IconName; label: string; onPress: () => void; wide?: boolean }) {
+function QuickAccessRow({ icon, label, description, onPress }: { icon: IconName; label: string; description: string; onPress: () => void }) {
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
-      style={{
-        flexBasis: wide ? '100%' : '47%', flexGrow: 1, minHeight: 88, padding: 16, borderRadius: 16,
-        backgroundColor: NU.surfaceSubtle, borderWidth: 1, borderColor: NU.hairline,
-        justifyContent: 'space-between',
-      }}
+      accessibilityHint={description}
+      style={({ pressed }) => ({
+        paddingHorizontal: 20, paddingVertical: 14, borderRadius: 16,
+        backgroundColor: pressed ? NU.surfaceSubtleStrong : NU.surfaceSubtle,
+        borderWidth: 1, borderColor: NU.hairline,
+        flexDirection: 'row', alignItems: 'center', gap: 16,
+      })}
     >
-      <Icon name={icon} size={18} color={NU.secondary} />
-      <Text style={{ fontFamily: 'Archivo_600SemiBold', fontSize: 13.5, color: NU.white }}>{label}</Text>
+      <View accessible={false} importantForAccessibility="no-hide-descendants" style={{ width: 22, alignItems: 'center', flexShrink: 0 }}>
+        <Icon name={icon} size={22} color={NU.secondary} />
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={{ fontFamily: 'Archivo_600SemiBold', fontSize: 16, lineHeight: 22, color: NU.white }}>{label}</Text>
+        <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 13, lineHeight: 18, color: NU.secondary, marginTop: 3 }}>{description}</Text>
+      </View>
+      <Icon name="chevron-right" size={18} color={NU.secondary} />
     </Pressable>
   );
 }

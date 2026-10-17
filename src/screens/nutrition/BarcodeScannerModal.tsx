@@ -156,9 +156,25 @@ export function BarcodeScannerModal({
                 {t('barcodeScan.permissionExplanation')}
               </Text>
               {permission.canAskAgain ? (
-                <NuButton onPress={() => { void requestPermission(); }}>{t('barcodeScan.permissionRequest')}</NuButton>
+                <NuButton
+                  onPress={() => { void requestPermission(); }}
+                  accessibilityLabel={t('barcodeScan.permissionRequest')}
+                  style={{ width: '100%', maxWidth: 320, flexShrink: 0 }}
+                >
+                  <Text style={{ fontFamily: 'Archivo_600SemiBold', fontSize: 16, lineHeight: 22, color: NU.white, textAlign: 'center', flexShrink: 1, marginHorizontal: 16 }}>
+                    {t('barcodeScan.permissionRequest')}
+                  </Text>
+                </NuButton>
               ) : (
-                <NuButton onPress={() => { void Linking.openSettings(); }}>{t('barcodeScan.permissionOpenSettings')}</NuButton>
+                <NuButton
+                  onPress={() => { void Linking.openSettings(); }}
+                  accessibilityLabel={t('barcodeScan.permissionOpenSettings')}
+                  style={{ width: '100%', maxWidth: 320, flexShrink: 0 }}
+                >
+                  <Text style={{ fontFamily: 'Archivo_600SemiBold', fontSize: 16, lineHeight: 22, color: NU.white, textAlign: 'center', flexShrink: 1, marginHorizontal: 16 }}>
+                    {t('barcodeScan.permissionOpenSettings')}
+                  </Text>
+                </NuButton>
               )}
             </View>
           ) : (

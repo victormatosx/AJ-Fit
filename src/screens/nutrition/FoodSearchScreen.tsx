@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Animated, Easing, Keyboard, Modal, Platform, Pressable, ScrollView, Text, TextInput, TouchableWithoutFeedback, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { Timestamp } from 'firebase/firestore';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,7 +9,7 @@ import { CtaButton } from '../../components/ui/CtaButton';
 import { Icon } from '../../components/ui/Icon';
 import { FoodRow } from '../../components/nutrition/FoodRow';
 import { SkeletonBlock } from '../../components/nutrition/NutritionPrimitives';
-import { NU, NuButton, NuSheetHeader } from '../../components/nutrition/NuKit';
+import { NU, NuButton, NuPanel, NuSheetHeader } from '../../components/nutrition/NuKit';
 import { useTheme } from '../../theme';
 import { useAuth } from '../../state/AuthContext';
 import { searchNutritionCatalog, listCustomFoods } from '../../services/nutritionFoods';
@@ -19,7 +19,7 @@ import { createFederatedFoodLogSearchProvider } from '../../nutrition/foodLog/fe
 import { resolveDefaultServingUnit, nutrientsForServing } from '../../nutrition/catalog/servings';
 import { listNutritionRecipes, calculateStoredRecipeNutrition } from '../../services/nutritionRecipes';
 import type {
-  FoodLogEntry, FoodLogServingUnit, FoodLogSourceType, NutritionCustomFood, NutritionFoodNutritionValues, NutritionFoodSourceType,
+  FoodLogEntry, FoodLogServingUnit, FoodLogSourceType, NutritionCustomFood, NutritionFood, NutritionFoodNutritionValues, NutritionFoodSourceType,
   NutritionRecipe,
 } from '../../types/nutrition';
 import { countBucket, durationBucket, trackNutritionEvent } from '../../nutrition/analytics';
@@ -77,9 +77,18 @@ const localFoodLogSearchProvider = createFederatedFoodLogSearchProvider({
  */
 export function FoodSearchScreen({
   visible, onClose, onSelect, excludeIds = [], includeRecipes = false, catalog = 'generation', variant = 'profile',
-  favoriteFoodIds, recentFoodIds, favoriteRecipeIds, onToggleFavoriteFood, onToggleFavoriteRecipe, overlay,
+  favoriteFoodIds, recentFoodIds, favoriteRecipeIds, onToggleFavoriteFood, onToggleFavoriteRecipe, overlay, presentation = 'modal', onRequestCreateFood, catalogSearch, localFoods,
 }: {
+  catalogSearch?: (text: string, options: { cursor?: string }) => Promise<{
+    foods: Pick<NutritionFood<Timestamp>, 'id' | 'name' | 'brand' | 'nutritionPer100g' | 'source'>[];
+    nextCursor: string | null;
+  }>;
+  localFoods?: readonly Pick<NutritionCustomFood<Timestamp>, 'id' | 'name' | 'nutritionPer100g'>[];
   visible: boolean;
+  /** Modal search, diary sheet, or an inline field/results within the caller's page. */
+  presentation?: 'modal' | 'sheet' | 'inline';
+  /** Inline callers own the custom-food overlay outside their page's ScrollView. */
+  onRequestCreateFood?: () => void;
   onClose: () => void;
   onSelect: (food: NutritionFoodPick) => void;
   excludeIds?: readonly string[];
@@ -118,13 +127,16 @@ export function FoodSearchScreen({
   const { t } = useTranslation('nutrition');
   const { user } = useAuth();
   const [text, setText] = useState('');
+  const [searchExpanded, setSearchExpanded] = useState(false);
+  const searchInputRef = useRef<TextInput>(null);
+  const sheetHeight = useRef(new Animated.Value(45)).current;
   const [results, setResults] = useState<CatalogSearchResult[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(false);
   const [lastSearchHadZeroResults, setLastSearchHadZeroResults] = useState(false);
-  const [customFoods, setCustomFoods] = useState<NutritionCustomFood<Timestamp>[]>([]);
+  const [customFoods, setCustomFoods] = useState<Pick<NutritionCustomFood<Timestamp>, 'id' | 'name' | 'nutritionPer100g'>[]>([]);
   const [recipes, setRecipes] = useState<NutritionRecipe<Timestamp>[]>([]);
   const [selectingRecipeId, setSelectingRecipeId] = useState<string | null>(null);
   const [creatingFood, setCreatingFood] = useState(false);
@@ -136,14 +148,52 @@ export function FoodSearchScreen({
   const [materializingId, setMaterializingId] = useState<string | null>(null);
 
   useEffect(() => {
+    if (localFoods) { setCustomFoods([...localFoods]); return; }
     if (!visible || !user) return;
     listCustomFoods(user.uid).then(setCustomFoods).catch(() => setCustomFoods([]));
     if (includeRecipes) listNutritionRecipes(user.uid).then(setRecipes).catch(() => setRecipes([]));
-  }, [visible, user, includeRecipes]);
+  }, [visible, user, includeRecipes, localFoods]);
 
   useEffect(() => {
-    if (!visible) { setText(''); setResults([]); setCursor(null); setError(false); }
-  }, [visible]);
+    if (presentation === 'sheet') {
+      setSearchExpanded(false);
+      if (visible) Keyboard.dismiss();
+    }
+    if (!visible) {
+      searchRequestRef.current++;
+      setText(''); setResults([]); setCursor(null); setError(false); setLoading(false); setLoadingMore(false); setCreatingFood(false);
+    }
+  }, [visible, presentation]);
+
+  const dismissSearchKeyboard = useCallback(() => {
+    searchInputRef.current?.blur();
+    Keyboard.dismiss();
+    setSearchExpanded(false);
+  }, []);
+
+  useEffect(() => {
+    if (presentation !== 'sheet' || !visible) return;
+    const subscription = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => {
+      searchInputRef.current?.blur();
+      setSearchExpanded(false);
+    });
+    return () => subscription.remove();
+  }, [presentation, visible]);
+
+  useEffect(() => {
+    if (presentation !== 'sheet' || !visible) {
+      sheetHeight.setValue(45);
+      return;
+    }
+    const transition = Animated.timing(sheetHeight, {
+      toValue: searchExpanded ? 90 : 45,
+      duration: 320,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false, // Height changes the available space for the scrollable results.
+    });
+    transition.start();
+    return () => transition.stop();
+  }, [presentation, visible, searchExpanded, sheetHeight]);
 
   const favoriteIdSet = useMemo(() => (favoriteFoodIds ? new Set(favoriteFoodIds) : undefined), [favoriteFoodIds]);
   const recentIdSet = useMemo(() => (recentFoodIds ? new Set(recentFoodIds) : undefined), [recentFoodIds]);
@@ -156,10 +206,10 @@ export function FoodSearchScreen({
         nextCursor,
       };
     })
-    : searchNutritionCatalog(query, { cursor: cursorId }).then(({ foods, nextCursor }) => ({
+    : (catalogSearch ?? searchNutritionCatalog)(query, { cursor: cursorId }).then(({ foods, nextCursor }) => ({
       results: foods.map((food): CatalogSearchResult => ({ id: food.id, name: food.name, brandName: food.brand?.name, nutritionPer100g: food.nutritionPer100g, sourceType: food.source.type })),
       nextCursor,
-    }))), [catalog, favoriteIdSet, recentIdSet]);
+    }))), [catalog, favoriteIdSet, recentIdSet, catalogSearch]);
 
   const runSearch = useCallback((query: string) => {
     const requestId = ++searchRequestRef.current;
@@ -186,9 +236,10 @@ export function FoodSearchScreen({
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!visible) return;
     debounceRef.current = setTimeout(() => runSearch(text), DEBOUNCE_MS);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [text, runSearch]);
+  }, [visible, text, runSearch]);
 
   const loadMore = () => {
     if (!cursor || loadingMore) return;
@@ -226,8 +277,12 @@ export function FoodSearchScreen({
   const trackedSelect = useCallback((pick: NutritionFoodPick) => {
     trackNutritionEvent({ name: 'nutrition_catalog_item_selected',
       properties: { catalogMode: catalog, origin: pick.origin, ...(pick.sourceType ? { source: pick.sourceType } : {}) } });
+    if (presentation === 'inline') {
+      searchRequestRef.current++;
+      setText(''); setResults([]); setCursor(null); setError(false); setLoading(false); setLoadingMore(false);
+    } else Keyboard.dismiss();
     onSelect(pick);
-  }, [catalog, onSelect]);
+  }, [catalog, onSelect, presentation]);
 
   /** Materializes a possibly-fresh external (`fatsecret`) result into `foodLogCatalog` before resolving its final id — a no-op read for every local-sourced result. */
   const selectFoodLogResult = async (result: CatalogSearchResult) => {
@@ -241,6 +296,8 @@ export function FoodSearchScreen({
         foodId: materialized.id, name: materialized.name, origin, nutritionPer100g: materialized.nutritionPer100g,
         sourceType: materialized.source.type, servings: materialized.servings, defaultServingId: materialized.defaultServingId,
       });
+    } catch {
+      setError(true);
     } finally {
       setMaterializingId(null);
     }
@@ -252,6 +309,8 @@ export function FoodSearchScreen({
     try {
       const nutritionPer100g = await calculateStoredRecipeNutrition(user.uid, recipe.id);
       trackedSelect({ foodId: recipe.id, name: recipe.name, origin: 'recipe', nutritionPer100g });
+    } catch {
+      setError(true);
     } finally {
       setSelectingRecipeId(null);
     }
@@ -261,7 +320,7 @@ export function FoodSearchScreen({
   // state value and piece of logic below this point is shared identically
   // by both render paths.
   const resultsList = (nu: boolean) => (
-    <View style={nu ? undefined : { paddingHorizontal: 12 }}>
+    <View style={nu || presentation === 'inline' ? undefined : { paddingHorizontal: 12 }}>
       {visibleCustom.map((food) => (
         <FoodRow key={food.id} name={food.name} origin="custom"
           kcal={food.nutritionPer100g.kcal} proteinG={food.nutritionPer100g.proteinG} per100g
@@ -318,13 +377,56 @@ export function FoodSearchScreen({
     />
   );
 
-  // Exactly one native `<Modal>` for this screen regardless of `variant` —
-  // only the chrome/content inside it differs. Two independent native
-  // Modals able to be visible at once is the documented anti-pattern this
-  // feature's own `stackedModalAuditRegression.test.ts` guards against.
+  if (presentation === 'inline') {
+    if (!visible) return null;
+    return (
+      <View style={{ gap: 10 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14,
+          minHeight: 52, borderRadius: theme.radii.lg, backgroundColor: theme.colors.inputBackground,
+          borderWidth: 1, borderColor: theme.colors.inputBorder }}>
+          <Icon name="search" size={18} color={theme.colors.inputIcon} />
+          <TextInput
+            ref={searchInputRef} value={text}
+            onChangeText={(value) => {
+              searchRequestRef.current++;
+              setText(value); setResults([]); setCursor(null); setError(false); setLoading(value.trim().length >= 2); setLoadingMore(false);
+            }}
+            accessibilityLabel={t('foodSearch.placeholder')}
+            placeholder={t('foodSearch.placeholder')} placeholderTextColor={theme.colors.inputPlaceholder}
+            style={{ flex: 1, minHeight: 50, fontFamily: theme.fonts.ui, fontSize: 15, color: theme.colors.inputText }}
+            autoCorrect={false} returnKeyType="search" onSubmitEditing={() => runSearch(text)}
+          />
+          {text.length > 0 ? <Pressable onPress={() => {
+            searchRequestRef.current++; setText(''); setResults([]); setCursor(null); setError(false); setLoading(false); setLoadingMore(false);
+            searchInputRef.current?.focus();
+          }} accessibilityRole="button" accessibilityLabel={t('foodSearch.clearSearch')} hitSlop={8}>
+            <Icon name="x" size={16} color={theme.colors.textFaint} />
+          </Pressable> : null}
+        </View>
+        {text.length > 0 && text.trim().length < 2 ? (
+          <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textFaint }}>{t('foodSearch.typeMore')}</Text>
+        ) : loading ? (
+          <ActivityIndicator accessibilityLabel={t('foodSearch.title')} color={theme.colors.primaryEmphasis} />
+        ) : error ? (
+          <View style={{ gap: 8 }}>
+            <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.feedbackErrorTextStrong }}>{t('foodSearch.error')}</Text>
+            <CtaButton onPress={() => runSearch(text)}>{t('foodSearch.retry')}</CtaButton>
+          </View>
+        ) : showEmpty ? (
+          <View style={{ gap: 10 }}>
+            <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textFaint }}>{t('foodSearch.empty')}</Text>
+            {onRequestCreateFood ? <CtaButton onPress={() => { Keyboard.dismiss(); onRequestCreateFood(); }}>{t('foodSearch.emptyCta')}</CtaButton> : null}
+          </View>
+        ) : text.trim().length >= 2 ? resultsList(false) : null}
+      </View>
+    );
+  }
+
+  // Share search content between the standalone picker and the Diary's
+  // embedded sheet. Sheet presentation never creates another native Modal.
   const body = variant === 'nutrition' ? (
-    <View style={{ flex: 1, backgroundColor: NU.bg }}>
-      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+    <View style={{ flex: 1, backgroundColor: presentation === 'sheet' ? NU.panel : NU.bg }}>
+      <SafeAreaView style={{ flex: 1 }} edges={presentation === 'sheet' ? [] : ['top', 'bottom']}>
         <NuSheetHeader title={t('foodSearch.title')} onBack={onClose} />
 
         <View
@@ -335,12 +437,14 @@ export function FoodSearchScreen({
         >
           <Icon name="search" size={17} color={NU.faint} />
           <TextInput
+            ref={searchInputRef}
             value={text}
             onChangeText={setText}
             placeholder={t('foodSearch.placeholder')}
             placeholderTextColor={NU.faint}
             style={{ flex: 1, fontFamily: 'Archivo_400Regular', fontSize: 15.5, color: NU.white }}
-            autoFocus
+            autoFocus={presentation !== 'sheet'}
+            onFocus={() => setSearchExpanded(true)}
             returnKeyType="search"
           />
           {text.length > 0 ? (
@@ -398,7 +502,8 @@ export function FoodSearchScreen({
             placeholder={t('foodSearch.placeholder')}
             placeholderTextColor={theme.colors.inputPlaceholder}
             style={{ flex: 1, fontFamily: theme.fonts.ui, fontSize: 15, color: theme.colors.inputText }}
-            autoFocus
+            autoFocus={presentation !== 'sheet'}
+            onFocus={() => setSearchExpanded(true)}
             returnKeyType="search"
           />
         </View>
@@ -428,6 +533,22 @@ export function FoodSearchScreen({
       </SafeAreaView>
     </ScreenBg>
   );
+
+  if (presentation === 'sheet') {
+    return (
+      <>
+        <NuPanel visible={visible} onClose={searchExpanded ? dismissSearchKeyboard : onClose} avoidKeyboard
+          animatedHeight={sheetHeight.interpolate({ inputRange: [45, 90], outputRange: ['45%', '90%'] })}
+          contentStyle={{ paddingHorizontal: 0, paddingBottom: 16 }}>
+          <TouchableWithoutFeedback onPress={dismissSearchKeyboard} accessible={false}>
+            {body}
+          </TouchableWithoutFeedback>
+        </NuPanel>
+        {visible ? createCustomFoodOverlay : null}
+        {visible ? overlay : null}
+      </>
+    );
+  }
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose} presentationStyle="pageSheet">

@@ -14,10 +14,10 @@ import {
 } from '../steps';
 
 describe('ONBOARDING_STEPS', () => {
-  it('has 39 unique step ids', () => {
+  it('has 49 unique step ids', () => {
     const ids = ONBOARDING_STEPS.map((s) => s.id);
-    expect(ids).toHaveLength(39);
-    expect(new Set(ids).size).toBe(39);
+    expect(ids).toHaveLength(49);
+    expect(new Set(ids).size).toBe(49);
   });
 
   it('never lets auth/paywall be dev-jumpable', () => {
@@ -87,7 +87,7 @@ describe('getNextStepId / getPreviousStepId', () => {
     // place -> guided interstitial -> muscleFocus
     expect(getPreviousStepId('muscleFocus', 'anonymous', { place: 'gym', specialConditions: ['none'] })).toBe('place');
     // specialConditions -> AJ progress/social proof -> commitment
-    expect(getPreviousStepId('commitment', 'anonymous', { place: 'gym', specialConditions: ['none'] })).toBe('specialConditions');
+    expect(getPreviousStepId('commitment', 'anonymous', { place: 'gym', specialConditions: ['none'] })).toBe('nutrition_varietyPreference');
   });
 
   it('has no previous step before the first step of each mode', () => {
@@ -165,7 +165,7 @@ describe('conditional questionnaire branches', () => {
     const male = getStepSequence('anonymous', { ...standard, sex: 'm' });
     const female = getStepSequence('anonymous', { ...standard, sex: 'f' });
     expect(female).toEqual(male);
-    expect(female.filter((id) => getStepDef(id).kind === 'question')).toHaveLength(13);
+    expect(female.filter((id) => getStepDef(id).kind === 'question')).toHaveLength(23);
   });
 
   it('never shows the equipment step, for any place — v1.27 does not collect a home equipment inventory', () => {
@@ -271,5 +271,17 @@ describe('unified weekly schedule step', () => {
 describe('MAX_MUSCLE_FOCUS', () => {
   it('is capped at 2 (documented product decision)', () => {
     expect(MAX_MUSCLE_FOCUS).toBe(2);
+  });
+});
+
+describe('nutrition insertion', () => {
+  it('uses nine/ten questions only in anonymous mode, followed directly by social proof', () => {
+    const a = getStepSequence('anonymous', { goal: 'health', specialConditions: ['none'] });
+    const start = a.indexOf('interstitial_ajFitProgress');
+    const end = a.indexOf('socialProof');
+    expect(a.slice(start + 1, end)).toHaveLength(9);
+    expect(getNextStepId('nutrition_varietyPreference', 'anonymous', { goal: 'health' })).toBe('socialProof');
+    expect(getStepSequence('anonymous', { goal: 'strength' }).filter((id) => id.startsWith('nutrition_'))).toHaveLength(10);
+    expect(getStepSequence('forcedQuestionnaire', { goal: 'strength' }).some((id) => id.startsWith('nutrition_'))).toBe(false);
   });
 });

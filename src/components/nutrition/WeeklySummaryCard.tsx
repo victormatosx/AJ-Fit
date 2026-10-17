@@ -20,43 +20,54 @@ export function WeeklySummaryCard({
   const { resolvedUnits } = useUnits();
   const massUnit = weightUnit(resolvedUnits);
 
-  if (loading) return <SkeletonBlock height={142} />;
+  if (loading) return <SkeletonBlock height={160} />;
 
   const delta = weight?.deltaKg != null ? weightFromKg(weight.deltaKg, resolvedUnits) : null;
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={t('weekly.open')}
+    <View
       style={{
-        padding: 16, borderRadius: 16, backgroundColor: NU.surfaceSubtle,
-        borderWidth: 1, borderColor: NU.hairline, gap: 14,
+        padding: 20, borderRadius: 16, backgroundColor: NU.surfaceSubtle,
+        borderWidth: 1, borderColor: NU.hairline, gap: 16,
       }}
     >
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <NuCap>{t('weekly.thisWeek')}</NuCap>
-        <Icon name="chevron-right" size={15} color={NU.blueHi} />
-      </View>
-      {summary?.averageConsumed ? (
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 14 }}>
-          <CompactMetric label={t('weekly.average')} value={`${Math.round(summary.averageConsumed.kcal)}`} unit={t('weekly.kcalPerDay')} />
-          <CompactMetric label={t('weekly.protein')} value={`${Math.round(summary.averageConsumed.proteinG)}`} unit={t('weekly.gramsPerDay')} />
-          <CompactMetric
-            label={t('weekly.weight')}
-            value={delta == null ? (weight?.latest ? formatWeightFromKg(weight.latest.weightKg, resolvedUnits) : '—') : `${delta > 0 ? '+' : ''}${delta.toFixed(1)}`}
-            unit={delta == null && weight?.latest ? massUnit : delta == null ? '' : massUnit}
-          />
-          <CompactMetric label={t('weekly.records')} value={`${summary.recordedDays}/7`} unit={t('weekly.days')} />
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={t('weekly.open')}
+        style={{ gap: 14 }}
+      >
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <NuCap>{t('weekly.thisWeek')}</NuCap>
+          <Icon name="chevron-right" size={18} color={NU.secondary} />
         </View>
-      ) : (
-        <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 13, lineHeight: 19, color: NU.faint }}>
-          {t('weekly.empty')}
-        </Text>
-      )}
-      <Text style={{ fontFamily: 'Archivo_600SemiBold', fontSize: 12.5, color: NU.blueHi }}>
-        {t('weekly.open')}
-      </Text>
-    </Pressable>
+        {summary?.averageConsumed ? (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 14 }}>
+            <CompactMetric label={t('weekly.average')} value={`${Math.round(summary.averageConsumed.kcal)}`} unit={t('weekly.kcalPerDay')} />
+            <CompactMetric label={t('weekly.protein')} value={`${Math.round(summary.averageConsumed.proteinG)}`} unit={t('weekly.gramsPerDay')} />
+            <CompactMetric
+              label={t('weekly.weight')}
+              value={delta == null ? (weight?.latest ? formatWeightFromKg(weight.latest.weightKg, resolvedUnits) : '—') : `${delta > 0 ? '+' : ''}${delta.toFixed(1)}`}
+              unit={delta == null && weight?.latest ? massUnit : delta == null ? '' : massUnit}
+            />
+            <CompactMetric label={t('weekly.records')} value={`${summary.recordedDays}/7`} unit={t('weekly.days')} />
+          </View>
+        ) : (
+          <View style={{ gap: 8 }}>
+            <Text style={{ fontFamily: 'Archivo_700Bold', fontSize: 20, lineHeight: 26, color: NU.white }}>
+              {t('weekly.empty')}
+            </Text>
+            <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 13, lineHeight: 19, color: NU.secondary }}>
+              {t('weekly.emptyBody')}
+            </Text>
+          </View>
+        )}
+        {summary?.averageConsumed ? (
+          <Text style={{ fontFamily: 'Archivo_600SemiBold', fontSize: 12.5, color: NU.secondary }}>
+            {t('weekly.open')}
+          </Text>
+        ) : null}
+      </Pressable>
+    </View>
   );
 }
 

@@ -1,5 +1,8 @@
-import React, { useMemo, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import type { ResolvedUnits } from '../../types/units';
+import { searchOnboardingCatalog, onboardingCatalogFoods, type OnboardingCustomFood } from '../../nutrition/catalog/onboardingCatalog';
+import type { CustomFoodInput } from '../../services/nutritionFoods';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { Timestamp } from 'firebase/firestore';
@@ -10,33 +13,29 @@ import { Icon } from '../../components/ui/Icon';
 import { SelectableChip, SelectableRow } from '../../components/nutrition/NutritionPrimitives';
 import { FoodRow } from '../../components/nutrition/FoodRow';
 import { useTheme } from '../../theme';
-import { useAppState } from '../../state/AppState';
+import { useUnits } from '../../state/UnitsContext';
+import { formatWeightFromKg, formatWeightInputFromKg, weightUnit } from '../../units/weightConversions';
+import { useAuth } from '../../state/AuthContext';
 import {
-  DIETARY_PATTERNS, NON_TRAINING_ACTIVITY_LEVELS, NUTRITION_FOOD_ALLERGENS, NUTRITION_GOAL_CATEGORIES,
+  NON_TRAINING_ACTIVITY_LEVELS, NUTRITION_FOOD_ALLERGENS, NUTRITION_GOAL_CATEGORIES,
   NUTRITION_MEAL_SLOTS, NUTRITION_PROGRESSION_PACES, NUTRITION_SUPPLEMENT_IDS, VARIETY_PREFERENCES,
   type NutritionGoal, type NutritionProfile,
 } from '../../types/nutrition';
 import {
-  canContinueProfileStep, isSafetyBlocked, profileStepOrder, type ProfileDraft, type ProfileStepId,
+  emptyProfileDraft, canContinueProfileStep, isProfileDraftComplete, parseTargetWeightInput, profileDraftFromSaved, profileStepOrder, toggleDietaryPattern, type ProfileDraft, type ProfileStepId,
 } from '../../nutrition/ui/profileSteps';
+import { loadCatalogFood, loadCustomFood } from '../../services/nutritionFoods';
+import { CreateCustomFoodScreen } from './CreateCustomFoodScreen';
 import { FoodSearchScreen, type NutritionFoodPick } from './FoodSearchScreen';
 
-function emptyDraft(goal: NutritionGoal, pregnantDefault: boolean): ProfileDraft {
-  return {
-    questionnaireVersion: 1,
-    nonTrainingActivityLevel: undefined, mealSlots: [], dietaryPattern: undefined,
-    preferredFoodIds: [], usualFoodIds: [], excludedFoodIds: [], excludedAllergens: [],
-    supplements: [], pregnant: pregnantDefault, breastfeeding: false, varietyPreference: undefined,
-  };
-}
-
-type FoodPickerTarget = 'preferredFoodIds' | 'usualFoodIds' | 'excludedFoodIds' | null;
+type FoodPickerTarget = 'preferredFoodIds' | 'excludedFoodIds' | null;
 
 export function NutritionProfileScreen({
-  profile, inheritedGoal, mode, onCancel, saving, saveError, onSubmit, favoriteFoodIds, onToggleFavoriteFood,
+  profile, inheritedGoal, currentWeightKg, mode, onCancel, saving, saveError, onSubmit, favoriteFoodIds, onToggleFavoriteFood,
 }: {
   profile: NutritionProfile<Timestamp> | null;
   inheritedGoal: NutritionGoal;
+  currentWeightKg?: number | null;
   mode: 'create' | 'edit';
   onCancel: () => void;
   saving: boolean;
@@ -47,31 +46,123 @@ export function NutritionProfileScreen({
 }) {
   const { theme } = useTheme();
   const { t } = useTranslation('nutrition');
-  const { quiz } = useAppState();
+  const { resolvedUnits } = useUnits();
+  const [targetWeightText, setTargetWeightText] = useState(() => profile?.targetWeightKg != null
+    ? formatWeightInputFromKg(profile.targetWeightKg, resolvedUnits) : '');
   const steps = useMemo(() => profileStepOrder(inheritedGoal), [inheritedGoal]);
   const [draft, setDraft] = useState<ProfileDraft>(
-    () => (profile ? { ...profile } : emptyDraft(inheritedGoal, Boolean(quiz?.pregnancyScreening))),
+    () => (profile ? profileDraftFromSaved(profile) : emptyProfileDraft()),
   );
   const [stepIndex, setStepIndex] = useState(0);
   const [reviewing, setReviewing] = useState(mode === 'edit');
-  const [foodPicker, setFoodPicker] = useState<FoodPickerTarget>(null);
-  const [foodNames, setFoodNames] = useState<Record<string, string>>({});
-
   const step: ProfileStepId | null = reviewing ? null : steps[stepIndex] ?? null;
-  const canContinue = step ? canContinueProfileStep(step, draft) : true;
-  const safetyBlocked = isSafetyBlocked(draft);
-
-  const patch = (next: Partial<ProfileDraft>) => setDraft((prev) => ({ ...prev, ...next }));
+  const canContinue = step ? canContinueProfileStep(step, draft, inheritedGoal) : isProfileDraftComplete(inheritedGoal, draft);
 
   const goNext = () => {
+    Keyboard.dismiss();
     if (stepIndex + 1 < steps.length) setStepIndex(stepIndex + 1);
     else setReviewing(true);
   };
   const goBack = () => {
+    Keyboard.dismiss();
     if (reviewing) { setReviewing(false); setStepIndex(steps.length - 1); return; }
     if (stepIndex === 0) onCancel();
     else setStepIndex(stepIndex - 1);
   };
+
+  async function handleSubmit() {
+    if (!canContinue || saving) return;
+    await onSubmit(draft);
+  }
+
+  return (
+    <ScreenBg>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 22, paddingTop: 6 }}>
+          <Pressable onPress={goBack} accessibilityRole="button" accessibilityLabel={t('profile.actions.back')} hitSlop={10}>
+            <Icon name="arrow-left" size={20} color={theme.colors.textPrimary} />
+          </Pressable>
+          <MonoLabel color={theme.colors.textFaint}>
+            {reviewing ? t('profile.review.title') : t('profile.stepOf', { current: stepIndex + 1, total: steps.length })}
+          </MonoLabel>
+          <View style={{ width: 20 }} />
+        </View>
+
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 22, paddingBottom: 40 }}>
+          {reviewing ? (
+            <>
+              <ReviewSection draft={draft} currentWeightKg={currentWeightKg} saveError={saveError} />
+              {!canContinue ? <Pressable accessibilityRole="button" onPress={() => {
+                setStepIndex(steps.findIndex((id) => !canContinueProfileStep(id, draft, inheritedGoal)));
+                setReviewing(false);
+              }}><Text style={{ color: theme.colors.formErrorText, marginTop: 14 }}>{t('profile.errors.invalid')}</Text></Pressable> : null}
+            </>
+          ) : step ? <NutritionProfileQuestion step={step} draft={draft} onChange={setDraft}
+            currentWeightKg={currentWeightKg} targetWeightText={targetWeightText} onTargetWeightText={setTargetWeightText}
+            favoriteFoodIds={favoriteFoodIds} onToggleFavoriteFood={onToggleFavoriteFood} /> : null}
+        </ScrollView>
+
+        <View style={{ padding: 22 }}>
+          {reviewing ? (
+            <CtaButton onPress={handleSubmit} disabled={saving || !canContinue}>
+              {t('profile.review.cta')}
+            </CtaButton>
+          ) : (
+            <CtaButton onPress={goNext} disabled={!canContinue}>{t('profile.actions.next')}</CtaButton>
+          )}
+        </View>
+      </SafeAreaView>
+      </KeyboardAvoidingView>
+
+    </ScreenBg>
+  );
+}
+
+
+/** Controlled question body shared by onboarding and the internal profile. */
+export function NutritionProfileQuestion({ step, draft, onChange, currentWeightKg, targetWeightText,
+  onTargetWeightText: setTargetWeightText, favoriteFoodIds, onToggleFavoriteFood, localFoods, onCreateLocalFood, hideTitle = false, inputUnits,
+}: {
+  inputUnits?: ResolvedUnits;
+  hideTitle?: boolean;
+  localFoods?: readonly OnboardingCustomFood[];
+  onCreateLocalFood?: (input: CustomFoodInput) => Promise<string>;
+  step: ProfileStepId; draft: ProfileDraft; onChange: (draft: ProfileDraft) => void;
+  currentWeightKg?: number | null; targetWeightText: string; onTargetWeightText: (text: string) => void;
+  favoriteFoodIds?: readonly string[]; onToggleFavoriteFood?: (id: string) => void;
+}) {
+  const { theme } = useTheme();
+  const { t } = useTranslation('nutrition');
+  const { user } = useAuth();
+  const { resolvedUnits: preferredUnits } = useUnits();
+  const resolvedUnits = inputUnits ?? preferredUnits;
+  const unit = weightUnit(resolvedUnits);
+  const profile = draft;
+  const targetWeightValid = canContinueProfileStep('targetWeightKg', draft);
+  const patch = (next: Partial<ProfileDraft>) => onChange({ ...draft, ...next });
+  const [creatingFoodTarget, setCreatingFoodTarget] = useState<FoodPickerTarget>(null);
+  const [foodNames, setFoodNames] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    let active = true;
+    const ids = [...new Set([...(profile?.preferredFoodIds ?? []), ...(profile?.excludedFoodIds ?? [])])];
+    if (localFoods) {
+      setFoodNames(Object.fromEntries([...onboardingCatalogFoods, ...localFoods].map((food) => [food.id, food.name])));
+      return;
+    }
+    void Promise.allSettled(ids.map(async (id) => {
+      const food = id.startsWith('custom_') && user?.uid ? await loadCustomFood(user.uid, id) : await loadCatalogFood(id);
+      return food ? { id, name: food.name } : null;
+    })).then((results) => {
+      if (!active) return;
+      const names: Record<string, string> = {};
+      for (const result of results) if (result.status === 'fulfilled' && result.value) names[result.value.id] = result.value.name;
+      setFoodNames((previous) => ({ ...names, ...previous }));
+    });
+    return () => { active = false; };
+  }, [profile, user?.uid, localFoods]);
+
 
   const toggleListValue = (key: 'mealSlots' | 'excludedAllergens' | 'supplements', value: string) => {
     const current = (draft[key] as string[] | undefined) ?? [];
@@ -81,7 +172,7 @@ export function NutritionProfileScreen({
   const addFoodId = (target: Exclude<FoodPickerTarget, null>, pick: NutritionFoodPick) => {
     const current = (draft[target] as string[] | undefined) ?? [];
     setFoodNames((prev) => ({ ...prev, [pick.foodId]: pick.name }));
-    if (current.includes(pick.foodId)) return;
+    if (current.includes(pick.foodId) || current.length >= 10) return;
     patch({ [target]: [...current, pick.foodId] } as Partial<ProfileDraft>);
   };
   const removeFoodId = (target: Exclude<FoodPickerTarget, null>, foodId: string) => {
@@ -89,15 +180,22 @@ export function NutritionProfileScreen({
     patch({ [target]: current.filter((id) => id !== foodId) } as Partial<ProfileDraft>);
   };
 
-  function FoodIdListEditor({ target, titleKey, addCtaKey, emptyKey }: {
-    target: Exclude<FoodPickerTarget, null>; titleKey: string; addCtaKey: string; emptyKey: string;
+  function renderFoodIdListEditor({ target, titleKey, emptyKey, showTitle = true }: {
+    target: Exclude<FoodPickerTarget, null>; titleKey: string; emptyKey: string; showTitle?: boolean;
   }) {
     const ids = (draft[target] as string[] | undefined) ?? [];
     return (
       <View style={{ gap: 10 }}>
-        <Text style={{ fontFamily: theme.fonts.display, fontSize: 22, color: theme.colors.textPrimary }}>
+        {showTitle && !hideTitle ? <Text style={{ fontFamily: theme.fonts.display, fontSize: 22, color: theme.colors.textPrimary }}>
           {t(titleKey as never)}
-        </Text>
+        </Text> : null}
+        {ids.length < 10 ? <FoodSearchScreen
+          key={target} catalogSearch={localFoods ? searchOnboardingCatalog : undefined} localFoods={localFoods} visible presentation="inline" catalog="generation" onClose={Keyboard.dismiss}
+          excludeIds={ids} favoriteFoodIds={favoriteFoodIds} onToggleFavoriteFood={onToggleFavoriteFood}
+          onSelect={(pick) => addFoodId(target, pick)} onRequestCreateFood={() => setCreatingFoodTarget(target)}
+        /> : <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textMuted }}>
+          {t('foodSearch.selectionLimit', { count: 10 })}
+        </Text>}
         {ids.length === 0 ? (
           <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textFaint }}>{t(emptyKey as never)}</Text>
         ) : ids.map((id) => (
@@ -105,12 +203,12 @@ export function NutritionProfileScreen({
             <Icon name="x" size={16} color={theme.colors.textFaint} />
           )} onPress={() => removeFoodId(target, id)} />
         ))}
-        <SelectableRow role="checkbox" label={t(addCtaKey as never)} selected={false} onPress={() => setFoodPicker(target)} />
       </View>
     );
   }
 
   function StepTitle({ title, subtitle }: { title: string; subtitle?: string }) {
+    if (hideTitle) return null;
     return (
       <View style={{ gap: 6, marginBottom: 20 }}>
         <Display size={22}>{title}</Display>
@@ -149,8 +247,35 @@ export function NutritionProfileScreen({
         return (
           <>
             <StepTitle title={t('profile.questions.targetWeightKg.title')} subtitle={t('profile.questions.targetWeightKg.subtitle')} />
-            <SelectableRow label={t('profile.questions.targetWeightKg.skip')} selected={draft.targetWeightKg == null}
-              onPress={() => patch({ targetWeightKg: null })} />
+            <View style={{ gap: 16 }}>
+              <View style={{ padding: 16, borderRadius: theme.radii.lg, backgroundColor: theme.colors.choiceBackground,
+                borderWidth: 1, borderColor: theme.colors.choiceBorder }}>
+                <MonoLabel color={theme.colors.textMuted}>{t('profile.questions.targetWeightKg.currentWeight')}</MonoLabel>
+                <Text style={{ fontFamily: theme.fonts.display, fontSize: 32, color: theme.colors.textPrimary, marginTop: 6 }}>
+                  {currentWeightKg != null ? `${formatWeightFromKg(currentWeightKg, resolvedUnits)} ${unit}` : t('profile.questions.targetWeightKg.unavailable')}
+                </Text>
+              </View>
+              <View style={{ gap: 8 }}>
+                <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 14, color: theme.colors.textPrimary }}>
+                  {t('profile.questions.targetWeightKg.label', { unit })}
+                </Text>
+                <TextInput value={targetWeightText}
+                  onChangeText={(text) => { setTargetWeightText(text); patch({ targetWeightKg: parseTargetWeightInput(text, resolvedUnits) }); }}
+                  keyboardType="decimal-pad" returnKeyType="done"
+                  accessibilityLabel={t('profile.questions.targetWeightKg.label', { unit })}
+                  placeholder={t('profile.questions.targetWeightKg.placeholder', { unit })}
+                  placeholderTextColor={theme.colors.textFaint}
+                  style={{ minHeight: 56, paddingHorizontal: 16, borderRadius: theme.radii.lg, borderWidth: 1,
+                    borderColor: targetWeightValid ? theme.colors.inputBorder : theme.colors.inputBorderError,
+                    backgroundColor: theme.colors.inputBackground, color: theme.colors.textPrimary,
+                    fontFamily: theme.fonts.ui, fontSize: 20 }} />
+                {!targetWeightValid ? <Text accessibilityRole="alert" style={{ fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.formErrorText }}>
+                  {t('profile.questions.targetWeightKg.invalid', { max: formatWeightInputFromKg(500, resolvedUnits), unit })}
+                </Text> : null}
+              </View>
+              <SelectableRow label={t('profile.questions.targetWeightKg.skip')} selected={draft.targetWeightKg == null}
+                onPress={() => { setTargetWeightText(''); patch({ targetWeightKg: null }); }} />
+            </View>
           </>
         );
       case 'nonTrainingActivityLevel':
@@ -179,32 +304,28 @@ export function NutritionProfileScreen({
             </View>
           </>
         );
-      case 'dietaryPattern':
-        return (
-          <>
-            <StepTitle title={t('profile.questions.dietaryPattern.title')} />
-            <View style={{ gap: 10 }}>
-              {DIETARY_PATTERNS.map((option) => (
-                <SelectableRow key={option} label={t(`profile.questions.dietaryPattern.options.${option}`)}
-                  selected={draft.dietaryPattern === option} onPress={() => patch({ dietaryPattern: option })} />
-              ))}
-            </View>
-          </>
-        );
       case 'preferredFoodIds':
-        return (
-          <FoodIdListEditor target="preferredFoodIds" titleKey="profile.questions.preferredFoodIds.title"
-            addCtaKey="profile.questions.preferredFoodIds.addCta" emptyKey="profile.questions.preferredFoodIds.empty" />
-        );
-      case 'usualFoodIds':
-        return (
-          <FoodIdListEditor target="usualFoodIds" titleKey="profile.questions.usualFoodIds.title"
-            addCtaKey="profile.questions.usualFoodIds.addCta" emptyKey="profile.questions.usualFoodIds.empty" />
-        );
+        return renderFoodIdListEditor({ target: 'preferredFoodIds', titleKey: 'profile.questions.preferredFoodIds.title',
+          emptyKey: 'profile.questions.preferredFoodIds.empty' });
       case 'excludedFoodIds':
         return (
-          <FoodIdListEditor target="excludedFoodIds" titleKey="profile.questions.excludedFoodIds.title"
-            addCtaKey="profile.questions.excludedFoodIds.addCta" emptyKey="profile.questions.excludedFoodIds.empty" />
+          <View style={{ gap: 24 }}>
+            <View>
+              <StepTitle title={t('profile.questions.excludedFoodIds.title')} subtitle={t('profile.questions.dietaryPattern.subtitle')} />
+              <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 14, color: theme.colors.textMuted, marginBottom: 10 }}>
+                {t('profile.questions.dietaryPattern.title')}
+              </Text>
+              <View style={{ gap: 10 }}>
+                {(['vegetarian', 'vegan', 'pescatarian'] as const).map((option) => (
+                  <SelectableRow key={option} label={t(`profile.questions.dietaryPattern.options.${option}`)}
+                    selected={draft.dietaryPattern === option}
+                    onPress={() => patch({ dietaryPattern: toggleDietaryPattern(draft.dietaryPattern, option) })} />
+                ))}
+              </View>
+            </View>
+            {renderFoodIdListEditor({ target: 'excludedFoodIds', showTitle: false, titleKey: 'profile.questions.excludedFoodIds.title',
+              emptyKey: 'profile.questions.excludedFoodIds.empty' })}
+          </View>
         );
       case 'excludedAllergens':
         return (
@@ -230,26 +351,6 @@ export function NutritionProfileScreen({
             </View>
           </>
         );
-      case 'pregnant':
-        return (
-          <>
-            <StepTitle title={t('profile.questions.pregnant.title')} />
-            <View style={{ gap: 10 }}>
-              <SelectableRow label={t('profile.questions.pregnant.yes')} selected={draft.pregnant === true} onPress={() => patch({ pregnant: true })} />
-              <SelectableRow label={t('profile.questions.pregnant.no')} selected={draft.pregnant === false} onPress={() => patch({ pregnant: false })} />
-            </View>
-          </>
-        );
-      case 'breastfeeding':
-        return (
-          <>
-            <StepTitle title={t('profile.questions.breastfeeding.title')} />
-            <View style={{ gap: 10 }}>
-              <SelectableRow label={t('profile.questions.breastfeeding.yes')} selected={draft.breastfeeding === true} onPress={() => patch({ breastfeeding: true })} />
-              <SelectableRow label={t('profile.questions.breastfeeding.no')} selected={draft.breastfeeding === false} onPress={() => patch({ breastfeeding: false })} />
-            </View>
-          </>
-        );
       case 'varietyPreference':
         return (
           <>
@@ -267,53 +368,18 @@ export function NutritionProfileScreen({
     }
   }
 
-  async function handleSubmit() {
-    await onSubmit(draft);
-  }
-
-  return (
-    <ScreenBg>
-      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 22, paddingTop: 6 }}>
-          <Pressable onPress={goBack} accessibilityRole="button" accessibilityLabel={t('profile.actions.back')} hitSlop={10}>
-            <Icon name="arrow-left" size={20} color={theme.colors.textPrimary} />
-          </Pressable>
-          <MonoLabel color={theme.colors.textFaint}>
-            {reviewing ? t('profile.review.title') : t('profile.stepOf', { current: stepIndex + 1, total: steps.length })}
-          </MonoLabel>
-          <View style={{ width: 20 }} />
-        </View>
-
-        <ScrollView contentContainerStyle={{ padding: 22, paddingBottom: 40 }}>
-          {reviewing ? (
-            <ReviewSection draft={draft} safetyBlocked={safetyBlocked} saveError={saveError} />
-          ) : step ? renderStep(step) : null}
-        </ScrollView>
-
-        <View style={{ padding: 22 }}>
-          {reviewing ? (
-            <CtaButton onPress={handleSubmit} disabled={saving || safetyBlocked}>
-              {t('profile.review.cta')}
-            </CtaButton>
-          ) : (
-            <CtaButton onPress={goNext} disabled={!canContinue}>{t('profile.actions.next')}</CtaButton>
-          )}
-        </View>
-      </SafeAreaView>
-
-      <FoodSearchScreen
-        visible={foodPicker != null}
-        onClose={() => setFoodPicker(null)}
-        excludeIds={foodPicker ? ((draft[foodPicker] as string[] | undefined) ?? []) : []}
-        favoriteFoodIds={favoriteFoodIds}
-        onToggleFavoriteFood={onToggleFavoriteFood}
-        onSelect={(pick) => { if (foodPicker) addFoodId(foodPicker, pick); setFoodPicker(null); }}
-      />
-    </ScreenBg>
-  );
+  return <>{renderStep(step)}
+    <Modal visible={creatingFoodTarget != null} onRequestClose={() => setCreatingFoodTarget(null)} animationType="slide">
+      <CreateCustomFoodScreen createFood={onCreateLocalFood} visible={creatingFoodTarget != null} onClose={() => setCreatingFoodTarget(null)}
+        onCreated={(food) => {
+          if (creatingFoodTarget) addFoodId(creatingFoodTarget, { foodId: food.id, name: food.name, origin: 'custom', nutritionPer100g: food.nutritionPer100g });
+          setCreatingFoodTarget(null);
+        }} />
+    </Modal>
+  </>;
 }
 
-function ReviewSection({ draft, safetyBlocked, saveError }: { draft: ProfileDraft; safetyBlocked: boolean; saveError: string | null }) {
+function ReviewSection({ draft, currentWeightKg, saveError }: { draft: ProfileDraft; currentWeightKg?: number | null; saveError: string | null }) {
   const { theme } = useTheme();
   const { t } = useTranslation('nutrition');
   const row = (label: string, value: string) => (
@@ -324,6 +390,8 @@ function ReviewSection({ draft, safetyBlocked, saveError }: { draft: ProfileDraf
       </Text>
     </View>
   );
+  const { resolvedUnits } = useUnits();
+  const unit = weightUnit(resolvedUnits);
   const none = t('profile.review.none');
   return (
     <View>
@@ -332,24 +400,14 @@ function ReviewSection({ draft, safetyBlocked, saveError }: { draft: ProfileDraf
         {t('profile.review.subtitle')}
       </Text>
 
-      {safetyBlocked ? (
-        <View style={{ padding: 16, borderRadius: theme.radii.lg, backgroundColor: theme.colors.feedbackCriticalBackground,
-          borderWidth: 1, borderColor: theme.colors.feedbackCriticalBorder, marginBottom: 18 }}>
-          <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 14, color: theme.colors.feedbackCriticalText }}>
-            {t('home.pregnancyBlock.title')}
-          </Text>
-          <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.feedbackCriticalText, marginTop: 6, lineHeight: 19 }}>
-            {t('home.pregnancyBlock.body')}
-          </Text>
-        </View>
-      ) : null}
-
+      {currentWeightKg != null ? row(t('profile.questions.targetWeightKg.currentWeight'), `${formatWeightFromKg(currentWeightKg, resolvedUnits)} ${unit}`) : null}
+      {row(t('profile.questions.targetWeightKg.label', { unit }), draft.targetWeightKg != null ? `${formatWeightFromKg(draft.targetWeightKg, resolvedUnits)} ${unit}` : none)}
       {draft.nutritionGoalCategory ? row(t('profile.review.goal'), t(`profile.questions.nutritionGoalCategory.options.${draft.nutritionGoalCategory}`)) : null}
       {draft.nonTrainingActivityLevel ? row(t('profile.review.activity'), t(`profile.questions.nonTrainingActivityLevel.options.${draft.nonTrainingActivityLevel}`)) : null}
       {row(t('profile.review.meals'), (draft.mealSlots ?? []).map((slot) => t(`mealSlots.${slot}`)).join(', ') || none)}
       {draft.dietaryPattern ? row(t('profile.review.dietaryPattern'), t(`profile.questions.dietaryPattern.options.${draft.dietaryPattern}`)) : null}
       {row(t('profile.review.preferred'), String((draft.preferredFoodIds ?? []).length || none))}
-      {row(t('profile.review.usual'), String((draft.usualFoodIds ?? []).length || none))}
+      {(draft.usualFoodIds ?? []).length > 0 ? row(t('profile.review.usual'), String(draft.usualFoodIds!.length)) : null}
       {row(t('profile.review.excluded'), String((draft.excludedFoodIds ?? []).length || none))}
       {row(t('profile.review.allergens'), (draft.excludedAllergens ?? []).length > 0
         ? (draft.excludedAllergens ?? []).map((item) => t(`profile.questions.excludedAllergens.options.${item}`)).join(', ') : none)}

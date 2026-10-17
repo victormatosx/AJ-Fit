@@ -1,3 +1,5 @@
+import { emptyOnboardingNutrition, type OnboardingNutritionDraft } from './nutritionDraft';
+import { logError } from '../lib/logger';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppState } from '../state/AppState';
 import {
@@ -9,6 +11,7 @@ import {
   type OnboardingStepId,
 } from './steps';
 import {
+  clearOnboardingDraft,
   buildDraft,
   draftToQuiz,
   readOnboardingDraft,
@@ -47,6 +50,8 @@ export function useOnboardingFunnel(mode: OnboardingFunnelMode) {
   const [currentStepId, setCurrentStepId] = useState<OnboardingStepId>(
     () => getStepSequence(mode)[0],
   );
+  const [pendingTransfer, setPendingTransfer] = useState(false);
+  const [nutrition, setNutrition] = useState<OnboardingNutritionDraft>(emptyOnboardingNutrition);
   const [name, setName] = useState<string | null>(null);
   const [healthIntegrationChoice, setHealthIntegrationChoice] = useState<OnboardingHealthIntegrationChoice | null>(null);
   const [hydrated, setHydrated] = useState(mode === 'forcedQuestionnaire');
@@ -58,8 +63,10 @@ export function useOnboardingFunnel(mode: OnboardingFunnelMode) {
     (async () => {
       const draft = await readOnboardingDraft();
       if (cancelled) return;
+      if (draft?.transfer) { setPendingTransfer(true); setHydrated(true); return; }
       if (draft) {
         setQuiz(draftToQuiz(draft));
+        setNutrition(draft.nutrition);
         setName(draft.name);
         setHealthIntegrationChoice(draft.healthIntegrationChoice);
         setCurrentStepId(draft.currentStepId);
@@ -79,9 +86,9 @@ export function useOnboardingFunnel(mode: OnboardingFunnelMode) {
   // Fire-and-forget persistence — every step/name/answer change updates the
   // draft. Cheap (single AsyncStorage write) and never blocks navigation.
   useEffect(() => {
-    if (mode !== 'anonymous' || !hydrated) return;
-    void writeOnboardingDraft(buildDraft({ currentStepId, name, healthIntegrationChoice, quiz }));
-  }, [mode, hydrated, currentStepId, name, healthIntegrationChoice, quiz]);
+    if (mode !== 'anonymous' || !hydrated || pendingTransfer) return;
+    void writeOnboardingDraft(buildDraft({ currentStepId, name, healthIntegrationChoice, quiz, nutrition })).catch((error) => logError('onboardingDraft:write', error));
+  }, [mode, hydrated, currentStepId, name, healthIntegrationChoice, quiz, nutrition, pendingTransfer]);
 
   const progress = computeOnboardingProgress(currentStepId, mode, quiz);
 
@@ -108,6 +115,12 @@ export function useOnboardingFunnel(mode: OnboardingFunnelMode) {
 
   return {
     mode,
+    nutrition, setNutrition, pendingTransfer,
+    discardPendingTransfer: async () => {
+      await clearOnboardingDraft(); setPendingTransfer(false); setNutrition(emptyOnboardingNutrition());
+      setCurrentStepId(getStepSequence(mode)[0]);
+    },
+    flushDraft: () => writeOnboardingDraft(buildDraft({ currentStepId, name, healthIntegrationChoice, quiz, nutrition })),
     currentStepId,
     name,
     setName,

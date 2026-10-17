@@ -64,7 +64,7 @@ describe('dispatcher mode boundary', () => {
     const deps = {
       ...dependencies(vi.fn(async () => ({ allowed: true as const }))), eligibility,
       db: { collection: () => ({ doc: () => ({ collection: () => ({
-        where: () => ({ get: async () => ({ docs: [] }) }),
+        get: async () => ({ docs: [] }),
       }) }) }) } as never,
     };
     await expect(dispatchNotification(REQUEST, deps, 'PRODUCT')).resolves.toEqual({

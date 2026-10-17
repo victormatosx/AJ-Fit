@@ -47,6 +47,8 @@
       }
     },
     "nextMeal": {
+      "showAllFoods": "Show all foods (+{{count}})",
+      "collapseFoods": "Collapse list",
       "title": "NEXT MEAL",
       "recommended": "Recommended",
       "openCta": "View meal"
@@ -62,6 +64,7 @@
       "summaryCta": "Summary"
     },
     "mealsToday": {
+      "nextMeal": "Next meal",
       "title": "TODAY'S MEALS",
       "itemCount_one": "{{count}} food",
       "itemCount_other": "{{count}} foods",
@@ -71,16 +74,16 @@
     },
     "quickAccess": {
       "title": "MORE",
+      "customFoodDescription": "Add a custom food to your collection.",
       "customFood": "Create food",
+      "recipeDescription": "Save your recipes to use whenever you like.",
       "recipe": "Create recipe",
+      "favoritesDescription": "Access your favorite foods and recipes.",
       "favorites": "My favorites",
+      "savedMealsDescription": "View meals you saved to use again.",
       "savedMeals": "Saved meals",
+      "historyDescription": "Access your previous meal plans.",
       "history": "Plan history"
-    },
-    "pregnancyBlock": {
-      "title": "Specialized guidance recommended",
-      "body": "During pregnancy or breastfeeding, automatic diet generation is unavailable in AJ Fit. We recommend following up with a nutritionist for safe, personalized guidance.",
-      "ack": "Got it"
     },
     "disabled": {
       "title": "Nutrition not yet available",
@@ -88,7 +91,24 @@
     }
   },
   "weekly": {
+    "aboutAverage": "About the daily average",
+    "macroTargetsAverage": "Goals are averaged over the {{count}} days with available goals.",
+    "dailyAverage": "Daily average",
+    "dailyTarget": "Daily goal",
+    "averageDailyTarget": "Average daily goal",
+    "averageCoverage": "Average based on {{count}} of 7 days with logs.",
+    "targetUnavailable": "Goal unavailable",
+    "dailyConsumption": "Daily intake",
+    "futureDay": "Future day",
+    "noRecordDay": "No log",
+    "dayTarget": "Goal {{value}}",
+    "individualTargets": "Markers show each day’s available goal.",
+    "macroAverages": "Macronutrients (daily average)",
+    "noWeeklyWeight": "No weight measurements available this week.",
+    "openProgressCompact": "View in Progress",
     "title": "Weekly summary",
+    "emptyBody": "Start logging your meals to track your nutrition and see your progress.",
+    "registerMeal": "Log meal",
     "thisWeek": "This week",
     "open": "View summary",
     "back": "Back to Nutrition",
@@ -178,8 +198,12 @@
       "targetWeightKg": {
         "title": "Do you have a target weight in mind?",
         "subtitle": "This field is optional.",
-        "placeholder": "Target weight (kg)",
-        "skip": "I'd rather not say"
+        "placeholder": "Target weight ({{unit}})",
+        "skip": "I'd rather not say",
+        "currentWeight": "Current weight",
+        "label": "Target weight ({{unit}})",
+        "invalid": "Enter a valid weight greater than zero and up to {{max}} {{unit}}.",
+        "unavailable": "Unavailable"
       },
       "nonTrainingActivityLevel": {
         "title": "How active are you outside of training?",
@@ -201,22 +225,17 @@
           "vegetarian": "Vegetarian",
           "vegan": "Vegan",
           "pescatarian": "Pescatarian"
-        }
+        },
+        "subtitle": "Optional. Choose one pattern or tap it again to clear. Individual exclusions below also apply."
       },
       "preferredFoodIds": {
-        "title": "Foods you prefer",
+        "title": "Foods you want to include",
         "subtitle": "We'll prioritize these foods in your meals.",
         "addCta": "Add food",
         "empty": "No foods added yet."
       },
-      "usualFoodIds": {
-        "title": "Foods you usually eat",
-        "subtitle": "This helps build a plan that's easier to follow.",
-        "addCta": "Add food",
-        "empty": "No foods added yet."
-      },
       "excludedFoodIds": {
-        "title": "Foods you want to exclude",
+        "title": "Foods you do not want in your diet",
         "subtitle": "These foods will never appear in your plan.",
         "addCta": "Add food",
         "empty": "No excluded foods."
@@ -247,16 +266,6 @@
           "other": "Other"
         }
       },
-      "pregnant": {
-        "title": "Are you pregnant?",
-        "yes": "Yes",
-        "no": "No"
-      },
-      "breastfeeding": {
-        "title": "Are you breastfeeding?",
-        "yes": "Yes",
-        "no": "No"
-      },
       "varietyPreference": {
         "title": "Do you prefer variety or repeating the same meals?",
         "options": {
@@ -280,8 +289,7 @@
       "supplements": "Supplements",
       "variety": "Variety",
       "none": "None",
-      "cta": "Create my diet",
-      "safetyBlocked": "Generation blocked — see the notice above."
+      "cta": "Create my diet"
     },
     "errors": {
       "invalid": "Review the flagged answers before continuing.",
@@ -418,7 +426,10 @@
     "loadMore": "Load more",
     "offline": "No connection. Showing recent foods.",
     "error": "We couldn't search right now.",
-    "recipeBadge": "Recipe"
+    "recipeBadge": "Recipe",
+    "clearSearch": "Clear search",
+    "retry": "Try again",
+    "selectionLimit": "You can select up to {{count}} foods. Remove one to add another."
   },
   "customFood": {
     "title": "Create food",
@@ -470,6 +481,11 @@
     "gramsShort": "g"
   },
   "diary": {
+    "addError": "Could not add the food. Please try again.",
+    "remaining": "{{value}} kcal remaining",
+    "overGoal": "Over goal: {{value}} kcal",
+    "emptyMeal": "No foods logged.",
+    "foodActions": "Options for {{name}}",
     "title": "Food diary",
     "today": "Today",
     "yesterday": "Yesterday",
@@ -540,5 +556,27 @@
     "readOnlyBanner": "Viewing an archived plan — read-only.",
     "empty": "No plans found yet.",
     "createdAt": "Created on"
+  },
+  "onboarding": {
+    "requestFailedTitle": "Your plan could not be started",
+    "requestFailedBody": "Your answers are still saved. The automatic request has stopped. Check your access and try again when ready.",
+    "waitingTitle": "Your plan preparation has not started",
+    "waitingBody": "Your answers are saved. We are waiting for access confirmation and service availability. You can try again if needed.",
+    "automaticDisabledTitle": "Your answers are saved",
+    "automaticDisabledBody": "Automatic preparation is currently disabled. You can request your plan when generation is available.",
+    "recovery": "Your nutrition answers are saved. We could not finish preparing your plan yet.",
+    "retry": "Try again",
+    "discard": "Discard saved answers",
+    "discardTitle": "Discard nutrition answers?",
+    "discardBody": "This only removes the pending local answers.",
+    "cancel": "Cancel",
+    "preparingTitle": "Your meal plan is being prepared",
+    "preparingBody": "We are creating your personalized meal plan based on your answers.",
+    "preparingNote": "You can keep using AJ Fit. We will let you know in the app when your plan is ready.",
+    "readyTitle": "Your meal plan is ready!",
+    "readyBody": "Your meal plan is now available.",
+    "dismiss": "Dismiss",
+    "pendingAccount": "Nutrition answers are waiting to transfer. Sign in to the account used during registration, or discard them to start again.",
+    "signIn": "Sign in"
   }
 }

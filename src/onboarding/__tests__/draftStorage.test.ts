@@ -1,3 +1,4 @@
+import { nutritionDraftAnswers, emptyOnboardingNutrition } from '../nutritionDraft';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const localStore = new Map<string, string>();
@@ -16,6 +17,9 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
+  bindOnboardingDraft,
+  bindOnboardingHealthSnapshot,
+  acknowledgeOnboardingHealthChoice,
   buildDraft,
   clearOnboardingDraft,
   draftToQuiz,
@@ -61,7 +65,7 @@ describe('missing/corrupted/future-versioned draft', () => {
       ['pregnancyComplication', 'pregnancyCare'],
       ['postpartumDeliveryType', 'postpartumContext'],
     ]) {
-      localStore.set(ONBOARDING_DRAFT_STORAGE_KEY, JSON.stringify({ version: 1, currentStepId: legacy, answers: {} }));
+      localStore.set(ONBOARDING_DRAFT_STORAGE_KEY, JSON.stringify({ version: 1, currentStepId: legacy, answers: { sex: 'f', specialConditions: [legacy.startsWith('pregnancy') ? 'pregnancy' : 'postpartum'] } }));
       await expect(readOnboardingDraft()).resolves.toMatchObject({ currentStepId: grouped });
     }
   });
@@ -173,5 +177,65 @@ describe('clearOnboardingDraft', () => {
     await expect(readOnboardingDraft()).resolves.toBeNull();
     // Calling again on an already-absent key must not throw.
     await expect(clearOnboardingDraft()).resolves.toBeUndefined();
+  });
+});
+
+describe('nutrition draft retention and handoff', () => {
+  it('expires abandoned drafts after 30 days but retains account-bound pending transfers', async () => {
+    const draft = buildDraft({ currentStepId: 'weight', name: null, healthIntegrationChoice: null, quiz: defaultQuiz });
+    draft.updatedAt = new Date(Date.now() - 31 * 86400000).toISOString();
+    localStore.set(ONBOARDING_DRAFT_STORAGE_KEY, JSON.stringify(draft));
+    expect(await readOnboardingDraft()).toBeNull();
+    localStore.set(ONBOARDING_DRAFT_STORAGE_KEY, JSON.stringify({ ...draft, transfer: { uid: 'alice', status: 'pending' } }));
+    expect((await readOnboardingDraft())?.transfer?.uid).toBe('alice');
+  });
+  it('moves a resumed v1 completed training flow to nutrition without losing training answers', async () => {
+    localStore.set(ONBOARDING_DRAFT_STORAGE_KEY, JSON.stringify({ version: 1, currentStepId: 'plan', answers: { goal: 'health', weight: 75 } }));
+    const draft = await readOnboardingDraft();
+    expect(draft?.currentStepId).toBe('nutrition_progressionPace');
+    expect(draft?.answers.weight).toBe(75);
+  });
+});
+
+describe('target weight JSON recovery', () => {
+  it('retains raw invalid text rather than converting NaN into a skipped answer', async () => {
+    const nutrition = { ...emptyOnboardingNutrition(), targetWeightText: '80kg', targetWeightUnits: 'metric' as const };
+    const draft = buildDraft({ currentStepId: 'nutrition_targetWeightKg', name: null, healthIntegrationChoice: null, quiz: defaultQuiz, nutrition });
+    await writeOnboardingDraft(draft);
+    const restored = (await readOnboardingDraft())!.nutrition;
+    expect(restored.targetWeightText).toBe('80kg');
+    expect(Number.isNaN(nutritionDraftAnswers(restored).targetWeightKg)).toBe(true);
+  });
+  it('preserves pounds across process restarts independently of current display preferences', async () => {
+    const nutrition = { ...emptyOnboardingNutrition(), targetWeightText: '180', targetWeightUnits: 'imperial' as const };
+    const draft = buildDraft({ currentStepId: 'nutrition_targetWeightKg', name: null, healthIntegrationChoice: null, quiz: defaultQuiz, nutrition });
+    await writeOnboardingDraft(draft);
+    const restored = (await readOnboardingDraft())!.nutrition;
+    expect(restored.targetWeightUnits).toBe('imperial');
+    expect(nutritionDraftAnswers(restored).targetWeightKg).toBeCloseTo(81.6466, 4);
+  });
+});
+
+describe('scoped cleanup and legacy health ownership', () => {
+  it('never clears a pending transfer for another UID or session', async () => {
+    const nutrition = emptyOnboardingNutrition(); nutrition.completed = true;
+    const draft = buildDraft({ currentStepId: 'plan', quiz: defaultQuiz, name: null, healthIntegrationChoice: 'connect', nutrition });
+    draft.sessionId = 'session-123'; await writeOnboardingDraft(draft); await bindOnboardingDraft('u', 'session-123');
+    await clearOnboardingDraft({ uid: 'other', sessionId: 'session-123' });
+    expect(await readOnboardingDraft()).not.toBeNull();
+    await clearOnboardingDraft({ uid: 'u', sessionId: 'wrong' });
+    expect(await readOnboardingDraft()).not.toBeNull();
+    await clearOnboardingDraft({ uid: 'u', sessionId: 'session-123' });
+    expect(await readOnboardingDraft()).toBeNull();
+  });
+  it('binds and consumes a legacy choice independently, retaining partial nutrition', async () => {
+    const draft = buildDraft({ currentStepId: 'goal', quiz: defaultQuiz, name: null, healthIntegrationChoice: 'connect' });
+    draft.nutrition.targetWeightText = '123.4'; await writeOnboardingDraft(draft);
+    await bindOnboardingHealthSnapshot('u', draft);
+    await acknowledgeOnboardingHealthChoice('other');
+    expect((await readOnboardingDraft())?.healthIntegrationChoice).toBe('connect');
+    await acknowledgeOnboardingHealthChoice('u');
+    expect((await readOnboardingDraft())?.healthIntegrationChoice).toBeNull();
+    expect((await readOnboardingDraft())?.nutrition.targetWeightText).toBe('123.4');
   });
 });

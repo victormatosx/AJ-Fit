@@ -143,41 +143,12 @@ describe('calculateNutritionTargets — golden cases', () => {
 });
 
 describe('calculateNutritionTargets — safety', () => {
-  it('pregnant === true throws INELIGIBLE_PREGNANCY, no bypass', () => {
-    try {
-      calculateNutritionTargets(buildInput({ pregnant: true }));
-      throw new Error('expected to throw');
-    } catch (error) {
-      expect(error).toBeInstanceOf(NutritionEngineError);
-      expect((error as NutritionEngineError).code).toBe('INELIGIBLE_PREGNANCY');
-    }
-  });
-
-  it('breastfeeding === true throws INELIGIBLE_BREASTFEEDING, no bypass', () => {
-    try {
-      calculateNutritionTargets(buildInput({ breastfeeding: true }));
-      throw new Error('expected to throw');
-    } catch (error) {
-      expect(error).toBeInstanceOf(NutritionEngineError);
-      expect((error as NutritionEngineError).code).toBe('INELIGIBLE_BREASTFEEDING');
-    }
-  });
-
-  it('pregnancy takes priority over breastfeeding when both are true, but resolveEligibility reports both blockers', () => {
-    const eligibility = resolveEligibility(buildInput({ pregnant: true, breastfeeding: true }));
-    expect(eligibility.eligible).toBe(false);
-    expect(eligibility.blockers).toEqual(['pregnancy', 'lactation']);
-
-    try {
-      calculateNutritionTargets(buildInput({ pregnant: true, breastfeeding: true }));
-      throw new Error('expected to throw');
-    } catch (error) {
-      expect((error as NutritionEngineError).code).toBe('INELIGIBLE_PREGNANCY');
-    }
-  });
-
-  it('resolveEligibility never throws and reports eligible=true/blockers=[] for a normal user', () => {
-    expect(resolveEligibility(buildInput())).toEqual({ eligible: true, blockers: [] });
+  it.each([
+    { pregnant: true }, { breastfeeding: true }, { pregnant: true, breastfeeding: true }, {},
+  ])('ignores legacy pregnancy/lactation flags: %j', (legacyFlags) => {
+    const input = buildInput(legacyFlags);
+    expect(resolveEligibility(input)).toEqual({ eligible: true, blockers: [] });
+    expect(calculateNutritionTargets(input)).toEqual(calculateNutritionTargets(buildInput()));
   });
 
   it('calorie floor clamps an extreme deficit for a very light, low-RMR profile', () => {

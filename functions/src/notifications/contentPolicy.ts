@@ -297,8 +297,8 @@ export const NUTRITION_DAILY_LOG_REMINDER_COPIES = {
 
 export const NUTRITION_PLAN_READY_COPIES = {
   'pt-BR': {
-    title: 'Seu plano alimentar está pronto',
-    body: 'Abra a Nutrição para conferir suas refeições.',
+    title: 'Sua dieta está pronta!',
+    body: 'Seu plano alimentar personalizado já está disponível no AJ Fit. Toque para conferir.',
   },
   en: {
     title: 'Your meal plan is ready',
@@ -486,9 +486,11 @@ const TYPE_POLICIES: Readonly<Record<NotificationType, TypePolicy>> = {
   },
   NUTRITION_PLAN_READY: {
     category: 'NUTRITION',
-    allowedDataKeys: ['generationId'],
+    allowedDataKeys: ['generationId', 'initialOnboarding', 'recipientUid'],
     allowedIntents: ['nutrition-plan'],
-    allowedCopies: copies(NUTRITION_PLAN_READY_COPIES),
+    allowedCopies: [...copies(NUTRITION_PLAN_READY_COPIES),
+      // Pending historical dispatches retain their original idempotency contract.
+      { title: 'Seu plano alimentar está pronto', body: 'Abra a Nutrição para conferir suas refeições.' }],
   },
   NUTRITION_WEEKLY_SUMMARY: {
     category: 'NUTRITION',
@@ -1006,6 +1008,7 @@ export function buildNutritionDailyLogReminder(params: {
 export function buildNutritionPlanReadyNotification(params: {
   uid: string;
   generationId: string;
+  initialOnboarding?: boolean;
   locale: NotificationLocale;
 }): NotificationDispatchRequest {
   return buildNutritionNotification({
@@ -1013,7 +1016,7 @@ export function buildNutritionPlanReadyNotification(params: {
     type: 'NUTRITION_PLAN_READY',
     sourceIdentity: `plan-ready:${params.generationId}`,
     intent: 'nutrition-plan',
-    data: { generationId: params.generationId },
+    data: { generationId: params.generationId, recipientUid: params.uid, ...(params.initialOnboarding ? { initialOnboarding: 'true' } : {}) },
   });
 }
 

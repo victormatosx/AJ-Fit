@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
+import * as backendLogger from '../../lib/logger';
 import type { NutritionEngineOutput, NutritionProfile } from '../shared/types/nutrition';
 import { OpenAiNutritionProvider, OPENAI_PLAN_SCHEMA, OPENAI_REQUEST_TIMEOUT_MS, type NutritionAiProvider } from '../ai/provider';
 import { NUTRITION_AI_MODELS } from '../ai/config';
@@ -30,7 +31,7 @@ const engine: NutritionEngineOutput = {
 /** A free-form AI item — no foodId, self-estimated nutrition, self-declared allergens. */
 function item(name: string, kcal: number, proteinG: number, carbsG: number, fatG: number, fiberG: number,
   allergens: string[] = []) {
-  return { name, quantity: 100, unit: 'g', preparationNote: '',
+  return { name, ingredients: [{ name, origin: 'plant' as const }], quantity: 100, unit: 'g', preparationNote: '',
     estimatedNutrition: { kcal, proteinG, carbsG, fatG, fiberG }, allergens };
 }
 /** `scale` uniformly scales ALL of one item's macros away from the exact target — exercises the deterministic scale-and-recheck correction (every field must land back in range together, not just kcal). */
@@ -120,7 +121,7 @@ describe('prompt payload — backend sends numbers/safety, AI gets freedom over 
     expect(payload.usualFoodNames).toEqual(['Feijão']);
     expect(payload.excludedFoodNames).toEqual(['Amendoim']);
     expect(payload.excludedAllergens).toEqual(['milk']);
-    expect(payload.wheyAccepted).toBe(true);
+    expect(payload.wheyAccepted).toBe(false);
     expect(payload).not.toHaveProperty('candidates');
   });
 
@@ -270,5 +271,131 @@ describe('resolveNutritionWeightKg — brand-new account with no assessment yet 
     // which `loadGenerationContext`'s existing validation still rejects downstream.
     expect(resolveNutritionWeightKg(null, 'not-a-number')).toEqual({ weightKg: 'not-a-number', source: 'questionnaire' });
     expect(resolveNutritionWeightKg(undefined, 0)).toEqual({ weightKg: 0, source: 'questionnaire' });
+  });
+});
+
+describe('incident regression — rejected nutrient proportions', () => {
+  it('confirms repair context in the outgoing payload while logging only presence flags', async () => {
+    const info = vi.spyOn(backendLogger, 'logInfo').mockImplementation(() => {});
+    try {
+      const fetcher = vi.fn().mockImplementation(async () => new Response(JSON.stringify({
+        status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(output()) }] }],
+      }), { status: 200 }));
+      const feedback = JSON.stringify({ failureCode: 'AI_MACRO_VALIDATION_FAILED', scope: 'meal',
+        slot: 'breakfast', nutrients: ['proteinG:above_max'], previousPlan: output() });
+      await new OpenAiNutritionProvider('test-key', fetcher).generatePlan({ profile, engine, goal,
+        foodNames: noNames, feedback, trace: { generationId: 'job-repair', attempt: 2 } });
+      const payload = JSON.parse(fetcher.mock.calls[0][1].body);
+      expect(JSON.parse(payload.input[2].content).retryFeedback).toBe(feedback);
+      expect(info).toHaveBeenCalledWith('nutrition.generation', 'ai_request_started', expect.objectContaining({
+        generationId: 'job-repair', attempt: 2, retryFeedbackPresent: true, repairCandidatePresent: true,
+      }));
+      expect(JSON.stringify(info.mock.calls)).not.toContain('Mingau');
+    } finally { info.mockRestore(); }
+  });
+  it('preserves rejection and repairs the rejected candidate while keeping audit diagnostics free of food content', async () => {
+    const wrong = output();
+    wrong.meals[0].foods[0].estimatedNutrition.proteinG = 40;
+    wrong.meals[0].foods[0].estimatedNutrition.fiberG = 1;
+    const provider = fakeProvider(wrong, output());
+    const audits: unknown[] = [];
+    const generated = await generateValidatedPlan(provider, profile, engine, goal, noNames,
+      async (audit) => { audits.push(audit.validationIssue); }, async () => {}, { generationId: 'diagnostic-job' });
+    expect(generated.attempt).toBe(2);
+    expect(audits[0]).toEqual({ scope: 'meal', slot: 'breakfast',
+      nutrients: ['proteinG:above_max', 'fiberG:below_min'] });
+    const retry = vi.mocked(provider.generatePlan).mock.calls[1][0];
+    expect(JSON.parse(retry.feedback!)).toEqual({ failureCode: 'AI_MACRO_VALIDATION_FAILED',
+      scope: 'meal', slot: 'breakfast', nutrients: ['proteinG:above_max', 'fiberG:below_min'], previousPlan: wrong });
+    expect(JSON.stringify(audits)).not.toContain('Mingau');
+    expect(retry.trace).toEqual({ generationId: 'diagnostic-job', attempt: 2 });
+    expect(() => validateAndBuildPlan(wrong, profile.mealSlots, engine)).toThrow('meal_target_deviation');
+  });
+
+  it.each([400, 401, 403, 404, 429, 500])('classifies HTTP %s and retries only transient provider responses', async (httpStatus) => {
+    const fetcher = vi.fn().mockImplementation(async () => new Response(
+      JSON.stringify({ error: { code: httpStatus === 429 ? 'rate_limit_exceeded' : 'provider_failure',
+        message: 'private body must never be logged' } }), { status: httpStatus }));
+    const provider = new OpenAiNutritionProvider('private-key', fetcher);
+    const audits: unknown[] = [];
+    await expect(generateValidatedPlan(provider, profile, engine, goal, noNames,
+      async (audit) => { audits.push(audit); })).rejects.toMatchObject({
+      code: httpStatus === 429 ? 'AI_RATE_LIMIT' : 'AI_PROVIDER_ERROR',
+    });
+    expect(fetcher).toHaveBeenCalledTimes(httpStatus === 429 || httpStatus >= 500 ? 3 : 1);
+    expect(audits).toHaveLength(fetcher.mock.calls.length);
+  });
+
+  it('does not retry insufficient_quota even though the HTTP status is 429', async () => {
+    const fetcher = vi.fn().mockImplementation(async () => new Response(
+      JSON.stringify({ error: { code: 'insufficient_quota' } }), { status: 429 }));
+    await expect(generateValidatedPlan(new OpenAiNutritionProvider('key', fetcher), profile, engine, goal, noNames))
+      .rejects.toMatchObject({ code: 'AI_RATE_LIMIT' });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('dietary restrictions across generation, regeneration and meal alternatives', () => {
+  function composed(name: string, origin: import('../generation/domain').RawAiFoodItem['ingredients'][number]['origin']) {
+    return { ...item(name, 400, 20, 50, 10, 10), ingredients: [{ name, origin }] };
+  }
+  function plantPlan() {
+    const plan = output();
+    plan.meals[1].foods[0].name = 'Arroz com feijão';
+    plan.meals[1].foods[0].ingredients = [{ name: 'Arroz', origin: 'plant' }, { name: 'Feijão', origin: 'plant' }];
+    return plan;
+  }
+  it.each(['omnivore', 'vegetarian', 'vegan', 'pescatarian'] as const)('accepts compatible meals for %s on repeated generations', async (dietaryPattern) => {
+    const generatePlan = fakeProvider(plantPlan(), plantPlan());
+    for (let i = 0; i < 2; i++) {
+      expect((await generateValidatedPlan(generatePlan, { ...profile, dietaryPattern }, engine, goal, noNames)).attempt).toBe(1);
+    }
+    const request = vi.mocked(generatePlan.generatePlan).mock.calls[0][0];
+    expect(request.profile).not.toHaveProperty('pregnant');
+    expect(request.profile).not.toHaveProperty('breastfeeding');
+  });
+  it.each([
+    ['vegetarian', 'Frango', 'terrestrial_animal'], ['vegetarian', 'Tilápia', 'fish'],
+    ['vegetarian', 'Camarão', 'shellfish'], ['vegan', 'Iogurte', 'dairy'], ['vegan', 'Ovo', 'egg'],
+    ['vegan', 'Whey', 'dairy'], ['vegan', 'Mel', 'other_animal'], ['pescatarian', 'Carne bovina', 'terrestrial_animal'],
+    ['pescatarian', 'Caldo sem composição conhecida', 'unknown'], ['vegan', 'Queijo', 'plant'],
+  ] as const)('blocks %s with %s even when allergens are omitted', async (dietaryPattern, name, origin) => {
+    const plan = plantPlan();
+    plan.meals[0].foods[0] = composed(name, origin) as ReturnType<typeof item>;
+    const provider = fakeProvider(plan);
+    await expect(generateValidatedPlan(provider, { ...profile, dietaryPattern }, engine, goal, noNames))
+      .rejects.toMatchObject({ code: 'AI_SAFETY_VALIDATION_FAILED' });
+    expect(provider.generatePlan).toHaveBeenCalledTimes(1);
+  });
+  it('allows lacto-ovo vegetarian meals and seafood for pescatarians', () => {
+    for (const [dietaryPattern, name, origin] of [
+      ['vegetarian', 'Iogurte', 'dairy'], ['vegetarian', 'Ovo', 'egg'], ['pescatarian', 'Tilápia', 'fish'],
+      ['pescatarian', 'Camarão', 'shellfish'], ['vegan', 'Leite de coco', 'plant'], ['vegan', 'Carne de soja', 'plant'],
+    ] as const) {
+      const plan = plantPlan();
+      plan.meals[0].foods[0] = composed(name, origin) as ReturnType<typeof item>;
+      expect(() => validateAndBuildPlan(plan, profile.mealSlots, engine, [], true, { dietaryPattern, excludedFoodNames: [] })).not.toThrow();
+    }
+  });
+  it('combines hard ingredient exclusions, allergies and dietary pattern, overriding preferred foods', async () => {
+    const plan = plantPlan();
+    const names = { preferred: ['Feijão'], usual: [], excluded: ['Feijão, cozido'] };
+    await expect(generateValidatedPlan(fakeProvider(plan), { ...profile, dietaryPattern: 'vegan' }, engine, goal, names))
+      .rejects.toMatchObject({ code: 'AI_SAFETY_VALIDATION_FAILED' });
+    plan.meals[0].foods[0] = composed('Leite de soja', 'plant') as ReturnType<typeof item>;
+    await expect(generateValidatedPlan(fakeProvider(plan), { ...profile, dietaryPattern: 'vegan', excludedAllergens: ['soy'] }, engine, goal, noNames))
+      .rejects.toMatchObject({ code: 'AI_SAFETY_VALIDATION_FAILED' });
+  });
+  it('fails closed on missing composition metadata', () => {
+    const plan = output();
+    delete (plan.meals[0].foods[0] as Partial<ReturnType<typeof item>>).ingredients;
+    expect(() => validateAndBuildPlan(plan, profile.mealSlots, engine)).toThrow('invalid_schema');
+  });
+  it('keeps legacy safety state out of both HTTP AI contexts', () => {
+    for (const payload of [fullPlanContext(profile, engine, goal, noNames),
+      mealAlternativeContext(profile, engine.mealTargets[0], [], goal, noNames)]) {
+      expect(JSON.parse(payload)).not.toHaveProperty('pregnant');
+      expect(JSON.parse(payload)).not.toHaveProperty('breastfeeding');
+    }
   });
 });

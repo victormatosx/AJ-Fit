@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon } from '../../components/ui/Icon';
 import { NU, NuButton, NuCap, NuHairline } from '../../components/nutrition/NuKit';
 import { useAuth } from '../../state/AuthContext';
-import { createCustomFood } from '../../services/nutritionFoods';
+import { createCustomFood, type CustomFoodInput } from '../../services/nutritionFoods';
 import { validateCustomFoodForm } from '../../nutrition/ui/customFoodForm';
 import type { NutritionCustomFood } from '../../types/nutrition';
 import type { Timestamp } from 'firebase/firestore';
@@ -72,8 +72,9 @@ function NuNumRow({ label, value, onChangeText, unit, placeholder = '0', last, e
  * run for the in-session "save" path.
  */
 export function CreateCustomFoodScreen({
-  visible, onClose, onCreated,
+  visible, onClose, onCreated, createFood,
 }: {
+  createFood?: (input: CustomFoodInput) => Promise<string>;
   visible: boolean;
   onClose: () => void;
   onCreated: (food: NutritionCustomFood<Timestamp> & { id: string }) => void;
@@ -92,13 +93,14 @@ export function CreateCustomFoodScreen({
   const reset = () => { setName(''); setKcal(''); setProtein(''); setCarbs(''); setFat(''); setFiber(''); setErrors({}); };
 
   const handleSave = async () => {
-    if (!user) return;
+    if (!user && !createFood) return;
     const result = validateCustomFoodForm({ name, kcal, protein, carbs, fat, fiber });
     setErrors(result.errors as Record<string, boolean>);
     if (!result.valid || !result.values) return;
     setSaving(true);
     try {
-      const id = await createCustomFood(user.uid, { name: name.trim(), nutritionPer100g: result.values });
+      const input = { name: name.trim(), nutritionPer100g: result.values };
+      const id = createFood ? await createFood(input) : await createCustomFood(user!.uid, input);
       onCreated({ id, name: name.trim(), nutritionPer100g: result.values } as NutritionCustomFood<Timestamp> & { id: string });
       reset();
     } catch {

@@ -16,13 +16,16 @@ export function resolveNutritionPhysicalContextFromSources(
   const heightCm = typeof profileHeight === 'number' && profileHeight > 0 ? profileHeight : quiz?.height;
   const latest = [...assessments].sort((a, b) => b.measuredAt.toMillis() - a.measuredAt.toMillis()
     || (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0))[0];
+  const assessmentWeight = latest?.weight;
+  const hasAssessmentWeight = typeof assessmentWeight === 'number' && Number.isFinite(assessmentWeight) && assessmentWeight > 0;
+  const weightKg = hasAssessmentWeight ? assessmentWeight : quiz?.weight;
   if (!birthDate || !(birthDate instanceof Date) || !Number.isFinite(birthDate.getTime())
-    || !heightCm || heightCm <= 0 || !latest || latest.weight <= 0 || !quiz?.sex || !quiz.goal) return null;
-  return { birthDate, ageYears: computeAge(birthDate, now), heightCm, weightKg: latest.weight,
+    || !heightCm || heightCm <= 0 || typeof weightKg !== 'number' || !Number.isFinite(weightKg) || weightKg <= 0 || !quiz?.sex || !quiz.goal) return null;
+  return { birthDate, ageYears: computeAge(birthDate, now), heightCm, weightKg,
     sex: quiz.sex, goal: quiz.goal,
     sources: { birthDate: profileBirthDate ? 'profile' : 'questionnaire',
       height: typeof profileHeight === 'number' && profileHeight > 0 ? 'profile' : 'questionnaire',
-      weight: 'assessment', sex: 'questionnaire', goal: 'questionnaire' } };
+      weight: hasAssessmentWeight ? 'assessment' : 'questionnaire', sex: 'questionnaire', goal: 'questionnaire' } };
 }
 
 export async function resolveNutritionPhysicalContext(uid: string): Promise<NutritionPhysicalContext<Date> | null> {

@@ -2,7 +2,7 @@ export type DeepLinkIntent =
   | Readonly<{ type: 'active-workout' }>
   | Readonly<{ type: 'support-case'; caseId: string }>
   | Readonly<{ type: 'campaign-tab'; tab: 'home' | 'workout' | 'progress' | 'profile' }>
-  | Readonly<{ type: 'nutrition-tab'; destination: 'plan' | 'diary' | 'weekly' }>;
+  | Readonly<{ type: 'nutrition-tab'; destination: 'plan' | 'diary' | 'weekly'; recipientUid?: string }>;
 
 /**
  * Converts an external URL into one of the app's explicitly supported
@@ -38,7 +38,7 @@ export function enqueueDeepLinkIntent(
   }
   if (pending.type === 'campaign-tab' && incoming.type === 'campaign-tab') return pending.tab === incoming.tab ? pending : incoming;
   if (pending.type === 'nutrition-tab' && incoming.type === 'nutrition-tab') {
-    return pending.destination === incoming.destination ? pending : incoming;
+    return pending.destination === incoming.destination && pending.recipientUid === incoming.recipientUid ? pending : incoming;
   }
   return pending;
 }
@@ -53,7 +53,7 @@ export function consumeDeepLinkIntent(
   }
   if (pending.type === 'campaign-tab' && handled.type === 'campaign-tab') return pending.tab === handled.tab ? null : pending;
   if (pending.type === 'nutrition-tab' && handled.type === 'nutrition-tab') {
-    return pending.destination === handled.destination ? null : pending;
+    return pending.destination === handled.destination && pending.recipientUid === handled.recipientUid ? null : pending;
   }
   return null;
 }

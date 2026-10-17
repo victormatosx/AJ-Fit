@@ -50,7 +50,7 @@ const QUESTIONNAIRES_COLLECTION = 'questionnaires';
 const ASSESSMENTS_COLLECTION = 'assessments';
 const HEALTH_WEIGHT_SAMPLES_COLLECTION = 'healthWeightSamples';
 export const NUTRITION_USER_RESOURCES = [
-  'nutritionProfile', 'nutritionPlans', 'nutritionDailyLogs', 'nutritionRecipes',
+  'onboardingNutritionState', 'nutritionProfile', 'nutritionPlans', 'nutritionDailyLogs', 'nutritionRecipes',
   'nutritionFoods', 'nutritionPreferences', 'nutritionFavoriteMealOptions',
   'nutritionGenerationJobs', 'nutritionMealAlternatives',
 ] as const;

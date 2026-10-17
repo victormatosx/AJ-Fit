@@ -1,3 +1,6 @@
+import { PROFILE_STEP_IDS, needsNutritionGoalCategory, type ProfileStepId } from '../nutrition/ui/profileSteps';
+import type { NutritionGoal } from '../types/nutrition';
+
 /**
  * Central definition of the onboarding funnel's step order — the single
  * source of truth for "what comes after what". See
@@ -22,6 +25,7 @@ export type OnboardingStepKind =
   | 'monetization';
 
 export type OnboardingStepId =
+  | `nutrition_${ProfileStepId}`
   | 'presentation'
   | 'name'
   | 'welcome'
@@ -117,6 +121,7 @@ export const ONBOARDING_STEPS: readonly OnboardingStepDef[] = [
   { id: 'functionalSituations', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'medicalRestrictionDetails', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'interstitial_ajFitProgress', kind: 'interstitial', countsTowardProgress: false, persistsToDraft: false, devJumpable: true },
+  ...PROFILE_STEP_IDS.map((id): OnboardingStepDef => ({ id: `nutrition_${id}`, kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true })),
   { id: 'socialProof', kind: 'socialProof', countsTowardProgress: false, persistsToDraft: false, devJumpable: true },
   { id: 'commitment', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'analyzing', kind: 'processing', countsTowardProgress: false, persistsToDraft: false, devJumpable: true },
@@ -186,6 +191,7 @@ export function getStepIndex(id: OnboardingStepId): number {
 }
 
 export type OnboardingFlowAnswers = {
+  goal?: NutritionGoal | null;
   sex?: string | null;
   place?: string | null;
   limits?: string[];
@@ -195,6 +201,7 @@ export type OnboardingFlowAnswers = {
 
 function isApplicableStep(id: OnboardingStepId, answers?: OnboardingFlowAnswers): boolean {
   if (!answers) return true;
+  if (id === 'nutrition_nutritionGoalCategory') return !answers.goal || needsNutritionGoalCategory(answers.goal);
   // v1.27 never considers a home equipment inventory in any generation step
   // (selection, composition, or cycle evolution) — Home templates are
   // already authored to be executable at home by definition (see

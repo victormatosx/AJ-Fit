@@ -91,8 +91,6 @@ export async function loadGenerationContext(db: Firestore, uid: string, now = ne
   ]);
   const profile = nutritionDoc.data();
   if (!validProfile(profile)) throw new HttpsError('failed-precondition', 'INVALID_NUTRITION_PROFILE');
-  if (profile.pregnant) throw new HttpsError('failed-precondition', 'INELIGIBLE_PREGNANCY');
-  if (profile.breastfeeding) throw new HttpsError('failed-precondition', 'INELIGIBLE_BREASTFEEDING');
   const quizDoc = questionnaireQuery.docs[0];
   const quiz = quizDoc?.data().answers as Record<string, unknown> | undefined;
   const userProfile = profileDoc.data()?.profile as Record<string, unknown> | undefined;

@@ -19,6 +19,6 @@ describe('RecipeQuantityModal', () => {
 
   it('never confirms a non-positive or unresolved gram amount', () => {
     expect(source).toMatch(/const valid = grams != null && isPositiveGrams\(grams\);/);
-    expect(source).toMatch(/disabled=\{!valid\}/);
+    expect(source).toMatch(/disabled=\{!valid \|\| saving\}/);
   });
 });
