@@ -331,6 +331,11 @@
       "title": "We need a bit more data to calculate your plan",
       "body": "Log your most recent weight so we can calculate your nutrition targets."
     },
+    "observationInterrupted": {
+      "title": "Waiting for a diet update",
+      "body": "We haven't received new updates. Your diet may still be in progress. Check your connection and check its status again.",
+      "retry": "Check status"
+    },
     "genericError": {
       "title": "Something went wrong",
       "body": "Please try again in a moment."

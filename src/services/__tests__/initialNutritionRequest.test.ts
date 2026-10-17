@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { readInitialNutritionRequest, runInitialNutritionRequest, setInitialNutritionDisabled, resolveInitialNutritionRequestPresentation } from '../initialNutritionRequest';
 const store = new Map<string, string>();
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: {
   getItem: async (key: string) => store.get(key) ?? null,
   setItem: async (key: string, value: string) => { store.set(key, value); },
 } }));
-import { readInitialNutritionRequest, runInitialNutritionRequest, setInitialNutritionDisabled, resolveInitialNutritionRequestPresentation } from '../initialNutritionRequest';
 beforeEach(() => { store.clear(); vi.useRealTimers(); });
 describe('persistent initial request budget', () => {
   it('survives remount/reopen and caps transient requests at three; explicit recovery is bounded again', async () => {
@@ -39,6 +39,19 @@ describe('persistent initial request budget', () => {
     await setInitialNutritionDisabled('u'); expect(await readInitialNutritionRequest('u')).toMatchObject({ status: 'disabled', attempts: 0 });
     await runInitialNutritionRequest('u', async () => ({ generationId: '', status: 'disabled' }));
     expect((await readInitialNutritionRequest('u')).status).toBe('disabled');
+  });
+  it('serializes repeated explicit retries and persists the acknowledged job across module reload', async () => {
+    let finish!: (value: { generationId: string }) => void;
+    const request = vi.fn(() => new Promise<{ generationId: string }>((resolve) => { finish = resolve; }));
+    const retries = Array.from({ length: 6 }, () => runInitialNutritionRequest('u', request, true));
+    await vi.waitFor(() => expect(request).toHaveBeenCalledOnce());
+    finish({ generationId: 'already-created' });
+    await Promise.all(retries);
+    vi.resetModules();
+    const reopened = await import('../initialNutritionRequest');
+    await reopened.runInitialNutritionRequest('u', request, true);
+    expect(request).toHaveBeenCalledOnce();
+    expect((await reopened.readInitialNutritionRequest('u')).status).toBe('queued');
   });
 });
 

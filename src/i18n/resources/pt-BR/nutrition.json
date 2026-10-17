@@ -331,6 +331,11 @@
       "title": "Faltam alguns dados para calcular seu plano",
       "body": "Registre seu peso mais recente para que possamos calcular suas metas nutricionais."
     },
+    "observationInterrupted": {
+      "title": "Aguardando atualização da sua dieta",
+      "body": "Não recebemos novas atualizações. Sua dieta pode continuar sendo preparada. Confira sua conexão e consulte o andamento novamente.",
+      "retry": "Consultar andamento"
+    },
     "genericError": {
       "title": "Algo deu errado",
       "body": "Tente novamente em alguns instantes."

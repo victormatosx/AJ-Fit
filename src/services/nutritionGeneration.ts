@@ -65,6 +65,36 @@ export function subscribeToNutritionGenerationJob(
 
 const ACTIVE_JOB_STATUSES = ['queued', 'running', 'validating'] as const;
 
+/** A stalled listener is recoverable; it never cancels or recreates the backend job. */
+export function monitorNutritionGenerationJob(
+  uid: string, generationId: string,
+  onJob: (job: NutritionGenerationJobDoc | null) => void,
+  onObservationFailed: (failed: boolean) => void,
+): Unsubscribe {
+  let timer: ReturnType<typeof setTimeout>;
+  const arm = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => onObservationFailed(true), 12 * 60 * 1000);
+  };
+  onObservationFailed(false);
+  arm();
+  const stop = subscribeToNutritionGenerationJob(uid, generationId, (job) => {
+    onObservationFailed(!job);
+    clearTimeout(timer);
+    if (job && ACTIVE_JOB_STATUSES.some((status) => status === job.status)) arm();
+    onJob(job);
+  }, () => { clearTimeout(timer); onObservationFailed(true); });
+  return () => { clearTimeout(timer); stop(); };
+}
+
+/** Independent listeners may deliver the completed job before its atomically persisted plan. */
+export function generationPlanIsReady(
+  job: Pick<NutritionGenerationJobDoc, 'status' | 'planId'> | null,
+  plan: { planId: string } | null,
+): boolean {
+  return job?.status === 'completed' && Boolean(plan && plan.planId === job.planId);
+}
+
 /**
  * Resumes tracking across navigation/app restarts (states_and_loading.md
  * §5): backend single-flight guarantees at most one job in these statuses
