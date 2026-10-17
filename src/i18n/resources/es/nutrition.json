@@ -331,6 +331,11 @@
       "title": "Necesitamos un dato más para calcular tu plan",
       "body": "Registra tu peso más reciente para que podamos calcular tus metas nutricionales."
     },
+    "observationInterrupted": {
+      "title": "Esperando una actualización de tu dieta",
+      "body": "No hemos recibido nuevas actualizaciones. Tu dieta puede seguir preparándose. Revisa tu conexión y vuelve a consultar su estado.",
+      "retry": "Consultar estado"
+    },
     "genericError": {
       "title": "Algo salió mal",
       "body": "Intenta de nuevo en un momento."

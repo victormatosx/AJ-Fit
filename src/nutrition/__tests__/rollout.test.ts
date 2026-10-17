@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { isValidNutritionRolloutConfig, nutritionFlagEnabled, nutritionRolloutBucket,
-  NUTRITION_ROLLOUT_FAIL_SAFE_CONFIG, onboardingAutomaticGenerationEnabled } from '../rollout';
+  NUTRITION_ROLLOUT_FAIL_SAFE_CONFIG, onboardingAutomaticGenerationEnabled, subscribeToNutritionRolloutConfig } from '../rollout';
+
+const snapshots = vi.hoisted(() => vi.fn());
+vi.mock('firebase/firestore', () => ({ doc: vi.fn(), onSnapshot: snapshots }));
 
 vi.mock('../../lib/firebase', () => ({ db: {} }));
 
@@ -19,6 +22,21 @@ describe('Nutrition rollout', () => {
       nutritionEnabled: enabled, nutritionPlanGenerationEnabled: enabled,
     })).toBe(true);
   });
+});
+
+it('recovers gates from an empty offline snapshot when the server config arrives', () => {
+  const unsubscribe = vi.fn(); snapshots.mockReturnValue(unsubscribe);
+  const configs = vi.fn();
+  const stop = subscribeToNutritionRolloutConfig(configs);
+  const [, next, error] = snapshots.mock.calls[0];
+  next({ data: () => undefined });
+  expect(configs).toHaveBeenLastCalledWith(NUTRITION_ROLLOUT_FAIL_SAFE_CONFIG);
+  const config = { nutritionEnabled: enabled, nutritionPlanGenerationEnabled: enabled };
+  next({ data: () => config });
+  expect(nutritionFlagEnabled('u', 'nutritionPlanGenerationEnabled', configs.mock.calls.at(-1)![0])).toBe(true);
+  error(new Error('denied'));
+  expect(configs).toHaveBeenLastCalledWith(NUTRITION_ROLLOUT_FAIL_SAFE_CONFIG);
+  stop(); expect(unsubscribe).toHaveBeenCalledOnce();
 });
 
 it('keeps automatic generation independently disabled without changing the historical active contract', () => {

@@ -32,7 +32,7 @@ export function NutritionGeneratingScreen({
   const { t } = useTranslation('nutrition');
 
   if (observationFailed || job?.status === 'failed') {
-    const copyKey = observationFailed ? 'genericError' : generationFailureCopyKey(job?.errorCode);
+    const copyKey = observationFailed ? 'observationInterrupted' : generationFailureCopyKey(job?.errorCode);
     const retryable = observationFailed || isGenerationRetryable(job?.errorCode);
     return (
       <View style={{ flex: 1, backgroundColor: NU.bg }}>
@@ -40,7 +40,7 @@ export function NutritionGeneratingScreen({
           <NutritionErrorState
             title={t(`generating.${copyKey}.title`)}
             body={t(`generating.${copyKey}.body`)}
-            retryLabel={retryable ? t('generating.failed.retry') : undefined}
+            retryLabel={retryable ? t(observationFailed ? 'generating.observationInterrupted.retry' : 'generating.failed.retry') : undefined}
             onRetry={retryable ? onRetry : undefined}
             backLabel={t('generating.failed.back')}
             onBack={onBack}

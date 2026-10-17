@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { loadNutritionRolloutConfig, nutritionFlagEnabled } from './rollout';
+import { subscribeToNutritionRolloutConfig, nutritionFlagEnabled } from './rollout';
 
 /**
  * Gates the whole Nutrition tab client-side (`08_frontend` round brief §3):
@@ -13,11 +13,10 @@ export function useNutritionEnabled(uid: string | null): boolean | null {
 
   useEffect(() => {
     if (!uid) { setEnabled(null); return; }
-    let cancelled = false;
-    loadNutritionRolloutConfig().then((config) => {
-      if (!cancelled) setEnabled(nutritionFlagEnabled(uid, 'nutritionEnabled', config));
-    }).catch(() => { if (!cancelled) setEnabled(false); });
-    return () => { cancelled = true; };
+    setEnabled(null);
+    return subscribeToNutritionRolloutConfig((config) => {
+      setEnabled(nutritionFlagEnabled(uid, 'nutritionEnabled', config));
+    });
   }, [uid]);
 
   return enabled;

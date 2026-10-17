@@ -8,11 +8,11 @@ import { Alert, AppState, Keyboard, Modal } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { Timestamp } from 'firebase/firestore';
 import { useAuth } from '../../state/AuthContext';
-import { loadNutritionRolloutConfig, nutritionFlagEnabled } from '../../nutrition/rollout';
+import { subscribeToNutritionRolloutConfig, nutritionFlagEnabled } from '../../nutrition/rollout';
 import { resolveNutritionPhysicalContext } from '../../services/nutritionContext';
 import { createNutritionProfile, updateNutritionProfile, type NutritionProfileAnswers } from '../../services/nutritionProfile';
 import {
-  requestNutritionPlanGeneration, subscribeToActiveNutritionGenerationJob, subscribeToNutritionGenerationJob,
+  requestNutritionPlanGeneration, subscribeToActiveNutritionGenerationJob, monitorNutritionGenerationJob, generationPlanIsReady,
   type NutritionGenerationJobDoc,
 } from '../../services/nutritionGeneration';
 import {
@@ -81,7 +81,7 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
   const uid = user?.uid ?? null;
   const { t } = useTranslation('nutrition');
 
-  const [generationEnabled, setGenerationEnabled] = useState(false);
+  const [generationEnabled, setGenerationEnabled] = useState<boolean | null>(null);
   const [profile, setProfile] = useState<NutritionProfileType<Timestamp> | null>(null);
   const [currentWeightKg, setCurrentWeightKg] = useState<number | null>(null);
   const [goal, setGoal] = useState<NutritionGoal | null>(null);
@@ -99,16 +99,8 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
   const [job, setJob] = useState<NutritionGenerationJobDoc | null>(null);
   const [generationObservationFailed, setGenerationObservationFailed] = useState(false);
   const generationRequestInFlight = useRef(false);
-  // `activeJob`/`generationId` momentarily go back to null the instant a job
-  // flips to 'completed' (the job and the plan-becomes-active write commit
-  // together on the backend, but the client's two independent `onSnapshot`
-  // listeners for them do not necessarily deliver in the same tick) — so
-  // `!plan && !generationId && !activeJob` below can be true for one frame
-  // even though a plan was just produced. Once this session has observed
-  // any job at all, remember it, so that frame falls through to home's own
-  // `loading`/`noPlan` state (correct either way) instead of back to the
-  // "automatic generation disabled" copy, which a job having existed makes
-  // misleading regardless of the `onboardingAutomatic` rollout flag.
+  // A delayed enrollment snapshot must not show the pre-request copy after
+  // this session has already observed generation activity.
   const sawGenerationActivityRef = useRef(false);
   if (activeJob || job || generationId) sawGenerationActivityRef.current = true;
 
@@ -252,12 +244,19 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
 
   useEffect(() => {
     if (!uid) return;
+    setGenerationEnabled(null);
+    return subscribeToNutritionRolloutConfig((config) => {
+      setGenerationEnabled(nutritionFlagEnabled(uid, 'nutritionPlanGenerationEnabled', config));
+    });
+  }, [uid, reloadKey]);
+
+  useEffect(() => {
+    if (!uid) return;
     let cancelled = false;
     setBaseError(false);
-    Promise.all([loadNutritionRolloutConfig(), resolveNutritionPhysicalContext(uid)])
-      .then(([config, physical]) => {
+    resolveNutritionPhysicalContext(uid)
+      .then((physical) => {
         if (cancelled) return;
-        setGenerationEnabled(nutritionFlagEnabled(uid, 'nutritionPlanGenerationEnabled', config));
         setGoal(physical?.goal ?? null);
         setCurrentWeightKg(physical?.weightKg ?? null);
         setBaseLoaded(true);
@@ -308,7 +307,7 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
   useEffect(() => {
     if (!uid) return;
     setPlanLoaded(false);
-    return subscribeToActiveNutritionPlan(uid, (next) => { setPlan(next); setPlanLoaded(true); }, () => setPlanLoaded(true));
+    return subscribeToActiveNutritionPlan(uid, (next) => { setPlan(next); setPlanLoaded(true); }, () => { setBaseError(true); setPlanLoaded(true); });
   }, [uid, reloadKey]);
 
   // Resumes tracking an in-flight generation across navigation/app restarts
@@ -322,30 +321,21 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
         setGenerationId(next.generationId);
         setRoute((current) => (current.name === 'generating' ? current : { name: 'generating' }));
       }
-    }, () => setActiveJobLoaded(true));
-  }, [uid]);
+    }, () => { setBaseError(true); setActiveJobLoaded(true); });
+  }, [uid, reloadKey]);
 
   useEffect(() => {
     if (!uid || !generationId) { setJob(null); return; }
     setJob(null);
-    setGenerationObservationFailed(false);
-    // A monitor timeout never fails the backend job or submits another AI request.
-    const timer = setTimeout(() => setGenerationObservationFailed(true), 12 * 60 * 1000);
-    const unsubscribe = subscribeToNutritionGenerationJob(uid, generationId, (next) => {
+    return monitorNutritionGenerationJob(uid, generationId, (next) => {
       setJob(next);
       if (next?.status === 'failed') setRoute({ name: 'generating' });
-      if (!next) setGenerationObservationFailed(true);
-      if (next?.status === 'completed' || next?.status === 'failed') {
-        clearTimeout(timer);
-        setGenerationObservationFailed(false);
-      }
-    }, () => { clearTimeout(timer); setGenerationObservationFailed(true); });
-    return () => { clearTimeout(timer); unsubscribe(); };
+    }, setGenerationObservationFailed);
   }, [uid, generationId, reloadKey]);
 
   useEffect(() => {
-    if (job?.status === 'completed') { setGenerationId(null); setRoute((current) => current.name === 'generating' ? { name: 'home' } : current); }
-  }, [job?.status]);
+    if (job?.generationId === generationId && generationPlanIsReady(job, plan)) { setGenerationId(null); setRoute((current) => current.name === 'generating' ? { name: 'home' } : current); }
+  }, [job, plan, generationId]);
 
   // Today's diary — drives NutritionHome's real consumption summary.
   useEffect(() => {
@@ -637,7 +627,7 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
     setHistoryVisible(true);
   };
 
-  if (!uid || !baseLoaded || !profileLoaded || !enrollmentLoaded || !activeJobLoaded) {
+  if (!uid || !baseLoaded || !profileLoaded || !enrollmentLoaded || !activeJobLoaded || generationEnabled == null) {
     return <NutritionHomeScreen state={{ kind: 'loading' }} onCreateCustomFood={() => {}} onCreateRecipe={() => {}} />;
   }
 

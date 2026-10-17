@@ -1,0 +1,29 @@
+{
+  "projectId": "ajfit-2f321",
+  "readConfirmedAt": "2026-10-17T13:41:43.314019+00:00",
+  "documents": {
+    "onboardingAutomatic": {
+      "value": {
+        "schemaVersion": 1,
+        "percentage": 100,
+        "enabled": true
+      },
+      "updateTime": "2026-10-17T13:29:12.883862Z"
+    },
+    "active": {
+      "value": {
+        "nutritionPlanGenerationEnabled": {
+          "percentage": 100,
+          "enabled": true,
+          "schemaVersion": 1
+        },
+        "nutritionEnabled": {
+          "percentage": 100,
+          "enabled": true,
+          "schemaVersion": 1
+        }
+      },
+      "updateTime": "2026-10-09T02:06:27.885662Z"
+    }
+  }
+}

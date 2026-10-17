@@ -1,9 +1,23 @@
 import { randomUUID } from 'node:crypto';
 import { Timestamp } from 'firebase-admin/firestore';
 import type { CallableRequest } from 'firebase-functions/v2/https';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { db } from '../../lib/firebaseAdmin';
 import { requestNutritionPlanGenerationHandler } from '../generation/request';
+import { loadGenerationContext } from '../generation/context';
+import { processNutritionGenerationJob } from '../generation/worker';
+import { NutritionAiProviderError } from '../ai/provider';
+
+async function validResult(uid: string) {
+  const context = await loadGenerationContext(db, uid);
+  return { model: 'mock', latencyMs: 1, usage: { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0 },
+    output: { meals: context.engine.mealTargets.map((target) => ({ slot: target.slot, foods: [{
+      name: 'Arroz com feijão', ingredients: [{ name: 'Arroz', origin: 'plant' }],
+      quantity: 100, unit: 'g', preparationNote: '', allergens: [],
+      estimatedNutrition: { kcal: target.kcal.target, proteinG: target.proteinG.target,
+        carbsG: target.carbsG.target, fatG: target.fatG.target, fiberG: target.fiberG?.target ?? 0 },
+    }] })) } };
+}
 
 async function fixture(enrolled = true) {
   const uid = `initial-nutrition-${randomUUID()}`;
@@ -86,6 +100,91 @@ describe.skipIf(!process.env.FIRESTORE_EMULATOR_HOST)('first onboarding generati
     const jobs = await root.collection('nutritionGenerationJobs').get();
     expect(jobs.size).toBe(1);
     expect(jobs.docs[0].get('initialOnboarding')).toBe(true);
+  });
+
+  it('recovers a lost callable response/reopen while running and after completion without a second job or plan', async () => {
+    const { uid, root, request } = await fixture();
+    const { generationId } = await requestNutritionPlanGenerationHandler(request, db, async () => true);
+    const result = await validResult(uid);
+    let release!: () => void;
+    const blocked = new Promise<void>((resolve) => { release = resolve; });
+    const generatePlan = vi.fn(async () => { await blocked; return result; });
+    const worker = processNutritionGenerationJob(uid, generationId, { generatePlan }, db);
+    await vi.waitFor(() => expect(generatePlan).toHaveBeenCalledOnce());
+    expect(await processNutritionGenerationJob(uid, generationId, { generatePlan }, db)).toBe(false);
+    const requests = await Promise.all(Array.from({ length: 5 }, () => requestNutritionPlanGenerationHandler(request, db, async () => true)));
+    expect(requests.every((response) => response.generationId === generationId)).toBe(true);
+    release(); expect(await worker).toBe(true);
+    // A new app process has no local state; the enrollment still identifies the completed diet.
+    expect(await requestNutritionPlanGenerationHandler(request, db, async () => true)).toEqual({ generationId });
+    expect((await root.collection('onboardingNutritionState').doc('current').get()).get('autoGenerationId')).toBe(generationId);
+    expect((await root.collection('nutritionGenerationJobs').get()).size).toBe(1);
+    expect((await root.collection('nutritionPlans').get()).size).toBe(1);
+    expect((await root.collection('nutritionPlans').doc(generationId).get()).get('status')).toBe('active');
+    expect(generatePlan).toHaveBeenCalledOnce();
+  });
+
+  it('resumes an expired worker lease with the persisted attempt budget and transient provider retry', async () => {
+    const { uid, root, request } = await fixture();
+    const { generationId } = await requestNutritionPlanGenerationHandler(request, db, async () => true);
+    const ref = root.collection('nutritionGenerationJobs').doc(generationId);
+    await ref.update({ status: 'running', aiAttemptCount: 1, leaseUntil: Timestamp.fromMillis(0), nextAttemptAt: Timestamp.fromMillis(0) });
+    const generatePlan = vi.fn().mockRejectedValueOnce(new NutritionAiProviderError('AI_RATE_LIMIT', true))
+      .mockResolvedValueOnce(await validResult(uid));
+    expect(await processNutritionGenerationJob(uid, generationId, { generatePlan }, db)).toBe(true);
+    expect(generatePlan.mock.calls.map(([input]) => input.trace.attempt)).toEqual([2, 3]);
+    expect((await ref.get()).get('aiAttemptCount')).toBe(3);
+    expect((await ref.get()).get('status')).toBe('completed');
+    expect((await root.collection('nutritionPlans').get()).size).toBe(1);
+    expect(await processNutritionGenerationJob(uid, generationId, { generatePlan }, db)).toBe(false);
+    expect(generatePlan).toHaveBeenCalledTimes(2);
+  });
+
+  it('never spends a fourth AI attempt after a crash and permits only one explicit recovery job', async () => {
+    const { uid, root, request } = await fixture();
+    const { generationId } = await requestNutritionPlanGenerationHandler(request, db, async () => true);
+    const ref = root.collection('nutritionGenerationJobs').doc(generationId);
+    await ref.update({ status: 'validating', aiAttemptCount: 3, lastFailureCode: 'AI_MACRO_VALIDATION_FAILED',
+      leaseUntil: Timestamp.fromMillis(0), nextAttemptAt: Timestamp.fromMillis(0) });
+    const generatePlan = vi.fn();
+    expect(await processNutritionGenerationJob(uid, generationId, { generatePlan }, db)).toBe(false);
+    expect(generatePlan).not.toHaveBeenCalled();
+    expect((await ref.get()).get('errorCode')).toBe('AI_MACRO_VALIDATION_FAILED');
+    expect((await ref.get()).get('status')).toBe('failed');
+    expect((await root.collection('nutritionPlans').get()).empty).toBe(true);
+    expect((await requestNutritionPlanGenerationHandler(request, db, async () => true)).generationId).toBe(generationId);
+    const retryRequest = { ...request, data: { requestId: 'explicit-crash-recovery' } } as CallableRequest;
+    await expect(requestNutritionPlanGenerationHandler(retryRequest, db)).rejects.toThrow('NUTRITION_GENERATION_COOLDOWN');
+    await db.collection('nutritionRateLimits').doc(uid).update({ lastRequestedAt: Timestamp.fromMillis(0) });
+    const recovered = await Promise.all(Array.from({ length: 5 }, () => requestNutritionPlanGenerationHandler(retryRequest, db)));
+    expect(new Set(recovered.map((response) => response.generationId)).size).toBe(1);
+    expect((await root.collection('nutritionGenerationJobs').get()).size).toBe(2);
+    expect((await root.collection('onboardingNutritionState').doc('current').get()).get('latestGenerationId')).toBe(recovered[0].generationId);
+  });
+
+  it('recovers a transient Firestore persistence failure using the same job after lease expiry', async () => {
+    const { uid, root, request } = await fixture();
+    const { generationId } = await requestNutritionPlanGenerationHandler(request, db, async () => true);
+    const ref = root.collection('nutritionGenerationJobs').doc(generationId);
+    const result = await validResult(uid);
+    const generatePlan = vi.fn().mockImplementationOnce(async () => {
+      // Fail only the next persistence transaction; no real service is interrupted.
+      vi.spyOn(db, 'runTransaction').mockRejectedValueOnce(Object.assign(new Error('emulated unavailable'), { code: 14 }));
+      return result;
+    }).mockResolvedValue(result);
+    try {
+      expect(await processNutritionGenerationJob(uid, generationId, { generatePlan }, db)).toBe(false);
+    } finally { vi.restoreAllMocks(); }
+    expect((await ref.get()).get('status')).toBe('validating');
+    expect((await root.collection('nutritionPlans').get()).empty).toBe(true);
+    expect(await processNutritionGenerationJob(uid, generationId, { generatePlan }, db)).toBe(false);
+    expect(generatePlan).toHaveBeenCalledOnce();
+    await ref.update({ leaseUntil: Timestamp.fromMillis(0), nextAttemptAt: Timestamp.fromMillis(0) });
+    expect(await processNutritionGenerationJob(uid, generationId, { generatePlan }, db)).toBe(true);
+    expect(generatePlan.mock.calls.map(([input]) => input.trace.attempt)).toEqual([1, 2]);
+    expect((await root.collection('nutritionGenerationJobs').get()).size).toBe(1);
+    expect((await root.collection('nutritionPlans').get()).size).toBe(1);
+    expect((await ref.get()).get('status')).toBe('completed');
   });
 
 });
