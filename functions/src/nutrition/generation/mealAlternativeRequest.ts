@@ -19,6 +19,7 @@ import { resolvePromptFoodNames } from './foodNames';
 import { recommendedOptionFoodNames } from './mealAlternativeShared';
 import { recordAiOperation } from './operations';
 import { requireNutritionGenerationRollout } from './rollout';
+import { logValidationDiagnostics } from './diagnostics';
 
 export const MEAL_ALTERNATIVE_COOLDOWN_MS = 20 * 1000;
 export const MEAL_ALTERNATIVE_REQUEST_LEASE_MS = 3 * 60 * 1000;
@@ -160,6 +161,7 @@ export async function requestNutritionMealAlternativeHandler(
       context.physical.goal, foodNames, feedback?.reason,
       async (audit) => {
         finalAttempt = audit.attempt;
+        logValidationDiagnostics(audit.validationDiagnostics, { generationId: requestId, attempt: audit.attempt });
         await recordAiOperation(db, { ownerUid: uid, generationId: requestId, operation: 'meal_alternative',
           defaultModel: audit.fallback ? NUTRITION_AI_MODELS.fallback : NUTRITION_AI_MODELS.mealAlternative,
           attempt: audit.attempt, result: audit.result, code: audit.code, fallback: audit.fallback,

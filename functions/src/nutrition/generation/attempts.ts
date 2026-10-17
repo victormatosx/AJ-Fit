@@ -3,6 +3,7 @@ import { nutritionAiProfile, NutritionAiProviderError, type AiResult, type Nutri
 import { MAX_AI_ATTEMPTS } from '../ai/config';
 import { PlanValidationError, validateAndBuildPlan, type ValidatedPlan, type FailureCode, type ValidationIssue } from './domain';
 import type { NutritionPromptFoodNames } from './foodNames';
+import { validationRetryFeedback, type ValidationDiagnostics } from './diagnostics';
 
 export type AttemptCode = FailureCode | 'AI_TIMEOUT' | 'AI_RATE_LIMIT' | 'AI_RETRY_EXHAUSTED' | 'AI_PROVIDER_ERROR';
 export interface AttemptAudit {
@@ -10,6 +11,7 @@ export interface AttemptAudit {
   /** Only ever set for AI_SAFETY_VALIDATION_FAILED — see NutritionAiProviderError.refusalReason. */
   refusalReason?: string;
   validationIssue?: ValidationIssue;
+  validationDiagnostics?: ValidationDiagnostics;
 }
 export class GenerationAttemptsExhausted extends Error {
   constructor(readonly code: AttemptCode) { super(code); }
@@ -58,16 +60,17 @@ export async function generateValidatedPlan(
     } catch (error) {
       lastCode = classifyAttemptError(error);
       const validationIssue = error instanceof PlanValidationError ? error.issue : undefined;
+      const validationDiagnostics = error instanceof PlanValidationError ? error.diagnostics : undefined;
       // Repair the actual rejected candidate instead of asking for a fresh
       // plan with a context-free error code. This stays in memory and goes
       // only to the provider; it must never enter logs or job documents.
-      feedback = validationIssue ? JSON.stringify({ failureCode: lastCode, ...validationIssue,
-        previousPlan: result.output }) : lastCode;
-      await onAttempt({ attempt, fallback, result, code: lastCode, latencyMs: Date.now() - started, validationIssue });
+      feedback = validationRetryFeedback(lastCode, validationIssue, validationDiagnostics,
+        error instanceof PlanValidationError ? error.repairCandidate ?? result.output : result.output);
+      await onAttempt({ attempt, fallback, result, code: lastCode, latencyMs: Date.now() - started, validationIssue, validationDiagnostics });
       if (error instanceof PlanValidationError && !error.retryable) break;
       continue;
     }
-    await onAttempt({ attempt, fallback, result, code: null, latencyMs: Date.now() - started });
+    await onAttempt({ attempt, fallback, result, code: null, latencyMs: Date.now() - started, validationDiagnostics: validated.diagnostics });
     return { validated, result, attempt, fallback };
   }
   throw new GenerationAttemptsExhausted(lastCode);

@@ -37,7 +37,7 @@ Keep it natural, practical, affordable: normal everyday Brazilian foods, simple 
 Prefer preferredFoodNames/usualFoodNames when they fit; never include a food that violates an allergy, the dietary pattern or excludedFoodNames.
 Targets are already calculated — don't recalculate them, don't add macros outside estimatedNutrition, no prose.
 For EACH meal, sum the estimatedNutrition of all its foods. The sums for kcal, proteinG, carbsG, fatG AND fiberG must each be inside that mealTargets field's min/max range; aim at target. These are simultaneous acceptance constraints, not suggestions. Before returning, check every sum and adjust food choices and quantities until all five fit. Keep nutrition estimates truthful for the actual portions; never fabricate values to fit. Matching calories alone is insufficient, and scaling all portions equally cannot fix an incorrect macro ratio.
-If retryFeedback contains previousPlan and identifies a rejected slot and nutrients (below_min/above_max), repair that candidate instead of starting over. Preserve meals already within all ranges; adjust the failing foods and portions to correct their proportions, then check ALL meals and nutrients again. Return the complete repaired plan in the same schema.`;
+If retryFeedback contains previousPlan, repair that candidate instead of starting over. Its validation lists all meal and daily deviations (observed, min/max, absolute difference from the violated boundary and percent), plus deterministic correction results. Fix ALL failures with truthful food choices and representable portions; never just edit nutrition numbers. Keep count units integer and preserve already valid meals and all restrictions. Recheck every meal AND the daily ranges when provided. Return the complete repaired plan in the same schema.`;
 
 export function fullPlanContext(
   profile: NutritionAiProfile, engine: NutritionEngineOutput, goal: NutritionGoal,
@@ -75,7 +75,8 @@ Compose two or three equivalent options for a single meal, built directly from y
 Each option is a list of items. Each item has: name, quantity, unit, an optional short preparationNote, your own estimatedNutrition (kcal, proteinG, carbsG, fatG, fiberG) for that exact quantity, and an allergens array you self-declare truthfully for that item.
 Build a natural, practical, accessible Brazilian meal for this slot: normal, everyday, affordable foods, simple preparations (raw, cooked, grilled, roasted), never an elaborate recipe. Avoid expensive ingredients unless preferredFoodNames/usualFoodNames call for them.
 Prefer preferredFoodNames/usualFoodNames when they fit the target and restrictions, and avoid the listed avoidFoodNames when a natural alternative remains. Never include a food that violates an allergy, the dietary pattern, or the excludedFoodNames list.
-The meal target is already calculated. Do not recalculate targets, report macros outside each item's own estimatedNutrition, add prose, or explain.`;
+The meal target is already calculated. Do not recalculate targets, report macros outside each item's own estimatedNutrition, add prose, or explain.
+If retryFeedback contains previousPlan and validation, repair ALL reported deviations using observed values and min/max ranges. Preserve valid options and restrictions; use truthful estimates for the actual portions, integer count units, and return the complete schema.`;
 
 export function mealAlternativeContext(
   profile: NutritionAiProfile, target: MealNutritionTarget, avoidFoodNames: readonly string[],

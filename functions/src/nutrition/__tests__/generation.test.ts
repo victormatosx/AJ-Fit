@@ -305,7 +305,7 @@ describe('incident regression — rejected nutrient proportions', () => {
     expect(audits[0]).toEqual({ scope: 'meal', slot: 'breakfast',
       nutrients: ['proteinG:above_max', 'fiberG:below_min'] });
     const retry = vi.mocked(provider.generatePlan).mock.calls[1][0];
-    expect(JSON.parse(retry.feedback!)).toEqual({ failureCode: 'AI_MACRO_VALIDATION_FAILED',
+    expect(JSON.parse(retry.feedback!)).toMatchObject({ failureCode: 'AI_MACRO_VALIDATION_FAILED',
       scope: 'meal', slot: 'breakfast', nutrients: ['proteinG:above_max', 'fiberG:below_min'], previousPlan: wrong });
     expect(JSON.stringify(audits)).not.toContain('Mingau');
     expect(retry.trace).toEqual({ generationId: 'diagnostic-job', attempt: 2 });

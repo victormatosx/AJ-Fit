@@ -6,6 +6,7 @@ import { MAX_AI_ATTEMPTS } from '../ai/config';
 import { PlanValidationError, validateAndBuildMealAlternative, type ValidatedMealAlternative } from './domain';
 import { classifyAttemptError, GenerationAttemptsExhausted, type AttemptAudit, type AttemptCode } from './attempts';
 import type { NutritionPromptFoodNames } from './foodNames';
+import { validationRetryFeedback } from './diagnostics';
 
 /**
  * Mirrors `generateValidatedPlan`'s bounded retry/fallback loop exactly
@@ -21,6 +22,7 @@ export async function generateValidatedMealAlternative(
 ): Promise<{ validated: ValidatedMealAlternative; result: AiResult; attempt: number; fallback: boolean }> {
   if (!provider.generateMealAlternative) throw new NutritionAiProviderError('AI_PROVIDER_ERROR', false);
   let lastCode: AttemptCode = 'AI_RETRY_EXHAUSTED';
+  let retryFeedback: string | undefined;
   for (let attempt = 1; attempt <= MAX_AI_ATTEMPTS; attempt++) {
     const fallback = attempt === MAX_AI_ATTEMPTS
       && ['AI_SCHEMA_INVALID', 'AI_MACRO_VALIDATION_FAILED'].includes(lastCode);
@@ -28,9 +30,10 @@ export async function generateValidatedMealAlternative(
     let result: AiResult | null = null;
     try {
       result = await provider.generateMealAlternative({ profile: nutritionAiProfile(profile), target, avoidFoodNames, goal, foodNames,
-        feedback: attempt > 1 ? lastCode : feedback, fallback });
+        feedback: attempt > 1 ? retryFeedback ?? lastCode : feedback, fallback });
     } catch (error) {
       lastCode = classifyAttemptError(error);
+      retryFeedback = undefined;
       await onAttempt({ attempt, fallback, result, code: lastCode, latencyMs: Date.now() - started });
       if ((error instanceof PlanValidationError || error instanceof NutritionAiProviderError) && !error.retryable) break;
       continue;
@@ -40,11 +43,15 @@ export async function generateValidatedMealAlternative(
       validated = validateAndBuildMealAlternative(result.output, slot, target, profile.excludedAllergens, true, { dietaryPattern: profile.dietaryPattern, excludedFoodNames: foodNames.excluded });
     } catch (error) {
       lastCode = classifyAttemptError(error);
-      await onAttempt({ attempt, fallback, result, code: lastCode, latencyMs: Date.now() - started });
+      const validationIssue = error instanceof PlanValidationError ? error.issue : undefined;
+      const validationDiagnostics = error instanceof PlanValidationError ? error.diagnostics : undefined;
+      retryFeedback = validationRetryFeedback(lastCode, validationIssue, validationDiagnostics,
+        error instanceof PlanValidationError ? error.repairCandidate ?? result.output : result.output);
+      await onAttempt({ attempt, fallback, result, code: lastCode, latencyMs: Date.now() - started, validationIssue, validationDiagnostics });
       if (error instanceof PlanValidationError && !error.retryable) break;
       continue;
     }
-    await onAttempt({ attempt, fallback, result, code: null, latencyMs: Date.now() - started });
+    await onAttempt({ attempt, fallback, result, code: null, latencyMs: Date.now() - started, validationDiagnostics: validated.diagnostics });
     return { validated, result, attempt, fallback };
   }
   throw new GenerationAttemptsExhausted(lastCode);

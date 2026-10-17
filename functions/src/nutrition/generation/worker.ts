@@ -12,6 +12,7 @@ import { resolvePromptFoodNames } from './foodNames';
 import { recordAiOperation } from './operations';
 import { trackNutritionBackendEvent } from '../analytics';
 import { countBucket, durationBucket } from '../shared/nutrition/analytics/contract';
+import { logValidationDiagnostics } from './diagnostics';
 
 const LEASE_MS = 8 * 60 * 1000;
 const JOB_STATUS_ACTIVE = ['queued', 'running', 'validating'];
@@ -82,6 +83,7 @@ export async function processNutritionGenerationJob(
       provider, context.profile, context.engine, context.physical.goal, foodNames,
       async (audit) => {
         observedAttempt = audit.attempt;
+        logValidationDiagnostics(audit.validationDiagnostics, { generationId, attempt: audit.attempt });
         logInfo('nutrition.generation', 'attempt_completed', { generationId, attempt: audit.attempt,
           stage: audit.result ? 'validation' : 'provider', failureCode: audit.code,
           durationMs: audit.latencyMs, fallback: audit.fallback,
