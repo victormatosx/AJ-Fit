@@ -17,9 +17,13 @@ describe('CreateRecipeScreen', () => {
     expect(source).toMatch(/localFoodLogSearchProvider\.search\(query/);
   });
 
-  it('shows kcal/protein/"per 100 g" on search results and adds the tapped food straight to the ingredient list', () => {
+  it('shows kcal/protein/"per 100 g" on search results and opens the same add-grams quantity step RegisterMealScreen uses', () => {
     expect(source).toMatch(/kcal=\{food\.nutritionPer100g\.kcal\} proteinG=\{food\.nutritionPer100g\.proteinG\} per100g/);
-    expect(source).toMatch(/const addIngredient = \(food: NutritionFoodPick\) => \{[\s\S]*?setIngredients\(\(prev\) => \[\.\.\.prev, \{ \.\.\.food, grams: '100' \}\]\);/);
+    expect(source).toMatch(/const openAddIngredient = \(food: NutritionFoodPick\) => \{[\s\S]*?setGramsStep\(food\);/);
+    expect(source).toMatch(/const confirmAddIngredient = \(\) => \{[\s\S]*?setIngredients\(\(prev\) => \[\.\.\.prev, \{ \.\.\.gramsStep, grams: gramsText \}\]\);/);
+    // Same component/behavior as RegisterMealScreen's grams step: keyboard dismissed on open+confirm, NuPanel sheet, serving-unit pills.
+    expect(source).toMatch(/<NuPanel visible=\{gramsStep != null\} avoidKeyboard/);
+    expect(source).toMatch(/servableUnits\.length > 0/);
   });
 
   it('excludes already-added ingredients from search results', () => {
@@ -34,8 +38,8 @@ describe('CreateRecipeScreen', () => {
     expect(source).toMatch(/cursor, favoriteIds: favoriteIdSet, recentIds: recentIdSet/);
   });
 
-  it('hides the search once MAX_INGREDIENTS is reached, showing the cap message instead', () => {
-    expect(source).toMatch(/ingredients\.length < MAX_INGREDIENTS \? \(/);
+  it('never limits the number of ingredients', () => {
+    expect(source).not.toMatch(/MAX_INGREDIENTS/);
   });
 
   it('derives the whole breakdown from calculateRecipeBreakdown — never a client-typed macro field', () => {
@@ -51,32 +55,37 @@ describe('CreateRecipeScreen', () => {
     expect(source).toMatch(/onPress=\{\(\) => setIngredients\(\(prev\) => prev\.filter\(\(_, i\) => i !== index\)\)\}/);
   });
 
-  it('caps ingredients at MAX_INGREDIENTS (the documented recipe safety limit) and disables adding past it', () => {
-    expect(source).toMatch(/const MAX_INGREDIENTS = 6;/);
-    expect(source).toMatch(/ingredients\.length < MAX_INGREDIENTS \? \(/);
-    expect(source).toMatch(/t\('recipe\.maxIngredients', \{ count: MAX_INGREDIENTS \}\)/);
+  it('always shows the embedded ingredient search, never gated behind a toggle', () => {
+    expect(source).not.toMatch(/showIngredientSearch/);
+    expect(source).not.toMatch(/recipe\.addIngredient/);
   });
 
-  it('shows total ingredient weight, final-weight input with a fallback note, and the per100g derivation', () => {
+  it('labels the name and description fields and keeps their placeholders', () => {
+    expect(source).toMatch(/value=\{name\}\s*onChangeText=\{setName\}\s*placeholder=\{t\('recipe\.namePlaceholder'\)\}/);
+    expect(source).toMatch(/value=\{description\}\s*onChangeText=\{setDescription\}\s*placeholder=\{t\('recipe\.descriptionPlaceholder'\)\}/);
+    expect(source).toContain("<Text style={styles.fieldLabel}>{t('recipe.name')}</Text>");
+    expect(source).toContain("<Text style={styles.fieldLabel}>{t('recipe.description')}</Text>");
+  });
+
+  it('shows ingredient weight without a final-weight input or duplicate per100g summary', () => {
     expect(source).toMatch(/t\('recipe\.totalWeight'\)/);
-    expect(source).toMatch(/value=\{finalWeightText\}\s*onChangeText=\{setFinalWeightText\}/);
-    expect(source).toMatch(/breakdown\.usedIngredientWeightFallback \? \(/);
-    expect(source).toMatch(/t\('recipe\.finalWeightFallback', \{ grams: Math\.round\(breakdown\.totalIngredientWeightG\) \}\)/);
-    expect(source).toMatch(/<NutrientRow label=\{t\('recipe\.per100g'\)\} values=\{breakdown\.per100g\} \/>/);
+    expect(source).toMatch(/Math\.round\(breakdown\.totalIngredientWeightG\)/);
+    expect(source).not.toMatch(/finalWeight/);
+    expect(source).not.toMatch(/recipe\.per100g|recipe\.nutritionSubtitle/);
   });
 
   it('shows per-serving macros only when the breakdown actually has them (servings was valid)', () => {
-    expect(source).toMatch(/\{breakdown\.perServing \? \(/);
+    expect(source).toMatch(/\{breakdown\?\.perServing \? \(/);
     expect(source).toMatch(/<NuCap>\{t\('recipe\.perServing'\)\}<\/NuCap>/);
     expect(source).toMatch(/Math\.round\(breakdown\.perServing\.kcal\)/);
     expect(source).toMatch(/breakdown\.perServing\.proteinG\.toFixed\(1\)/);
   });
 
-  it('passes finalWeightG/servings through to createNutritionRecipe only when actually provided', () => {
+  it('saves recipes with ingredient-based weight and optional servings', () => {
     const saveStart = source.indexOf('const handleSave');
     const saveEnd = source.indexOf('};', saveStart);
     const saveBody = source.slice(saveStart, saveEnd);
-    expect(saveBody).toMatch(/\.\.\.\(hasFinalWeight \? \{ finalWeightG: finalWeightValue \} : \{\}\)/);
+    expect(saveBody).not.toMatch(/finalWeightG/);
     expect(saveBody).toMatch(/\.\.\.\(hasServings \? \{ servings: servingsValue \} : \{\}\)/);
   });
 });

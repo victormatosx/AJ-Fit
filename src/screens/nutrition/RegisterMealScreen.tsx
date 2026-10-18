@@ -193,6 +193,7 @@ export function RegisterMealScreen({
   };
 
   const openAddGrams = (food: FoodPick) => {
+    Keyboard.dismiss();
     trackNutritionEvent({ name: 'nutrition_catalog_item_selected',
       properties: { catalogMode: 'logging', origin: food.origin, ...(food.sourceType ? { source: food.sourceType } : {}) } });
     // Fase C6 — defaults to the food's natural unit when it has one; `gramsText` is always a plain editable number either way.
