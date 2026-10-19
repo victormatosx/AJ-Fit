@@ -125,10 +125,15 @@ describe('dedupeFoodLogSearchResults', () => {
     expect(result[0].nutritionPer100g.kcal).toBe(400);
   });
 
-  it('collapses exact normalized name+brand duplicates but preserves different brands', () => {
+  it('does not hide a different composition behind the same name and brand', () => {
+    const a = entry({ id: 'a', name: 'Arroz branco', source: { type: 'taco', sourceId: 'a', sourceName: 'TACO' }, nutritionPer100g: { kcal: 128, proteinG: 2.5, carbsG: 28, fatG: 0.2 } });
+    const b = entry({ id: 'b', name: 'Arroz branco', source: { type: 'taco', sourceId: 'b', sourceName: 'TACO' }, nutritionPer100g: { kcal: 360, proteinG: 7, carbsG: 80, fatG: 1 } });
+    expect(dedupeFoodLogSearchResults([a, b]).map((food) => food.nutritionPer100g.kcal)).toEqual([128, 360]);
+  });
+  it('preserves independent source identities even with identical normalized name and brand', () => {
     const first = entry({ id: 'a', name: 'Whey Protein', brand: { name: 'Dux' }, source: { type: 'off', sourceId: '1', sourceName: 'OFF' } });
     const duplicate = entry({ id: 'b', name: 'WHEY  PROTEIN', brand: { name: 'Dux' }, source: { type: 'off', sourceId: '2', sourceName: 'OFF' } });
     const otherBrand = entry({ id: 'c', name: 'Whey Protein', brand: { name: 'Outra' }, source: { type: 'off', sourceId: '3', sourceName: 'OFF' } });
-    expect(dedupeFoodLogSearchResults([first, duplicate, otherBrand]).map((food) => food.id)).toEqual(['a', 'c']);
+    expect(dedupeFoodLogSearchResults([first, duplicate, otherBrand]).map((food) => food.id)).toEqual(['a', 'b', 'c']);
   });
 });

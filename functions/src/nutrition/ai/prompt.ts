@@ -54,6 +54,7 @@ export function fullPlanContext(
     dietaryPattern: profile.dietaryPattern,
     excludedFoodNames: foodNames.excluded,
     excludedAllergens: profile.excludedAllergens ?? [],
+    ...(profile.excludedSubstances?.length ? { excludedSubstances: profile.excludedSubstances } : {}),
     preferredFoodNames: foodNames.preferred,
     usualFoodNames: foodNames.usual,
     varietyPreference: profile.varietyPreference,
@@ -88,6 +89,7 @@ export function mealAlternativeContext(
     dietaryPattern: profile.dietaryPattern,
     excludedFoodNames: foodNames.excluded,
     excludedAllergens: profile.excludedAllergens ?? [],
+    ...(profile.excludedSubstances?.length ? { excludedSubstances: profile.excludedSubstances } : {}),
     avoidFoodNames,
     preferredFoodNames: foodNames.preferred,
     usualFoodNames: foodNames.usual,
@@ -97,3 +99,15 @@ export function mealAlternativeContext(
     ...(feedback ? { retryFeedback: feedback } : {}),
   });
 }
+
+/** Additive override used only by the opt-in catalog pipeline. */
+export const CATALOG_INTENT_INSTRUCTIONS = `
+CATALOG INTENT MODE v1: The food names are temporary intentions. Use only grams (unit "g"),
+1-6 simple foods per meal, with explicit exact preparation and cut/type. Prefer single foods,
+not dishes, sauces or implicit cooking fats. Use exact full product names INCLUDING brand for
+commercial products. Suggest reasonable weighed portions, at most 600g per item and 1200g per meal.
+Never invent an ID or claim a match is verified. estimatedNutrition is a temporary planning estimate;
+the backend will replace it entirely with catalog values and may reject or repair the plan.
+Catalog failure feedback means replace the unresolved intention with an equivalent practical food;
+never relax a restriction. When repair feedback contains catalog-calculated nutrients, plan changes
+using those observations. Return the existing schema; no catalog metadata in the response.`;

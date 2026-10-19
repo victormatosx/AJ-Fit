@@ -20,10 +20,11 @@ const NON_RETRYABLE_ERROR_CODES: readonly NutritionGenerationErrorCode[] = [
 ];
 
 export type GenerationFailureCopyKey =
-  | 'disabled' | 'safetyBlocked' | 'accountInactive' | 'genericError';
+  | 'disabled' | 'safetyBlocked' | 'accountInactive' | 'catalogUnavailable' | 'genericError';
 
 /** Maps a failure code to one of a small, user-safe set of copy buckets. Never surfaces the raw code. */
 export function generationFailureCopyKey(code: NutritionGenerationErrorCode | null | undefined): GenerationFailureCopyKey {
+  if (code === 'AI_CATALOG_RESOLUTION_FAILED') return 'catalogUnavailable';
   if (code === 'FEATURE_DISABLED') return 'disabled';
   if (code === 'AI_SAFETY_VALIDATION_FAILED') return 'safetyBlocked';
   if (code === 'ACCOUNT_INACTIVE') return 'accountInactive';

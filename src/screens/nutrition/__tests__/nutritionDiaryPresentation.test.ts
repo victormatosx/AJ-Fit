@@ -182,16 +182,37 @@ describe('Diário Alimentar presentation', () => {
     expect(p.onClose).not.toHaveBeenCalled();
   });
 
-  it('opens editing with the selected grams, delegates saving, and reinitializes for a different item', () => {
+  it('opens editing with the selected grams, delegates saving, and reinitializes for a different item', async () => {
     const p = fixture(); let tree = draw(p);
     options(tree); tree = draw(p); action(tree, 'diary.editGrams'); tree = draw(p);
     let sheet = named(tree, 'EditGramsSheet')[0];
     expect(sheet.props.initialGrams).toBe(100);
-    (sheet.props.onSave as (g: number) => void)(110);
+    await (sheet.props.onSave as (g: number) => Promise<void>)(110);
     expect(p.onEditGrams).toHaveBeenCalledWith('breakfast', p.day!.meals[0].items[0], 110);
     tree = draw(p); expect(named(tree, 'EditGramsSheet')).toHaveLength(0);
     options(tree, 'cheese'); tree = draw(p); action(tree, 'diary.editGrams'); tree = draw(p);
     sheet = named(tree, 'EditGramsSheet')[0]; expect(sheet.props.initialGrams).toBe(30);
+  });
+
+  it('shows only name, original quantity/unit and calories while preserving snapshot editing', async () => {
+    const p = fixture(); const original = p.day!.meals[0].items[0];
+    const entry = { id: 'snapshot-egg', source: 'plan_snapshot', quantity: 0.5, unit: 'unidade', preparationNote: 'Cozido',
+      snapshot: { ...original.snapshot, name: 'Synthetic egg' }, loggedAt: original.loggedAt,
+      base: { name: 'Synthetic egg', quantity: 0.5, unit: 'unidade', preparationNote: 'Cozido', nutrition: totals },
+      planReference: { collection: 'nutritionPlans', documentId: 'p', optionId: 'breakfast-1', slot: 'breakfast', itemIndex: 0 },
+    } as typeof original;
+    p.day!.meals[0].items = [entry];
+    let tree = draw(p);
+    expect(content(tree)).toContain('Synthetic egg');
+    expect(content(tree).replace(/\s+/g, ' ')).toContain('0.5 unidade');
+    expect(content(tree).replace(/\s+/g, ' ')).toContain(`${entry.snapshot.kcal} units.kcal`);
+    expect(content(tree)).not.toContain('diary.planEstimate');
+    expect(content(tree)).not.toContain('Cozido');
+    expect(content(tree)).not.toContain('undefined');
+    options(tree, 'Synthetic egg'); tree = draw(p); action(tree, 'diary.editQuantity'); tree = draw(p);
+    const sheet = named(tree, 'EditGramsSheet')[0]; expect(sheet.props.initialGrams).toBe(0.5); expect(sheet.props.unit).toBe('unidade');
+    await (sheet.props.onSave as (q: number) => Promise<void>)(1.5);
+    expect(p.onEditGrams).toHaveBeenCalledWith('breakfast', entry, 1.5);
   });
 
   it('preserves moving to another enabled meal', () => {

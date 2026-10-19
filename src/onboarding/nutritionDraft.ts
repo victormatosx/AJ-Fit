@@ -23,7 +23,7 @@ export function restoreOnboardingNutrition(raw: unknown): OnboardingNutritionDra
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return empty;
   const value = raw as Partial<OnboardingNutritionDraft>;
   const answers = value.answers && typeof value.answers === 'object' ? { ...empty.answers, ...value.answers } : empty.answers;
-  for (const key of ['mealSlots', 'preferredFoodIds', 'usualFoodIds', 'excludedFoodIds', 'excludedAllergens', 'supplements'] as const) {
+  for (const key of ['mealSlots', 'preferredFoodIds', 'usualFoodIds', 'excludedFoodIds', 'excludedAllergens', 'excludedSubstances', 'supplements'] as const) {
     if (!Array.isArray(answers[key])) delete answers[key];
   }
   return { answers, targetWeightText: typeof value.targetWeightText === 'string' ? value.targetWeightText : '',

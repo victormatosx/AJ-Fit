@@ -87,6 +87,7 @@ describe('Nutrition Rules', () => {
     await assertSucceeds(setDoc(meal('alice', '2026-10-08', 'lunch'), { slot: 'lunch', totals: totals() }));
     await assertSucceeds(setDoc(item('alice', '2026-10-08', 'lunch', 'item1'), loggedItem()));
     await assertSucceeds(updateDoc(meal('alice', '2026-10-08', 'lunch'), { followedRecommendedOptionId: 'lunch-1', totals: totals() }));
+    await assertFails(setDoc(meal('alice', '2026-10-08', 'lunch'), { slot: 'lunch', totals: totals(), itemsRevision: 0, extra: true }));
     await assertSucceeds(setDoc(meal('alice', '2026-10-08', 'breakfast'), { slot: 'breakfast', totals: totals() }));
     await assertSucceeds(setDoc(item('alice', '2026-10-08', 'breakfast', 'breakfast-item'), loggedItem({ id: 'breakfast-item' })));
     await assertFails(setDoc(doc(db('alice'), path('alice', 'nutritionDailyLogs', '2026-10-09')), { localDate: '2026-10-08', timezone: 'UTC', totals: totals(), loggedItemCount: 0, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }));
@@ -128,6 +129,41 @@ describe('Nutrition Rules', () => {
     await assertFails(deleteDoc(doc(db('mallory'), path('alice', 'nutritionRecipes', 'r1'))));
     await assertSucceeds(deleteDoc(recipe));
     await assertSucceeds(deleteDoc(food));
+  });
+
+  it('enforces the itemsRevision optimistic-concurrency counter on meal docs (production audit P2-01 fix)', async () => {
+    const meal = (slot: string) => doc(db('alice'), `users/alice/nutritionDailyLogs/2026-10-10/meals/${slot}`);
+
+    // A meal doc never touched by a revision-aware client behaves exactly as before: any owner
+    // can create/update/delete it freely, and bounds on itemsRevision only apply if present.
+    await assertSucceeds(setDoc(meal('dinner'), { slot: 'dinner', totals: totals() }));
+    await assertSucceeds(updateDoc(meal('dinner'), { totals: totals() }));
+    await assertSucceeds(deleteDoc(meal('dinner')));
+
+    // Bootstrap: the FIRST write that introduces itemsRevision accepts any bounded, correctly
+    // typed value — there is no prior revision to increment from yet.
+    await assertSucceeds(setDoc(meal('lunch'), { slot: 'lunch', totals: totals(), itemsRevision: 1 }));
+    // Once tracked, every further write must increment by exactly 1 — anything else fails closed,
+    // INCLUDING a legacy (pre-fix) client's blind write that omits the field entirely. This is the
+    // exact scenario that used to silently corrupt the aggregate (P2-01): now it is denied outright.
+    await assertFails(updateDoc(meal('lunch'), { totals: totals() })); // stale client's payload shape — no itemsRevision at all
+    await assertFails(updateDoc(meal('lunch'), { totals: totals(), itemsRevision: 1 })); // not incremented
+    await assertFails(updateDoc(meal('lunch'), { totals: totals(), itemsRevision: 3 })); // skips ahead
+    await assertFails(updateDoc(meal('lunch'), { totals: totals(), itemsRevision: 0 })); // goes backward
+    await assertSucceeds(updateDoc(meal('lunch'), { totals: totals(), itemsRevision: 2 })); // exactly +1
+    await assertSucceeds(updateDoc(meal('lunch'), { totals: totals(), itemsRevision: 3 })); // exactly +1 again
+    // Type/bounds are still enforced once tracked, independent of the increment check.
+    await assertFails(updateDoc(meal('lunch'), { totals: totals(), itemsRevision: 4.5 }));
+    await assertFails(updateDoc(meal('lunch'), { totals: totals(), itemsRevision: '4' }));
+    // Once tracked, the doc can never be deleted outright — clearing to zero items must go through
+    // an `update` with an incremented revision (what `nutritionDiary.ts` now does), never a raw delete.
+    await assertFails(deleteDoc(meal('lunch')));
+    await assertSucceeds(updateDoc(meal('lunch'), { totals: totals(), itemsRevision: 4 })); // "clearing" via update still succeeds
+
+    // Bounds are enforced on a fresh (untracked) doc's bootstrap write too.
+    await assertFails(setDoc(meal('supper'), { slot: 'supper', totals: totals(), itemsRevision: 1000000001 }));
+    await assertFails(setDoc(meal('supper'), { slot: 'supper', totals: totals(), itemsRevision: -1 }));
+    await assertSucceeds(setDoc(meal('supper'), { slot: 'supper', totals: totals(), itemsRevision: 1000000000 }));
   });
 
   it('accepts a recipe\'s optional finalWeightG/servings within range and rejects invalid ones', async () => {
@@ -381,5 +417,72 @@ describe('Nutrition Rules', () => {
     const item = loggedItem({ id: 'flc-item', source: 'food_log_catalog', foodId: 'flc_taco_1' });
     await assertSucceeds(setDoc(doc(db('alice'), itemPath('flc-item')), item));
     await assertFails(setDoc(doc(db('alice'), itemPath('bad-source')), loggedItem({ id: 'bad-source', source: 'not_a_real_source' })));
+  });
+});
+
+describe('catalog linked plan bookmarks and critical absence profile', () => {
+  it('keeps linked bookmarks backend-owned without granting write access to plans, catalog or consumption receipts', async () => {
+    const foods = Array.from({ length: 8 }, () => ({ name: 'Arroz', quantity: 100, unit: 'g', preparationNote: '', estimatedNutrition: totals(),
+      catalogBinding: { schemaVersion: 1, collection: 'nutritionFoods', foodId: 'nf_taco_test' } }));
+    await assertFails(setDoc(doc(db('alice'), path('alice', 'nutritionFavoriteMealOptions', 'fav1')), favoriteMealOption({ foods })));
+    await env.withSecurityRulesDisabled(ctx => setDoc(doc(ctx.firestore(), path('alice', 'nutritionFavoriteMealOptions', 'fav1')), favoriteMealOption({ foods })));
+    await assertSucceeds(getDoc(doc(db('alice'), path('alice', 'nutritionFavoriteMealOptions', 'fav1'))));
+    await assertFails(setDoc(doc(db('alice'), path('alice', 'nutritionPlans', 'p')), { foods }));
+    await assertFails(setDoc(doc(db('alice'), path('alice', 'nutritionCatalogLogReceipts', 'r')), { requestKey: 'forged' }));
+    await assertFails(setDoc(doc(db('alice'), 'nutritionFoods/nf_taco_test'), { name: 'Forged' }));
+  });
+  it('validates lactose/gluten absences on profile create and update without changing old profiles', async () => {
+    const ref = doc(db('alice'), path('alice', 'nutritionProfile', 'current'));
+    await assertSucceeds(setDoc(ref, { ...profile(), excludedSubstances: ['lactose'] }));
+    await assertSucceeds(updateDoc(ref, { excludedSubstances: ['gluten'], updatedAt: serverTimestamp() }));
+    await assertFails(updateDoc(ref, { excludedSubstances: ['unknown'], updatedAt: serverTimestamp() }));
+    await assertFails(updateDoc(ref, { excludedSubstances: ['gluten', 'gluten'], updatedAt: serverTimestamp() }));
+  });
+});
+
+describe('transactional diary cutover — old writers fail closed selectively', () => {
+  const day = 'users/alice/nutritionDailyLogs/2026-10-18';
+  const meal = `${day}/meals/breakfast`;
+  const item = `${meal}/items/item1`;
+  async function seed(enrolled: boolean) {
+    await env.withSecurityRulesDisabled(async ctx => {
+      const f = ctx.firestore();
+      await setDoc(doc(f, day), { localDate: '2026-10-18', timezone: 'UTC', totals: totals(), loggedItemCount: 1, createdAt: Timestamp.now(), updatedAt: Timestamp.now() });
+      await setDoc(doc(f, meal), { slot: 'breakfast', totals: totals() });
+      await setDoc(doc(f, item), loggedItem());
+      if (enrolled) await setDoc(doc(f, 'users/alice/nutritionDiaryProtocol/current'), { version: 1, enrolledAt: Timestamp.now() });
+    });
+  }
+  it('preserves legacy manual writes before enrollment', async () => {
+    await seed(false);
+    await assertSucceeds(updateDoc(doc(db('alice'), item), { grams: 150 }));
+    await assertSucceeds(deleteDoc(doc(db('alice'), item)));
+  });
+  it('denies stale direct add/edit/remove/move and aggregate/day deletion after enrollment', async () => {
+    await seed(true);
+    await assertFails(setDoc(doc(db('alice'), `${meal}/items/item2`), loggedItem({ id: 'item2' })));
+    await assertFails(updateDoc(doc(db('alice'), item), { grams: 150 }));
+    await assertFails(deleteDoc(doc(db('alice'), item)));
+    await assertFails(setDoc(doc(db('alice'), `${day}/meals/lunch/items/item1`), loggedItem()));
+    await assertFails(updateDoc(doc(db('alice'), meal), { totals: totals() }));
+    await assertFails(deleteDoc(doc(db('alice'), meal)));
+    await assertFails(updateDoc(doc(db('alice'), day), { loggedItemCount: 2, updatedAt: serverTimestamp() }));
+    await assertFails(deleteDoc(doc(db('alice'), day)));
+    await assertSucceeds(getDoc(doc(db('alice'), item)));
+    await assertSucceeds(getDoc(doc(db('alice'), day)));
+  });
+  it('does not allow clients to enroll, reset the protocol, forge snapshots or manipulate receipts', async () => {
+    await seed(true);
+    await assertFails(setDoc(doc(db('alice'), 'users/alice/nutritionDiaryProtocol/current'), { version: 1 }));
+    await assertFails(deleteDoc(doc(db('alice'), 'users/alice/nutritionDiaryProtocol/current')));
+    await assertFails(getDoc(doc(db('mallory'), 'users/alice/nutritionDiaryProtocol/current')));
+    await assertSucceeds(getDoc(doc(db('alice'), 'users/alice/nutritionDiaryProtocol/current')));
+    const receipt = doc(db('alice'), 'users/alice/nutritionDiaryOperationReceipts/request-fake');
+    await assertFails(setDoc(receipt, { result: {} })); await assertFails(getDoc(receipt));
+    await assertFails(setDoc(doc(db('alice'), item), { id: 'item1', source: 'plan_snapshot', quantity: 100, unit: 'g', snapshot: { name: 'Fake', ...totals() } }));
+  });
+  it('rejects the new source on an unenrolled client without inventing a foodId', async () => {
+    await seed(false);
+    await assertFails(setDoc(doc(db('alice'), item), { id: 'item1', source: 'plan_snapshot', quantity: 100, unit: 'g', snapshot: { name: 'Fake', ...totals() }, loggedAt: Timestamp.now() }));
   });
 });

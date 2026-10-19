@@ -1,3 +1,4 @@
+import { catalogLinkingEnabled } from '../catalogLinking/config';
 import { createRevenueCatV2Client, REVENUECAT_API_SECRET_KEY } from '../../billing/revenueCatApi';
 import { reconcileRevenueCatPremiumSubscriptions } from '../../billing/revenueCatSubscription';
 import { randomUUID } from 'node:crypto';
@@ -124,7 +125,7 @@ export async function requestNutritionPlanGenerationHandler(
       if (deletionLock.exists) throw new HttpsError('failed-precondition', 'ACCOUNT_INACTIVE');
       if (initial) tx.update(enrollmentRef, { autoGenerationId: generationId });
       else if (onboardingRetry) tx.update(enrollmentRef, { latestGenerationId: generationId });
-      tx.create(jobRef, { ...((initial || onboardingRetry) ? { initialOnboarding: true } : {}), generationId, operationType: 'full_plan', status: 'queued', requestedAt: now,
+      tx.create(jobRef, { ...(catalogLinkingEnabled() ? { generationMode: 'catalog' } : {}), ...((initial || onboardingRetry) ? { initialOnboarding: true } : {}), generationId, operationType: 'full_plan', status: 'queued', requestedAt: now,
         retryCount: 0, aiAttemptCount: 0, lastFailureCode: null,
         planId: null, errorCode: null, ownerUid: uid, nextAttemptAt: now, leaseUntil: null });
       tx.set(rateRef, { ownerUid: uid, activeGenerationId: generationId, activePlanId: rate.get('activePlanId') ?? null,

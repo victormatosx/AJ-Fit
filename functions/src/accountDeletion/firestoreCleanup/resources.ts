@@ -52,7 +52,7 @@ const HEALTH_WEIGHT_SAMPLES_COLLECTION = 'healthWeightSamples';
 export const NUTRITION_USER_RESOURCES = [
   'onboardingNutritionState', 'nutritionProfile', 'nutritionPlans', 'nutritionDailyLogs', 'nutritionRecipes',
   'nutritionFoods', 'nutritionPreferences', 'nutritionFavoriteMealOptions',
-  'nutritionGenerationJobs', 'nutritionMealAlternatives',
+  'nutritionGenerationJobs', 'nutritionMealAlternatives', 'nutritionCatalogLogReceipts', 'nutritionDiaryProtocol', 'nutritionDiaryOperationReceipts',
 ] as const;
 const PROGRESS_PHOTOS_COLLECTION = 'progressPhotos';
 const WORKOUT_PROGRAMS_COLLECTION = 'workoutPrograms';

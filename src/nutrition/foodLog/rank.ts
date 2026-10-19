@@ -100,25 +100,21 @@ export function rankFoodLogResults<TTimestamp = unknown>(
 }
 
 /**
- * Presentation-only dedupe. Documents and nutrition values remain
- * independent in Firestore; only the inferior duplicate is omitted from
- * this ranked response. Barcode is authoritative. Without a barcode, only
- * exact normalized name+brand duplicates are collapsed.
+ * Identity dedupe: source identity or barcode, never name+brand alone.
+ * Independent compositions/servings can share the exact same display name;
+ * removing them hides legitimate nutritional choices from manual search.
  */
 export function dedupeFoodLogSearchResults<TTimestamp>(
   entries: readonly FoodLogEntry<TTimestamp>[],
 ): FoodLogEntry<TTimestamp>[] {
   const seenIdentity = new Set<string>();
   const seenBarcode = new Set<string>();
-  const seenPresentation = new Set<string>();
   return entries.filter((food) => {
     const identity = `${food.source.type}:${food.source.sourceId}`;
     const barcode = food.barcode?.trim() || null;
-    const presentation = `${normalizeSearchText(food.name)}|${food.brand?.name ? normalizeSearchText(food.brand.name) : ''}`;
-    if (seenIdentity.has(identity) || (barcode != null && seenBarcode.has(barcode)) || seenPresentation.has(presentation)) return false;
+    if (seenIdentity.has(identity) || (barcode != null && seenBarcode.has(barcode))) return false;
     seenIdentity.add(identity);
     if (barcode != null) seenBarcode.add(barcode);
-    seenPresentation.add(presentation);
     return true;
   });
 }

@@ -157,7 +157,7 @@ export function NutritionHomeScreen({
   // The summary bar is real consumption vs. goal (round brief §5/§22) — never
   // the plan's own totals, which are only a recommendation.
   const consumed: NutritionTotals = todayDiary?.totals ?? { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0, fiberG: 0 };
-  const next = nextPlanMeal(plan);
+  const next = nextPlanMeal(plan, todayDiary);
   const today = todayLocalDate();
   // Same "{weekday} · {day} {month}" template Home's own header uses
   // (`home:meta.todayLine`) — standardized across Home/Treino/Dieta instead

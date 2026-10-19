@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   diarySlotSummary, foodPickOriginToDiarySource, isPositiveGrams,
-  moveMealItem, removeMealItem, replaceMealItems, sumItemTotals, sumMealTotals, upsertMealItem,
+  moveMealItem, nextUnloggedSlot, removeMealItem, replaceMealItems, sumItemTotals, sumMealTotals, upsertMealItem,
 } from '../diaryModel';
 import type { NutritionLoggedFoodItem, NutritionLoggedMeal } from '../../../types/nutrition';
 
@@ -110,6 +110,32 @@ describe('diarySlotSummary', () => {
     const meals = replaceMealItems<null>([], 'lunch', [item('1', 'a', 100, 250), item('2', 'b', 50, 50)]);
     expect(diarySlotSummary({ meals }, 'lunch')).toEqual({ kcal: 300, itemCount: 2 });
     expect(diarySlotSummary({ meals }, 'breakfast')).toBeNull();
+  });
+});
+
+describe('nextUnloggedSlot', () => {
+  const slots = ['breakfast', 'lunch', 'dinner'] as const;
+
+  it('returns the first slot when nothing is logged (no Diary doc yet)', () => {
+    expect(nextUnloggedSlot(slots, null)).toBe('breakfast');
+  });
+
+  it('skips a logged breakfast and returns lunch', () => {
+    const meals = replaceMealItems<null>([], 'breakfast', [item('1', 'a', 100)]);
+    expect(nextUnloggedSlot(slots, { meals })).toBe('lunch');
+  });
+
+  it('returns undefined once every slot has items logged', () => {
+    let meals = replaceMealItems<null>([], 'breakfast', [item('1', 'a', 100)]);
+    meals = replaceMealItems(meals, 'lunch', [item('2', 'b', 100)]);
+    meals = replaceMealItems(meals, 'dinner', [item('3', 'c', 100)]);
+    expect(nextUnloggedSlot(slots, { meals })).toBeUndefined();
+  });
+
+  it('treats a slot with an empty item list the same as untouched — still "next"', () => {
+    const meals = replaceMealItems<null>([], 'breakfast', [item('1', 'a', 100)]);
+    const emptied = replaceMealItems(meals, 'breakfast', []);
+    expect(nextUnloggedSlot(slots, { meals: emptied })).toBe('breakfast');
   });
 });
 

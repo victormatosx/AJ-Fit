@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { initializeFirebaseAppCheck } from '../firebaseAppCheck';
 
 const mocks = vi.hoisted(() => ({
   initialize: vi.fn(),
@@ -7,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   platform: 'ios',
   providerOptions: null as null | { getToken: () => Promise<unknown> },
   logWarn: vi.fn(),
+  logInfo: vi.fn(),
+  tokenReadiness: vi.fn(),
 }));
 
 vi.mock('react-native', () => ({
@@ -24,6 +27,7 @@ vi.mock('firebase/app-check', () => ({
     }
   },
   initializeAppCheck: mocks.initialize,
+  getToken: mocks.tokenReadiness,
 }));
 
 vi.mock('../nativeAppCheck', () => ({
@@ -33,10 +37,8 @@ vi.mock('../nativeAppCheck', () => ({
 
 vi.mock('../logger', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../logger')>();
-  return { ...actual, logWarn: mocks.logWarn };
+  return { ...actual, logWarn: mocks.logWarn, logInfo: mocks.logInfo };
 });
-
-import { initializeFirebaseAppCheck } from '../firebaseAppCheck';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -48,11 +50,28 @@ beforeEach(() => {
     expireTimeMillis: Date.now() + 60_000,
   });
   mocks.initialize.mockReturnValue({ name: 'app-check-instance' });
+  mocks.tokenReadiness.mockResolvedValue({ token: 'synthetic-private-token-never-logged' });
   delete (globalThis as typeof globalThis & { __ajFitFirebaseAppCheck?: unknown })
     .__ajFitFirebaseAppCheck;
 });
 
 describe('Firebase JS CustomProvider bridge', () => {
+  it('reports real-provider readiness once in native development without logging its token', async () => {
+    const g = globalThis as typeof globalThis & { __DEV__?: boolean };
+    g.__DEV__ = true;
+    try {
+      initializeFirebaseAppCheck({} as never);
+      initializeFirebaseAppCheck({} as never);
+      await Promise.resolve();
+      expect(mocks.tokenReadiness).toHaveBeenCalledTimes(1);
+      expect(mocks.logInfo).toHaveBeenCalledWith('app-check', 'native_provider_ready', { nativeAvailable: true });
+      expect(JSON.stringify(mocks.logInfo.mock.calls)).not.toContain('synthetic-private-token');
+    } finally { delete g.__DEV__; }
+  });
+  it('does not perform the diagnostic token request in production', () => {
+    initializeFirebaseAppCheck({} as never);
+    expect(mocks.tokenReadiness).not.toHaveBeenCalled();
+  });
   it('initializes App Check on the exact Firebase JS app supplied by firebase.ts', async () => {
     const app = { name: '[DEFAULT]' };
 

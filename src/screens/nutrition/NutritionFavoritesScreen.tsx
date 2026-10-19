@@ -49,7 +49,7 @@ export function NutritionFavoritesScreen({
                   <View style={{ marginTop: 10 }}>
                     {favorite.foods.map((food, foodIndex) => (
                       <View key={`${food.name}-${foodIndex}`} style={{ borderTopWidth: 1, borderTopColor: NU.hairline }}>
-                        <FoodRow name={`${food.name} — ${food.quantity} ${food.unit}`} raw kcal={planItemKcal(food)} />
+                        <FoodRow name={`${food.name}${food.catalogBinding?.brandName ? ` (${food.catalogBinding.brandName})` : ''} — ${food.quantity} ${food.unit}`} raw kcal={planItemKcal(food)} />
                       </View>
                     ))}
                   </View>

@@ -1,3 +1,5 @@
+export { favoriteCatalogMeal } from './nutrition/catalogLinking/favoriteMeal';
+export { logCatalogMeal } from './nutrition/catalogLinking/logMeal';
 import { onCall, onRequest } from 'firebase-functions/v2/https';
 export { requestNutritionPlanGeneration } from './nutrition/generation/request';
 export { onNutritionGenerationJobCreated, retryNutritionGenerationJobs } from './nutrition/generation/worker';
@@ -426,3 +428,5 @@ export {
   reconcileNotificationReceipts,
   retryNotificationDispatches,
 };
+
+export { mutateNutritionDiaryV1 } from './nutrition/diary/mutate';

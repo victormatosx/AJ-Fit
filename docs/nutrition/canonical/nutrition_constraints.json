@@ -46,7 +46,7 @@
     "dailyAdherenceScoreEnabled": false,
     "mealAdherenceScoreEnabled": false,
     "weeklyComparisonEnabled": true,
-    "loggedItemSources": ["catalog_food", "custom_food", "recipe", "food_log_catalog"],
+    "loggedItemSources": ["catalog_food", "custom_food", "recipe", "food_log_catalog", "plan_snapshot"],
     "recommendedOptionTracking": {
       "level": "meal",
       "note": "\"Followed the recommended option\" is tracked per logged meal (a reference to the active plan's option id), not per logged item. A single item cannot carry a meaningful 'this came from the recommended option' flag on its own, since the recommended option is a set of foods, not one food."

@@ -7,7 +7,7 @@ import { logInfo, logWarn } from '../../lib/logger';
 import { AI_SCHEMA_VERSION, NUTRITION_AI_MODELS } from './config';
 import {
   FULL_PLAN_SYSTEM_PROMPT, fullPlanContext, MEAL_ALTERNATIVE_SYSTEM_PROMPT, mealAlternativeContext,
-  UNTRUSTED_DATA_SYSTEM_PROMPT,
+  UNTRUSTED_DATA_SYSTEM_PROMPT, CATALOG_INTENT_INSTRUCTIONS,
 } from './prompt';
 
 /**
@@ -39,6 +39,8 @@ export interface FullPlanRequest {
   foodNames: NutritionPromptFoodNames;
   feedback?: string;
   fallback?: boolean;
+  catalogMode?: boolean;
+  timeoutMs?: number;
 }
 export interface MealAlternativeRequest {
   profile: NutritionAiProfile;
@@ -48,6 +50,8 @@ export interface MealAlternativeRequest {
   foodNames: NutritionPromptFoodNames;
   feedback?: string;
   fallback?: boolean;
+  catalogMode?: boolean;
+  timeoutMs?: number;
 }
 export interface NutritionAiProvider {
   generatePlan(request: FullPlanRequest): Promise<AiResult>;
@@ -146,11 +150,12 @@ export class OpenAiNutritionProvider implements NutritionAiProvider {
     model: string, developerPrompt: string, userContent: string, schemaName: string, schema: object,
     trace: { generationId?: string; attempt?: number;
       retryFeedbackPresent?: boolean; repairCandidatePresent?: boolean } = {},
+    timeoutMs = OPENAI_REQUEST_TIMEOUT_MS,
   ): Promise<AiResult> {
     const started = Date.now();
     logInfo('nutrition.generation', 'ai_request_started', { ...trace, model, stage: 'provider' });
     const response = await this.fetcher('https://api.openai.com/v1/responses', {
-      method: 'POST', signal: AbortSignal.timeout(OPENAI_REQUEST_TIMEOUT_MS),
+      method: 'POST', signal: AbortSignal.timeout(Math.max(1, Math.min(OPENAI_REQUEST_TIMEOUT_MS, timeoutMs))),
       headers: { Authorization: `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' },
       /**
        * 16000 (sized for 6 meals x 3 options x 8 foods) was right for the
@@ -221,16 +226,16 @@ export class OpenAiNutritionProvider implements NutritionAiProvider {
     let repairCandidatePresent = false;
     try { repairCandidatePresent = Boolean(JSON.parse(request.feedback ?? 'null')?.previousPlan); }
     catch { /* Older retries may contain only a technical error enum. */ }
-    return this.callResponsesApi(model, FULL_PLAN_SYSTEM_PROMPT,
+    return this.callResponsesApi(model, request.catalogMode ? FULL_PLAN_SYSTEM_PROMPT + CATALOG_INTENT_INSTRUCTIONS : FULL_PLAN_SYSTEM_PROMPT,
       fullPlanContext(request.profile, request.engine, request.goal, request.foodNames, request.feedback),
       `nutrition_plan_${AI_SCHEMA_VERSION.replaceAll('.', '_')}`, OPENAI_PLAN_SCHEMA,
-      { ...request.trace, retryFeedbackPresent: Boolean(request.feedback), repairCandidatePresent });
+      { ...request.trace, retryFeedbackPresent: Boolean(request.feedback), repairCandidatePresent }, request.timeoutMs);
   }
 
   async generateMealAlternative(request: MealAlternativeRequest): Promise<AiResult> {
     const model = request.fallback ? NUTRITION_AI_MODELS.fallback : NUTRITION_AI_MODELS.mealAlternative;
-    return this.callResponsesApi(model, MEAL_ALTERNATIVE_SYSTEM_PROMPT,
+    return this.callResponsesApi(model, request.catalogMode ? MEAL_ALTERNATIVE_SYSTEM_PROMPT + CATALOG_INTENT_INSTRUCTIONS : MEAL_ALTERNATIVE_SYSTEM_PROMPT,
       mealAlternativeContext(request.profile, request.target, request.avoidFoodNames, request.goal, request.foodNames, request.feedback),
-      `nutrition_meal_alternative_${AI_SCHEMA_VERSION.replaceAll('.', '_')}`, OPENAI_MEAL_ALTERNATIVE_SCHEMA);
+      `nutrition_meal_alternative_${AI_SCHEMA_VERSION.replaceAll('.', '_')}`, OPENAI_MEAL_ALTERNATIVE_SCHEMA, {}, request.timeoutMs);
   }
 }

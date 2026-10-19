@@ -103,7 +103,6 @@ export function MealDetailsScreen({
                         showSummaryBox={false}
                         onRegister={readOnly || !onRegister ? undefined : () => {
                           onRegister(option);
-                          setConfirmation(t('mealDetails.registered'));
                         }}
                         registering={registeringOptionId === option.id}
                         onSwap={readOnly || !onSwap || !recommended ? undefined : onSwap}

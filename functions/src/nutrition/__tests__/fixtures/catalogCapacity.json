@@ -1,0 +1,1832 @@
+{
+  "A": {
+    "scenario": {
+      "kcal": 2200,
+      "weight": 70,
+      "goal": "maintenance",
+      "macros": {
+        "proteinG": 112,
+        "fatG": 61.111111111111114,
+        "carbsG": 300.5,
+        "fiberG": 30.8
+      },
+      "targets": [
+        {
+          "slot": "breakfast",
+          "kcal": {
+            "min": 570,
+            "target": 600,
+            "max": 630
+          },
+          "proteinG": {
+            "min": 26.29565217391304,
+            "target": 29.217391304347824,
+            "max": 32.13913043478261
+          },
+          "carbsG": {
+            "min": 73.75909090909092,
+            "target": 81.95454545454545,
+            "max": 90.15
+          },
+          "fatG": {
+            "min": 15.000000000000002,
+            "target": 16.666666666666668,
+            "max": 18.333333333333336
+          },
+          "fiberG": {
+            "min": 6.720000000000001,
+            "target": 8.4,
+            "max": 10.08
+          }
+        },
+        {
+          "slot": "lunch",
+          "kcal": {
+            "min": 570,
+            "target": 600,
+            "max": 630
+          },
+          "proteinG": {
+            "min": 26.29565217391304,
+            "target": 29.217391304347824,
+            "max": 32.13913043478261
+          },
+          "carbsG": {
+            "min": 73.75909090909092,
+            "target": 81.95454545454545,
+            "max": 90.15
+          },
+          "fatG": {
+            "min": 15.000000000000002,
+            "target": 16.666666666666668,
+            "max": 18.333333333333336
+          },
+          "fiberG": {
+            "min": 6.720000000000001,
+            "target": 8.4,
+            "max": 10.08
+          }
+        },
+        {
+          "slot": "afternoon_snack",
+          "kcal": {
+            "min": 380,
+            "target": 400,
+            "max": 420
+          },
+          "proteinG": {
+            "min": 21.91304347826087,
+            "target": 24.347826086956523,
+            "max": 26.78260869565218
+          },
+          "carbsG": {
+            "min": 49.17272727272728,
+            "target": 54.63636363636364,
+            "max": 60.10000000000001
+          },
+          "fatG": {
+            "min": 10.000000000000002,
+            "target": 11.111111111111112,
+            "max": 12.222222222222225
+          },
+          "fiberG": {
+            "min": 4.48,
+            "target": 5.6000000000000005,
+            "max": 6.720000000000001
+          }
+        },
+        {
+          "slot": "dinner",
+          "kcal": {
+            "min": 570,
+            "target": 600,
+            "max": 630
+          },
+          "proteinG": {
+            "min": 26.29565217391304,
+            "target": 29.217391304347824,
+            "max": 32.13913043478261
+          },
+          "carbsG": {
+            "min": 73.75909090909092,
+            "target": 81.95454545454545,
+            "max": 90.15
+          },
+          "fatG": {
+            "min": 15.000000000000002,
+            "target": 16.666666666666668,
+            "max": 18.333333333333336
+          },
+          "fiberG": {
+            "min": 6.720000000000001,
+            "target": 8.4,
+            "max": 10.08
+          }
+        }
+      ]
+    },
+    "meals": [
+      {
+        "slot": "breakfast",
+        "pool": 39,
+        "feasible": true,
+        "status": 0,
+        "totals": {
+          "kcal": 570.02,
+          "proteinG": 29.47,
+          "carbsG": 77.81,
+          "fatG": 18.299999999999997,
+          "fiberG": 8.79
+        },
+        "withinAfterRounding": true,
+        "foods": [
+          {
+            "id": "179",
+            "name": "Banana, nanica, crua",
+            "g": 250.0
+          },
+          {
+            "id": "207",
+            "name": "Kiwi, cru",
+            "g": 149.79
+          },
+          {
+            "id": "488",
+            "name": "Ovo, de galinha, inteiro, cozido/10minutos",
+            "g": 180.57
+          }
+        ]
+      },
+      {
+        "slot": "lunch",
+        "pool": 77,
+        "feasible": true,
+        "status": 0,
+        "totals": {
+          "kcal": 570.04,
+          "proteinG": 26.330000000000002,
+          "carbsG": 77.03,
+          "fatG": 17.150000000000002,
+          "fiberG": 10.05
+        },
+        "withinAfterRounding": true,
+        "foods": [
+          {
+            "id": "107",
+            "name": "Cebola, crua",
+            "g": 156.81
+          },
+          {
+            "id": "1",
+            "name": "Arroz, integral, cozido",
+            "g": 244.45
+          },
+          {
+            "id": "290",
+            "name": "Corimbatá, cozido",
+            "g": 86.09
+          }
+        ]
+      },
+      {
+        "slot": "afternoon_snack",
+        "pool": 43,
+        "feasible": true,
+        "status": 0,
+        "totals": {
+          "kcal": 390.3,
+          "proteinG": 21.939999999999998,
+          "carbsG": 57.910000000000004,
+          "fatG": 10.040000000000001,
+          "fiberG": 4.51
+        },
+        "withinAfterRounding": true,
+        "foods": [
+          {
+            "id": "179",
+            "name": "Banana, nanica, crua",
+            "g": 237.37
+          },
+          {
+            "id": "462",
+            "name": "Queijo, minas, meia cura",
+            "g": 39.5
+          },
+          {
+            "id": "486",
+            "name": "Ovo, de galinha, clara, cozida/10minutos",
+            "g": 76.47
+          }
+        ]
+      },
+      {
+        "slot": "dinner",
+        "pool": 77,
+        "feasible": true,
+        "status": 0,
+        "totals": {
+          "kcal": 570.04,
+          "proteinG": 26.330000000000002,
+          "carbsG": 77.03,
+          "fatG": 17.150000000000002,
+          "fiberG": 10.05
+        },
+        "withinAfterRounding": true,
+        "foods": [
+          {
+            "id": "107",
+            "name": "Cebola, crua",
+            "g": 156.81
+          },
+          {
+            "id": "1",
+            "name": "Arroz, integral, cozido",
+            "g": 244.45
+          },
+          {
+            "id": "290",
+            "name": "Corimbatá, cozido",
+            "g": 86.09
+          }
+        ]
+      }
+    ]
+  },
+  "B": {
+    "scenario": {
+      "kcal": 3000,
+      "weight": 90,
+      "goal": "muscle_gain",
+      "macros": {
+        "proteinG": 162,
+        "fatG": 83.33333333333333,
+        "carbsG": 400.5,
+        "fiberG": 42
+      },
+      "targets": [
+        {
+          "slot": "breakfast",
+          "kcal": {
+            "min": 657.6923076923077,
+            "target": 692.3076923076924,
+            "max": 726.923076923077
+          },
+          "proteinG": {
+            "min": 31.242857142857137,
+            "target": 34.71428571428571,
+            "max": 38.18571428571428
+          },
+          "carbsG": {
+            "min": 83.18076923076924,
+            "target": 92.42307692307693,
+            "max": 101.66538461538464
+          },
+          "fatG": {
+            "min": 17.307692307692307,
+            "target": 19.23076923076923,
+            "max": 21.153846153846153
+          },
+          "fiberG": {
+            "min": 7.753846153846155,
+            "target": 9.692307692307693,
+            "max": 11.630769230769232
+          }
+        },
+        {
+          "slot": "morning_snack",
+          "kcal": {
+            "min": 438.46153846153845,
+            "target": 461.53846153846155,
+            "max": 484.61538461538464
+          },
+          "proteinG": {
+            "min": 26.03571428571428,
+            "target": 28.928571428571423,
+            "max": 31.82142857142857
+          },
+          "carbsG": {
+            "min": 55.45384615384616,
+            "target": 61.61538461538462,
+            "max": 67.77692307692308
+          },
+          "fatG": {
+            "min": 11.53846153846154,
+            "target": 12.820512820512821,
+            "max": 14.102564102564104
+          },
+          "fiberG": {
+            "min": 5.1692307692307695,
+            "target": 6.461538461538462,
+            "max": 7.753846153846154
+          }
+        },
+        {
+          "slot": "lunch",
+          "kcal": {
+            "min": 657.6923076923077,
+            "target": 692.3076923076924,
+            "max": 726.923076923077
+          },
+          "proteinG": {
+            "min": 31.242857142857137,
+            "target": 34.71428571428571,
+            "max": 38.18571428571428
+          },
+          "carbsG": {
+            "min": 83.18076923076924,
+            "target": 92.42307692307693,
+            "max": 101.66538461538464
+          },
+          "fatG": {
+            "min": 17.307692307692307,
+            "target": 19.23076923076923,
+            "max": 21.153846153846153
+          },
+          "fiberG": {
+            "min": 7.753846153846155,
+            "target": 9.692307692307693,
+            "max": 11.630769230769232
+          }
+        },
+        {
+          "slot": "afternoon_snack",
+          "kcal": {
+            "min": 438.46153846153845,
+            "target": 461.53846153846155,
+            "max": 484.61538461538464
+          },
+          "proteinG": {
+            "min": 26.03571428571428,
+            "target": 28.928571428571423,
+            "max": 31.82142857142857
+          },
+          "carbsG": {
+            "min": 55.45384615384616,
+            "target": 61.61538461538462,
+            "max": 67.77692307692308
+          },
+          "fatG": {
+            "min": 11.53846153846154,
+            "target": 12.820512820512821,
+            "max": 14.102564102564104
+          },
+          "fiberG": {
+            "min": 5.1692307692307695,
+            "target": 6.461538461538462,
+            "max": 7.753846153846154
+          }
+        },
+        {
+          "slot": "dinner",
+          "kcal": {
+            "min": 657.6923076923077,
+            "target": 692.3076923076924,
+            "max": 726.923076923077
+          },
+          "proteinG": {
+            "min": 31.242857142857137,
+            "target": 34.71428571428571,
+            "max": 38.18571428571428
+          },
+          "carbsG": {
+            "min": 83.18076923076924,
+            "target": 92.42307692307693,
+            "max": 101.66538461538464
+          },
+          "fatG": {
+            "min": 17.307692307692307,
+            "target": 19.23076923076923,
+            "max": 21.153846153846153
+          },
+          "fiberG": {
+            "min": 7.753846153846155,
+            "target": 9.692307692307693,
+            "max": 11.630769230769232
+          }
+        }
+      ]
+    },
+    "meals": [
+      {
+        "slot": "breakfast",
+        "pool": 39,
+        "feasible": true,
+        "status": 0,
+        "totals": {
+          "kcal": 697.13,
+          "proteinG": 34.480000000000004,
+          "carbsG": 100.25,
+          "fatG": 21.119999999999997,
+          "fiberG": 7.779999999999999
+        },
+        "withinAfterRounding": true,
+        "foods": [
+          {
+            "id": "179",
+            "name": "Banana, nanica, crua",
+            "g": 250.0
+          },
+          {
+            "id": "182",
+            "name": "Banana, prata, crua",
+            "g": 151.69
+          },
+          {
+            "id": "488",
+            "name": "Ovo, de galinha, inteiro, cozido/10minutos",
+            "g": 218.13
+          }
+        ]
+      },
+      {
+        "slot": "morning_snack",
+        "pool": 43,
+        "feasible": true,
+        "status": 0,
+        "totals": {
+          "kcal": 449.15,
+          "proteinG": 29.71,
+          "carbsG": 63.33,
+          "fatG": 11.56,
+          "fiberG": 6.09
+        },
+        "withinAfterRounding": true,
+        "foods": [
+          {
+            "id": "182",
+            "name": "Banana, prata, crua",
+            "g": 232.96
+          },
+          {
+            "id": "486",
+            "name": "Ovo, de galinha, clara, cozida/10minutos",
+            "g": 191.76
+          },
+          {
+            "id": "590",
+            "name": "Coco, cru",
+            "g": 26.53
+          }
+        ]
+      },
+      {
+        "slot": "lunch",
+        "pool": 77,
+        "feasible": true,
+        "status": 0,
+        "totals": {
+          "kcal": 657.72,
+          "proteinG": 31.49,
+          "carbsG": 88.05,
+          "fatG": 19.07,
+          "fiberG": 8.4
+        },
+        "withinAfterRounding": true,
+        "foods": [
+          {
+            "id": "107",
+            "name": "Cebola, crua",
+            "g": 200.0
+          },
+          {
+            "id": "290",
+            "name": "Corimbatá, cozido",
+            "g": 108.67
+          },
+          {
+            "id": "3",
+            "name": "Arroz, tipo 1, cozido",
+            "g": 250.0
+          }
+        ]
+      },
+      {
+        "slot": "afternoon_snack",
+        "pool": 43,
+        "feasible": true,
+        "status": 0,
+        "totals": {
+          "kcal": 449.15,
+          "proteinG": 29.71,
+          "carbsG": 63.33,
+          "fatG": 11.56,
+          "fiberG": 6.09
+        },
+        "withinAfterRounding": true,
+        "foods": [
+          {
+            "id": "182",
+            "name": "Banana, prata, crua",
+            "g": 232.96
+          },
+          {
+            "id": "486",
+            "name": "Ovo, de galinha, clara, cozida/10minutos",
+            "g": 191.76
+          },
+          {
+            "id": "590",
+            "name": "Coco, cru",
+            "g": 26.53
+          }
+        ]
+      },
+      {
+        "slot": "dinner",
+        "pool": 77,
+        "feasible": true,
+        "status": 0,
+        "totals": {
+          "kcal": 657.72,
+          "proteinG": 31.49,
+          "carbsG": 88.05,
+          "fatG": 19.07,
+          "fiberG": 8.4
+        },
+        "withinAfterRounding": true,
+        "foods": [
+          {
+            "id": "107",
+            "name": "Cebola, crua",
+            "g": 200.0
+          },
+          {
+            "id": "290",
+            "name": "Corimbatá, cozido",
+            "g": 108.67
+          },
+          {
+            "id": "3",
+            "name": "Arroz, tipo 1, cozido",
+            "g": 250.0
+          }
+        ]
+      }
+    ]
+  },
+  "C": {
+    "scenario": {
+      "kcal": 1600,
+      "weight": 65,
+      "goal": "weight_loss",
+      "macros": {
+        "proteinG": 130,
+        "fatG": 52,
+        "carbsG": 153,
+        "fiberG": 22.400000000000002
+      },
+      "targets": [
+        {
+          "slot": "breakfast",
+          "kcal": {
+            "min": 414.5454545454545,
+            "target": 436.3636363636363,
+            "max": 458.18181818181813
+          },
+          "proteinG": {
+            "min": 30.52173913043478,
+            "target": 33.91304347826087,
+            "max": 37.30434782608696
+          },
+          "carbsG": {
+            "min": 37.554545454545455,
+            "target": 41.72727272727273,
+            "max": 45.900000000000006
+          },
+          "fatG": {
+            "min": 12.763636363636362,
+            "target": 14.18181818181818,
+            "max": 15.6
+          },
+          "fiberG": {
+            "min": 4.887272727272728,
+            "target": 6.109090909090909,
+            "max": 7.330909090909091
+          }
+        },
+        {
+          "slot": "lunch",
+          "kcal": {
+            "min": 414.5454545454545,
+            "target": 436.3636363636363,
+            "max": 458.18181818181813
+          },
+          "proteinG": {
+            "min": 30.52173913043478,
+            "target": 33.91304347826087,
+            "max": 37.30434782608696
+          },
+          "carbsG": {
+            "min": 37.554545454545455,
+            "target": 41.72727272727273,
+            "max": 45.900000000000006
+          },
+          "fatG": {
+            "min": 12.763636363636362,
+            "target": 14.18181818181818,
+            "max": 15.6
+          },
+          "fiberG": {
+            "min": 4.887272727272728,
+            "target": 6.109090909090909,
+            "max": 7.330909090909091
+          }
+        },
+        {
+          "slot": "afternoon_snack",
+          "kcal": {
+            "min": 276.3636363636364,
+            "target": 290.90909090909093,
+            "max": 305.4545454545455
+          },
+          "proteinG": {
+            "min": 25.434782608695656,
+            "target": 28.260869565217394,
+            "max": 31.086956521739136
+          },
+          "carbsG": {
+            "min": 25.03636363636364,
+            "target": 27.81818181818182,
+            "max": 30.600000000000005
+          },
+          "fatG": {
+            "min": 8.50909090909091,
+            "target": 9.454545454545455,
+            "max": 10.400000000000002
+          },
+          "fiberG": {
+            "min": 3.2581818181818187,
+            "target": 4.072727272727273,
+            "max": 4.887272727272728
+          }
+        },
+        {
+          "slot": "dinner",
+          "kcal": {
+            "min": 414.5454545454545,
+            "target": 436.3636363636363,
+            "max": 458.18181818181813
+          },
+          "proteinG": {
+            "min": 30.52173913043478,
+            "target": 33.91304347826087,
+            "max": 37.30434782608696
+          },
+          "carbsG": {
+            "min": 37.554545454545455,
+            "target": 41.72727272727273,
+            "max": 45.900000000000006
+          },
+          "fatG": {
+            "min": 12.763636363636362,
+            "target": 14.18181818181818,
+            "max": 15.6
+          },
+          "fiberG": {
+            "min": 4.887272727272728,
+            "target": 6.109090909090909,
+            "max": 7.330909090909091
+          }
+        }
+      ]
+    },
+    "meals": [
+      {
+        "slot": "breakfast",
+        "pool": 39,
+        "feasible": true,
+        "status": 0,
+        "totals": {
+          "kcal": 414.57,
+          "proteinG": 30.55,
+          "carbsG": 43.480000000000004,
+          "fatG": 14.07,
+          "fiberG": 4.92
+        },
+        "withinAfterRounding": true,
+        "foods": [
+          {
+            "id": "221",
+            "name": "Maçã, Argentina, com casca, crua",
+            "g": 245.86
+          },
+          {
+            "id": "447",
+            "name": "Creme de Leite",
+            "g": 59.39
+          },
+          {
+            "id": "486",
+            "name": "Ovo, de galinha, clara, cozida/10minutos",
+            "g": 217.68
+          }
+        ]
+      },
+      {
+        "slot": "lunch",
+        "pool": 77,
+        "feasible": true,
+        "status": 0,
+        "totals": {
+          "kcal": 414.6,
+          "proteinG": 30.56,
+          "carbsG": 39.08,
+          "fatG": 15.139999999999999,
+          "fiberG": 5.95
+        },
+        "withinAfterRounding": true,
+        "foods": [
+          {
+            "id": "107",
+            "name": "Cebola, crua",
+            "g": 200.0
+          },
+          {
+            "id": "121",
+            "name": "Farinha, de mandioca, crua",
+            "g": 24.21
+          },
+          {
+            "id": "317",
+            "name": "Salmão, sem pele, fresco, grelhado",
+            "g": 102.55
+          }
+        ]
+      },
+      {
+        "slot": "afternoon_snack",
+        "pool": 43,
+        "feasible": true,
+        "status": 0,
+        "totals": {
+          "kcal": 297.69,
+          "proteinG": 31.060000000000002,
+          "carbsG": 25.060000000000002,
+          "fatG": 8.540000000000001,
+          "fiberG": 4.79
+        },
+        "withinAfterRounding": true,
+        "foods": [
+          {
+            "id": "207",
+            "name": "Kiwi, cru",
+            "g": 177.58
+          },
+          {
+            "id": "448",
+            "name": "Iogurte, natural",
+            "g": 244.46
+          },
+          {
+            "id": "486",
+            "name": "Ovo, de galinha, clara, cozida/10minutos",
+            "g": 139.74
+          }
+        ]
+      },
+      {
+        "slot": "dinner",
+        "pool": 77,
+        "feasible": true,
+        "status": 0,
+        "totals": {
+          "kcal": 414.6,
+          "proteinG": 30.56,
+          "carbsG": 39.08,
+          "fatG": 15.139999999999999,
+          "fiberG": 5.95
+        },
+        "withinAfterRounding": true,
+        "foods": [
+          {
+            "id": "107",
+            "name": "Cebola, crua",
+            "g": 200.0
+          },
+          {
+            "id": "121",
+            "name": "Farinha, de mandioca, crua",
+            "g": 24.21
+          },
+          {
+            "id": "317",
+            "name": "Salmão, sem pele, fresco, grelhado",
+            "g": 102.55
+          }
+        ]
+      }
+    ]
+  },
+  "D": {
+    "scenario": {
+      "kcal": 2200,
+      "weight": 70,
+      "goal": "maintenance",
+      "macros": {
+        "proteinG": 112,
+        "fatG": 61.111111111111114,
+        "carbsG": 300.5,
+        "fiberG": 30.8
+      },
+      "targets": [
+        {
+          "slot": "breakfast",
+          "kcal": {
+            "min": 570,
+            "target": 600,
+            "max": 630
+          },
+          "proteinG": {
+            "min": 26.29565217391304,
+            "target": 29.217391304347824,
+            "max": 32.13913043478261
+          },
+          "carbsG": {
+            "min": 73.75909090909092,
+            "target": 81.95454545454545,
+            "max": 90.15
+          },
+          "fatG": {
+            "min": 15.000000000000002,
+            "target": 16.666666666666668,
+            "max": 18.333333333333336
+          },
+          "fiberG": {
+            "min": 6.720000000000001,
+            "target": 8.4,
+            "max": 10.08
+          }
+        },
+        {
+          "slot": "lunch",
+          "kcal": {
+            "min": 570,
+            "target": 600,
+            "max": 630
+          },
+          "proteinG": {
+            "min": 26.29565217391304,
+            "target": 29.217391304347824,
+            "max": 32.13913043478261
+          },
+          "carbsG": {
+            "min": 73.75909090909092,
+            "target": 81.95454545454545,
+            "max": 90.15
+          },
+          "fatG": {
+            "min": 15.000000000000002,
+            "target": 16.666666666666668,
+            "max": 18.333333333333336
+          },
+          "fiberG": {
+            "min": 6.720000000000001,
+            "target": 8.4,
+            "max": 10.08
+          }
+        },
+        {
+          "slot": "afternoon_snack",
+          "kcal": {
+            "min": 380,
+            "target": 400,
+            "max": 420
+          },
+          "proteinG": {
+            "min": 21.91304347826087,
+            "target": 24.347826086956523,
+            "max": 26.78260869565218
+          },
+          "carbsG": {
+            "min": 49.17272727272728,
+            "target": 54.63636363636364,
+            "max": 60.10000000000001
+          },
+          "fatG": {
+            "min": 10.000000000000002,
+            "target": 11.111111111111112,
+            "max": 12.222222222222225
+          },
+          "fiberG": {
+            "min": 4.48,
+            "target": 5.6000000000000005,
+            "max": 6.720000000000001
+          }
+        },
+        {
+          "slot": "dinner",
+          "kcal": {
+            "min": 570,
+            "target": 600,
+            "max": 630
+          },
+          "proteinG": {
+            "min": 26.29565217391304,
+            "target": 29.217391304347824,
+            "max": 32.13913043478261
+          },
+          "carbsG": {
+            "min": 73.75909090909092,
+            "target": 81.95454545454545,
+            "max": 90.15
+          },
+          "fatG": {
+            "min": 15.000000000000002,
+            "target": 16.666666666666668,
+            "max": 18.333333333333336
+          },
+          "fiberG": {
+            "min": 6.720000000000001,
+            "target": 8.4,
+            "max": 10.08
+          }
+        }
+      ]
+    },
+    "meals": [
+      {
+        "slot": "breakfast",
+        "pool": 39,
+        "feasible": true,
+        "status": 0,
+        "totals": {
+          "kcal": 570.02,
+          "proteinG": 29.47,
+          "carbsG": 77.81,
+          "fatG": 18.299999999999997,
+          "fiberG": 8.79
+        },
+        "withinAfterRounding": true,
+        "foods": [
+          {
+            "id": "179",
+            "name": "Banana, nanica, crua",
+            "g": 250.0
+          },
+          {
+            "id": "207",
+            "name": "Kiwi, cru",
+            "g": 149.79
+          },
+          {
+            "id": "488",
+            "name": "Ovo, de galinha, inteiro, cozido/10minutos",
+            "g": 180.57
+          }
+        ]
+      },
+      {
+        "slot": "lunch",
+        "pool": 30,
+        "feasible": true,
+        "status": 0,
+        "totals": {
+          "kcal": 570.02,
+          "proteinG": 26.65,
+          "carbsG": 78.99,
+          "fatG": 16.55,
+          "fiberG": 7.6000000000000005
+        },
+        "withinAfterRounding": true,
+        "foods": [
+          {
+            "id": "107",
+            "name": "Cebola, crua",
+            "g": 200.0
+          },
+          {
+            "id": "129",
+            "name": "Mandioca, cozida",
+            "g": 200.0
+          },
+          {
+            "id": "488",
+            "name": "Ovo, de galinha, inteiro, cozido/10minutos",
+            "g": 165.77
+          }
+        ]
+      },
+      {
+        "slot": "afternoon_snack",
+        "pool": 43,
+        "feasible": true,
+        "status": 0,
+        "totals": {
+          "kcal": 390.3,
+          "proteinG": 21.939999999999998,
+          "carbsG": 57.910000000000004,
+          "fatG": 10.040000000000001,
+          "fiberG": 4.51
+        },
+        "withinAfterRounding": true,
+        "foods": [
+          {
+            "id": "179",
+            "name": "Banana, nanica, crua",
+            "g": 237.37
+          },
+          {
+            "id": "462",
+            "name": "Queijo, minas, meia cura",
+            "g": 39.5
+          },
+          {
+            "id": "486",
+            "name": "Ovo, de galinha, clara, cozida/10minutos",
+            "g": 76.47
+          }
+        ]
+      },
+      {
+        "slot": "dinner",
+        "pool": 30,
+        "feasible": true,
+        "status": 0,
+        "totals": {
+          "kcal": 570.02,
+          "proteinG": 26.65,
+          "carbsG": 78.99,
+          "fatG": 16.55,
+          "fiberG": 7.6000000000000005
+        },
+        "withinAfterRounding": true,
+        "foods": [
+          {
+            "id": "107",
+            "name": "Cebola, crua",
+            "g": 200.0
+          },
+          {
+            "id": "129",
+            "name": "Mandioca, cozida",
+            "g": 200.0
+          },
+          {
+            "id": "488",
+            "name": "Ovo, de galinha, inteiro, cozido/10minutos",
+            "g": 165.77
+          }
+        ]
+      }
+    ]
+  },
+  "F": {
+    "scenario": {
+      "kcal": 2000,
+      "weight": 70,
+      "goal": "maintenance",
+      "macros": {
+        "proteinG": 112,
+        "fatG": 56,
+        "carbsG": 262,
+        "fiberG": 28
+      },
+      "targets": [
+        {
+          "slot": "breakfast",
+          "kcal": {
+            "min": 518.1818181818181,
+            "target": 545.4545454545454,
+            "max": 572.7272727272726
+          },
+          "proteinG": {
+            "min": 26.29565217391304,
+            "target": 29.217391304347824,
+            "max": 32.13913043478261
+          },
+          "carbsG": {
+            "min": 64.30909090909091,
+            "target": 71.45454545454545,
+            "max": 78.60000000000001
+          },
+          "fatG": {
+            "min": 13.745454545454544,
+            "target": 15.272727272727272,
+            "max": 16.8
+          },
+          "fiberG": {
+            "min": 6.109090909090909,
+            "target": 7.636363636363636,
+            "max": 9.163636363636362
+          }
+        },
+        {
+          "slot": "lunch",
+          "kcal": {
+            "min": 518.1818181818181,
+            "target": 545.4545454545454,
+            "max": 572.7272727272726
+          },
+          "proteinG": {
+            "min": 26.29565217391304,
+            "target": 29.217391304347824,
+            "max": 32.13913043478261
+          },
+          "carbsG": {
+            "min": 64.30909090909091,
+            "target": 71.45454545454545,
+            "max": 78.60000000000001
+          },
+          "fatG": {
+            "min": 13.745454545454544,
+            "target": 15.272727272727272,
+            "max": 16.8
+          },
+          "fiberG": {
+            "min": 6.109090909090909,
+            "target": 7.636363636363636,
+            "max": 9.163636363636362
+          }
+        },
+        {
+          "slot": "afternoon_snack",
+          "kcal": {
+            "min": 345.45454545454544,
+            "target": 363.6363636363636,
+            "max": 381.8181818181818
+          },
+          "proteinG": {
+            "min": 21.91304347826087,
+            "target": 24.347826086956523,
+            "max": 26.78260869565218
+          },
+          "carbsG": {
+            "min": 42.872727272727275,
+            "target": 47.63636363636364,
+            "max": 52.400000000000006
+          },
+          "fatG": {
+            "min": 9.163636363636364,
+            "target": 10.181818181818182,
+            "max": 11.200000000000001
+          },
+          "fiberG": {
+            "min": 4.072727272727273,
+            "target": 5.090909090909091,
+            "max": 6.1090909090909085
+          }
+        },
+        {
+          "slot": "dinner",
+          "kcal": {
+            "min": 518.1818181818181,
+            "target": 545.4545454545454,
+            "max": 572.7272727272726
+          },
+          "proteinG": {
+            "min": 26.29565217391304,
+            "target": 29.217391304347824,
+            "max": 32.13913043478261
+          },
+          "carbsG": {
+            "min": 64.30909090909091,
+            "target": 71.45454545454545,
+            "max": 78.60000000000001
+          },
+          "fatG": {
+            "min": 13.745454545454544,
+            "target": 15.272727272727272,
+            "max": 16.8
+          },
+          "fiberG": {
+            "min": 6.109090909090909,
+            "target": 7.636363636363636,
+            "max": 9.163636363636362
+          }
+        }
+      ]
+    },
+    "meals": [
+      {
+        "slot": "breakfast",
+        "pool": 26,
+        "feasible": true,
+        "status": 0,
+        "totals": {
+          "kcal": 536.65,
+          "proteinG": 26.32,
+          "carbsG": 78.57,
+          "fatG": 15.76,
+          "fiberG": 6.22
+        },
+        "withinAfterRounding": true,
+        "foods": [
+          {
+            "id": "164",
+            "name": "Abacaxi, cru",
+            "g": 147.15
+          },
+          {
+            "id": "179",
+            "name": "Banana, nanica, crua",
+            "g": 250.0
+          },
+          {
+            "id": "488",
+            "name": "Ovo, de galinha, inteiro, cozido/10minutos",
+            "g": 161.66
+          }
+        ]
+      },
+      {
+        "slot": "lunch",
+        "pool": 77,
+        "feasible": true,
+        "status": 0,
+        "totals": {
+          "kcal": 518.22,
+          "proteinG": 29.84,
+          "carbsG": 64.34,
+          "fatG": 16.06,
+          "fiberG": 9.14
+        },
+        "withinAfterRounding": true,
+        "foods": [
+          {
+            "id": "100",
+            "name": "Brócolis, cozido",
+            "g": 180.46
+          },
+          {
+            "id": "129",
+            "name": "Mandioca, cozida",
+            "g": 187.37
+          },
+          {
+            "id": "315",
+            "name": "Salmão, filé, com pele, fresco, grelhado",
+            "g": 104.32
+          }
+        ]
+      },
+      {
+        "slot": "afternoon_snack",
+        "pool": 30,
+        "feasible": true,
+        "status": 0,
+        "totals": {
+          "kcal": 363.46000000000004,
+          "proteinG": 21.939999999999998,
+          "carbsG": 51.85,
+          "fatG": 9.2,
+          "fiberG": 4.1
+        },
+        "withinAfterRounding": true,
+        "foods": [
+          {
+            "id": "179",
+            "name": "Banana, nanica, crua",
+            "g": 215.93
+          },
+          {
+            "id": "486",
+            "name": "Ovo, de galinha, clara, cozida/10minutos",
+            "g": 107.02
+          },
+          {
+            "id": "487",
+            "name": "Ovo, de galinha, gema, cozida/10minutos",
+            "g": 28.8
+          }
+        ]
+      },
+      {
+        "slot": "dinner",
+        "pool": 77,
+        "feasible": true,
+        "status": 0,
+        "totals": {
+          "kcal": 518.22,
+          "proteinG": 29.84,
+          "carbsG": 64.34,
+          "fatG": 16.06,
+          "fiberG": 9.14
+        },
+        "withinAfterRounding": true,
+        "foods": [
+          {
+            "id": "100",
+            "name": "Brócolis, cozido",
+            "g": 180.46
+          },
+          {
+            "id": "129",
+            "name": "Mandioca, cozida",
+            "g": 187.37
+          },
+          {
+            "id": "315",
+            "name": "Salmão, filé, com pele, fresco, grelhado",
+            "g": 104.32
+          }
+        ]
+      }
+    ]
+  },
+  "G": {
+    "scenario": {
+      "kcal": 2200,
+      "weight": 70,
+      "goal": "maintenance",
+      "macros": {
+        "proteinG": 112,
+        "fatG": 61.111111111111114,
+        "carbsG": 300.5,
+        "fiberG": 30.8
+      },
+      "targets": [
+        {
+          "slot": "breakfast",
+          "kcal": {
+            "min": 570,
+            "target": 600,
+            "max": 630
+          },
+          "proteinG": {
+            "min": 26.29565217391304,
+            "target": 29.217391304347824,
+            "max": 32.13913043478261
+          },
+          "carbsG": {
+            "min": 73.75909090909092,
+            "target": 81.95454545454545,
+            "max": 90.15
+          },
+          "fatG": {
+            "min": 15.000000000000002,
+            "target": 16.666666666666668,
+            "max": 18.333333333333336
+          },
+          "fiberG": {
+            "min": 6.720000000000001,
+            "target": 8.4,
+            "max": 10.08
+          }
+        },
+        {
+          "slot": "lunch",
+          "kcal": {
+            "min": 570,
+            "target": 600,
+            "max": 630
+          },
+          "proteinG": {
+            "min": 26.29565217391304,
+            "target": 29.217391304347824,
+            "max": 32.13913043478261
+          },
+          "carbsG": {
+            "min": 73.75909090909092,
+            "target": 81.95454545454545,
+            "max": 90.15
+          },
+          "fatG": {
+            "min": 15.000000000000002,
+            "target": 16.666666666666668,
+            "max": 18.333333333333336
+          },
+          "fiberG": {
+            "min": 6.720000000000001,
+            "target": 8.4,
+            "max": 10.08
+          }
+        },
+        {
+          "slot": "afternoon_snack",
+          "kcal": {
+            "min": 380,
+            "target": 400,
+            "max": 420
+          },
+          "proteinG": {
+            "min": 21.91304347826087,
+            "target": 24.347826086956523,
+            "max": 26.78260869565218
+          },
+          "carbsG": {
+            "min": 49.17272727272728,
+            "target": 54.63636363636364,
+            "max": 60.10000000000001
+          },
+          "fatG": {
+            "min": 10.000000000000002,
+            "target": 11.111111111111112,
+            "max": 12.222222222222225
+          },
+          "fiberG": {
+            "min": 4.48,
+            "target": 5.6000000000000005,
+            "max": 6.720000000000001
+          }
+        },
+        {
+          "slot": "dinner",
+          "kcal": {
+            "min": 570,
+            "target": 600,
+            "max": 630
+          },
+          "proteinG": {
+            "min": 26.29565217391304,
+            "target": 29.217391304347824,
+            "max": 32.13913043478261
+          },
+          "carbsG": {
+            "min": 73.75909090909092,
+            "target": 81.95454545454545,
+            "max": 90.15
+          },
+          "fatG": {
+            "min": 15.000000000000002,
+            "target": 16.666666666666668,
+            "max": 18.333333333333336
+          },
+          "fiberG": {
+            "min": 6.720000000000001,
+            "target": 8.4,
+            "max": 10.08
+          }
+        }
+      ]
+    },
+    "meals": [
+      {
+        "slot": "breakfast",
+        "pool": 37,
+        "feasible": true,
+        "status": 0,
+        "totals": {
+          "kcal": 570.03,
+          "proteinG": 26.32,
+          "carbsG": 89.30000000000001,
+          "fatG": 15.280000000000001,
+          "fiberG": 7.1
+        },
+        "withinAfterRounding": true,
+        "foods": [
+          {
+            "id": "164",
+            "name": "Abacaxi, cru",
+            "g": 234.69
+          },
+          {
+            "id": "179",
+            "name": "Banana, nanica, crua",
+            "g": 250.0
+          },
+          {
+            "id": "488",
+            "name": "Ovo, de galinha, inteiro, cozido/10minutos",
+            "g": 155.74
+          }
+        ]
+      },
+      {
+        "slot": "lunch",
+        "pool": 77,
+        "feasible": true,
+        "status": 0,
+        "totals": {
+          "kcal": 570.04,
+          "proteinG": 26.330000000000002,
+          "carbsG": 77.03,
+          "fatG": 17.150000000000002,
+          "fiberG": 10.05
+        },
+        "withinAfterRounding": true,
+        "foods": [
+          {
+            "id": "107",
+            "name": "Cebola, crua",
+            "g": 156.81
+          },
+          {
+            "id": "1",
+            "name": "Arroz, integral, cozido",
+            "g": 244.45
+          },
+          {
+            "id": "290",
+            "name": "Corimbatá, cozido",
+            "g": 86.09
+          }
+        ]
+      },
+      {
+        "slot": "afternoon_snack",
+        "pool": 41,
+        "feasible": true,
+        "status": 0,
+        "totals": {
+          "kcal": 392.40999999999997,
+          "proteinG": 21.94,
+          "carbsG": 58.42,
+          "fatG": 10.030000000000001,
+          "fiberG": 4.51
+        },
+        "withinAfterRounding": true,
+        "foods": [
+          {
+            "id": "179",
+            "name": "Banana, nanica, crua",
+            "g": 237.37
+          },
+          {
+            "id": "447",
+            "name": "Creme de Leite",
+            "g": 42.93
+          },
+          {
+            "id": "486",
+            "name": "Ovo, de galinha, clara, cozida/10minutos",
+            "g": 134.15
+          }
+        ]
+      },
+      {
+        "slot": "dinner",
+        "pool": 77,
+        "feasible": true,
+        "status": 0,
+        "totals": {
+          "kcal": 570.04,
+          "proteinG": 26.330000000000002,
+          "carbsG": 77.03,
+          "fatG": 17.150000000000002,
+          "fiberG": 10.05
+        },
+        "withinAfterRounding": true,
+        "foods": [
+          {
+            "id": "107",
+            "name": "Cebola, crua",
+            "g": 156.81
+          },
+          {
+            "id": "1",
+            "name": "Arroz, integral, cozido",
+            "g": 244.45
+          },
+          {
+            "id": "290",
+            "name": "Corimbatá, cozido",
+            "g": 86.09
+          }
+        ]
+      }
+    ]
+  },
+  "H": {
+    "scenario": {
+      "kcal": 2000,
+      "weight": 70,
+      "goal": "maintenance",
+      "macros": {
+        "proteinG": 112,
+        "fatG": 56,
+        "carbsG": 262,
+        "fiberG": 28
+      },
+      "targets": [
+        {
+          "slot": "breakfast",
+          "kcal": {
+            "min": 518.1818181818181,
+            "target": 545.4545454545454,
+            "max": 572.7272727272726
+          },
+          "proteinG": {
+            "min": 26.29565217391304,
+            "target": 29.217391304347824,
+            "max": 32.13913043478261
+          },
+          "carbsG": {
+            "min": 64.30909090909091,
+            "target": 71.45454545454545,
+            "max": 78.60000000000001
+          },
+          "fatG": {
+            "min": 13.745454545454544,
+            "target": 15.272727272727272,
+            "max": 16.8
+          },
+          "fiberG": {
+            "min": 6.109090909090909,
+            "target": 7.636363636363636,
+            "max": 9.163636363636362
+          }
+        },
+        {
+          "slot": "lunch",
+          "kcal": {
+            "min": 518.1818181818181,
+            "target": 545.4545454545454,
+            "max": 572.7272727272726
+          },
+          "proteinG": {
+            "min": 26.29565217391304,
+            "target": 29.217391304347824,
+            "max": 32.13913043478261
+          },
+          "carbsG": {
+            "min": 64.30909090909091,
+            "target": 71.45454545454545,
+            "max": 78.60000000000001
+          },
+          "fatG": {
+            "min": 13.745454545454544,
+            "target": 15.272727272727272,
+            "max": 16.8
+          },
+          "fiberG": {
+            "min": 6.109090909090909,
+            "target": 7.636363636363636,
+            "max": 9.163636363636362
+          }
+        },
+        {
+          "slot": "afternoon_snack",
+          "kcal": {
+            "min": 345.45454545454544,
+            "target": 363.6363636363636,
+            "max": 381.8181818181818
+          },
+          "proteinG": {
+            "min": 21.91304347826087,
+            "target": 24.347826086956523,
+            "max": 26.78260869565218
+          },
+          "carbsG": {
+            "min": 42.872727272727275,
+            "target": 47.63636363636364,
+            "max": 52.400000000000006
+          },
+          "fatG": {
+            "min": 9.163636363636364,
+            "target": 10.181818181818182,
+            "max": 11.200000000000001
+          },
+          "fiberG": {
+            "min": 4.072727272727273,
+            "target": 5.090909090909091,
+            "max": 6.1090909090909085
+          }
+        },
+        {
+          "slot": "dinner",
+          "kcal": {
+            "min": 518.1818181818181,
+            "target": 545.4545454545454,
+            "max": 572.7272727272726
+          },
+          "proteinG": {
+            "min": 26.29565217391304,
+            "target": 29.217391304347824,
+            "max": 32.13913043478261
+          },
+          "carbsG": {
+            "min": 64.30909090909091,
+            "target": 71.45454545454545,
+            "max": 78.60000000000001
+          },
+          "fatG": {
+            "min": 13.745454545454544,
+            "target": 15.272727272727272,
+            "max": 16.8
+          },
+          "fiberG": {
+            "min": 6.109090909090909,
+            "target": 7.636363636363636,
+            "max": 9.163636363636362
+          }
+        }
+      ]
+    },
+    "meals": [
+      {
+        "slot": "breakfast",
+        "pool": 26,
+        "feasible": true,
+        "status": 0,
+        "totals": {
+          "kcal": 536.65,
+          "proteinG": 26.32,
+          "carbsG": 78.57,
+          "fatG": 15.76,
+          "fiberG": 6.22
+        },
+        "withinAfterRounding": true,
+        "foods": [
+          {
+            "id": "164",
+            "name": "Abacaxi, cru",
+            "g": 147.15
+          },
+          {
+            "id": "179",
+            "name": "Banana, nanica, crua",
+            "g": 250.0
+          },
+          {
+            "id": "488",
+            "name": "Ovo, de galinha, inteiro, cozido/10minutos",
+            "g": 161.66
+          }
+        ]
+      },
+      {
+        "slot": "lunch",
+        "pool": 30,
+        "feasible": true,
+        "status": 0,
+        "totals": {
+          "kcal": 518.22,
+          "proteinG": 26.32,
+          "carbsG": 66.22,
+          "fatG": 16.76,
+          "fiberG": 9.129999999999999
+        },
+        "withinAfterRounding": true,
+        "foods": [
+          {
+            "id": "100",
+            "name": "Brócolis, cozido",
+            "g": 178.93
+          },
+          {
+            "id": "129",
+            "name": "Mandioca, cozida",
+            "g": 190.64
+          },
+          {
+            "id": "488",
+            "name": "Ovo, de galinha, inteiro, cozido/10minutos",
+            "g": 161.09
+          }
+        ]
+      },
+      {
+        "slot": "afternoon_snack",
+        "pool": 30,
+        "feasible": true,
+        "status": 0,
+        "totals": {
+          "kcal": 363.46000000000004,
+          "proteinG": 21.939999999999998,
+          "carbsG": 51.85,
+          "fatG": 9.2,
+          "fiberG": 4.1
+        },
+        "withinAfterRounding": true,
+        "foods": [
+          {
+            "id": "179",
+            "name": "Banana, nanica, crua",
+            "g": 215.93
+          },
+          {
+            "id": "486",
+            "name": "Ovo, de galinha, clara, cozida/10minutos",
+            "g": 107.02
+          },
+          {
+            "id": "487",
+            "name": "Ovo, de galinha, gema, cozida/10minutos",
+            "g": 28.8
+          }
+        ]
+      },
+      {
+        "slot": "dinner",
+        "pool": 30,
+        "feasible": true,
+        "status": 0,
+        "totals": {
+          "kcal": 518.22,
+          "proteinG": 26.32,
+          "carbsG": 66.22,
+          "fatG": 16.76,
+          "fiberG": 9.129999999999999
+        },
+        "withinAfterRounding": true,
+        "foods": [
+          {
+            "id": "100",
+            "name": "Brócolis, cozido",
+            "g": 178.93
+          },
+          {
+            "id": "129",
+            "name": "Mandioca, cozida",
+            "g": 190.64
+          },
+          {
+            "id": "488",
+            "name": "Ovo, de galinha, inteiro, cozido/10minutos",
+            "g": 161.09
+          }
+        ]
+      }
+    ]
+  }
+}

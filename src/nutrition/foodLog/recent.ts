@@ -15,6 +15,7 @@ export function recentFoodLogIds<TTimestamp>(logs: readonly NutritionDailyLog<TT
   const ids: string[] = [];
   const seen = new Set<string>();
   for (const item of items) {
+    if (item.source !== 'food_log_catalog') continue;
     if (seen.has(item.foodId)) continue;
     seen.add(item.foodId); ids.push(item.foodId);
     if (ids.length >= maxIds) break;

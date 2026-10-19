@@ -1,5 +1,6 @@
 import {
   CustomProvider,
+  getToken,
   initializeAppCheck,
   type AppCheck,
 } from 'firebase/app-check';
@@ -10,7 +11,7 @@ import {
   getNativeAppCheckToken,
   isNativeAppCheckAvailable,
 } from './nativeAppCheck';
-import { errorClass, errorCode, logWarn, sanitizeLogText } from './logger';
+import { errorClass, errorCode, logInfo, logWarn, sanitizeLogText } from './logger';
 
 type AppCheckGlobal = typeof globalThis & {
   __ajFitFirebaseAppCheck?: AppCheck;
@@ -126,5 +127,16 @@ export function initializeFirebaseAppCheck(app: FirebaseApp): AppCheck | null {
     isTokenAutoRefreshEnabled: true,
   });
   shared.__ajFitFirebaseAppCheck = appCheck;
+  // Development readiness evidence from the real native provider. No callable,
+  // user-data write, token logging or change to production enforcement.
+  if (isDev && nativeAvailable) {
+    void getToken(appCheck, false).then(() => {
+      logInfo('app-check', 'native_provider_ready', { nativeAvailable: true });
+    }).catch((error: unknown) => {
+      logWarn('app-check', 'native_provider_readiness_failed', {
+        category: categorizeAppCheckFailure(error), errorCode: errorCode(error) ?? 'UNCLASSIFIED',
+      });
+    });
+  }
   return appCheck;
 }

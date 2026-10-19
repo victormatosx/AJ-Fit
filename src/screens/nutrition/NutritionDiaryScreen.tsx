@@ -1,11 +1,13 @@
+import { diaryItemQuantity, diaryItemUnit } from '../../nutrition/diary/snapshot';
 import React, { useEffect, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon } from '../../components/ui/Icon';
 import { SkeletonBlock } from '../../components/nutrition/NutritionPrimitives';
-import { NU, NuButton, NuNav, NuPanel, NuSelectPill, NuSheetHeader, NuStepper, NuRow } from '../../components/nutrition/NuKit';
+import { NU, NuButton, NuNav, NuPanel, NuSelectPill, NuSheetHeader, NuRow } from '../../components/nutrition/NuKit';
 import { isFutureLocalDate, todayLocalDate } from '../../nutrition/ui/localDate';
+import { nextUnloggedSlot } from '../../nutrition/ui/diaryModel';
 import { NUTRITION_MEAL_SLOTS, type NutritionLoggedFoodItem, type NutritionMealSlot, type NutritionTotals } from '../../types/nutrition';
 import { formatFoodDisplayName } from '../../nutrition/ui/formatFoodDisplayName';
 import type { NutritionDailyLogDoc } from '../../services/nutritionDiary';
@@ -99,23 +101,27 @@ function DiaryNutritionSummary({ totals, goals }: { totals: NutritionTotals; goa
  * a different item always starts from that item's own `initialGrams`
  * instead of whatever was last typed.
  */
-function EditGramsSheet({
-  visible, initialGrams, onClose, onSave,
-}: { visible: boolean; initialGrams: number; onClose: () => void; onSave: (grams: number) => void }) {
+function EditGramsSheet({ visible, initialGrams, unit, estimated, onClose, onSave }: {
+  visible: boolean; initialGrams: number; unit: string; estimated: boolean;
+  onClose: () => void; onSave: (quantity: number) => Promise<void>;
+}) {
   const { t } = useTranslation('nutrition');
-  const [grams, setGrams] = useState(initialGrams);
-
+  const [text, setText] = useState(String(initialGrams));
+  const [busy, setBusy] = useState(false);
+  const quantity = Number(text.replace(',', '.'));
+  const valid = Number.isFinite(quantity) && quantity > 0 && quantity <= (estimated ? 5000 : 10000);
   return (
-    <NuPanel visible={visible} onClose={onClose}>
-      <Text style={{ fontFamily: 'Archivo_700Bold', fontSize: 18, color: NU.white }}>{t('diary.editGrams')}</Text>
-      <View style={{ marginTop: 24 }}>
-        <NuStepper
-          value={`${Math.round(grams)} ${t('units.gramsShort')}`}
-          onMinus={() => setGrams((g) => Math.max(1, g - 10))}
-          onPlus={() => setGrams((g) => Math.min(10000, g + 10))}
-        />
-      </View>
-      <NuButton onPress={() => { if (grams > 0) onSave(grams); }} style={{ marginTop: 26 }}>{t('diary.save')}</NuButton>
+    <NuPanel visible={visible} avoidKeyboard onClose={busy ? () => {} : onClose}>
+      <Text style={{ fontFamily: 'Archivo_700Bold', fontSize: 18, color: NU.white }}>{t(estimated ? 'diary.editQuantity' : 'diary.editGrams')}</Text>
+      {estimated ? <Text style={{ color: NU.secondary, marginTop: 8 }}>{t('diary.planEstimate')}</Text> : null}
+      <TextInput value={text} onChangeText={setText} editable={!busy} keyboardType="decimal-pad"
+        accessibilityLabel={`${t('diary.editQuantity')} (${unit})`}
+        style={{ color: NU.white, fontSize: 24, marginTop: 24, padding: 12 }} />
+      <Text style={{ color: NU.secondary }}>{unit}</Text>
+      <NuButton disabled={!valid || busy} onPress={() => {
+        setBusy(true);
+        void onSave(quantity).then(onClose).catch(() => Alert.alert(t('diary.operationFailed'))).finally(() => setBusy(false));
+      }} style={{ marginTop: 26 }}>{t('diary.save')}</NuButton>
     </NuPanel>
   );
 }
@@ -136,7 +142,7 @@ export function NutritionDiaryScreen({
   onPrevDay: () => void;
   onNextDay: () => void;
   onAddFood: (slot: NutritionMealSlot) => void;
-  onEditGrams: (slot: NutritionMealSlot, item: NutritionLoggedFoodItem, grams: number) => void;
+  onEditGrams: (slot: NutritionMealSlot, item: NutritionLoggedFoodItem, grams: number) => Promise<void>;
   onRemove: (slot: NutritionMealSlot, itemId: string) => void;
   onMove: (slot: NutritionMealSlot, itemId: string, toSlot: NutritionMealSlot) => void;
 }) {
@@ -151,9 +157,9 @@ export function NutritionDiaryScreen({
   const firstRecorded = orderedSlots.find((slot) => day?.meals.some((meal) => meal.slot === slot && meal.items.length > 0));
   const defaultExpansion = firstRecorded ? { [firstRecorded]: true } : {};
   const expanded = expandedByDate[localDate] ?? defaultExpansion;
-  const nextSlot = localDate === todayLocalDate()
-    ? orderedSlots.find((slot) => !day?.meals.some((meal) => meal.slot === slot && meal.items.length > 0))
-    : undefined;
+  // Shares `planView.nextPlanMeal`'s predicate (via `nextUnloggedSlot`) so
+  // the Home card and this screen never disagree on which meal is next.
+  const nextSlot = localDate === todayLocalDate() ? nextUnloggedSlot(orderedSlots, day) : undefined;
 
   useEffect(() => {
     if (!visible || !dayLoaded) return;
@@ -238,9 +244,9 @@ export function NutritionDiaryScreen({
                       ) : items.map((item, itemIndex) => (
                         <View key={item.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 16, paddingRight: 6, paddingVertical: 8, borderTopWidth: itemIndex ? 1 : 0, borderTopColor: NU.hairline }}>
                           <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
-                            <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 14, lineHeight: 20, color: NU.white }}>{formatFoodDisplayName(item.snapshot.name)}</Text>
+                            <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 14, lineHeight: 20, color: NU.white }}>{item.source === 'plan_snapshot' ? item.snapshot.name : formatFoodDisplayName(item.snapshot.name)}</Text>
                             <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 12, lineHeight: 17, color: NU.secondary }}>
-                              {item.grams}{t('units.gramsShort')} · {Math.round(item.snapshot.kcal)} {t('units.kcal')}
+                              {diaryItemQuantity(item)} {diaryItemUnit(item)} · {Math.round(item.snapshot.kcal)} {t('units.kcal')}
                             </Text>
                           </View>
                           <Pressable
@@ -271,7 +277,7 @@ export function NutritionDiaryScreen({
         <Text style={{ fontFamily: 'Archivo_600SemiBold', fontSize: 16, lineHeight: 22, color: NU.white, marginBottom: 12 }}>
           {foodActions ? formatFoodDisplayName(foodActions.item.snapshot.name) : ''}
         </Text>
-        <NuRow label={t('diary.editGrams')} onPress={() => { setEditing(foodActions); setFoodActions(null); }} />
+        <NuRow label={t(foodActions?.item.source === 'plan_snapshot' ? 'diary.editQuantity' : 'diary.editGrams')} onPress={() => { setEditing(foodActions); setFoodActions(null); }} />
         <NuRow label={t('diary.moveMeal')} onPress={() => {
           if (foodActions) setMoving({ slot: foodActions.slot, itemId: foodActions.item.id, toSlot: foodActions.slot });
           setFoodActions(null);
@@ -291,9 +297,11 @@ export function NutritionDiaryScreen({
         <EditGramsSheet
           key={`${localDate}-${editing.slot}-${editing.item.id}`}
           visible
-          initialGrams={editing.item.grams}
+          initialGrams={diaryItemQuantity(editing.item)}
+          unit={diaryItemUnit(editing.item)}
+          estimated={editing.item.source === 'plan_snapshot'}
           onClose={() => setEditing(null)}
-          onSave={(grams) => { onEditGrams(editing.slot, editing.item, grams); setEditing(null); }}
+          onSave={async (quantity) => { await onEditGrams(editing.slot, editing.item, quantity); setEditing(null); }}
         />
       ) : null}
 

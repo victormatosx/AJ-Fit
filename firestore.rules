@@ -1098,7 +1098,7 @@ service cloud.firestore {
           'questionnaireVersion', 'progressionPace', 'targetWeightKg', 'nonTrainingActivityLevel',
           'mealSlots', 'dietaryPattern', 'preferredFoodIds', 'usualFoodIds',
           'excludedFoodIds', 'supplements', 'pregnant', 'breastfeeding',
-          'varietyPreference', 'nutritionGoalCategory', 'excludedAllergens', 'updatedAt'
+          'varietyPreference', 'nutritionGoalCategory', 'excludedAllergens', 'excludedSubstances', 'updatedAt'
         ])
         && d.questionnaireVersion is int && d.questionnaireVersion >= 1 && d.questionnaireVersion <= 100
         && d.get('progressionPace', 'gradual') in ['gradual', 'moderate', 'accelerated']
@@ -1114,6 +1114,10 @@ service cloud.firestore {
         && d.get('excludedAllergens', []).size() <= 9
         && d.get('excludedAllergens', []).toSet().size() == d.get('excludedAllergens', []).size()
         && d.get('excludedAllergens', []).hasOnly(['milk', 'egg', 'peanut', 'tree_nuts', 'soy', 'wheat', 'fish', 'shellfish', 'other'])
+        && d.get('excludedSubstances', []) is list
+        && d.get('excludedSubstances', []).size() <= 2
+        && d.get('excludedSubstances', []).toSet().size() == d.get('excludedSubstances', []).size()
+        && d.get('excludedSubstances', []).hasOnly(['lactose', 'gluten'])
         && d.supplements is list && d.supplements.size() <= 6
         && d.supplements.toSet().size() == d.supplements.size()
         && d.supplements.hasOnly(['whey_or_protein', 'creatine', 'caffeine_or_preworkout', 'multivitamin', 'omega_3', 'other'])
@@ -1121,6 +1125,9 @@ service cloud.firestore {
         && d.varietyPreference in ['repeatable', 'variety', 'indifferent']
         && d.get('nutritionGoalCategory', 'maintenance') in ['weight_loss', 'muscle_gain', 'maintenance', 'body_recomposition']
         && d.updatedAt == request.time;
+    }
+    function legacyDiaryClientWriterAllowed(userId) {
+      return !exists(/databases/$(database)/documents/users/$(userId)/nutritionDiaryProtocol/current);
     }
     function nutritionLogItemValid(item) {
       return item.keys().hasOnly(['id', 'foodId', 'grams', 'source', 'snapshot', 'loggedAt'])
@@ -1170,7 +1177,28 @@ service cloud.firestore {
         && value.sourceName is string && value.sourceName.size() > 0 && value.sourceName.size() <= 200
         && (value.get('sourceVersion', null) == null || (value.sourceVersion is string && value.sourceVersion.size() <= 50));
     }
-    function nutritionFavoriteFoodItemValid(item) {
+    // The current favorite service copies free-form plan items. Keep the
+    // historical catalog snapshot variant readable/writable as before, while
+    // validating today's contract as a bookmark (never nutrient authority).
+    function nutritionFavoritePlannedItemValid(f, foodKeys, nutrientKeys, allergens) {
+      let n = f.get('estimatedNutrition', null);
+      let a = f.get('allergens', []);
+      // Direct mandatory field access fails closed when absent; avoiding the
+      // redundant hasAll/type/range expansions keeps eight items in budget.
+      return f.keys().hasOnly(foodKeys)
+        && f.name.matches('^[\\s\\S]{1,120}$')
+        && f.quantity > 0 && f.quantity <= 5000
+        && f.unit.matches('^[\\s\\S]{1,24}$')
+        && f.preparationNote.matches('^[\\s\\S]{0,200}$')
+        // Shallow, bounded bookmark metadata only. Strict numeric validation
+        // applies to diary entries separately; these estimates never authorize
+        // consumption. Deep expansion here exceeds Rules' budget
+        // for eight foods. Legacy authoritative snapshots retain full checks.
+        && (n == null || n.keys().hasOnly(nutrientKeys))
+        && a.size() <= 9
+        && a.hasOnly(allergens);
+    }
+    function nutritionFavoriteLegacyItemValid(item) {
       return item is map && item.keys().hasOnly(['foodId', 'grams', 'snapshot'])
         && item.keys().hasAll(['foodId', 'grams', 'snapshot'])
         && nutritionId(item.foodId) && item.grams is number && item.grams > 0 && item.grams <= 10000
@@ -1191,14 +1219,31 @@ service cloud.firestore {
     }
     function nutritionFavoriteFoodsValid(foods) {
       return foods is list && foods.size() >= 1 && foods.size() <= 8
-        && (foods.size() < 1 || nutritionFavoriteFoodItemValid(foods[0]))
-        && (foods.size() < 2 || nutritionFavoriteFoodItemValid(foods[1]))
-        && (foods.size() < 3 || nutritionFavoriteFoodItemValid(foods[2]))
-        && (foods.size() < 4 || nutritionFavoriteFoodItemValid(foods[3]))
-        && (foods.size() < 5 || nutritionFavoriteFoodItemValid(foods[4]))
-        && (foods.size() < 6 || nutritionFavoriteFoodItemValid(foods[5]))
-        && (foods.size() < 7 || nutritionFavoriteFoodItemValid(foods[6]))
-        && (foods.size() < 8 || nutritionFavoriteFoodItemValid(foods[7]));
+        && ('name' in foods[0] ? nutritionFavoritePlannedFoodsValid(foods) : nutritionFavoriteLegacyFoodsValid(foods));
+    }
+    function nutritionFavoritePlannedFoodsValid(foods) {
+      let count = foods.size();
+      let foodKeys = ['name', 'quantity', 'unit', 'preparationNote', 'estimatedNutrition', 'allergens'];
+      let nutrientKeys = ['kcal', 'proteinG', 'carbsG', 'fatG', 'fiberG'];
+      let allergens = ['milk', 'egg', 'peanut', 'tree_nuts', 'soy', 'wheat', 'fish', 'shellfish', 'other'];
+      return nutritionFavoritePlannedItemValid(foods[0], foodKeys, nutrientKeys, allergens)
+        && (count < 2 || nutritionFavoritePlannedItemValid(foods[1], foodKeys, nutrientKeys, allergens))
+        && (count < 3 || nutritionFavoritePlannedItemValid(foods[2], foodKeys, nutrientKeys, allergens))
+        && (count < 4 || nutritionFavoritePlannedItemValid(foods[3], foodKeys, nutrientKeys, allergens))
+        && (count < 5 || nutritionFavoritePlannedItemValid(foods[4], foodKeys, nutrientKeys, allergens))
+        && (count < 6 || nutritionFavoritePlannedItemValid(foods[5], foodKeys, nutrientKeys, allergens))
+        && (count < 7 || nutritionFavoritePlannedItemValid(foods[6], foodKeys, nutrientKeys, allergens))
+        && (count < 8 || nutritionFavoritePlannedItemValid(foods[7], foodKeys, nutrientKeys, allergens));
+    }
+    function nutritionFavoriteLegacyFoodsValid(foods) {
+      return (foods.size() < 1 || nutritionFavoriteLegacyItemValid(foods[0]))
+        && (foods.size() < 2 || nutritionFavoriteLegacyItemValid(foods[1]))
+        && (foods.size() < 3 || nutritionFavoriteLegacyItemValid(foods[2]))
+        && (foods.size() < 4 || nutritionFavoriteLegacyItemValid(foods[3]))
+        && (foods.size() < 5 || nutritionFavoriteLegacyItemValid(foods[4]))
+        && (foods.size() < 6 || nutritionFavoriteLegacyItemValid(foods[5]))
+        && (foods.size() < 7 || nutritionFavoriteLegacyItemValid(foods[6]))
+        && (foods.size() < 8 || nutritionFavoriteLegacyItemValid(foods[7]));
     }
     function nutritionFavoriteMealOptionValid(option) {
       return option is map && option.keys().hasAll(['id', 'source', 'slot', 'foods', 'totals', 'createdAt'])
@@ -1308,7 +1353,7 @@ service cloud.firestore {
             'progressionPace', 'targetWeightKg', 'nonTrainingActivityLevel', 'mealSlots',
             'dietaryPattern', 'preferredFoodIds', 'usualFoodIds', 'excludedFoodIds',
             'supplements', 'pregnant', 'breastfeeding', 'varietyPreference',
-            'nutritionGoalCategory', 'excludedAllergens', 'updatedAt'
+            'nutritionGoalCategory', 'excludedAllergens', 'excludedSubstances', 'updatedAt'
           ]);
         allow delete: if false;
       }
@@ -1334,9 +1379,18 @@ service cloud.firestore {
       // `loggedItemCount` the client maintains incrementally so the
       // backend can detect an empty day (see `nutritionNotificationContext.ts`)
       // without reading every meal/item.
+      // Server-owned cutover. A stale client may read history but may never race
+      // a server diary transaction after this account has enrolled.
+      match /nutritionDiaryProtocol/{protocolId} {
+        allow read: if isOwner(userId) && accountActive(userId);
+        allow write: if false;
+      }
+      match /nutritionDiaryOperationReceipts/{receiptId} {
+        allow read, write: if false;
+      }
       match /nutritionDailyLogs/{localDate} {
         allow read: if isOwner(userId) && accountActive(userId);
-        allow create: if isOwner(userId) && accountActive(userId)
+        allow create: if isOwner(userId) && accountActive(userId) && legacyDiaryClientWriterAllowed(userId)
           && request.resource.data.keys().hasOnly(['localDate', 'timezone', 'totals', 'loggedItemCount', 'createdAt', 'updatedAt'])
           && request.resource.data.keys().hasAll(['localDate', 'timezone', 'totals', 'loggedItemCount', 'createdAt', 'updatedAt'])
           && strictLocalDate(localDate)
@@ -1346,7 +1400,7 @@ service cloud.firestore {
           && request.resource.data.loggedItemCount is int && request.resource.data.loggedItemCount >= 0 && request.resource.data.loggedItemCount <= 36
           && request.resource.data.createdAt == request.time
           && request.resource.data.updatedAt == request.time;
-        allow update: if isOwner(userId) && accountActive(userId)
+        allow update: if isOwner(userId) && accountActive(userId) && legacyDiaryClientWriterAllowed(userId)
           && request.resource.data.keys().hasOnly(['localDate', 'timezone', 'totals', 'loggedItemCount', 'createdAt', 'updatedAt'])
           && request.resource.data.keys().hasAll(['localDate', 'timezone', 'totals', 'loggedItemCount', 'createdAt', 'updatedAt'])
           && request.resource.data.localDate == localDate
@@ -1356,22 +1410,60 @@ service cloud.firestore {
           && nutritionTotals(request.resource.data.totals)
           && request.resource.data.loggedItemCount is int && request.resource.data.loggedItemCount >= 0 && request.resource.data.loggedItemCount <= 36
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['timezone', 'totals', 'loggedItemCount', 'updatedAt']);
-        allow delete: if isOwner(userId) && accountActive(userId);
+        allow delete: if isOwner(userId) && accountActive(userId) && legacyDiaryClientWriterAllowed(userId);
 
         // One document per meal slot (doc id == slot) — bounds every write
         // to a single meal's items (<= 6), regardless of how many other
         // meals exist that day.
         match /meals/{slotId} {
           allow read: if isOwner(userId) && accountActive(userId);
-          allow create, update: if isOwner(userId) && accountActive(userId)
+          // Optional optimistic-concurrency counter for the legacy
+          // (pre-enrollment) manual writer (production audit P2-01): a
+          // one-shot item query taken before the transaction can go stale
+          // under a concurrent write, and the writer has no way to re-run
+          // that query inside the transaction (Firestore's client SDK only
+          // supports get-by-reference there). `itemsRevision` lets the
+          // transaction detect staleness via the one document it DOES read
+          // transactionally (this meal doc) and retry instead of silently
+          // committing a lost update. Absent is fine (meal never touched by
+          // a revision-aware client yet); once present, every further write
+          // — from ANY client, including one that predates this field and
+          // has no idea it exists — must observe and increment it by
+          // exactly 1. A stale (pre-fix) client's blind overwrite therefore
+          // fails closed (`PERMISSION_DENIED`) instead of silently dropping
+          // another write's contribution to the aggregate.
+          allow create: if isOwner(userId) && accountActive(userId) && legacyDiaryClientWriterAllowed(userId)
             && slotId in ['breakfast', 'morning_snack', 'lunch', 'afternoon_snack', 'dinner', 'supper']
-            && request.resource.data.keys().hasOnly(['slot', 'totals', 'followedRecommendedOptionId'])
+            && request.resource.data.keys().hasOnly(['slot', 'totals', 'followedRecommendedOptionId', 'itemsRevision'])
             && request.resource.data.keys().hasAll(['slot', 'totals'])
             && request.resource.data.slot == slotId
             && nutritionLoggedMealTotalsValid(request.resource.data.totals)
             && (request.resource.data.get('followedRecommendedOptionId', null) == null
-              || nutritionBoundedId(request.resource.data.followedRecommendedOptionId));
-          allow delete: if isOwner(userId) && accountActive(userId);
+              || nutritionBoundedId(request.resource.data.followedRecommendedOptionId))
+            && (!('itemsRevision' in request.resource.data)
+              || (request.resource.data.itemsRevision is int
+                && request.resource.data.itemsRevision >= 0 && request.resource.data.itemsRevision <= 1000000000));
+          allow update: if isOwner(userId) && accountActive(userId) && legacyDiaryClientWriterAllowed(userId)
+            && slotId in ['breakfast', 'morning_snack', 'lunch', 'afternoon_snack', 'dinner', 'supper']
+            && request.resource.data.keys().hasOnly(['slot', 'totals', 'followedRecommendedOptionId', 'itemsRevision'])
+            && request.resource.data.keys().hasAll(['slot', 'totals'])
+            && request.resource.data.slot == slotId
+            && nutritionLoggedMealTotalsValid(request.resource.data.totals)
+            && (request.resource.data.get('followedRecommendedOptionId', null) == null
+              || nutritionBoundedId(request.resource.data.followedRecommendedOptionId))
+            && (!('itemsRevision' in request.resource.data)
+              || (request.resource.data.itemsRevision is int
+                && request.resource.data.itemsRevision >= 0 && request.resource.data.itemsRevision <= 1000000000))
+            && (!('itemsRevision' in resource.data)
+              || request.resource.data.get('itemsRevision', -1) == resource.data.itemsRevision + 1);
+          // Once tracked, the doc is never deleted outright — clearing a
+          // meal to zero items must go through `update` with an
+          // incremented revision (see `nutritionDiary.ts`), so this same
+          // guard also covers "remove the last item". A stale client's raw
+          // delete of a tracked meal fails closed instead of silently
+          // discarding another writer's item from the aggregate.
+          allow delete: if isOwner(userId) && accountActive(userId) && legacyDiaryClientWriterAllowed(userId)
+            && !('itemsRevision' in resource.data);
 
           // A single logged item costs ~150-200 of the Rules evaluator's
           // 1000-expression-per-write budget on its own (confirmed
@@ -1386,10 +1478,10 @@ service cloud.firestore {
           // user touch anyone else's data or bypass a numeric/shape check.
           match /items/{itemId} {
             allow read: if isOwner(userId) && accountActive(userId);
-            allow create, update: if isOwner(userId) && accountActive(userId)
+            allow create, update: if isOwner(userId) && accountActive(userId) && legacyDiaryClientWriterAllowed(userId)
               && request.resource.data.id == itemId
               && nutritionLogItemValid(request.resource.data);
-            allow delete: if isOwner(userId) && accountActive(userId);
+            allow delete: if isOwner(userId) && accountActive(userId) && legacyDiaryClientWriterAllowed(userId);
           }
         }
       }
@@ -1663,8 +1755,12 @@ service cloud.firestore {
             && (stateId == 'current' || stateId == request.resource.data.get('programInstanceId', ''))
             && request.resource.data.keys().hasAll(
                  ['programId', 'nextSessionIndex', 'cursorDate', 'lastCompletedAt', 'pendingMissDecision', 'updatedAt'])
+            // `lastPerformedLocalDate` is deliberately allowed but NOT required:
+            // it records the day a session was actually trained (distinct from
+            // the opportunity it consumed) and is absent on every document
+            // written before it existed, so `hasAll` must never demand it.
             && request.resource.data.keys().hasOnly(
-                 ['programId', 'programInstanceId', 'nextSessionIndex', 'cursorDate', 'lastCompletedAt', 'pendingMissDecision', 'updatedAt'])
+                 ['programId', 'programInstanceId', 'nextSessionIndex', 'cursorDate', 'lastCompletedAt', 'lastPerformedLocalDate', 'pendingMissDecision', 'updatedAt'])
             && request.resource.data.programId == programId
             && (
                  !existsAfter(/databases/$(database)/documents/users/$(userId)/workoutLifecycleState/current)
@@ -1677,6 +1773,12 @@ service cloud.firestore {
             && request.resource.data.nextSessionIndex is int
             && request.resource.data.nextSessionIndex >= 0
             && request.resource.data.cursorDate is string
+            // Create: a fresh rotation has no day-of-effort history yet, so the
+            // only value a client may send is null (which is exactly what the
+            // miss-detection bootstrap in `src/services/workoutSchedule.ts`
+            // writes). The backend uses the Admin SDK and bypasses these rules.
+            && (!('lastPerformedLocalDate' in request.resource.data)
+                 || request.resource.data.lastPerformedLocalDate == null)
             && request.resource.data.updatedAt == request.time;
 
           // Update: a write that keeps the rotation position (nextSessionIndex
@@ -1693,8 +1795,12 @@ service cloud.firestore {
             && (stateId == 'current' || stateId == request.resource.data.get('programInstanceId', ''))
             && request.resource.data.keys().hasAll(
                  ['programId', 'nextSessionIndex', 'cursorDate', 'lastCompletedAt', 'pendingMissDecision', 'updatedAt'])
+            // `lastPerformedLocalDate` is deliberately allowed but NOT required:
+            // it records the day a session was actually trained (distinct from
+            // the opportunity it consumed) and is absent on every document
+            // written before it existed, so `hasAll` must never demand it.
             && request.resource.data.keys().hasOnly(
-                 ['programId', 'programInstanceId', 'nextSessionIndex', 'cursorDate', 'lastCompletedAt', 'pendingMissDecision', 'updatedAt'])
+                 ['programId', 'programInstanceId', 'nextSessionIndex', 'cursorDate', 'lastCompletedAt', 'lastPerformedLocalDate', 'pendingMissDecision', 'updatedAt'])
             && request.resource.data.programId == programId
             && (
                  !existsAfter(/databases/$(database)/documents/users/$(userId)/workoutLifecycleState/current)
@@ -1707,6 +1813,15 @@ service cloud.firestore {
             && request.resource.data.nextSessionIndex is int
             && request.resource.data.nextSessionIndex >= 0
             && request.resource.data.cursorDate is string
+            // Update: the client may only PRESERVE this field, never change it.
+            // It records the day a session was actually trained and feeds the
+            // resolver's "is today's opportunity still open" decision, so a
+            // client able to move it could unlock a session on a day the
+            // rotation never offered. Only the backend (Admin SDK, which
+            // bypasses these rules) ever assigns it. Client writes here are
+            // whole-document `set()`s that carry the stored value forward.
+            && request.resource.data.get('lastPerformedLocalDate', null)
+                 == resource.data.get('lastPerformedLocalDate', null)
             && request.resource.data.updatedAt == request.time
             // Legacy V1 has no grant system at all — its rotation legitimately
             // advances via a direct, ungated write (`src/services/

@@ -71,6 +71,7 @@
     "vitest": "^4.1.10"
   },
   "scripts": {
+    "check:native-env": "node scripts/checkNativeEnvironment.cjs",
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
@@ -121,7 +122,8 @@
     "test:integration:accountDeletionReconciliation": "firebase emulators:exec --only auth,firestore,storage --project ajfit-rules-test 'cd functions && ACCOUNT_DELETION_RECONCILIATION_INTEGRATION=1 npx vitest run src/accountDeletion/__tests__/accountDeletionReconciliation.integration.test.ts'",
     "test:integration:firstProgramGeneration": "firebase emulators:exec --only firestore --project ajfit-rules-test 'FIRST_PROGRAM_GENERATION_INTEGRATION=1 vitest run src/services/__tests__/firstProgramGeneration.integration.test.ts'",
     "test:integration:scheduleMissedSessionConcurrency": "firebase emulators:exec --only firestore --project ajfit-rules-test 'SCHEDULE_MISSED_SESSION_CONCURRENCY_INTEGRATION=1 vitest run src/services/__tests__/scheduleMissedSessionConcurrency.integration.test.ts'",
-    "test:integration": "npm run test:integration:preflight && firebase emulators:exec --only firestore --project ajfit-rules-test 'FIRST_PROGRAM_GENERATION_INTEGRATION=1 LIFECYCLE_APPLICATION_INTEGRATION=1 LONG_RUN_JOURNEY_INTEGRATION=1 ONBOARDING_SIGNUP_LIFECYCLE_INTEGRATION=1 PREPARED_WORKOUT_PROGRAM_CONCURRENCY_INTEGRATION=1 PRESCRIPTION_EVOLUTION_INTEGRATION=1 PROGRESSION_V2_INTEGRATION=1 QUESTIONNAIRE_LOAD_INTEGRATION=1 SCHEDULE_CONFIG_RECONCILIATION_INTEGRATION=1 SCHEDULE_MISSED_SESSION_CONCURRENCY_INTEGRATION=1 WORKOUT_EXECUTION_INTEGRATION=1 WORKOUT_LIFECYCLE_INTEGRATION=1 WORKOUT_PROGRAM_REST_SECONDS_INTEGRATION=1 WORKOUT_RECONCILIATION_INTEGRATION=1 vitest run --no-file-parallelism src/services/__tests__ src/**/__tests__/*.integration.test.ts'",
+    "test:integration:nutritionDiaryManualConcurrency": "firebase emulators:exec --only firestore --project ajfit-rules-test 'NUTRITION_DIARY_MANUAL_CONCURRENCY_INTEGRATION=1 vitest run src/services/__tests__/nutritionDiaryManualConcurrency.integration.test.ts'",
+    "test:integration": "npm run test:integration:preflight && firebase emulators:exec --only firestore --project ajfit-rules-test 'FIRST_PROGRAM_GENERATION_INTEGRATION=1 LIFECYCLE_APPLICATION_INTEGRATION=1 LONG_RUN_JOURNEY_INTEGRATION=1 NUTRITION_DIARY_MANUAL_CONCURRENCY_INTEGRATION=1 ONBOARDING_SIGNUP_LIFECYCLE_INTEGRATION=1 PREPARED_WORKOUT_PROGRAM_CONCURRENCY_INTEGRATION=1 PRESCRIPTION_EVOLUTION_INTEGRATION=1 PROGRESSION_V2_INTEGRATION=1 QUESTIONNAIRE_LOAD_INTEGRATION=1 SCHEDULE_CONFIG_RECONCILIATION_INTEGRATION=1 SCHEDULE_MISSED_SESSION_CONCURRENCY_INTEGRATION=1 WORKOUT_EXECUTION_INTEGRATION=1 WORKOUT_LIFECYCLE_INTEGRATION=1 WORKOUT_PROGRAM_REST_SECONDS_INTEGRATION=1 WORKOUT_RECONCILIATION_INTEGRATION=1 vitest run --no-file-parallelism src/services/__tests__ src/**/__tests__/*.integration.test.ts'",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
     "lint:affected": "eslint App.tsx src/workoutLifecycle src/progressionEngineV2 src/prescriptionEvolution src/services/workoutLifecycle.ts src/services/workoutLifecycleApplication.ts src/services/workoutPrograms.ts",

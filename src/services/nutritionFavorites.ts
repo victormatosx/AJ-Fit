@@ -1,3 +1,4 @@
+import { isCatalogLinkedOption } from '../nutrition/catalog/binding';
 import {
   collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query,
   runTransaction, serverTimestamp, setDoc, type Timestamp,
@@ -88,7 +89,16 @@ export async function toggleFavoriteRecipeId(uid: string, recipeId: string): Pro
 export type NewFavoriteMealOption = Omit<NutritionFavoriteMealOption<unknown>, 'id' | 'createdAt'>;
 
 /** Keeps at most `MAX_FAVORITE_MEAL_OPTIONS`, dropping the oldest when already full — a personal shortcut list, not a historical record. */
-export async function addFavoriteMealOption(uid: string, favorite: NewFavoriteMealOption): Promise<string> {
+export async function addFavoriteMealOption(uid: string, favorite: NewFavoriteMealOption, optionId?: string): Promise<string> {
+  if (favorite.foods.some(food => food.catalogBinding)) {
+    if (!optionId || !isCatalogLinkedOption(favorite.foods)) throw new Error('DIARY_OPTION_NOT_LINKED');
+    const [{ httpsCallable }, { functions }] = await Promise.all([import('firebase/functions'), import('../lib/firebaseFunctions')]);
+    const result = await httpsCallable<unknown, { favoriteId: string }>(functions, 'favoriteCatalogMeal')({
+      origin: favorite.source, documentId: favorite.source === 'plan' ? favorite.planId : favorite.alternativeId,
+      optionId, slot: favorite.slot,
+    });
+    return result.data.favoriteId;
+  }
   const id = newFavoriteId();
   await setDoc(doc(favoritesRef(uid), id), { ...favorite, id, createdAt: serverTimestamp() });
   const newest = await getDocs(query(favoritesRef(uid), orderBy('createdAt', 'desc'), limit(MAX_FAVORITE_MEAL_OPTIONS + 1)));

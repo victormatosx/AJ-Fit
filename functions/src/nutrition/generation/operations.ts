@@ -1,3 +1,4 @@
+import type { CatalogMetrics } from '../catalogLinking/search';
 import { Timestamp, type Firestore } from 'firebase-admin/firestore';
 import { PROMPT_VERSION } from '../ai/config';
 import type { AiResult } from '../ai/provider';
@@ -6,6 +7,7 @@ import { AI_SCHEMA_VERSION } from '../ai/config';
 import { estimateOpenAiCost } from '../observability/modelPricing';
 
 export interface RecordAiOperationParams {
+  catalogMetrics?: CatalogMetrics;
   ownerUid: string;
   generationId: string;
   operation: NutritionGenerationOperationType;
@@ -32,7 +34,8 @@ export async function recordAiOperation(db: Firestore, params: RecordAiOperation
     const lock = await tx.get(db.collection('accountDeletionLocks').doc(ownerUid));
     if (lock.exists) return;
     tx.set(ref, { ownerUid, generationId, operation, provider: 'openai',
-      model, promptVersion: PROMPT_VERSION, aiSchemaVersion: AI_SCHEMA_VERSION,
+      ...(params.catalogMetrics ? { catalogMetrics: params.catalogMetrics } : {}),
+      model, promptVersion: params.catalogMetrics ? `${PROMPT_VERSION}+catalog-intent-v1` : PROMPT_VERSION, aiSchemaVersion: AI_SCHEMA_VERSION,
       attempts: attempt, attemptNumber: attempt, retryCount: attempt - 1,
       fallbackUsed: fallback, latencyMs, inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens, cachedInputTokens: usage.cachedInputTokens,

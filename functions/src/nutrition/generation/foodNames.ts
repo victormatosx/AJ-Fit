@@ -7,7 +7,7 @@ export async function resolveFoodNames(db: Firestore, ids: readonly string[], ui
   const unique = [...new Set(ids)];
   const docs = await Promise.all(unique.map((id) => (id.startsWith('custom_') && uid
     ? db.collection('users').doc(uid).collection('nutritionFoods').doc(id)
-    : db.collection('nutritionFoods').doc(id)).get()));
+    : db.collection(id.startsWith('flc_') ? 'foodLogCatalog' : 'nutritionFoods').doc(id)).get()));
   const names = new Map<string, string>();
   for (const doc of docs) {
     const name = doc.data()?.name;

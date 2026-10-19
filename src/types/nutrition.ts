@@ -176,6 +176,8 @@ export interface NutritionProfile<TTimestamp = unknown> {
   excludedFoodIds: NutritionFoodId[];
   /** Explicit structured allergy exclusions; unknown allergen review fails closed during generation. */
   excludedAllergens?: NutritionFoodAllergen[];
+  /** Explicit critical absences; absence of this field preserves legacy profiles. */
+  excludedSubstances?: ('lactose' | 'gluten')[];
 
   supplements: NutritionSupplementId[];
 
@@ -457,6 +459,7 @@ export interface NutritionFoodSource {
   sourceVersion?: string;
 }
 export interface NutritionFood<TTimestamp = unknown> {
+  safetyEvidence?: NutritionCatalogSafetyEvidence;
   id: string;
   name: string;
   aliases: string[];
@@ -592,6 +595,7 @@ export const FOOD_LOG_SUB_CATEGORIES = [
 export type FoodLogSubCategory = (typeof FOOD_LOG_SUB_CATEGORIES)[number];
 
 export interface FoodLogEntry<TTimestamp = unknown> {
+  safetyEvidence?: NutritionCatalogSafetyEvidence;
   id: string;
   source: FoodLogSource;
   name: string;
@@ -672,6 +676,10 @@ export interface NutritionTotals {
 
 /**
  * Diet-quality-v3 (2026-10-10, "PLANO RECOMENDADO != CONSUMO REGISTRADO"):
+ * Legacy items are free-form estimates. In opt-in schema 3, catalogBinding
+ * identifies an authoritative catalog snapshot; estimatedNutrition then holds
+ * backend-calculated values (the field name is retained for old readers).
+ * The legacy architecture below applies only when catalogBinding is absent.
  * a recommended-plan item is a free-form AI estimate, never resolved
  * against `nutritionFoods` — no `foodId`, no catalog snapshot. `quantity`+
  * `unit` replace `grams` (the AI picks whatever unit reads naturally —
@@ -695,7 +703,33 @@ export interface NutritionTotals {
  * recompute a per-item snapshot for one. Every read site must treat an
  * absent value as "unknown for this historical item", never crash.
  */
+/** Backend-owned link. Display fields are retained for legacy UI compatibility. */
+export interface NutritionCatalogBinding {
+  brandName?: string;
+  schemaVersion: 1;
+  collection: 'nutritionFoods' | 'foodLogCatalog';
+  foodId: string;
+  grams: number;
+  source: { type: 'taco' | 'off'; sourceId: string };
+  catalogVersion: string;
+  nutritionRevision: string;
+  nutritionPer100g: NutritionFoodNutritionValues;
+  preparation: string;
+}
+
+/** Optional evidence supplied only by catalog administrators, never by a model.
+ * Absence claims must cover cross-contact, not merely ingredient omission. */
+export interface NutritionCatalogSafetyEvidence {
+  schemaVersion: 1;
+  nutritionRevision: string;
+  reference: string;
+  absentSubstances: string[];
+  dietaryPatterns: DietaryPattern[];
+  compositionReviewed: boolean;
+}
+
 export interface NutritionPlanFoodItem {
+  catalogBinding?: NutritionCatalogBinding;
   name: string;
   quantity: number;
   unit: string;
@@ -771,7 +805,7 @@ export interface NutritionPlanPayload {
   engineSnapshot: NutritionEngineSnapshot;
   meals: NutritionMeal[];
   dailyTotals: NutritionTotals;
-  generationMetadata: { provider: string; model: string; attempts: number; corrected: boolean; fallbackUsed: boolean };
+  generationMetadata: { mode?: 'catalog'; provider: string; model: string; attempts: number; corrected: boolean; fallbackUsed: boolean };
   versions: NutritionPlanVersions;
 }
 
@@ -833,16 +867,44 @@ export interface NutritionAiMealPlanOutput {
  * `NutritionLoggedMeal.followedRecommendedOptionId` below instead — see
  * `canonical/nutrition_constraints.json` `diary.recommendedOptionTracking`.
  */
-export const NUTRITION_LOGGED_FOOD_SOURCES = ['catalog_food', 'custom_food', 'recipe', 'food_log_catalog'] as const;
+export const NUTRITION_LOGGED_FOOD_SOURCES = ['catalog_food', 'custom_food', 'recipe', 'food_log_catalog', 'plan_snapshot'] as const;
 export type NutritionLoggedFoodSource = (typeof NUTRITION_LOGGED_FOOD_SOURCES)[number];
 
-export interface NutritionLoggedFoodItem<TTimestamp = unknown> extends NutritionFoodReference {
-  /** Client-generated id, stable for the lifetime of this entry — addresses edit/move/remove without relying on array position. */
+export interface NutritionPlanSnapshotBase {
+  name: string;
+  quantity: number;
+  unit: string;
+  preparationNote: string;
+  nutrition: NutritionTotals;
+}
+export interface NutritionPlanSnapshotReference {
+  collection: 'nutritionPlans' | 'nutritionMealAlternatives';
+  documentId: string;
+  optionId: string;
+  slot: NutritionMealSlot;
+  itemIndex: number;
+}
+interface NutritionDiaryItemCommon<TTimestamp> {
   id: string;
-  source: NutritionLoggedFoodSource;
   snapshot: NutritionFoodSnapshot;
   loggedAt: TTimestamp;
+  revision?: number;
 }
+export interface NutritionCatalogLoggedFoodItem<TTimestamp = unknown> extends NutritionDiaryItemCommon<TTimestamp>, NutritionFoodReference {
+  source: Exclude<NutritionLoggedFoodSource, 'plan_snapshot'>;
+}
+export interface NutritionPlanLoggedFoodItem<TTimestamp = unknown> extends NutritionDiaryItemCommon<TTimestamp> {
+  source: 'plan_snapshot';
+  quantity: number;
+  unit: string;
+  preparationNote: string;
+  base: NutritionPlanSnapshotBase;
+  planReference: NutritionPlanSnapshotReference;
+  /** Deliberately absent: these records are neither catalog foods nor gram conversions. */
+  foodId?: never;
+  grams?: never;
+}
+export type NutritionLoggedFoodItem<TTimestamp = unknown> = NutritionCatalogLoggedFoodItem<TTimestamp> | NutritionPlanLoggedFoodItem<TTimestamp>;
 
 export interface NutritionLoggedMeal<TTimestamp = unknown> {
   slot: NutritionMealSlot;
@@ -942,6 +1004,7 @@ export type NutritionGenerationOperationType = (typeof NUTRITION_GENERATION_OPER
 export const NUTRITION_GENERATION_ERROR_CODES = [
   'AI_TIMEOUT',
   'AI_RATE_LIMIT',
+  'AI_CATALOG_RESOLUTION_FAILED',
   'AI_SCHEMA_INVALID',
   'AI_MACRO_VALIDATION_FAILED',
   'AI_SAFETY_VALIDATION_FAILED',
@@ -956,6 +1019,7 @@ export type NutritionGenerationErrorCode = (typeof NUTRITION_GENERATION_ERROR_CO
 
 /** `users/{uid}/nutritionGenerationJobs/{generationId}` (`07_backend/firestore_schema.md` §9). */
 export interface NutritionGenerationJob<TTimestamp = unknown> {
+  generationMode?: 'catalog';
   generationId: string;
   operationType: NutritionGenerationOperationType;
   status: NutritionGenerationStatus;
@@ -999,7 +1063,7 @@ export interface NutritionMealAlternative<TTimestamp = unknown> {
   recommendedOptionId: string;
   feedback?: { reason: NutritionMealFeedbackReason; dislikedFoodIds?: string[] } | null;
   catalogVersion: string;
-  generationMetadata: { provider: string; model: string; attempts: number; corrected: boolean; fallbackUsed: boolean };
+  generationMetadata: { mode?: 'catalog'; provider: string; model: string; attempts: number; corrected: boolean; fallbackUsed: boolean };
   createdAt: TTimestamp;
 }
 

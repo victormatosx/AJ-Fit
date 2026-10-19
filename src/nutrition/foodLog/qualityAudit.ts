@@ -1,5 +1,4 @@
 import type { FoodLogEntry, FoodLogSourceType, NutritionFoodNutritionValues } from '../../types/nutrition';
-import { normalizeSearchText } from './normalize';
 
 /**
  * Deterministic, post-hoc quality audit over already-normalized catalog

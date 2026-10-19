@@ -1,3 +1,5 @@
+import { linkAndValidatePlan } from '../catalogLinking/pipeline';
+import type { CatalogSearchSession } from '../catalogLinking/search';
 import type { NutritionEngineOutput, NutritionGoal, NutritionProfile } from '../shared/types/nutrition';
 import { nutritionAiProfile, NutritionAiProviderError, type AiResult, type NutritionAiProvider } from '../ai/provider';
 import { MAX_AI_ATTEMPTS } from '../ai/config';
@@ -31,20 +33,24 @@ export async function generateValidatedPlan(
   onAttempt: (audit: AttemptAudit) => Promise<void> = async () => {},
   onValidating: (attempt: number) => Promise<void> = async () => {},
   options: { startAttempt?: number; previousFailureCode?: AttemptCode; generationId?: string;
+    catalogSession?: CatalogSearchSession; deadline?: number;
     onBeforeAttempt?: (attempt: number) => Promise<void> } = {},
 ): Promise<{ validated: ValidatedPlan; result: AiResult; attempt: number; fallback: boolean }> {
+  if (!options.catalogSession && profile.excludedSubstances?.length) throw new PlanValidationError('AI_SAFETY_VALIDATION_FAILED', false, 'critical_absence_requires_catalog');
   let lastCode: AttemptCode = options.previousFailureCode ?? 'AI_RETRY_EXHAUSTED';
   let feedback: string | undefined;
   for (let attempt = options.startAttempt ?? 1; attempt <= MAX_AI_ATTEMPTS; attempt++) {
     const fallback = attempt === MAX_AI_ATTEMPTS
       && ['AI_SCHEMA_INVALID', 'AI_MACRO_VALIDATION_FAILED'].includes(lastCode);
+    if (options.catalogSession && options.deadline && Date.now() + 5_000 >= options.deadline) break;
     const started = Date.now();
     let result: AiResult | null = null;
     await options.onBeforeAttempt?.(attempt);
     try {
       result = await provider.generatePlan({ profile: nutritionAiProfile(profile), engine, goal, foodNames,
         ...(options.generationId ? { trace: { generationId: options.generationId, attempt } } : {}),
-        feedback: attempt > 1 ? feedback ?? lastCode : undefined, fallback });
+        feedback: attempt > 1 ? feedback ?? lastCode : undefined, fallback,
+        ...(options.catalogSession ? { catalogMode: true, timeoutMs: Math.min(90_000, (options.deadline ?? Date.now() + 95_000) - Date.now() - 5_000) } : {}) });
     } catch (error) {
       lastCode = classifyAttemptError(error);
       feedback = undefined;
@@ -56,7 +62,7 @@ export async function generateValidatedPlan(
     await onValidating(attempt);
     let validated: ValidatedPlan;
     try {
-      validated = validateAndBuildPlan(result.output, profile.mealSlots, engine, profile.excludedAllergens, true, { dietaryPattern: profile.dietaryPattern, excludedFoodNames: foodNames.excluded });
+      validated = options.catalogSession ? await linkAndValidatePlan(result.output, options.catalogSession, profile, engine, foodNames) : validateAndBuildPlan(result.output, profile.mealSlots, engine, profile.excludedAllergens, true, { dietaryPattern: profile.dietaryPattern, excludedFoodNames: foodNames.excluded });
     } catch (error) {
       lastCode = classifyAttemptError(error);
       const validationIssue = error instanceof PlanValidationError ? error.issue : undefined;
@@ -66,6 +72,9 @@ export async function generateValidatedPlan(
       // only to the provider; it must never enter logs or job documents.
       feedback = validationRetryFeedback(lastCode, validationIssue, validationDiagnostics,
         error instanceof PlanValidationError ? error.repairCandidate ?? result.output : result.output);
+      if (options.catalogSession && error instanceof PlanValidationError && error.code === 'AI_CATALOG_RESOLUTION_FAILED') {
+        feedback = JSON.stringify({ catalogFailure: error.message, catalogRepair: error.repairCandidate, previousPlan: result.output, instruction: 'Replace unresolvable foods with explicitly named simple foods in grams; preserve restrictions.' });
+      }
       await onAttempt({ attempt, fallback, result, code: lastCode, latencyMs: Date.now() - started, validationIssue, validationDiagnostics });
       if (error instanceof PlanValidationError && !error.retryable) break;
       continue;

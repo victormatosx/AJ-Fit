@@ -1,3 +1,6 @@
+import { assertCatalogBindingsCurrent } from '../catalogLinking/pipeline';
+import { catalogLinkingEnabled, CATALOG_PIPELINE_VERSION, CATALOG_PLAN_SCHEMA_VERSION } from '../catalogLinking/config';
+import { CatalogSearchSession, firestoreCatalogReader } from '../catalogLinking/search';
 import { Timestamp, type DocumentReference, type Firestore } from 'firebase-admin/firestore';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
@@ -76,6 +79,10 @@ export async function processNutritionGenerationJob(
     const context = await loadGenerationContext(db, uid);
     const foodNames = await resolvePromptFoodNames(db, context.profile, uid);
     const claimedJob = await ref.get();
+    const catalogMode = claimedJob.get('generationMode') === 'catalog';
+    if (catalogMode && !catalogLinkingEnabled()) throw new Error('NUTRITION_GENERATION_DISABLED');
+    const deadline = operationStartedAt + 430_000;
+    const catalogSession = catalogMode ? new CatalogSearchSession(firestoreCatalogReader(db), deadline) : undefined;
     const usedAttempts = claimedJob.get('aiAttemptCount');
     const startAttempt = typeof usedAttempts === 'number' && Number.isInteger(usedAttempts) ? usedAttempts + 1 : 1;
     const previousFailureCode = claimedJob.get('lastFailureCode');
@@ -91,7 +98,7 @@ export async function processNutritionGenerationJob(
           nutrients: audit.validationIssue?.nutrients });
         await recordAiOperation(db, { ownerUid: uid, generationId, operation: 'full_plan',
           defaultModel: audit.fallback ? NUTRITION_AI_MODELS.fallback : NUTRITION_AI_MODELS.fullPlan,
-          attempt: audit.attempt, result: audit.result, code: audit.code, fallback: audit.fallback, latencyMs: audit.latencyMs });
+          attempt: audit.attempt, result: audit.result, code: audit.code, fallback: audit.fallback, latencyMs: audit.latencyMs, ...(catalogSession ? { catalogMetrics: { ...catalogSession.metrics } } : {}) });
         // Never log free-form model refusals: they can echo user input.
         // `lastFailureCode` intentionally only tracks a NON-final attempt's
         // failure (attempt < 3) — generateValidatedPlan reads it back as
@@ -107,7 +114,7 @@ export async function processNutritionGenerationJob(
       },
       async (currentAttempt) => { stage = 'validation'; await ref.update({ status: 'validating', retryCount: currentAttempt - 1,
         updatedAt: Timestamp.now() }); },
-      { startAttempt, generationId, previousFailureCode: typeof previousFailureCode === 'string'
+      { startAttempt, generationId, ...(catalogSession ? { catalogSession, deadline } : {}), previousFailureCode: typeof previousFailureCode === 'string'
         ? previousFailureCode as AttemptCode : undefined,
       onBeforeAttempt: async (currentAttempt) => { stage = 'provider'; await ref.update({ aiAttemptCount: currentAttempt,
         updatedAt: Timestamp.now() }); } },
@@ -128,6 +135,7 @@ export async function processNutritionGenerationJob(
           const oldId = rate.get('activePlanId');
           const oldPlanRef = typeof oldId === 'string' ? user.collection('nutritionPlans').doc(oldId) : null;
           const oldPlan = oldPlanRef ? await tx.get(oldPlanRef) : null;
+          if (catalogSession) await assertCatalogBindingsCurrent(tx, db, validated.meals.flatMap(m => m.options), context.profile, foodNames, catalogSession);
           if (oldPlanRef && oldPlan?.exists && oldPlan.get('status') === 'active') {
             tx.update(oldPlanRef, { status: 'archived', archivedAt: now });
           }
@@ -136,13 +144,13 @@ export async function processNutritionGenerationJob(
               inherited: context.input.inherited, nutritionAnswers: context.profile, capturedAt: now },
             physicalSnapshot: context.physical,
             engineSnapshot: { output: { ...context.engine, versions: {
-              ...context.engine.versions, foodCatalogVersion: FOOD_CATALOG_VERSION_PLACEHOLDER } }, ruleVersions: {
-              ...context.engine.versions, foodCatalogVersion: FOOD_CATALOG_VERSION_PLACEHOLDER } },
+              ...context.engine.versions, foodCatalogVersion: catalogMode ? CATALOG_PIPELINE_VERSION : FOOD_CATALOG_VERSION_PLACEHOLDER } }, ruleVersions: {
+              ...context.engine.versions, foodCatalogVersion: catalogMode ? CATALOG_PIPELINE_VERSION : FOOD_CATALOG_VERSION_PLACEHOLDER } },
             meals: validated.meals, dailyTotals: validated.dailyTotals,
-            versions: { planSchemaVersion: '2.0.0', nutritionEngineVersion: context.engine.versions.nutritionEngineVersion,
-              questionnaireVersion: context.questionnaireVersion, foodCatalogVersion: FOOD_CATALOG_VERSION_PLACEHOLDER,
-              aiGenerationSchemaVersion: AI_SCHEMA_VERSION, promptVersion: PROMPT_VERSION },
-            generationMetadata: { provider: 'openai', model: result.model, attempts: attempt,
+            versions: { planSchemaVersion: catalogMode ? CATALOG_PLAN_SCHEMA_VERSION : '2.0.0', nutritionEngineVersion: context.engine.versions.nutritionEngineVersion,
+              questionnaireVersion: context.questionnaireVersion, foodCatalogVersion: catalogMode ? CATALOG_PIPELINE_VERSION : FOOD_CATALOG_VERSION_PLACEHOLDER,
+              aiGenerationSchemaVersion: AI_SCHEMA_VERSION, promptVersion: catalogMode ? `${PROMPT_VERSION}+catalog-intent-v1` : PROMPT_VERSION },
+            generationMetadata: { ...(catalogMode ? { mode: 'catalog' } : {}), provider: 'openai', model: result.model, attempts: attempt,
               corrected: validated.corrected, fallbackUsed: fallback },
             createdAt: now, activatedAt: now, archivedAt: null });
           tx.update(ref, { status: 'completed', planId: generationId, completedAt: now,

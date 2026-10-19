@@ -1,4 +1,6 @@
-import type { NutritionMeal, NutritionMealOption, NutritionPlanFoodItem, NutritionPlanPayload } from '../../types/nutrition';
+import { NUTRITION_MEAL_SLOTS } from '../../types/nutrition';
+import type { NutritionLoggedMeal, NutritionMeal, NutritionMealOption, NutritionPlanFoodItem, NutritionPlanPayload } from '../../types/nutrition';
+import { nextUnloggedSlot } from './diaryModel';
 
 /** The recommended option of a meal — `recommendedOptionId` always references one of `options[].id`. */
 export function recommendedOption(meal: NutritionMeal): NutritionMealOption {
@@ -29,14 +31,23 @@ export function planItemKcal(item: NutritionPlanFoodItem): number | null {
 }
 
 /**
- * Without a Diary yet (this round's explicit scope), "next meal" / "today's
- * meals" cannot be derived from real consumption — only from the plan's own
- * structure. The first `mealSlots`-ordered meal is surfaced as "next", the
- * rest as the day's list; this never claims anything about what was
- * actually eaten (`08_frontend/screens.md` §1, `states_and_loading.md` §2).
+ * "Next meal" = the first meal (in canonical `NUTRITION_MEAL_SLOTS` order —
+ * `plan.meals` itself just tracks the profile's `mealSlots` selection order,
+ * not necessarily breakfast-first) whose slot has nothing logged in `day`
+ * yet. Shares `nextUnloggedSlot`'s predicate with `NutritionDiaryScreen` so
+ * the Home card and the Diário never disagree on what's next. `day: null`
+ * (no Diary doc yet) means nothing is logged, so the first slot wins, same
+ * as the old plan-only behavior. Returns `null` once every meal is logged —
+ * never falls back to breakfast.
  */
-export function nextPlanMeal(plan: Pick<NutritionPlanPayload, 'meals'>): NutritionMeal | null {
-  return plan.meals[0] ?? null;
+export function nextPlanMeal<T>(
+  plan: Pick<NutritionPlanPayload, 'meals'>, day: { meals: NutritionLoggedMeal<T>[] } | null,
+): NutritionMeal | null {
+  const orderedSlots = [...plan.meals]
+    .sort((a, b) => NUTRITION_MEAL_SLOTS.indexOf(a.slot) - NUTRITION_MEAL_SLOTS.indexOf(b.slot))
+    .map((meal) => meal.slot);
+  const slot = nextUnloggedSlot(orderedSlots, day);
+  return plan.meals.find((meal) => meal.slot === slot) ?? null;
 }
 
 export function remainingPlanMeals(plan: Pick<NutritionPlanPayload, 'meals'>): NutritionMeal[] {

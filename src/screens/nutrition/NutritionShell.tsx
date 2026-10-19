@@ -1,3 +1,7 @@
+import { planSnapshotClientEnabled, registerPlanSnapshotOption, type PlanSnapshotOrigin } from '../../services/nutritionDiaryProtocol';
+import { randomUUID } from 'expo-crypto';
+import { isCatalogLinkedOption } from '../../nutrition/catalog/binding';
+import { logCatalogMealOption } from '../../services/nutritionCatalogMeal';
 import { NutritionErrorState } from '../../components/nutrition/NutritionStates';
 import { readInitialNutritionRequest, subscribeInitialNutritionRequest, runInitialNutritionRequest, resolveInitialNutritionRequestPresentation, type InitialNutritionRequestState } from '../../services/initialNutritionRequest';
 import { requestInitialNutritionPlanGeneration } from '../../services/nutritionGeneration';
@@ -19,7 +23,7 @@ import {
   restoreNutritionPlan, subscribeToActiveNutritionPlan, subscribeToNutritionPlans, type NutritionPlanDoc,
 } from '../../services/nutritionPlans';
 import {
-  addDiaryFood, moveDiaryEntry, removeDiaryEntry, subscribeToDiaryDay, subscribeToDiaryWeek, updateDiaryEntryGrams,
+  addDiaryFood, moveDiaryEntry, removeDiaryEntry, subscribeToDiaryDay, subscribeToDiaryWeek, updateDiaryItemQuantity,
   type NutritionDailyLogDoc,
 } from '../../services/nutritionDiary';
 import {
@@ -483,7 +487,7 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
   }, [uid]);
   const handleRegisterMealEditGrams = useCallback(async (slot: NutritionMealSlot, item: NutritionLoggedFoodItem, grams: number) => {
     if (!uid) return;
-    await updateDiaryEntryGrams(uid, todayLocalDate(), slot, item.id, item.source, item.foodId, grams);
+    await updateDiaryItemQuantity(uid, todayLocalDate(), slot, item, grams);
   }, [uid]);
   const handleRegisterMealRemove = useCallback(async (slot: NutritionMealSlot, itemId: string) => {
     if (!uid) return;
@@ -511,7 +515,36 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
    * what `NutritionFavoritesScreen`'s `onUse` already did — guarantees at
    * most one of those two Modals is ever visible.
    */
-  const openRegisterMealForOption = useCallback((slot: NutritionMealSlot, option: NutritionMealOption) => {
+  const catalogRegistrationIds = useRef(new Map<string, string>());
+  const openRegisterMealForOption = useCallback((slot: NutritionMealSlot, option: NutritionMealOption, origin?: PlanSnapshotOrigin) => {
+    if (planSnapshotClientEnabled(uid)) {
+      if (!uid || !origin) { setRegisterError(t('mealDetails.registerError')); return; }
+      setRegisteringOptionId(option.id); setRegisterError(null);
+      void registerPlanSnapshotOption(uid, origin, option.id, slot)
+        .then(result => { Alert.alert(t(result.replayed ? 'diary.optionAlreadyRecorded' : 'mealDetails.registered')); })
+        .catch(() => { setRegisterError(t('diary.operationFailed')); Alert.alert(t('diary.operationFailed')); })
+        .finally(() => setRegisteringOptionId(null));
+      return;
+    }
+    if (option.foods.some(food => food.catalogBinding)) {
+      if (!origin || !isCatalogLinkedOption(option.foods)) { setRegisterError(t('mealDetails.registerError')); return; }
+      const key = `${uid ?? ''}:${todayLocalDate()}:${origin.origin}:${origin.documentId}:${option.id}:${slot}`;
+      const requestId = catalogRegistrationIds.current.get(key) ?? randomUUID();
+      catalogRegistrationIds.current.set(key, requestId);
+      setRegisteringOptionId(option.id); setRegisterError(null);
+      void logCatalogMealOption(origin, option.id, slot, requestId)
+        .then(() => {
+          if (catalogRegistrationIds.current.get(key) === requestId) catalogRegistrationIds.current.delete(key);
+          Alert.alert(t('mealDetails.registered'));
+        })
+        .catch((error: unknown) => {
+          const reason = error instanceof Error ? error.message : '';
+          const message = t(reason.includes('DIARY_CATALOG_CHANGED') ? 'mealDetails.catalogChanged' : 'mealDetails.registerError');
+          setRegisterError(message); Alert.alert(message);
+        })
+        .finally(() => setRegisteringOptionId(null));
+      return;
+    }
     setMealDetailsSlot(null);
     setFeedbackVisible(false);
     setAlternativeVisible(false);
@@ -519,13 +552,13 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
     setRegisteringMealSlot(slot);
     setRegisteringMealReference(option.foods);
     setRegisteringMealVisible(true);
-  }, []);
+  }, [uid, t]);
 
   const handleRegisterOption = useCallback((option: NutritionMealOption) => {
     if (!plan) return;
     const slot = plan.meals.find((meal) => meal.options.some((item) => item.id === option.id))?.slot;
     if (!slot) return;
-    openRegisterMealForOption(slot, option);
+    openRegisterMealForOption(slot, option, { origin: 'plan', documentId: plan.planId });
   }, [plan, openRegisterMealForOption]);
 
   const handleFavoriteOption = useCallback((option: NutritionMealOption, slot: NutritionMealSlot, source: 'plan' | 'alternative', refId: string) => {
@@ -535,7 +568,7 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
     addFavoriteMealOption(uid, {
       source, ...(source === 'plan' ? { planId: refId } : { alternativeId: refId }),
       slot, foods: option.foods, totals: option.totals,
-    })
+    }, option.id)
       .then(() => {
         setFavoritedOptionIds((prev) => [...prev, option.id]);
         trackNutritionEvent({ name: 'nutrition_favorite_added', properties: { mealSlot: slot, source } });
@@ -766,7 +799,7 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
             onRetry={() => handleRequestAlternative(lastFeedback ?? undefined)}
             onRegister={(option) => {
               if (!mealDetailsSlot) return;
-              openRegisterMealForOption(mealDetailsSlot, option);
+              if (alternativeIdRef.current) openRegisterMealForOption(mealDetailsSlot, option, { origin: 'alternative', documentId: alternativeIdRef.current });
             }}
             onFavorite={(option) => {
               if (!mealDetailsSlot) return;
@@ -855,12 +888,12 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
         onPrevDay={() => setDiaryDate((date) => shiftLocalDate(date, -1))}
         onNextDay={() => setDiaryDate((date) => (isFutureLocalDate(shiftLocalDate(date, 1)) ? date : shiftLocalDate(date, 1)))}
         onAddFood={(slot) => openDiaryFoodSearch(slot)}
-        onEditGrams={(slot, item, grams) => {
-          if (!uid) return;
-          void updateDiaryEntryGrams(uid, diaryDate, slot, item.id, item.source, item.foodId, grams);
+        onEditGrams={async (slot, item, quantity) => {
+          if (!uid) throw new Error('DIARY_ACCOUNT_CHANGED');
+          await updateDiaryItemQuantity(uid, diaryDate, slot, item, quantity);
         }}
-        onRemove={(slot, itemId) => { if (uid) void removeDiaryEntry(uid, diaryDate, slot, itemId); }}
-        onMove={(slot, itemId, toSlot) => { if (uid) void moveDiaryEntry(uid, diaryDate, slot, toSlot, itemId); }}
+        onRemove={(slot, itemId) => { if (uid) void removeDiaryEntry(uid, diaryDate, slot, itemId).catch(() => Alert.alert(t('diary.operationFailed'))); }}
+        onMove={(slot, itemId, toSlot) => { if (uid) void moveDiaryEntry(uid, diaryDate, slot, toSlot, itemId).catch(() => Alert.alert(t('diary.operationFailed'))); }}
         onDismissOverlay={diaryFoodTarget != null ? () => {
           if (addingDiaryFood) return;
           if (foodQuantityPick) setFoodQuantityPick(null);
@@ -1008,7 +1041,7 @@ export function NutritionShell({ navigationRequest, onOpenProgress }: {
         }}
         onUse={(favorite) => {
           setMealFavoritesVisible(false);
-          openRegisterMealForOption(favorite.slot, { id: favorite.id, foods: favorite.foods, totals: favorite.totals });
+          openRegisterMealForOption(favorite.slot, { id: favorite.id, foods: favorite.foods, totals: favorite.totals }, { origin: 'favorite', documentId: favorite.id });
         }}
       />
     </>

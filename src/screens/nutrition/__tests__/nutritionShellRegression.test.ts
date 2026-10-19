@@ -76,7 +76,7 @@ describe('NutritionShell integration regressions', () => {
     const editFnStart = source.indexOf('const handleRegisterMealEditGrams');
     const editFnEnd = source.indexOf('}, [uid]);', editFnStart);
     expect(source.slice(editFnStart, editFnEnd)).toMatch(
-      /await updateDiaryEntryGrams\(uid, todayLocalDate\(\), slot, item\.id, item\.source, item\.foodId, grams\)/,
+      /await updateDiaryItemQuantity\(uid, todayLocalDate\(\), slot, item, grams\)/,
     );
     const removeFnStart = source.indexOf('const handleRegisterMealRemove');
     const removeFnEnd = source.indexOf('}, [uid]);', removeFnStart);

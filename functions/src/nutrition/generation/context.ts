@@ -14,9 +14,12 @@ function validProfile(value: unknown): value is NutritionProfile<Timestamp> {
   const required = ['questionnaireVersion', 'nonTrainingActivityLevel', 'mealSlots', 'dietaryPattern',
     'preferredFoodIds', 'usualFoodIds', 'excludedFoodIds', 'supplements', 'pregnant',
     'breastfeeding', 'varietyPreference', 'updatedAt'];
-  const optional = ['progressionPace', 'targetWeightKg', 'nutritionGoalCategory', 'excludedAllergens'];
+  const optional = ['progressionPace', 'targetWeightKg', 'nutritionGoalCategory', 'excludedAllergens', 'excludedSubstances'];
   return required.every((key) => key in p)
     && Object.keys(p).every((key) => [...required, ...optional].includes(key))
+    && (p.excludedSubstances === undefined || (Array.isArray(p.excludedSubstances) && p.excludedSubstances.length <= 2
+      && new Set(p.excludedSubstances).size === p.excludedSubstances.length
+      && p.excludedSubstances.every(s => s === 'lactose' || s === 'gluten')))
     && typeof p.pregnant === 'boolean' && typeof p.breastfeeding === 'boolean'
     && Number.isInteger(p.questionnaireVersion) && (p.questionnaireVersion as number) >= 1
     && (p.questionnaireVersion as number) <= 100 && p.updatedAt instanceof Timestamp

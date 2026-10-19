@@ -13,7 +13,7 @@ import { NUTRIENTS, nutrientDeviations, withinNutritionRange, type MealValidatio
 
 /** Free-form AI meals require composition metadata and pass dietary, exclusion,
  * allergen and macro validation before persistence. Catalog IDs are not generated. */
-export type FailureCode = 'AI_SCHEMA_INVALID' | 'AI_SAFETY_VALIDATION_FAILED' | 'AI_MACRO_VALIDATION_FAILED';
+export type FailureCode = 'AI_CATALOG_RESOLUTION_FAILED' | 'AI_SCHEMA_INVALID' | 'AI_SAFETY_VALIDATION_FAILED' | 'AI_MACRO_VALIDATION_FAILED';
 export interface ValidationIssue {
   scope: 'meal' | 'daily';
   slot?: NutritionMealSlot;

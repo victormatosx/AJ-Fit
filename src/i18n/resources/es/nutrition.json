@@ -336,6 +336,10 @@
       "body": "No hemos recibido nuevas actualizaciones. Tu dieta puede seguir preparándose. Revisa tu conexión y vuelve a consultar su estado.",
       "retry": "Consultar estado"
     },
+    "catalogUnavailable": {
+      "title": "No pudimos completar este plan",
+      "body": "No encontramos correspondencias verificables para todos los alimentos y restricciones. Tu plan anterior se conservó."
+    },
     "genericError": {
       "title": "Algo salió mal",
       "body": "Intenta de nuevo en un momento."
@@ -365,6 +369,7 @@
     "totals": "TOTALES DE LA COMIDA",
     "register": "Registrar esta opción",
     "registering": "Registrando…",
+    "catalogChanged": "Este alimento cambió o no está disponible. Actualiza tu plan o registra el consumo manualmente.",
     "registered": "Registrado en tu diario de hoy.",
     "registerError": "No pudimos registrar esto ahora.",
     "swap": "Cambiar comida",
@@ -497,6 +502,11 @@
     "gramsShort": "g"
   },
   "diary": {
+    "optionAlreadyRecorded": "Esta opción ya se registró para este día. Se conservaron tus cambios y eliminaciones.",
+    "planEstimate": "Estimación de la dieta",
+    "editQuantity": "Editar cantidad",
+    "operationFailed": "No se pudo guardar. Comprueba tu conexión e inténtalo de nuevo. Actualiza la aplicación si esta cuenta usa el nuevo diario.",
+
     "addError": "No se pudo añadir el alimento. Inténtalo de nuevo.",
     "remaining": "Faltan {{value}} kcal",
     "overGoal": "Por encima de la meta: {{value}} kcal",

@@ -336,6 +336,10 @@
       "body": "We haven't received new updates. Your diet may still be in progress. Check your connection and check its status again.",
       "retry": "Check status"
     },
+    "catalogUnavailable": {
+      "title": "Unable to complete this plan",
+      "body": "We could not verify catalog matches for every food and restriction. Your previous plan was preserved."
+    },
     "genericError": {
       "title": "Something went wrong",
       "body": "Please try again in a moment."
@@ -365,6 +369,7 @@
     "totals": "MEAL TOTALS",
     "register": "Log this option",
     "registering": "Logging…",
+    "catalogChanged": "This food changed or is unavailable. Update your plan or log what you ate manually.",
     "registered": "Logged to today's diary.",
     "registerError": "We couldn't log this right now.",
     "swap": "Swap meal",
@@ -497,6 +502,11 @@
     "gramsShort": "g"
   },
   "diary": {
+    "optionAlreadyRecorded": "This option was already recorded for this day. Your edits and deletions were preserved.",
+    "planEstimate": "Diet estimate",
+    "editQuantity": "Edit quantity",
+    "operationFailed": "Unable to save. Check your connection and try again. Update the app if this account uses the new diary.",
+
     "addError": "Could not add the food. Please try again.",
     "remaining": "{{value}} kcal remaining",
     "overGoal": "Over goal: {{value}} kcal",

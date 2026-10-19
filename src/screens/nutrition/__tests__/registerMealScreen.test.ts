@@ -60,7 +60,7 @@ describe('RegisterMealScreen — single screen, no wizard', () => {
 
   it('accepts an arbitrary gram amount for both adding and editing, never a fixed list of presets', () => {
     expect(source).toMatch(/keyboardType="decimal-pad"/);
-    expect(source).toMatch(/const gramsValid = isPositiveGrams\(gramsValue\)/);
+    expect(source).toMatch(/isPositiveGrams\(gramsValue\)/);
     expect(source).not.toMatch(/gramsPresets|servingOptions|commonPortions/);
   });
 

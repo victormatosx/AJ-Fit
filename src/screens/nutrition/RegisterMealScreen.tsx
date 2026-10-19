@@ -1,3 +1,4 @@
+import { diaryItemQuantity, diaryItemUnit, planSnapshotNutrition } from '../../nutrition/diary/snapshot';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator, Alert, InputAccessoryView, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TextInput, View,
@@ -177,14 +178,21 @@ export function RegisterMealScreen({
   const showReference = !!referenceItems && referenceItems.length > 0 && slot === initialSlot;
 
   const gramsValue = Number(gramsText.replace(',', '.'));
-  const gramsValid = isPositiveGrams(gramsValue);
+  const editingSnapshot = gramsStep?.mode === 'edit' && gramsStep.item.source === 'plan_snapshot' ? gramsStep.item : null;
+  const quantityUnit = gramsStep?.mode === 'edit' ? diaryItemUnit(gramsStep.item) : 'g';
+  const quantityWithinBounds = isPositiveGrams(gramsValue) && (!editingSnapshot || gramsValue <= 5000);
   const stepNutritionPer100g = gramsStep?.mode === 'add' ? gramsStep.food.nutritionPer100g
-    : gramsStep?.mode === 'edit' ? { kcal: gramsStep.item.snapshot.kcal / (gramsStep.item.grams / 100),
+    : gramsStep?.mode === 'edit' && gramsStep.item.source !== 'plan_snapshot' ? { kcal: gramsStep.item.snapshot.kcal / (gramsStep.item.grams / 100),
       proteinG: gramsStep.item.snapshot.proteinG / (gramsStep.item.grams / 100),
       carbsG: gramsStep.item.snapshot.carbsG / (gramsStep.item.grams / 100),
       fatG: gramsStep.item.snapshot.fatG / (gramsStep.item.grams / 100),
       fiberG: gramsStep.item.snapshot.fiberG == null ? null : gramsStep.item.snapshot.fiberG / (gramsStep.item.grams / 100) } : null;
-  const preview = stepNutritionPer100g && gramsValid ? nutrientsForGrams(stepNutritionPer100g, gramsValue) : null;
+  const preview = (() => {
+    if (!quantityWithinBounds) return null;
+    try { return editingSnapshot ? planSnapshotNutrition(editingSnapshot.base, gramsValue)
+      : stepNutritionPer100g ? nutrientsForGrams(stepNutritionPer100g, gramsValue) : null; } catch { return null; }
+  })();
+  const gramsValid = quantityWithinBounds && (!editingSnapshot || preview !== null);
   /** Fase C6 — only units with a confident gram basis are selectable; absent/ml-only units never appear here (grams stays the only input for them). */
   const servableUnits = gramsStep?.mode === 'add' ? (gramsStep.food.servings ?? []).filter((unit) => servingGrams(unit) != null) : [];
   const selectServingUnit = (unit: FoodLogServingUnit | null) => {
@@ -214,7 +222,7 @@ export function RegisterMealScreen({
   };
 
   const openEditGrams = (item: NutritionLoggedFoodItem) => {
-    setGramsStep({ mode: 'edit', item }); setSelectedServingId(null); setGramsText(String(item.grams));
+    setGramsStep({ mode: 'edit', item }); setSelectedServingId(null); setGramsText(String(diaryItemQuantity(item)));
   };
 
   /** Materializes a possibly-fresh external (`fatsecret`) result into `foodLogCatalog` before grams entry opens — a no-op read for every local-sourced result. */
@@ -242,6 +250,8 @@ export function RegisterMealScreen({
         await onEditGrams(slot, gramsStep.item, gramsValue);
       }
       setGramsStep(null);
+    } catch {
+      Alert.alert(t('diary.operationFailed'));
     } finally {
       setBusy(false);
     }
@@ -250,7 +260,7 @@ export function RegisterMealScreen({
   const confirmRemove = (item: NutritionLoggedFoodItem) => {
     Alert.alert(t('diary.removeConfirm'), undefined, [
       { text: t('diary.cancel'), style: 'cancel' },
-      { text: t('diary.remove'), style: 'destructive', onPress: () => { void onRemove(slot, item.id); } },
+      { text: t('diary.remove'), style: 'destructive', onPress: () => { void onRemove(slot, item.id).catch(() => Alert.alert(t('diary.operationFailed'))); } },
     ]);
   };
 
@@ -398,10 +408,11 @@ export function RegisterMealScreen({
                     <View key={item.id}>
                       {index > 0 ? <NuHairline /> : null}
                       <FoodRow
-                        name={item.snapshot.name} grams={item.grams} kcal={item.snapshot.kcal}
+                        name={item.snapshot.name} raw={item.source === 'plan_snapshot'} grams={item.source === 'plan_snapshot' ? undefined : item.grams} kcal={item.snapshot.kcal}
+                        servingLabel={item.source === 'plan_snapshot' ? `${item.quantity} ${item.unit}` : undefined}
                         trailing={(
                           <View style={{ flexDirection: 'row', gap: 14 }}>
-                            <Pressable onPress={() => openEditGrams(item)} accessibilityRole="button" accessibilityLabel={t('diary.editGrams')}>
+                            <Pressable onPress={() => openEditGrams(item)} accessibilityRole="button" accessibilityLabel={t(item.source === 'plan_snapshot' ? 'diary.editQuantity' : 'diary.editGrams')}>
                               <Icon name="more-vertical" size={16} color={NU.faint} />
                             </Pressable>
                             <Pressable onPress={() => confirmRemove(item)} accessibilityRole="button" accessibilityLabel={t('diary.remove')}>
@@ -434,6 +445,7 @@ export function RegisterMealScreen({
                 </Text>
                 {onToggleFavoriteFood ? (() => {
                   const stepFoodId = gramsStep.mode === 'add' ? gramsStep.food.foodId : gramsStep.item.foodId;
+                  if (!stepFoodId) return null;
                   const stepFavorited = favoriteFoodIds?.includes(stepFoodId);
                   return (
                     <Pressable
@@ -473,16 +485,16 @@ export function RegisterMealScreen({
                       submitBehavior="blurAndSubmit"
                       onSubmitEditing={Keyboard.dismiss}
                       inputAccessoryViewID={Platform.OS === 'ios' ? 'register-meal-quantity-done' : undefined}
-                      accessibilityLabel={t('registerMeal.unitGrams')}
+                      accessibilityLabel={editingSnapshot ? `${t('diary.editQuantity')} (${quantityUnit})` : t('registerMeal.unitGrams')}
                       selectTextOnFocus
                       style={{ minWidth: 64, flexShrink: 1, paddingVertical: 6, paddingHorizontal: 2, fontFamily: 'Archivo_700Bold', fontSize: 24, color: NU.white, textAlign: 'center' }}
                     />
-                    <Text style={{ fontFamily: 'Archivo_700Bold', fontSize: 24, color: NU.white }}> {t('units.gramsShort')}</Text>
+                    <Text style={{ fontFamily: 'Archivo_700Bold', fontSize: 24, color: NU.white }}> {quantityUnit}</Text>
                   </View>
                 )}
                 sub={preview ? `${Math.round(preview.kcal)} ${t('units.kcal')}` : null}
-                onMinus={() => setGramsText(String(Math.max(0, Number(gramsText.replace(',', '.')) - 10)))}
-                onPlus={() => setGramsText(String(Number(gramsText.replace(',', '.')) + 10))}
+                onMinus={() => setGramsText(String(Math.max(0, Number(gramsText.replace(',', '.')) - (editingSnapshot?.unit === 'unidade' ? 0.5 : 10))))}
+                onPlus={() => setGramsText(String(Number(gramsText.replace(',', '.')) + (editingSnapshot?.unit === 'unidade' ? 0.5 : 10)))}
               />
               {preview ? (
                 <Text style={{ fontFamily: 'Archivo_400Regular', fontSize: 12.5, color: NU.faint, textAlign: 'center' }}>

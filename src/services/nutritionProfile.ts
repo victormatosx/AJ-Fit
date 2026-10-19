@@ -23,7 +23,7 @@ export function validateNutritionProfileAnswers(value: unknown): asserts value i
   const required = ['questionnaireVersion', 'nonTrainingActivityLevel', 'mealSlots', 'dietaryPattern',
     'preferredFoodIds', 'usualFoodIds', 'excludedFoodIds', 'supplements', 'pregnant',
     'breastfeeding', 'varietyPreference'];
-  const optional = ['progressionPace', 'targetWeightKg', 'nutritionGoalCategory', 'excludedAllergens'];
+  const optional = ['progressionPace', 'targetWeightKg', 'nutritionGoalCategory', 'excludedAllergens', 'excludedSubstances'];
   if (!required.every((key) => key in value) || Object.keys(value).some((key) => ![...required, ...optional].includes(key))) throw new Error('INVALID_NUTRITION_PROFILE');
   if (!Number.isInteger(value.questionnaireVersion) || (value.questionnaireVersion as number) < 1 || (value.questionnaireVersion as number) > 100
     || !NON_TRAINING_ACTIVITY_LEVELS.includes(value.nonTrainingActivityLevel as typeof NON_TRAINING_ACTIVITY_LEVELS[number])
@@ -42,6 +42,9 @@ export function validateNutritionProfileAnswers(value: unknown): asserts value i
     || value.excludedAllergens.length > NUTRITION_FOOD_ALLERGENS.length
     || new Set(value.excludedAllergens).size !== value.excludedAllergens.length
     || !value.excludedAllergens.every((item: unknown) => NUTRITION_FOOD_ALLERGENS.includes(item as typeof NUTRITION_FOOD_ALLERGENS[number])))) throw new Error('INVALID_NUTRITION_PROFILE');
+  if (value.excludedSubstances !== undefined && (!Array.isArray(value.excludedSubstances) || value.excludedSubstances.length > 2
+    || new Set(value.excludedSubstances).size !== value.excludedSubstances.length
+    || value.excludedSubstances.some(s => !['lactose', 'gluten'].includes(s)))) throw new Error('INVALID_NUTRITION_PROFILE');
   if ('nutritionGoalCategory' in value && !NUTRITION_GOAL_CATEGORIES.includes(value.nutritionGoalCategory as typeof NUTRITION_GOAL_CATEGORIES[number])) throw new Error('INVALID_NUTRITION_PROFILE');
   if ('targetWeightKg' in value && value.targetWeightKg !== null
     && (typeof value.targetWeightKg !== 'number' || !Number.isFinite(value.targetWeightKg) || value.targetWeightKg <= 0 || value.targetWeightKg > 500)) throw new Error('INVALID_NUTRITION_PROFILE');
@@ -74,7 +77,7 @@ export async function createNutritionProfile(uid: string, answers: NutritionProf
 
 export async function updateNutritionProfile(uid: string, answers: NutritionProfileAnswers): Promise<void> {
   const serialized = serializeNutritionProfileAnswers(answers);
-  for (const key of ['progressionPace', 'targetWeightKg', 'nutritionGoalCategory', 'excludedAllergens'] as const) {
+  for (const key of ['progressionPace', 'targetWeightKg', 'nutritionGoalCategory', 'excludedAllergens', 'excludedSubstances'] as const) {
     if (!(key in answers)) serialized[key] = deleteField();
   }
   await updateDoc(profileRef(uid), serialized);

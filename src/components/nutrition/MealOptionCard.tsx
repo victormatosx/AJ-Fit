@@ -78,7 +78,7 @@ export function MealOptionCard({
       <View style={{ marginTop: showSummaryBox ? 20 : 0 }}>
         <NuCap style={{ marginBottom: 10 }}>{t('mealDetails.foods')}</NuCap>
         {option.foods.map((item, index) => (
-          <FoodItemRow key={`${item.name}-${index}`} name={item.name} quantity={item.quantity} unit={item.unit} kcal={planItemKcal(item)} marginTop={index ? 8 : 0} />
+          <FoodItemRow key={`${item.name}-${index}`} name={item.catalogBinding?.brandName ? `${item.name} (${item.catalogBinding.brandName})` : item.name} quantity={item.quantity} unit={item.unit} kcal={planItemKcal(item)} marginTop={index ? 8 : 0} />
         ))}
       </View>
 

@@ -80,6 +80,18 @@ export function diarySlotSummary<T>(day: { meals: NutritionLoggedMeal<T>[] } | n
   return { kcal: meal.totals.kcal, itemCount: meal.items.length };
 }
 
+/**
+ * First slot (in the given order) with nothing logged — the single source of
+ * truth for "next meal," shared by `planView.nextPlanMeal` (Dieta Home) and
+ * `NutritionDiaryScreen` (Diário), so the two screens never diverge on which
+ * meal counts as next.
+ */
+export function nextUnloggedSlot<T>(
+  orderedSlots: readonly NutritionMealSlot[], day: { meals: NutritionLoggedMeal<T>[] } | null,
+): NutritionMealSlot | undefined {
+  return orderedSlots.find((slot) => diarySlotSummary(day, slot) == null);
+}
+
 /** `FoodSearchScreen`'s `NutritionFoodPick.origin` -> the diary's own `NutritionLoggedFoodSource` vocabulary. */
 export function foodPickOriginToDiarySource(origin: 'catalog' | 'custom' | 'recipe' | 'food_log'): NutritionLoggedFoodSource {
   if (origin === 'recipe') return 'recipe';

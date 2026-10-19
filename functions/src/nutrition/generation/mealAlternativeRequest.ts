@@ -1,3 +1,6 @@
+import { assertCatalogBindingsCurrent } from '../catalogLinking/pipeline';
+import { catalogLinkingEnabled, CATALOG_PIPELINE_VERSION, CATALOG_PLAN_SCHEMA_VERSION } from '../catalogLinking/config';
+import { CatalogSearchSession, firestoreCatalogReader } from '../catalogLinking/search';
 import { Timestamp, type Firestore } from 'firebase-admin/firestore';
 import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/https';
 
@@ -143,7 +146,8 @@ export async function requestNutritionMealAlternativeHandler(
       mealAlternativeWindowCount: priorCount + 1,
       updatedAt: claimedAt,
     }, { merge: true });
-    return { replay: null, meal };
+    return { replay: null, meal, catalogPlan: plan.get('versions.planSchemaVersion') === CATALOG_PLAN_SCHEMA_VERSION,
+      storedTargets: plan.get('engineSnapshot.output.mealTargets') as import('../shared/types/nutrition').MealNutritionTarget[] | undefined };
   });
   if (claim.replay) return claim.replay;
   const meal = claim.meal!;
@@ -153,7 +157,12 @@ export async function requestNutritionMealAlternativeHandler(
     const context = await loadGenerationContext(db, uid);
     const mealIndex = context.profile.mealSlots.indexOf(slot);
     if (mealIndex === -1) throw new Error('INVALID_NUTRITION_CONTEXT');
-    const target = context.engine.mealTargets[mealIndex];
+    const catalogMode = Boolean(claim.catalogPlan || catalogLinkingEnabled());
+    if (claim.catalogPlan && !catalogLinkingEnabled()) throw new Error('NUTRITION_GENERATION_DISABLED');
+    const target = claim.catalogPlan ? claim.storedTargets?.find(t => t.slot === slot) : context.engine.mealTargets[mealIndex];
+    if (!target) throw new Error('INVALID_NUTRITION_CONTEXT');
+    const deadline = startedAt + 110_000;
+    const catalogSession = catalogMode ? new CatalogSearchSession(firestoreCatalogReader(db), deadline) : undefined;
     const foodNames = await resolvePromptFoodNames(db, context.profile, uid);
 
     const { validated, result, attempt, fallback } = await generateValidatedMealAlternative(
@@ -165,8 +174,9 @@ export async function requestNutritionMealAlternativeHandler(
         await recordAiOperation(db, { ownerUid: uid, generationId: requestId, operation: 'meal_alternative',
           defaultModel: audit.fallback ? NUTRITION_AI_MODELS.fallback : NUTRITION_AI_MODELS.mealAlternative,
           attempt: audit.attempt, result: audit.result, code: audit.code, fallback: audit.fallback,
-          latencyMs: audit.latencyMs });
+          latencyMs: audit.latencyMs, ...(catalogSession ? { catalogMetrics: { ...catalogSession.metrics } } : {}) });
       },
+      catalogSession ? { catalogSession, deadline } : {},
     );
 
     const createdAt = Timestamp.now();
@@ -186,10 +196,11 @@ export async function requestNutritionMealAlternativeHandler(
       if (rate.get('activeMealAlternativeRequestId') !== requestId) {
         throw new HttpsError('aborted', 'MEAL_ALTERNATIVE_STALE_REQUEST');
       }
+      if (catalogSession) await assertCatalogBindingsCurrent(tx, db, validated.options, context.profile, foodNames, catalogSession);
       const value = { alternativeId: requestId, planId, slot, options: validated.options,
         recommendedOptionId: validated.recommendedOptionId, feedback: feedback ?? null,
-        catalogVersion: FOOD_CATALOG_VERSION_PLACEHOLDER,
-        generationMetadata: { provider: 'openai', model: result.model, attempts: attempt,
+        catalogVersion: catalogMode ? CATALOG_PIPELINE_VERSION : FOOD_CATALOG_VERSION_PLACEHOLDER,
+        generationMetadata: { ...(catalogMode ? { mode: 'catalog' } : {}), provider: 'openai', model: result.model, attempts: attempt,
           corrected: validated.corrected, fallbackUsed: fallback }, createdAt };
       tx.create(alternativeRef, value);
       tx.update(rateRef, { activeMealAlternativeRequestId: null, activeMealAlternativeStartedAt: null,

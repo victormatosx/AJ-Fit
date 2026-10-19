@@ -11,6 +11,10 @@ const files = [
     'calculateRmr', 'calculateTdee', 'distributeMeals', 'errors', 'resolveGoalCategory',
     'validateInput'].map((name) => `nutrition/engine/${name}.ts`),
   'nutrition/catalog/math.ts',
+  'nutrition/diary/snapshot.ts',
+  'nutrition/catalog/binding.ts',
+  'nutrition/foodLog/search.ts',
+  'nutrition/foodLog/qualityAudit.ts',
   'nutrition/catalog/normalize.ts',
   'nutrition/analytics/contract.ts',
   // Fase C8 (security fix: server-side materialization) — the foodLogCatalog
