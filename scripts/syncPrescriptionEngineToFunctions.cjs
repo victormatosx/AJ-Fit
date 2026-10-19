@@ -71,7 +71,7 @@ const TS_FILES = [
 const JSON_FILES = [
   'workouts/AJ_Fit_T001_T090_workouts_reformed_v2_0.json',
   'workouts/AJ_Fit_v1_27_exercise_identity_matrix.json',
-  'workouts/AJ_Fit_T001_T102_workouts_canonical_v1_27_goal_routing_fixed.json',
+  'workouts/AJ_Fit_T001_T102_workouts_canonical_v1_33_peck_deck_runtime_id_fixed.json',
   'workout-modifiers/exercise-limitations/15_LIMITATION_PROFILES_TECHNICAL_v2.json',
   'workout-modifiers/exercise-limitations/limitation-dataset-identity.json',
 ];

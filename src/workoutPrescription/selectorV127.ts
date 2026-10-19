@@ -1,4 +1,4 @@
-import canonicalJson from '../../docs/workouts/AJ_Fit_T001_T102_workouts_canonical_v1_27_goal_routing_fixed.json';
+import canonicalJson from '../../docs/workouts/AJ_Fit_T001_T102_workouts_canonical_v1_33_peck_deck_runtime_id_fixed.json';
 import { questionnaireLevelForCurrentLevel } from '../workoutLifecycle/prescriptionInputs';
 import type { CurrentTrainingLevel } from '../workoutLifecycle/types';
 import { environmentFor, goalFamilyFor } from './input';

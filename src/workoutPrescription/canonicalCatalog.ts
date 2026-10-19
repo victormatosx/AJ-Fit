@@ -1,8 +1,8 @@
-import canonicalV127Json from '../../docs/workouts/AJ_Fit_T001_T102_workouts_canonical_v1_27_goal_routing_fixed.json';
+import canonicalV127Json from '../../docs/workouts/AJ_Fit_T001_T102_workouts_canonical_v1_33_peck_deck_runtime_id_fixed.json';
 import { resolveCanonicalExerciseId } from './canonicalExerciseIdentity';
 import type { CanonicalExercise, CanonicalSession, CanonicalTemplate, TemplateId } from './types';
 
-type AuthoringExercise = Omit<CanonicalExercise, 'sets' | 'cycleRange'> & { sets?: number | string };
+type AuthoringExercise = Omit<CanonicalExercise, 'sets' | 'cycleRange'> & { sets?: number | string; warmup?: unknown };
 type AuthoringSession = Omit<CanonicalSession, 'exercises'> & { exercises: AuthoringExercise[] };
 type AuthoringTemplate = Omit<CanonicalTemplate, 'sessions'> & { sessions: AuthoringSession[] };
 
@@ -44,10 +44,12 @@ export function parseCanonicalV127Template(raw: AuthoringTemplate): CanonicalTem
         const runtimeId = resolveCanonicalExerciseId(exercise.exercise_id);
         if (!runtimeId) throw new Error(`UNRESOLVED_CANONICAL_EXERCISE:${exercise.exercise_id}`);
         const { sets: _authoredSets, catalog_status: _catalogStatus,
-          source_name_v1_1: _sourceV11, source_name_v1_2: _sourceV12,
+          source_name_v1_1: _sourceV11, source_name_v1_2: _sourceV12, warmup: _warmup,
           ...prescription } = exercise;
-        // catalog_status and historical source names are authoring evidence,
-        // not executable prescription fields. The identity matrix retains them.
+        // catalog_status, historical source names and the v1.33 warm-up-set
+        // annotation are authoring evidence, not executable prescription
+        // fields — no stage of the pipeline (composition, persistence,
+        // display) models a warm-up set today. The source JSON retains them.
         return {
           ...prescription,
           exercise_id: runtimeId,

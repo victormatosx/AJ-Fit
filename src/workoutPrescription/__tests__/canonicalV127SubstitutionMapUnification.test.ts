@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import canonical from '../../../docs/workouts/AJ_Fit_T001_T102_workouts_canonical_v1_27_goal_routing_fixed.json';
+import canonical from '../../../docs/workouts/AJ_Fit_T001_T102_workouts_canonical_v1_33_peck_deck_runtime_id_fixed.json';
 import matrix from '../../../docs/workouts/AJ_Fit_v1_27_exercise_identity_matrix.json';
 import { EXERCISES_SEED } from '../../data/exercisesSeedData';
 import { CANONICAL_ACTIVITIES } from '../canonicalActivities';
@@ -162,10 +162,10 @@ describe('v1.27 exercise_substitution_map — closed identity unifications (no a
     }
   });
 
-  it('4. all 78 directly referenced exercise ids remain resolved (78/78, zero unresolved)', () => {
+  it('4. all 79 directly referenced exercise ids remain resolved (79/79, zero unresolved — v1.33 adds pec-deck-machine-fly)', () => {
     const referenced = new Set(canonical.workouts.flatMap((workout) =>
       workout.sessions.flatMap((session) => session.exercises.map((exercise) => exercise.exercise_id))));
-    expect(referenced.size).toBe(78);
+    expect(referenced.size).toBe(79);
     expect(unresolvedCanonicalExerciseIds()).toHaveLength(0);
     for (const id of referenced) {
       expect(resolveCanonicalExerciseId(id)).not.toBeNull();

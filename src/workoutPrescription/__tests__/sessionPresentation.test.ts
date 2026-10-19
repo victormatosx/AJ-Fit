@@ -128,7 +128,7 @@ describe('session name presentation — real v1.27 T001-T102 catalog (regression
   };
 
   const canonicalV127 = readJson<CanonicalV127File>(
-    'docs/workouts/AJ_Fit_T001_T102_workouts_canonical_v1_27_goal_routing_fixed.json',
+    'docs/workouts/AJ_Fit_T001_T102_workouts_canonical_v1_33_peck_deck_runtime_id_fixed.json',
   );
 
   it('reproduces the reported case (female, gym, 5x/week, hypertrophy — T016): every authorial session name survives, none collapses to "Resistência"', () => {
@@ -145,7 +145,7 @@ describe('session name presentation — real v1.27 T001-T102 catalog (regression
     const labels = workout.sessions.map((session) =>
       resolveSessionDisplayName(t, session.name, session.type, session.display_name),
     );
-    expect(labels).toEqual(['Push A', 'Pull A', 'Lower 1 — Quadríceps/Panturrilha', 'Upper Extra', 'Lower 2 — Posterior/Glúteos']);
+    expect(labels).toEqual(['Lower A — Posterior/Glúteos', 'Upper A — Anterior', 'Lower B — Quadríceps', 'Upper B — Posterior', 'Lower C — Glúteos/Posterior']);
     for (const label of labels) expect(label).not.toBe(resources['pt-BR'].sessionTypes.resistance);
   });
 

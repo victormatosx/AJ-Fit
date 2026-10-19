@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import canonical from '../../../docs/workouts/AJ_Fit_T001_T102_workouts_canonical_v1_27_goal_routing_fixed.json';
+import canonical from '../../../docs/workouts/AJ_Fit_T001_T102_workouts_canonical_v1_33_peck_deck_runtime_id_fixed.json';
 import matrix from '../../../docs/workouts/AJ_Fit_v1_27_exercise_identity_matrix.json';
 import { EXERCISES_SEED } from '../../data/exercisesSeedData';
 import { CANONICAL_ACTIVITIES } from '../canonicalActivities';
@@ -17,11 +17,21 @@ const rawTemplate = (id: string) => {
 };
 
 describe('v1.27 local materialization', () => {
-  it('classifies all 78 directly referenced identities with zero AMBIGUOUS/TRULY_MISSING left', () => {
+  it('classifies all 78 matrix-mapped identities with zero AMBIGUOUS/TRULY_MISSING, plus any id (e.g. the v1.33 pec-deck-machine-fly) that is already a direct runtime id', () => {
     const referenced = new Set(canonical.workouts.flatMap((workout) =>
       workout.sessions.flatMap((session) => session.exercises.map((exercise) => exercise.exercise_id))));
+    const matrixIds = new Set(matrix.rows.map((row) => row.canonicalId));
+    const directRuntimeIds = [...referenced].filter((id) => !matrixIds.has(id));
     expect(matrix.rows).toHaveLength(78);
-    expect(new Set(matrix.rows.map((row) => row.canonicalId))).toEqual(referenced);
+    // Every matrix row is actually referenced (no orphaned rows), and every
+    // referenced id outside the matrix is already a direct runtime id —
+    // e.g. v1.33's `pec-deck-machine-fly`, deliberately never added to the
+    // matrix per its own revision_notes ("existing-library... do not create
+    // or seed").
+    expect([...matrixIds].every((id) => referenced.has(id))).toBe(true);
+    for (const id of directRuntimeIds) {
+      expect(resolveCanonicalExerciseId(id)).toBe(id);
+    }
     expect(matrix.counts).toEqual({
       SEMANTIC_ALIAS_CONFIRMED: 71, EXACT_MATCH: 7,
     });
@@ -61,11 +71,11 @@ describe('v1.27 local materialization', () => {
     expect(resolveCanonicalExerciseId('farmers-walk')).toBe('farmers-walk');
   });
 
-  it('normalizes all 24 interval doses as cycle ranges and rejects unknown textual sets', () => {
+  it('normalizes all 14 interval doses as cycle ranges and rejects unknown textual sets', () => {
     const authored = canonical.workouts.flatMap((workout) => workout.sessions.flatMap((session) =>
       session.exercises.map((exercise) => (exercise as { sets?: number | string }).sets)))
       .filter((sets): sets is string => typeof sets === 'string');
-    expect(authored).toHaveLength(24);
+    expect(authored).toHaveLength(14);
     expect(new Set(authored)).toEqual(new Set(['5-7 ciclos', '6-8 ciclos']));
     expect(parseAuthoredSets('5-7 ciclos')).toEqual({ cycleRange: { min: 5, max: 7 } });
     expect(parseAuthoredSets('6-8 ciclos')).toEqual({ cycleRange: { min: 6, max: 8 } });

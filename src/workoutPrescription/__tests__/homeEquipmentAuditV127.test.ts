@@ -73,7 +73,7 @@ describe('Fase 9 §11 — Home templates are executable at home by definition (f
     }
   });
 
-  it('gym templates keep the machine variant unchanged (51 usages of standing-calf-raise-machine remain in gym templates)', () => {
+  it('gym templates keep the machine variant unchanged (96 usages of standing-calf-raise-machine remain in gym templates — v1.33 added calf work to more sessions, but never removed it from gym)', () => {
     const gymProfiles = V127_TEMPLATE_PROFILES.filter((profile) => profile.environment === 'gym');
     let usages = 0;
     for (const profile of gymProfiles) {
@@ -84,7 +84,7 @@ describe('Fase 9 §11 — Home templates are executable at home by definition (f
         }
       }
     }
-    expect(usages).toBe(51);
+    expect(usages).toBe(96);
   });
 
   it('v2 baseline: never placed a gym-exclusive-equipment exercise in any of its 45 Home templates either', () => {

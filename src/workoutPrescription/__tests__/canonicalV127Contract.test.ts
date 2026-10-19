@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import canonical from '../../../docs/workouts/AJ_Fit_T001_T102_workouts_canonical_v1_27_goal_routing_fixed.json';
+import canonical from '../../../docs/workouts/AJ_Fit_T001_T102_workouts_canonical_v1_33_peck_deck_runtime_id_fixed.json';
 import { catalogInvariantErrors, TEMPLATE_LIBRARY_VERSION, WORKOUT_TEMPLATES } from '../catalog';
 
 describe('future canonical v1.27 artifact', () => {
   it('has the complete, unique T001–T102 identity while runtime stays on v2', () => {
-    expect(canonical.schema_version).toBe('1.27.0');
+    expect(canonical.schema_version).toBe('1.33.0');
     const ids = canonical.workouts.map((workout) => workout.id);
     const expected = Array.from({ length: 102 }, (_, index) => `T${String(index + 1).padStart(3, '0')}`);
     expect(ids).toEqual(expected);
@@ -66,6 +66,13 @@ describe('future canonical v1.27 artifact', () => {
 
   it('does not retain the obsolete rationale', () => {
     expect(canonical.workouts.some((workout) => /dieta, cardio e volume são modificadores/i.test(workout.rationale))).toBe(false);
+  });
+
+  it('every session declares a type — a missing type crashes weeklySchedule.ts at runtime', () => {
+    const sessionsMissingType = canonical.workouts.flatMap((workout) => workout.sessions
+      .filter((session) => !('type' in session) || !session.type)
+      .map((session) => `${workout.id}/${session.name}`));
+    expect(sessionsMissingType).toEqual([]);
   });
 
   it('allows structurally valid future IDs and schema in the generic validator', () => {
