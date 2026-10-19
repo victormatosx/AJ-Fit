@@ -126,13 +126,18 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       'createVault',
       'dispatchTestNotification',
       'evaluateDailyWorkoutNotifications',
+      'externalWorkoutAction',
+      'favoriteCatalogMeal',
       'finalizeWorkoutSession',
       'getSupportAttachmentAccess',
       'initializeWorkoutProgramV127',
       'installActiveWorkoutProgram',
+      'issueWorkoutActionCapability',
+      'logCatalogMeal',
       'markSupportMessageRead',
       'materializeExternalFoodFatSecret',
       'monitorNutritionAiOperations',
+      'mutateNutritionDiaryV1',
       'onAccountDeletionRequested',
       'onNutritionGenerationCompleted',
       'onNutritionGenerationJobCreated',
@@ -272,6 +277,7 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       ['src/index.ts', 'installActiveWorkoutProgram'],
       ['src/index.ts', 'applyExerciseSubstitution'],
       ['src/index.ts', 'completeWorkoutCardio'],
+      ['src/index.ts', 'issueWorkoutActionCapability'],
       ['src/photoVault/createVault.ts', 'createVault'],
       ['src/photoVault/recoverVaultKey.ts', 'recoverVaultKey'],
       ['src/billing/confirmCommercialGate.ts', 'confirmCommercialGate'],
@@ -280,6 +286,9 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       ['src/nutrition/generation/mealAlternativeRequest.ts', 'requestNutritionMealAlternative'],
       ['src/nutrition/plans/restore.ts', 'restoreNutritionPlan'],
       ['src/nutrition/foodLog/resolveFoodByBarcode.ts', 'resolveFoodByBarcode'],
+      ['src/nutrition/catalogLinking/favoriteMeal.ts', 'favoriteCatalogMeal'],
+      ['src/nutrition/catalogLinking/logMeal.ts', 'logCatalogMeal'],
+      ['src/nutrition/diary/mutate.ts', 'mutateNutritionDiaryV1'],
       ['src/index.ts', 'syncPushDevice'],
       ['src/index.ts', 'releasePushDevice'],
       ['src/index.ts', 'dispatchTestNotification'],
@@ -308,7 +317,7 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       'src/nutrition/plans/restore.ts',
     ].map(readCode).join('\n');
 
-    expect(allEndpointSources.match(/enforceAppCheck\s*:\s*true/g)).toHaveLength(25);
+    expect(allEndpointSources.match(/enforceAppCheck\s*:\s*true/g)).toHaveLength(26);
     expect(allEndpointSources).not.toMatch(/consumeAppCheckToken\s*:\s*true/);
   });
 

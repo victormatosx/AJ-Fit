@@ -44,6 +44,11 @@ import { applyExerciseSubstitutionHandler } from './workoutLifecycle/exerciseSub
 import { completeWorkoutCardioHandler } from './workoutLifecycle/completeWorkoutCardio';
 import { finalizeWorkoutSessionHandler } from './workoutLifecycle/finalizeWorkoutSession';
 import {
+  issueWorkoutActionCapabilityHandler,
+  WORKOUT_ACTION_CAPABILITY_SECRET,
+} from './workoutLifecycle/workoutActionCapability';
+import { externalWorkoutActionHandler } from './workoutLifecycle/externalWorkoutAction';
+import {
   releasePushDeviceHandler,
   syncPushDeviceHandler,
 } from './pushDevices/pushDeviceRegistration';
@@ -206,6 +211,35 @@ export const completeWorkoutCardio = onCall(
 export const finalizeWorkoutSession = onCall(
   { enforceAppCheck: true },
   finalizeWorkoutSessionHandler,
+);
+
+/**
+ * Fase 3 of the interactive Lock Screen work — issues the short-lived,
+ * self-contained capability `externalWorkoutAction` validates (see that
+ * file's and `workoutActionCapability.ts`'s doc comments for the full
+ * architecture). Called by the authenticated main app, normally once per
+ * workout session as soon as `executionId` is known — never blocking the
+ * workout if it fails, since the Lock Screen presentation stays fail-open/
+ * read-only without a capability (no interactive control is wired to this
+ * endpoint yet; this phase only proves the infrastructure).
+ */
+export const issueWorkoutActionCapability = onCall(
+  { enforceAppCheck: true, secrets: [WORKOUT_ACTION_CAPABILITY_SECRET] },
+  issueWorkoutActionCapabilityHandler,
+);
+
+/**
+ * Fase 3 — capability-gated `complete_set` only (no +/- steppers over the
+ * network; those stay local to the widget extension). Deliberately a raw
+ * `onRequest`, not `onCall`: the caller (eventually the widget extension,
+ * `AdjustStepperIntent.swift`'s sibling once Fase 4 adds it) has no
+ * Firebase Auth session and no App Check attestation — it authenticates
+ * purely via the signed capability token in the request body. See
+ * `externalWorkoutAction.ts`'s own doc comment for the full trust model.
+ */
+export const externalWorkoutAction = onRequest(
+  { secrets: [WORKOUT_ACTION_CAPABILITY_SECRET] },
+  externalWorkoutActionHandler,
 );
 
 /** Trusted operational projection sourced only from the immutable backend-authoritative domain ledger. */
