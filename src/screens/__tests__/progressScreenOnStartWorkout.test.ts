@@ -10,25 +10,25 @@ describe('ProgressScreen onStartWorkout wiring', () => {
   });
 });
 
-describe('ProgressScreen locked-preview scroll/centering', () => {
-  it('derives the locked state for the active tab from the same data the panels gate on', () => {
-    // Imported health weight counts as real data too: the full-screen lock
-    // only applies when neither a real assessment nor imported weight exists
-    // (see BodyEvolutionView's own `hasAnyRealWeight`).
-    expect(screen).toContain("!latest && importedWeights.length === 0;");
-    expect(screen).toContain(
-      'const isLoadsLocked = !loadsLoading && !loadsError && loadExercises.length === 0;',
-    );
+describe('ProgressScreen panel scrolling', () => {
+  it('leaves emptiness entirely to the panels instead of mirroring their condition here', () => {
+    // The screen used to re-derive each panel's "no real data" condition so
+    // it could freeze the scroll around a centered, full-screen locked
+    // preview. The empty states are now ordinary (and taller-than-screen)
+    // panels, so that duplicated gate is gone and the condition lives in
+    // one place only: the panel itself.
+    expect(screen).not.toContain('isBodyLocked');
+    expect(screen).not.toContain('isLoadsLocked');
+    expect(screen).not.toContain('isCurrentViewLocked');
   });
 
-  it('disables scrolling and stretches the panel to fill the screen while locked', () => {
-    expect(screen).toContain('scrollEnabled={!isCurrentViewLocked}');
-    expect(screen).toContain('isCurrentViewLocked ? { flexGrow: 1 } : { paddingBottom: spacing[8] }');
-    expect(screen).toContain('fillHeight={isCurrentViewLocked}');
-    expect(screen).toContain('fillHeight ? { flex: 1 } : null');
+  it('scrolls every Corpo/Cargas state from the top, with the tab-bar spacing intact', () => {
+    expect(screen).toContain('contentContainerStyle={{ paddingBottom: spacing[8] }}');
+    expect(screen).not.toContain('scrollEnabled=');
+    expect(screen).not.toContain('flexGrow: 1');
   });
 
-  it('drops the gap below the tab row while locked, so the blur starts right at its edge', () => {
-    expect(screen).toContain('marginBottom: isCurrentViewLocked ? 0 : spacing[5]');
+  it('keeps the constant gap below the tab row', () => {
+    expect(screen).toContain('style={{ marginBottom: spacing[5] }}');
   });
 });

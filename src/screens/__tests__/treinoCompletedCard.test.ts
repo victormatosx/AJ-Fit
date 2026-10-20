@@ -29,6 +29,27 @@ describe('TREINO completed card', () => {
     expect(sessions[afterReposition.nextSessionIndex]).toBe('Inferiores Extra');
   });
 
+  /**
+   * Regression (2026-10-18): an advanced session carries a future
+   * `scheduledLocalDate`, so matching that date found nothing on the day the
+   * user actually trained and the card lost its title, muscle list, body map
+   * and metrics — everything derived from the session.
+   */
+  it('finds a session advanced onto an earlier day, by the date it was performed', () => {
+    const advanced = [{
+      status: 'COMPLETED',
+      programInstanceId: 'instance-1',
+      scheduledLocalDate: '2026-10-19',
+      performedLocalDate: '2026-10-18',
+      sessionIndex: 0,
+    }];
+    // The day of the effort finds it...
+    expect(completedSessionIndexForLocalDate(advanced, 'instance-1', '2026-10-18', sessions.length)).toBe(0);
+    // ...and the opportunity's own day does not: nothing was performed then.
+    expect(completedSessionIndexForLocalDate(advanced, 'instance-1', '2026-10-19', sessions.length)).toBeNull();
+    expect(treinoCardSession(sessions, completedResolution, 0)).toBe('Empurrar');
+  });
+
   it('ignores executions from a different date, instance, or nonterminal status', () => {
     expect(completedSessionIndexForLocalDate([
       { status: 'COMPLETED', programInstanceId: 'instance-1', scheduledLocalDate: '2026-10-05', sessionIndex: 0 },

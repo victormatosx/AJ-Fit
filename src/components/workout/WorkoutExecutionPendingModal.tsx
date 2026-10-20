@@ -47,14 +47,26 @@ export function WorkoutExecutionPendingModal({
       : error?.code === 'LEGACY_PENDING'
         ? error.executionIds[0]
         : null;
-  const title = error?.code === 'UNKNOWN' ? t('startError.title') : t('pendingExecution.title');
+  // DAILY_LIMIT is not an error state — it is the one-workout-per-day rule
+  // being honoured — so it gets the completed-today voice, not the failure
+  // one. No abandon action is offered for it (`executionId` is null above):
+  // there is nothing pending to resolve, only tomorrow to wait for.
+  const title = error?.code === 'DAILY_LIMIT'
+    ? t('dailyLimit.title')
+    : error?.code === 'CONFLICT' || error?.code === 'LEGACY_PENDING'
+      ? t('pendingExecution.title')
+      : t('startError.title');
   const body = error?.code === 'CONFLICT'
     ? t('pendingExecution.conflictBody')
     : error?.code === 'LEGACY_PENDING'
       ? ambiguous
         ? t('pendingExecution.legacyAmbiguousBody', { count: error.executionIds.length })
         : t('pendingExecution.legacyBody')
-      : t('startError.body');
+      : error?.code === 'DAILY_LIMIT'
+        ? t('dailyLimit.body')
+        : error?.code === 'SESSION_ALREADY_FINISHED'
+          ? t('startError.alreadyFinishedBody')
+          : t('startError.body');
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={resolving ? undefined : onCancel} statusBarTranslucent>

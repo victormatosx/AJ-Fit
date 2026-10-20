@@ -71,6 +71,23 @@ export interface ScheduleState {
   /** Local date the rotation was last walked through (inclusive). Only advances on COMPLETED/MISS_RESOLVED, never on a mere read. */
   cursorDate: string;
   lastCompletedAt: string | null;
+  /**
+   * Local date the user actually trained, which differs from
+   * `lastCompletedAt` only when a session was completed ahead of its own
+   * opportunity (the one-day "adiantar treino" exception): there
+   * `lastCompletedAt` holds the consumed opportunity's date while this holds
+   * the day of the effort.
+   *
+   * Deliberately a second field rather than a redefinition of
+   * `lastCompletedAt`: miss accounting and the backend's re-engagement
+   * episodes (`functions/src/notifications/reengagementContext.ts`) read
+   * `lastCompletedAt` as the last *opportunity* consumed, and would count an
+   * early-completed day as missed if it moved to the performed date.
+   *
+   * Null on every state written before this field existed; readers fall back
+   * to `lastCompletedAt`, which reproduces the previous behavior exactly.
+   */
+  lastPerformedLocalDate: string | null;
   pendingMissDecision: PendingMissDecision | null;
 }
 
@@ -98,7 +115,12 @@ export interface ResolveWorkoutScheduleInput {
   scheduleMode?: ScheduleMode;
   config: ScheduleConfig | null;
   /** null means the program has never been walked yet (freshly activated). */
-  state: Pick<ScheduleState, 'nextSessionIndex' | 'cursorDate' | 'pendingMissDecision' | 'lastCompletedAt'> | null;
+  state:
+    | (Pick<ScheduleState, 'nextSessionIndex' | 'cursorDate' | 'pendingMissDecision' | 'lastCompletedAt'>
+      /* Optional on purpose: states written before this field existed simply
+         omit it, and the resolver falls back to `lastCompletedAt`. */
+      & Partial<Pick<ScheduleState, 'lastPerformedLocalDate'>>)
+    | null;
   /** Local activation date (YYYY-MM-DD) of the active program; used only when `state` is null. */
   activatedAtLocalDate: string;
   /** Local "today" (YYYY-MM-DD), already resolved in the user's timezone by the caller. */

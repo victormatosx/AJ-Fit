@@ -39,6 +39,34 @@
     "nutrition": "Dieta"
   },
   "paywall": {
+    "sheet": {
+      "subtitle": "Entrenamiento completo, dieta y AJ contigo desde hoy.",
+      "afterTrialLabel": "DESPUÉS DE LA PRUEBA",
+      "startTrial": "Empezar mis {{duration}} gratis",
+      "startTrialToday": "{{price}} hoy",
+      "trialHeadline": "{{duration}} gratis",
+      "trialHeadlineTail": "para probarlo todo",
+      "perMonthSuffix": "/mes",
+      "fixedTrialDuration": "7 días",
+      "fixedZeroToday": "R$ 0,00 hoy",
+      "annualSupporting": "{{price}} por año · ahorra",
+      "annualSavings": "R$ 398,90",
+      "monthlySupporting": "Cobrado cada mes, sin permanencia",
+      "assuranceLead": "Riesgo cero.",
+      "assuranceBody": "¿No te gustó? Cancela en 2 toques antes del día 7 y no pagas nada."
+    },
+    "aj": {
+      "introWithName": "{{name}}, falta un paso para liberar tu plan.",
+      "intro": "Falta un paso para liberar tu plan.",
+      "introTrial": "Los primeros {{duration}} corren por mi cuenta. Pruebas todo y decides después.",
+      "comparePerMonth": "En el {{plan}} pagas {{price}} por mes.",
+      "comparePerPeriod": "En el {{plan}} pagas {{price}}.",
+      "couponApplied": "Cupón {{code}} aplicado.",
+      "activating": "Activando tu suscripción...",
+      "activatingTrial": "Activando tu prueba gratis...",
+      "restoring": "Buscando tu suscripción...",
+      "done": "Listo. Todo liberado."
+    },
     "header": {
       "restore": "Restaurar",
       "restoreAccessibilityLabel": "Restaurar compras anteriores"
@@ -71,7 +99,8 @@
       "cadence": {
         "monthly": "mensual",
         "annual": "anual"
-      }
+      },
+      "annualDiscountBadge": "-33%"
     },
     "legal": {
       "renewalDisclosure": "Renovación automática, cobrada por la tienda en cada ciclo. Cancela cuando quieras antes de la renovación en la configuración de tu cuenta.",
@@ -79,7 +108,7 @@
     },
     "promo": {
       "label": "CÓDIGO PROMOCIONAL",
-      "placeholder": "Ej.: CUPOM10",
+      "placeholder": "Código promocional",
       "inputAccessibilityLabel": "Código promocional",
       "applyAccessibilityLabel": "Aplicar código promocional",
       "applyButton": "Aplicar",
@@ -115,7 +144,8 @@
         "unauthenticated": "Tu sesión expiró. Inicia sesión de nuevo antes de comprar.",
         "intentMismatch": "La autorización de compra ya no corresponde al plan seleccionado. Inténtalo de nuevo.",
         "intentExpired": "La autorización promocional expiró. Pulsa Continuar para solicitar una nueva."
-      }
+      },
+      "appliedCode": "Cupón {{code}}"
     },
     "feedback": {
       "purchaseConfirmed": "Suscripción confirmada. Tu acceso Premium está activo.",

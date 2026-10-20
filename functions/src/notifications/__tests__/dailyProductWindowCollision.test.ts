@@ -74,7 +74,6 @@ function workoutContext(): DailyWorkoutContext {
     })),
     sessionCount: 1,
     scheduleState: null,
-    resolvedMissScheduledDate: null,
   };
 }
 

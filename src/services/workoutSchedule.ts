@@ -28,6 +28,11 @@ import { scheduleEventDocumentId } from '../scheduleEngine/identities';
 import { detectMissedSessionGap, resolveWorkoutSchedule } from '../scheduleEngine/resolver';
 import { repositionedSessionIndexes } from '../scheduleEngine/reposition';
 import {
+  readSessionSuggestion,
+  selectSession,
+  type SessionSuggestion,
+} from '../scheduleEngine/sessionSuggestion';
+import {
   pendingMissMatchesGap,
   reconcilePendingMissDecision,
 } from '../scheduleEngine/pendingMissReconciliation';
@@ -54,8 +59,14 @@ export interface PersistedScheduleState {
   programId: string;
   programInstanceId?: string;
   nextSessionIndex: number;
+  /** New training model. Absent on every document written before selection existed. */
+  suggestedSessionIndex?: number;
+  suggestionVersion?: number;
+  lastSelectedSessionIndex?: number | null;
   cursorDate: string;
   lastCompletedAt: string | null;
+  /** Absent on documents written before the field existed — see `ScheduleState`. */
+  lastPerformedLocalDate?: string | null;
   pendingMissDecision: PendingMissDecision | null;
   updatedAt: Timestamp | null;
 }
@@ -177,6 +188,19 @@ export async function ensureScheduleConfigFromQuestionnaire(
   });
 }
 
+/**
+ * Raw rotation state for the suggestion layer.
+ *
+ * Exported because the new resolver is pure over the stored document and the
+ * hook needs it directly — `resolveTodaysSchedule` used to be the only reader,
+ * and it also performed the miss-detection write that the new model removed.
+ */
+export async function loadScheduleSuggestionState(
+  uid: string, programId: string, programInstanceId?: string,
+): Promise<PersistedScheduleState | null> {
+  return loadScheduleState(uid, programId, programInstanceId);
+}
+
 async function loadScheduleState(uid: string, programId: string, programInstanceId?: string): Promise<PersistedScheduleState | null> {
   const snapshot = await getDoc(scheduleStateRef(uid, programId, programInstanceId));
   if (!snapshot.exists()) return null;
@@ -186,8 +210,12 @@ async function loadScheduleState(uid: string, programId: string, programInstance
     programId,
     ...(typeof data.programInstanceId === 'string' ? { programInstanceId: data.programInstanceId } : {}),
     nextSessionIndex: data.nextSessionIndex,
+    ...(Number.isInteger(data.suggestedSessionIndex) ? { suggestedSessionIndex: data.suggestedSessionIndex } : {}),
+    ...(Number.isInteger(data.suggestionVersion) ? { suggestionVersion: data.suggestionVersion } : {}),
+    lastSelectedSessionIndex: Number.isInteger(data.lastSelectedSessionIndex) ? data.lastSelectedSessionIndex : null,
     cursorDate: data.cursorDate,
     lastCompletedAt: data.lastCompletedAt ?? null,
+    lastPerformedLocalDate: data.lastPerformedLocalDate ?? null,
     pendingMissDecision: data.pendingMissDecision ?? null,
     updatedAt: data.updatedAt ?? null,
   };
@@ -286,6 +314,7 @@ export async function resolveTodaysSchedule(input: {
           nextSessionIndex: data.nextSessionIndex as number,
           cursorDate: data.cursorDate as string,
           lastCompletedAt: (data.lastCompletedAt as string | null) ?? null,
+          lastPerformedLocalDate: (data.lastPerformedLocalDate as string | null) ?? null,
           pendingMissDecision: null,
         };
         const recalculatedGap = detectMissedSessionGap({ ...resolverInput, state: currentState });
@@ -343,6 +372,7 @@ export async function resolveTodaysSchedule(input: {
             nextSessionIndex: gap.missedSessionIndex,
             cursorDate: activatedAtLocalDate,
             lastCompletedAt: null,
+            lastPerformedLocalDate: null,
             pendingMissDecision,
             updatedAt: serverTimestamp(),
           });
@@ -488,6 +518,7 @@ export async function resolveMissedSession(input: {
       // against regressing.
       cursorDate: addDaysLocal(input.todayLocalDate, -1),
       lastCompletedAt: data.lastCompletedAt ?? null,
+      lastPerformedLocalDate: data.lastPerformedLocalDate ?? null,
       pendingMissDecision: null,
       updatedAt: serverTimestamp(),
     });
@@ -596,6 +627,7 @@ export async function repositionScheduleCursor(input: {
         nextSessionIndex: input.targetSessionIndex,
         cursorDate: targetCursorDate,
         lastCompletedAt: data?.lastCompletedAt ?? null,
+        lastPerformedLocalDate: data?.lastPerformedLocalDate ?? null,
         pendingMissDecision: null,
         updatedAt: serverTimestamp(),
       });
@@ -606,6 +638,71 @@ export async function repositionScheduleCursor(input: {
     throw error;
   }
   if (staleCursor) throw new Error('STALE_SCHEDULE_CURSOR');
+}
+
+/**
+ * Persists an intentional session choice (new training model).
+ *
+ * This is the ONLY client write that moves the rotation now, and it is
+ * deliberately NOT grant-gated — unlike the `REPOSITION_SCHEDULE_CURSOR` path
+ * it replaces. That is safe, and in fact strictly tighter, because of what it
+ * cannot touch: `cursorDate`, `lastCompletedAt` and `lastPerformedLocalDate`
+ * are carried forward verbatim and Firestore Rules reject any write that
+ * changes them on this branch. The old reposition path moved `cursorDate`
+ * (which is why it needed a server-issued grant); selection moves only the
+ * SUGGESTION, which grants the user nothing they are not already entitled to
+ * — picking which of their own program's sessions to see next.
+ *
+ * Nothing about completion is written here: no execution, no `COMPLETED`
+ * event, no frequency, no streak. Selecting is not training.
+ *
+ * Runs in a transaction so two devices selecting at the same moment serialize
+ * instead of both rebasing off the same version; the Rules additionally
+ * require `suggestionVersion` to advance by exactly 1, so a lost update fails
+ * closed rather than silently skipping a position.
+ */
+export async function selectWorkoutSession(input: {
+  uid: string;
+  programId: string;
+  programInstanceId?: string;
+  sessionCount: number;
+  targetSessionIndex: number;
+  /** Used only when no `scheduleState` exists yet (first ever selection). */
+  activatedAtLocalDate: string;
+}): Promise<SessionSuggestion> {
+  const ref = scheduleStateRef(input.uid, input.programId, input.programInstanceId);
+  return runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    const data = snapshot.exists() ? snapshot.data() : null;
+    const current = readSessionSuggestion(data, input.sessionCount);
+    const transition = selectSession(current, input.targetSessionIndex, input.sessionCount);
+    if (transition.status === 'REJECTED') throw new Error(transition.reason);
+    // A repeated tap on the same session is already expressed by the stored
+    // pointer — no write, so the rotation cannot walk forward twice.
+    if (transition.status === 'UNCHANGED') return transition.suggestion;
+
+    const { suggestion } = transition;
+    transaction.set(ref, {
+      programId: input.programId,
+      ...(input.programInstanceId ? { programInstanceId: input.programInstanceId } : {}),
+      // Kept in lockstep: `nextSessionIndex` is what legacy readers (the
+      // resolver, re-engagement episodes, daily notifications) still consult,
+      // and it has always meant exactly "the next session the rotation owes".
+      nextSessionIndex: suggestion.suggestedSessionIndex,
+      suggestedSessionIndex: suggestion.suggestedSessionIndex,
+      suggestionVersion: suggestion.version,
+      lastSelectedSessionIndex: suggestion.lastSelectedSessionIndex,
+      // Completion-derived facts: preserved exactly, never authored here.
+      cursorDate: (data?.cursorDate as string | undefined) ?? input.activatedAtLocalDate,
+      lastCompletedAt: (data?.lastCompletedAt as string | null | undefined) ?? null,
+      lastPerformedLocalDate: (data?.lastPerformedLocalDate as string | null | undefined) ?? null,
+      // Decision 2.b: an explicit choice is the user's answer. No missed-session
+      // question may stand between them and training.
+      pendingMissDecision: null,
+      updatedAt: serverTimestamp(),
+    });
+    return suggestion;
+  });
 }
 
 /**

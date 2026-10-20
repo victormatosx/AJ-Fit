@@ -18,7 +18,20 @@ function localDate(value: Date, timezone: string): string {
 
 export interface ScheduleAuthorityContext {
   config: ScheduleConfig;
-  state: { nextSessionIndex: number; cursorDate: string; pendingMissDecision: PendingMissDecision | null; lastCompletedAt: string | null } | null;
+  state: {
+    nextSessionIndex: number;
+    cursorDate: string;
+    pendingMissDecision: PendingMissDecision | null;
+    lastCompletedAt: string | null;
+    /**
+     * Required by the resolver to tell an early completion's consumed
+     * opportunity apart from the day actually trained. Omitting it made the
+     * authority resolve a legacy cursor (anchored on the scheduled date) as
+     * "nothing due", so finalizing the NEXT session on that very day was
+     * rejected as `schedule_completion_session_not_expected`.
+     */
+    lastPerformedLocalDate?: string | null;
+  } | null;
   activatedAtLocalDate: string;
   sessionCount: number;
 }
@@ -56,6 +69,7 @@ export function buildScheduleAuthorityContext(input: {
       cursorDate: input.stateData.cursorDate,
       pendingMissDecision: input.stateData.pendingMissDecision ?? null,
       lastCompletedAt: input.stateData.lastCompletedAt ?? null,
+      lastPerformedLocalDate: input.stateData.lastPerformedLocalDate ?? null,
     } : null,
     activatedAtLocalDate: localDate(input.instance.activatedAt.toDate(), timezone),
     sessionCount,

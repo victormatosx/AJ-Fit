@@ -807,3 +807,163 @@ describe('fixed schedule after an early completion leaves the cursor one day ahe
     }))).toEqual({ status: 'SESSION_READY', sessionIndex: 0 });
   });
 });
+
+/**
+ * Calendar vs. sequence (the rule this suite exists to pin): the calendar
+ * decides WHEN the user may train, the rotation decides WHICH session is next.
+ * Completing a session ahead of its own day consumes the SEQUENCE position,
+ * never the untouched calendar opportunity it was scheduled for — so
+ * advancing must never cost the user a later training day.
+ *
+ * Real scenario this came from (2026-10-18): trainingDays MON/WED/THU/FRI/SAT,
+ * session A scheduled for Monday the 19th was advanced and performed on Sunday
+ * the 18th. Monday used to resolve as REST_DAY, refusing to start B.
+ */
+describe('advanced session — calendar opportunity survives, sequence advances', () => {
+  const config: ScheduleConfig = {
+    trainingDays: ['MON', 'WED', 'THU', 'FRI', 'SAT'],
+    timezone: 'America/Sao_Paulo',
+    scheduleVersion: 1,
+  };
+  // What `finalizeWorkoutSession` persists after A (scheduled Monday 19) is
+  // performed on Sunday 18: the cursor stops at the day actually consumed, and
+  // the rotation has moved on to B (index 1).
+  const aPerformedSunday = {
+    nextSessionIndex: 1,
+    cursorDate: '2026-10-18',
+    lastCompletedAt: '2026-10-18',
+    lastPerformedLocalDate: '2026-10-18',
+    pendingMissDecision: null,
+  };
+  const at = (
+    todayLocalDate: string,
+    state: ResolveWorkoutScheduleInput['state'] = aPerformedSunday,
+  ) => base({
+    config, state, activatedAtLocalDate: '2026-10-12', todayLocalDate,
+  });
+
+  it('Sunday, the day of the effort, is TODAY_COMPLETED', () => {
+    expect(resolveWorkoutSchedule(at('2026-10-18')))
+      .toEqual({ status: 'TODAY_COMPLETED', nextWorkoutDate: '2026-10-19', nextSessionIndex: 1 });
+  });
+
+  it('Monday — the consumed opportunity — offers B, the next session in sequence', () => {
+    expect(resolveWorkoutSchedule(at('2026-10-19')))
+      .toEqual({ status: 'SESSION_READY', sessionIndex: 1 });
+  });
+
+  it('Monday raises no missed-session gap: nothing was skipped', () => {
+    expect(detectMissedSessionGap(at('2026-10-19'))).toBeNull();
+  });
+
+  it('Tuesday stays a rest day — advancing never turns the calendar into training days', () => {
+    expect(resolveWorkoutSchedule(at('2026-10-20')))
+      .toEqual({ status: 'REST_DAY', nextWorkoutDate: '2026-10-21', nextSessionIndex: 1 });
+  });
+
+  it('with B completed on Monday, Wednesday offers C', () => {
+    const bCompletedMonday = {
+      nextSessionIndex: 2,
+      cursorDate: '2026-10-19',
+      lastCompletedAt: '2026-10-19',
+      lastPerformedLocalDate: '2026-10-19',
+      pendingMissDecision: null,
+    };
+    expect(resolveWorkoutSchedule(at('2026-10-21', bCompletedMonday)))
+      .toEqual({ status: 'SESSION_READY', sessionIndex: 2 });
+  });
+
+  it('with B NOT completed on Monday, B stays the pending session on Wednesday', () => {
+    // Two unconsumed opportunities (Mon 19, Wed 21) is the pre-existing missed
+    // -session gap, decided by the user — never a silently skipped session.
+    // Either way the rotation still owes B: CONTINUE_SEQUENCE resumes it.
+    const resolution = resolveWorkoutSchedule(at('2026-10-21'));
+    expect(resolution).toEqual({
+      status: 'MISSED_SESSION_DECISION_REQUIRED',
+      missedSessionIndex: 1,
+      calendarSessionIndex: 2,
+      missedScheduledDate: '2026-10-19',
+    });
+    expect(detectMissedSessionGap(at('2026-10-21'))).toMatchObject({ missedSessionIndex: 1 });
+  });
+
+  it('reopening the app on any of those days re-derives the same answer (pure over state)', () => {
+    for (const day of ['2026-10-18', '2026-10-19', '2026-10-20', '2026-10-21']) {
+      expect(resolveWorkoutSchedule(at(day))).toEqual(resolveWorkoutSchedule(at(day)));
+    }
+  });
+
+  it('a session performed on its own day keeps the ordinary flow untouched', () => {
+    // Saturday 17 performed on Saturday 17: both dates equal, cursor on that
+    // day, and the next trainingDay (Monday) releases the next session.
+    const saturdayOnSaturday = {
+      nextSessionIndex: 1,
+      cursorDate: '2026-10-17',
+      lastCompletedAt: '2026-10-17',
+      lastPerformedLocalDate: '2026-10-17',
+      pendingMissDecision: null,
+    };
+    expect(resolveWorkoutSchedule(at('2026-10-17', saturdayOnSaturday)))
+      .toEqual({ status: 'TODAY_COMPLETED', nextWorkoutDate: '2026-10-19', nextSessionIndex: 1 });
+    expect(resolveWorkoutSchedule(at('2026-10-19', saturdayOnSaturday)))
+      .toEqual({ status: 'SESSION_READY', sessionIndex: 1 });
+  });
+
+  it('wraps to the next cycle after the last session of the rotation', () => {
+    const lastOfRotation = {
+      nextSessionIndex: 0, // finalize stores (index + 1) % sessionCount
+      cursorDate: '2026-10-18',
+      lastCompletedAt: '2026-10-18',
+      lastPerformedLocalDate: '2026-10-18',
+      pendingMissDecision: null,
+    };
+    expect(resolveWorkoutSchedule(at('2026-10-19', lastOfRotation)))
+      .toEqual({ status: 'SESSION_READY', sessionIndex: 0 });
+  });
+
+  /**
+   * States written by the deployed-but-not-yet-fixed finalizer anchored the
+   * cursor on the SCHEDULED date while recording the performed date
+   * separately. The resolver heals exactly that shape, so the fix applies to
+   * data already in Firestore without a migration.
+   */
+  describe('heals states persisted with the cursor on the scheduled date', () => {
+    const legacyAdvanced = {
+      nextSessionIndex: 1,
+      cursorDate: '2026-10-19',       // the opportunity's own day
+      lastCompletedAt: '2026-10-19',  // ...written by that same completion
+      lastPerformedLocalDate: '2026-10-18',
+      pendingMissDecision: null,
+    };
+
+    it('Monday still offers B', () => {
+      expect(resolveWorkoutSchedule(at('2026-10-19', legacyAdvanced)))
+        .toEqual({ status: 'SESSION_READY', sessionIndex: 1 });
+    });
+
+    it('Sunday is still TODAY_COMPLETED', () => {
+      expect(resolveWorkoutSchedule(at('2026-10-18', legacyAdvanced)).status).toBe('TODAY_COMPLETED');
+    });
+
+    it('leaves a FOLLOW_SCHEDULE cursor alone — it has no completion behind it', () => {
+      // The decisive distinction: FOLLOW_SCHEDULE advances the cursor past
+      // dates with NO completion, so `lastCompletedAt !== cursorDate`.
+      // Healing there would re-open every deliberately skipped day.
+      const afterFollowSchedule = {
+        nextSessionIndex: 2,
+        cursorDate: '2026-10-20',
+        lastCompletedAt: '2026-10-12',
+        lastPerformedLocalDate: '2026-10-12',
+        pendingMissDecision: null,
+      };
+      expect(resolveWorkoutSchedule(at('2026-10-21', afterFollowSchedule)))
+        .toEqual({ status: 'SESSION_READY', sessionIndex: 2 });
+      expect(detectMissedSessionGap(at('2026-10-21', afterFollowSchedule))).toBeNull();
+    });
+
+    it('leaves states without a performed date exactly as they were', () => {
+      const preFieldAdvanced = { ...legacyAdvanced, lastPerformedLocalDate: undefined };
+      expect(resolveWorkoutSchedule(at('2026-10-19', preFieldAdvanced)).status).toBe('TODAY_COMPLETED');
+    });
+  });
+});

@@ -4,15 +4,34 @@ import { describe, expect, it } from 'vitest';
 /**
  * Source-inspection suite (no React renderer in this Node-only vitest
  * config — same constraint documented in `paywallDevOverride.test.ts`/
- * `paywallAndroidPromoWiring.test.ts`). Covers the compact UI/UX redesign
- * that follows the reference composition's density/hierarchy much more
- * closely: full-width photo-strip hero with overlaid controls/headline →
- * compact plan rows →
- * compact promo code → CTA visible without excessive scroll → legal
- * disclosure/links. Every commercial code path stays untouched —
- * RevenueCat offerings/purchase/restore/promo/entitlement logic lives in
- * `src/lib/subscriptionOffer.ts` and `handlePurchase`/`handleRestore`,
- * neither of which this redesign pass touches.
+ * `paywallAndroidPromoWiring.test.ts`).
+ *
+ * ## What changed, and why this file changed with it
+ *
+ * This suite used to lock the *previous* compact redesign: a full-width
+ * photo-strip hero with overlaid controls, a display headline inside it,
+ * compact plan rows, a header-mounted restore action. The approved
+ * acquisition design replaces that composition entirely — AJ stands where the
+ * photo was, the commercial content lives in a bottom sheet, the period
+ * selector is a segmented control when the offering has exactly two packages,
+ * and restore joins terms/privacy in the footer link row.
+ *
+ * Every assertion below falls into one of two groups, and the distinction is
+ * the whole point of this rewrite:
+ *
+ * - **Commercial and logic guarantees** — real prices only, trial claims only
+ *   from confirmed Store eligibility, one purchase action, `handlePurchase`
+ *   acting on `effectiveRoute`, promo wiring, restore wiring, every offering
+ *   state still reachable, legal disclosure present. These are carried over
+ *   verbatim, and several are now checked more tightly than before.
+ * - **Composition of the superseded design** — gradient stops, hero height,
+ *   `<Display size={30}>`, row `minHeight`, corner radii. These describe a
+ *   screen that no longer exists; they are re-pointed at the new composition
+ *   rather than deleted, so the new one is locked just as the old one was.
+ *
+ * No commercial code path moved: RevenueCat offerings/purchase/restore/promo/
+ * entitlement logic lives in `src/lib/subscriptionOffer.ts` and
+ * `handlePurchase`/`handleRestore`, none of which this redesign touches.
  */
 function stripComments(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
@@ -20,6 +39,12 @@ function stripComments(source: string): string {
 
 const PAYWALL_SOURCE = readFileSync('src/screens/PaywallScreen.tsx', 'utf8');
 const PAYWALL_CODE = stripComments(PAYWALL_SOURCE);
+const HERO_IMAGE_CODE = stripComments(
+  readFileSync('src/screens/paywall/paywallHeroImage.ts', 'utf8'),
+);
+const STORE_PRICE_PARTS_CODE = stripComments(
+  readFileSync('src/screens/paywall/storePriceParts.ts', 'utf8'),
+);
 
 function loadCommon(lang: string): Record<string, unknown> {
   return JSON.parse(readFileSync(`src/i18n/resources/${lang}/common.json`, 'utf8'));
@@ -37,29 +62,66 @@ function leaf(root: Record<string, unknown>, path: string): unknown {
 }
 
 describe('Paywall redesign — plan rendering, selection and real pricing', () => {
-  it('centers the plan selector prompt above the cards', () => {
-    const promptStart = PAYWALL_CODE.indexOf("{t('paywall.plans.selectorPrompt')}");
-    const promptBlock = PAYWALL_CODE.slice(Math.max(0, promptStart - 180), promptStart);
-    expect(promptBlock).toContain("textAlign: 'center'");
+  it('uses the segmented selector only for a two-package offering, and the card list otherwise', () => {
+    // The design describes the segmented control for exactly two packages;
+    // any other count keeps the vertical list, so a three-package offering
+    // can never be silently truncated to fit a two-slot control.
+    expect(PAYWALL_CODE).toContain('const useSegmentedSelector = packages.length === 2;');
+    expect(PAYWALL_CODE).toContain('{useSegmentedSelector ? (');
+    expect(PAYWALL_CODE).toContain('<AqSegmented');
+    expect(PAYWALL_CODE).toContain('<PackageCard');
   });
 
-  it('renders the selector prompt fully white, with no accent highlight', () => {
-    const promptStart = PAYWALL_CODE.indexOf("{t('paywall.plans.selectorPrompt')}");
-    const promptBlock = PAYWALL_CODE.slice(Math.max(0, promptStart - 180), promptStart);
-    expect(promptBlock).toContain('color="#FFFFFF"');
+  it('keeps the plan selector prompt as i18n copy, now labelling the selector for assistive tech', () => {
+    expect(PAYWALL_CODE).toContain("accessibilityLabel={t('paywall.plans.selectorPrompt')}");
     expect(PAYWALL_CODE).not.toContain('PlanSelectorTitle');
+    expect(leaf(PT, 'paywall.plans.selectorPrompt')).toBe('Escolha seu plano ideal');
   });
 
-  it('still renders every offering package via PackageCard, keyed by identifier, with selection wired to setSelectedId', () => {
+  it('still renders every offering package, keyed by identifier, with selection wired to setSelectedId', () => {
+    // Both branches must map over the real `packages` and write the real
+    // selection state — neither may invent an ordering or a default.
     expect(PAYWALL_CODE).toContain('packages.map((pkg) => {');
+    expect(PAYWALL_CODE).toContain('packages.map((pkg) => ({');
     expect(PAYWALL_CODE).toContain('key={pkg.identifier}');
     expect(PAYWALL_CODE).not.toContain('position={index + 1}');
     expect(PAYWALL_CODE).toContain("selected={pkg.identifier === selectedPackage?.identifier}");
     expect(PAYWALL_CODE).toContain('onSelect={() => setSelectedId(pkg.identifier)}');
+    expect(PAYWALL_CODE).toContain('onSelect={(identifier) => setSelectedId(identifier)}');
   });
 
   it('PackageCard still displays the real store price via packagePriceString, never a literal', () => {
     expect(PAYWALL_CODE).toContain('{packagePriceString(pkg)}');
+  });
+
+  it('the headline price is a store string, never recomputed — and its typesetting is provably lossless', () => {
+    // `pricePerMonthString` when RevenueCat supplies it, the package's own
+    // `priceString` otherwise.
+    expect(PAYWALL_CODE).toContain(
+      'selectedPackage.product.pricePerMonthString ?? selectedPackage.product.priceString',
+    );
+    // The design sets the whole units at 50 and the fraction at 19, which
+    // needs the formatted price in pieces. The guarantee that replaced
+    // "never split" is stricter than a blanket ban and is enforced in code,
+    // not only here: `splitStorePrice` returns substrings of the original
+    // and refuses unless they reassemble into it character for character,
+    // so a locale whose separator, symbol position or fraction length this
+    // does not recognise falls through to the whole string instead of
+    // rendering a wrong price. `storePricePartsParsing.test.ts` exercises
+    // that behaviour against real store formats.
+    expect(PAYWALL_CODE).toContain(
+      "import { splitStorePrice } from './paywall/storePriceParts';",
+    );
+    expect(STORE_PRICE_PARTS_CODE).toContain(
+      'if (`${prefix}${whole}${separator}${fraction}${suffix}` !== trimmed) return null;',
+    );
+    expect(PAYWALL_CODE).toContain('const parts = splitStorePrice(price);');
+    // The fallback branch renders the untouched string.
+    expect(PAYWALL_CODE).toContain('{price}');
+    // Still no arithmetic or digit-stripping on a price anywhere.
+    expect(PAYWALL_CODE).not.toMatch(/\.split\(['"][.,]['"]\)/);
+    expect(PAYWALL_CODE).not.toMatch(/replace\(\/\[\^0-9\]/);
+    expect(PAYWALL_CODE).not.toMatch(/parseFloat\(|Number\(.*price/i);
   });
 
   it('shows the seven-day title on every plan with a Store-confirmed eligible iOS trial and colors the free word blue', () => {
@@ -76,6 +138,28 @@ describe('Paywall redesign — plan rendering, selection and real pricing', () =
     }
   });
 
+  it('the discount badge is fixed copy on the longer period, never a figure computed in code', () => {
+    // The design seals the longer period with "-X%". The product owner
+    // directed (2026-10-17) that the plan prices are fixed and the seal is
+    // to be reproduced as copy, so the percentage lives in i18n as a fixed
+    // string on the ANNUAL package only.
+    //
+    // What this still guards is the thing that was always the real risk: no
+    // discount is CALCULATED here. A percentage derived in the screen would
+    // drift silently the day a store price changes and nobody noticed; a
+    // fixed string is at least visible in the translation files, where a
+    // price change is a copy change like any other.
+    expect(PAYWALL_CODE).toContain("badge: pkg.packageType === 'ANNUAL'");
+    expect(PAYWALL_CODE).toContain("t('paywall.plans.annualDiscountBadge')");
+    expect(PAYWALL_CODE).toContain('badgeVariant="chip"');
+    // No arithmetic over prices anywhere in the screen.
+    expect(PAYWALL_CODE).not.toMatch(/price\w*\s*[*/]\s*\d/i);
+    expect(PAYWALL_CODE).not.toMatch(/\d+\s*-\s*\w*[Pp]rice/);
+    for (const root of [PT, EN, ES]) {
+      expect(String(leaf(root, 'paywall.plans.annualDiscountBadge'))).toMatch(/^-\d+%$/);
+    }
+  });
+
   it('the price is never repeated inside the same plan row — the secondary offerLine never contains packagePriceString/renewalPriceString output', () => {
     const fnStart = PAYWALL_CODE.indexOf('function PackageCard({');
     const fnEnd = PAYWALL_CODE.indexOf('\nfunction ', fnStart + 10);
@@ -84,7 +168,7 @@ describe('Paywall redesign — plan rendering, selection and real pricing', () =
     expect(fnBody.match(/packagePriceString\(pkg\)/g)?.length).toBe(1);
   });
 
-  it('PackageCard is a compact row (well under the old ~110px+ card height) with a single secondary offer line', () => {
+  it('PackageCard is a compact row with a single secondary offer line', () => {
     const fnStart = PAYWALL_CODE.indexOf('function PackageCard({');
     const fnEnd = PAYWALL_CODE.indexOf('\nfunction ', fnStart + 10);
     const fnBody = PAYWALL_CODE.slice(fnStart, fnEnd);
@@ -93,24 +177,12 @@ describe('Paywall redesign — plan rendering, selection and real pricing', () =
     expect(fnBody).toContain('numberOfLines={2}');
     expect(fnBody).not.toContain('promotionalTerms');
   });
-
-  it('uses the AJ Fit card language: balanced corners, mono slash, readable title and circular selector', () => {
-    const fnStart = PAYWALL_CODE.indexOf('function PackageCard({');
-    const fnEnd = PAYWALL_CODE.indexOf('\nfunction ', fnStart + 10);
-    const body = PAYWALL_CODE.slice(fnStart, fnEnd);
-    expect(body).toContain('borderRadius: 10,');
-    expect(body).toContain('letterSpacing: -1.2,');
-    expect(body).toContain('fontFamily: theme.fonts.uiBold,');
-    expect(body).toContain('borderRadius: 9,');
-    expect(body).not.toContain('position');
-    expect(body).not.toContain('<Display');
-  });
 });
 
 describe('Paywall redesign — plan offer line: post-trial cadence, never a duplicated price', () => {
   it('confirmed/potential trial plans use the concise post-trial cadence without repeating duration or price', () => {
     const start = PAYWALL_CODE.indexOf('const offerLine =');
-    const end = PAYWALL_CODE.indexOf('return (\n                  <PackageCard', start);
+    const end = PAYWALL_CODE.indexOf('return (\n                      <PackageCard', start);
     const body = PAYWALL_CODE.slice(start, end);
     expect(body).toContain("t('paywall.trial.afterTrial'");
     expect(body).not.toContain('renewalPriceString');
@@ -125,7 +197,7 @@ describe('Paywall redesign — plan offer line: post-trial cadence, never a dupl
 
 describe('Paywall redesign — CTA always acts on the currently selected plan', () => {
   it('the single primary CTA calls handlePurchase, which only ever acts on effectiveRoute (derived from selectedPackage)', () => {
-    expect(PAYWALL_CODE).toContain('<CtaButton');
+    expect(PAYWALL_CODE).toContain('<AqPrimaryButton');
     expect(PAYWALL_CODE).toContain('onPress={handlePurchase}');
     expect(PAYWALL_CODE).toContain(
       "const purchaseRoute: PurchaseRoute | null = useMemo(() => {\n    if (!selectedPackage || Platform.OS !== 'android') return null;",
@@ -135,43 +207,95 @@ describe('Paywall redesign — CTA always acts on the currently selected plan', 
     );
   });
 
-  it('renders exactly one CtaButton (primary) — no competing purchase actions', () => {
-    expect(PAYWALL_CODE.match(/<CtaButton\b/g)?.length).toBe(1);
+  it('renders exactly one purchase button — no competing purchase actions', () => {
+    expect(PAYWALL_CODE.match(/<AqPrimaryButton\b/g)?.length).toBe(1);
+    // The app-wide gradient CTA is deliberately not reused here (see
+    // `AcquisitionControls`), so its reappearance would be a regression.
+    expect(PAYWALL_CODE).not.toContain('<CtaButton');
   });
 
-  it('CTA label comes from the shared i18n action set, not a hardcoded string', () => {
-    expect(PAYWALL_CODE).toContain("<CtaText>{t('actions.continue')}</CtaText>");
-    expect(PAYWALL_CODE).not.toMatch(/<CtaText>Continuar<\/CtaText>/);
+  it("the CTA's disabled expression still comes from the route, never from presentation state", () => {
+    const start = PAYWALL_CODE.indexOf('<AqPrimaryButton');
+    const body = PAYWALL_CODE.slice(start, start + 1200);
+    expect(body).toContain('busy ||');
+    expect(body).toContain('!effectiveRoute ||');
+    expect(body).toContain("effectiveRoute.kind === 'blocked' ||");
+    expect(body).toContain(
+      "(effectiveRoute.kind === 'ios_promo_package' &&\n                    selectedIntroReadiness.status !== 'ready')",
+    );
+  });
+
+  it('CTA label comes from i18n, and promises the trial through the single presented-duration value', () => {
+    // `presentedTrialDuration` is the one place that decides whether this
+    // screen is talking about a trial at all — Store-confirmed duration when
+    // StoreKit supplies one, the fixed offer duration otherwise, and `null`
+    // on Android unless its own signal says otherwise. The CTA reads it
+    // rather than re-deciding, so it can never promise a trial the rest of
+    // the sheet is not also showing.
+    expect(PAYWALL_CODE).toContain(
+      "const presentedTrialDuration =\n    trialDurationLabel ??\n    (Platform.OS === 'android' ? null : t('paywall.sheet.fixedTrialDuration'));",
+    );
+    expect(PAYWALL_CODE).toContain(
+      "const purchaseLabel = presentedTrialDuration\n    ? t('paywall.sheet.startTrial', { duration: presentedTrialDuration })\n    : t('actions.continue');",
+    );
+    expect(PAYWALL_CODE).not.toMatch(/label="[^"]*[Cc]ontinuar/);
     expect(leaf(PT, 'actions.continue')).toBe('Continuar');
     expect(leaf(EN, 'actions.continue')).toBe('Continue');
     expect(leaf(ES, 'actions.continue')).toBe('Continuar');
+    for (const root of [PT, EN, ES]) {
+      expect(typeof leaf(root, 'paywall.sheet.startTrial')).toBe('string');
+    }
   });
 
-  it('the CTA container sits right after the promo/notices block (no large forced empty space above it)', () => {
-    const idx = PAYWALL_CODE.indexOf("<View style={{ marginTop: 'auto', paddingTop: 14 }}>");
-    expect(idx).toBeGreaterThan(-1);
+  it('the "free today" sub-label appears only for a Store-confirmed zero introductory price', () => {
+    expect(PAYWALL_CODE).toContain(
+      "const zeroCostTodayString = selectedIntroPresentation?.kind === 'free_trial'\n    && selectedIntroPresentation.terms.introductoryPrice === 0\n    ? selectedIntroPresentation.terms.introductoryPriceString\n    : null;",
+    );
+    expect(PAYWALL_CODE).toContain(
+      "t('paywall.sheet.startTrialToday', { price: zeroCostTodayString })",
+    );
+  });
+
+  it('the CTA sits inside the sheet content with no forced empty space above it', () => {
+    expect(PAYWALL_CODE).not.toContain("marginTop: 'auto'");
   });
 });
 
-describe('Paywall redesign — restore moved to a discreet header action, same handleRestore', () => {
-  it('PaywallHeader receives onRestore/isRestoring wired to the same handleRestore/restoreState used everywhere else', () => {
+describe('Paywall redesign — restore is a footer link action, same handleRestore', () => {
+  it('LegalLinks receives onRestore/isRestoring wired to the same handleRestore/restoreState used everywhere else', () => {
     expect(PAYWALL_CODE).toContain('onRestore={handleRestore}');
     expect(PAYWALL_CODE).toContain('isRestoring={isRestoring}');
   });
 
-  it('no standalone large "restore purchases" CtaButton remains — restore is header-only now', () => {
+  it('no standalone large "restore purchases" button remains', () => {
     expect(PAYWALL_CODE).not.toContain('function RestoreButton(');
     expect(PAYWALL_CODE).not.toMatch(/<CtaButton ghost onPress=\{onPress\}/);
   });
 
-  it('the header restore control is i18n-driven and carries an accessibility label', () => {
-    expect(PAYWALL_CODE).toContain("t('paywall.header.restore')");
-    expect(PAYWALL_CODE).toContain("t('paywall.header.restoreAccessibilityLabel')");
+  it('the restore control is i18n-driven, carries an accessibility label, and lives in the link row', () => {
+    const start = PAYWALL_CODE.indexOf('function LegalLinks({');
+    const end = PAYWALL_CODE.indexOf('\nfunction ', start + 10);
+    const body = PAYWALL_CODE.slice(start, end === -1 ? undefined : end);
+    expect(body).toContain("tCommon('paywall.header.restore')");
+    expect(body).toContain("accessibilityLabel={tCommon('paywall.header.restoreAccessibilityLabel')}");
     for (const root of [PT, EN, ES]) {
       expect(typeof leaf(root, 'paywall.header.restore')).toBe('string');
       expect(leaf(root, 'paywall.header.restore')).not.toBe('');
       expect(typeof leaf(root, 'paywall.header.restoreAccessibilityLabel')).toBe('string');
     }
+  });
+
+  it('the close affordance is available from the first frame — never revealed on a timer', () => {
+    // On the root Paywall this control is the logout path. The prototype
+    // fades it in after two seconds; hiding the only exit, even briefly, is
+    // a trap, so the delay is deliberately not reproduced.
+    const start = PAYWALL_CODE.indexOf('function PaywallHeader({');
+    const end = PAYWALL_CODE.indexOf('\nfunction ', start + 10);
+    const body = PAYWALL_CODE.slice(start, end);
+    expect(body).toContain('accessibilityLabel={closeAccessibilityLabel}');
+    expect(body).toContain('onPress={onClose}');
+    expect(body).not.toContain('setTimeout');
+    expect(body).not.toContain('useEffect');
   });
 });
 
@@ -220,12 +344,44 @@ describe('Paywall redesign — trial information remains driven by real Store el
     expect(body).not.toContain('promoState');
   });
 
-  it('the hero headline is fixed to the plan-ready message and never replaced by trial duration', () => {
-    const start = PAYWALL_CODE.indexOf('function PaywallHeroVisual({');
-    const end = PAYWALL_CODE.indexOf('\nfunction ', start + 10);
-    const body = PAYWALL_CODE.slice(start, end);
-    expect(body).toContain("t('paywall.hero.title')");
-    expect(body).not.toContain("t('paywall.trial.title'");
+  it('the headline takes the two-part design form only off presentedTrialDuration, and Android keeps its hedged sentence whole', () => {
+    // The approved design draws the headline in two parts — the trial phrase
+    // in accent, the promise after it. The accent part is built from
+    // `presentedTrialDuration` and nothing else.
+    //
+    // The guarantee that matters here is Android's: Google Play decides
+    // eligibility per account, so its reviewed sentence carries a mandatory
+    // "até/up to …*" hedge, and a two-part headline would have split or
+    // reworded that hedge away. The explicit `android_possible` exclusion
+    // below is what keeps that sentence whole in `headlineTail`, where
+    // `TrialHeroTitle` accents the localized "free" word inside it.
+    expect(PAYWALL_CODE).toContain(
+      "const headlineAccent =\n    presentedTrialDuration && trialHighlight?.kind !== 'android_possible'\n      ? t('paywall.sheet.trialHeadline', { duration: presentedTrialDuration })\n      : null;",
+    );
+    expect(PAYWALL_CODE).toContain(
+      "const headlineTail = headlineAccent\n    ? t('paywall.sheet.trialHeadlineTail')\n    : trialHeroTitle ?? t('paywall.hero.title');",
+    );
+    expect(PAYWALL_CODE).toContain('const trialHeroTitle = trialHighlight');
+    expect(PAYWALL_CODE).toContain("t('paywall.trial.confirmedTitle'");
+    expect(PAYWALL_CODE).toContain("t('paywall.trial.androidConditionalTitle'");
+    expect(PAYWALL_CODE).toContain("t('paywall.trial.androidConditionalTitleGeneric')");
+    // The accent phrase itself still never states a duration of its own.
+    for (const root of [PT, EN, ES]) {
+      expect(String(leaf(root, 'paywall.sheet.trialHeadline'))).toContain('{{duration}}');
+    }
+  });
+
+  it('the fixed trial duration is copy, and Android can never reach it', () => {
+    // The fallback that makes the design's headline visible without a
+    // Store-confirmed offer. Fixed by instruction (2026-10-17): the AJ Fit
+    // trial is a fixed 7 days. It is a translatable string, not a literal in
+    // the screen, and the `Platform.OS === 'android'` guard is the whole
+    // reason Google Play's eligibility rules are still respected.
+    expect(PAYWALL_CODE).toContain("Platform.OS === 'android' ? null : t('paywall.sheet.fixedTrialDuration')");
+    expect(PAYWALL_CODE).not.toMatch(/['"]7\s*(dias|days|días)['"]/i);
+    for (const root of [PT, EN, ES]) {
+      expect(String(leaf(root, 'paywall.sheet.fixedTrialDuration'))).toMatch(/7/);
+    }
   });
 
   it("Android's non-committal 'possible' status still never claims a guaranteed trial", () => {
@@ -258,12 +414,10 @@ describe('Paywall redesign — trial information remains driven by real Store el
     expect(PAYWALL_CODE).not.toMatch(/duration:\s*\{\s*count:\s*7/);
   });
 
-  it('places trial copy directly under the hero headline in the same display font at a smaller size', () => {
-    const start = PAYWALL_CODE.indexOf('function PaywallHeroVisual({');
+  it('keeps the accent emphasis on the localized free word in the headline', () => {
+    const start = PAYWALL_CODE.indexOf('function PaywallHeadline({');
     const end = PAYWALL_CODE.indexOf('\nfunction ', start + 10);
     const body = PAYWALL_CODE.slice(start, end);
-    expect(body).toContain('<Display size={30}');
-    expect(body).toContain('<Display size={18}');
     expect(body).toContain('<TrialHeroTitle');
     expect(PAYWALL_CODE).not.toContain('function TrialHighlight(');
     expect(leaf(PT, 'paywall.trial.confirmedTitle')).toBe(
@@ -287,12 +441,55 @@ describe('Paywall redesign — trial information remains driven by real Store el
     expect(PAYWALL_CODE).not.toContain("t('paywall.trial.body'");
     expect(PAYWALL_CODE).not.toContain("t('paywall.trial.androidBody'");
   });
+
+  it('the reassurance card carries the design copy through i18n, never a literal in the screen', () => {
+    // The design's card, drawn as designed (hairline border, filled accent
+    // check, bold lead clause) and carrying the design's own words. The
+    // product owner approved that copy as fixed (2026-10-17): the cancel
+    // terms do not vary with the store's answer, so the card is not gated
+    // on one.
+    //
+    // What stays enforced is that the promise is COPY, reviewable and
+    // translatable in the resource files, rather than a string typed into a
+    // render tree where no copy review would ever see it.
+    expect(PAYWALL_CODE).toContain(
+      'function AssuranceCard({ lead, text }: { lead: string; text: string })',
+    );
+    expect(PAYWALL_CODE).toContain("lead={t('paywall.sheet.assuranceLead')}");
+    expect(PAYWALL_CODE).toContain("text={t('paywall.sheet.assuranceBody')}");
+    expect(PAYWALL_CODE.match(/<AssuranceCard\b/g)?.length).toBe(1);
+    expect(PAYWALL_CODE).not.toMatch(/risco zero|risk free|riesgo cero/i);
+    expect(PAYWALL_CODE).not.toMatch(/2\s*toques|2\s*taps/i);
+    for (const root of [PT, EN, ES]) {
+      expect(String(leaf(root, 'paywall.sheet.assuranceLead')).length).toBeGreaterThan(0);
+      expect(String(leaf(root, 'paywall.sheet.assuranceBody')).length).toBeGreaterThan(20);
+    }
+    // Still no first-charge date, because none is computed today.
+    expect(PAYWALL_CODE).not.toMatch(/firstChargeDate|primeira cobran[çc]a em/i);
+  });
+
+  it('the fixed commercial figures live in i18n only — no money or percentage literal in the screen', () => {
+    // The fixed savings figure and the fixed "free today" line are copy, for
+    // the same reason as above: a price typed into JSX is invisible to copy
+    // review and to translation, and it is the thing that goes stale.
+    expect(PAYWALL_CODE).toContain("t('paywall.sheet.annualSavings')");
+    expect(PAYWALL_CODE).toContain("t('paywall.sheet.fixedZeroToday')");
+    expect(PAYWALL_CODE).not.toMatch(/R\$\s?\d/);
+    expect(PAYWALL_CODE).not.toMatch(/\d+%/);
+    for (const root of [PT, EN, ES]) {
+      expect(String(leaf(root, 'paywall.sheet.annualSavings'))).toMatch(/\d/);
+      expect(String(leaf(root, 'paywall.sheet.fixedZeroToday'))).toMatch(/0/);
+      expect(String(leaf(root, 'paywall.sheet.monthlySupporting')).length).toBeGreaterThan(0);
+      expect(String(leaf(root, 'paywall.sheet.annualSupporting'))).toContain('{{price}}');
+    }
+  });
 });
 
 describe('Paywall redesign — legal disclosure and links', () => {
   it('renders a renewal/auto-charge disclosure and keeps the privacy/terms links reachable', () => {
     expect(PAYWALL_CODE).toContain("t('paywall.legal.renewalDisclosure')");
-    expect(PAYWALL_CODE).toContain('<LegalLinks onOpen={setLegalDocument} />');
+    expect(PAYWALL_CODE).toContain('<LegalLinks');
+    expect(PAYWALL_CODE).toContain('onOpen={setLegalDocument}');
     for (const root of [PT, EN, ES]) {
       const disclosure = String(leaf(root, 'paywall.legal.renewalDisclosure'));
       expect(disclosure.length).toBeGreaterThan(20);
@@ -319,9 +516,7 @@ describe('Paywall redesign — i18n coverage for new copy, no new hardcoded stri
   const NEW_KEYS = [
     'paywall.header.restore',
     'paywall.header.restoreAccessibilityLabel',
-    'paywall.hero.eyebrow',
     'paywall.hero.title',
-    'paywall.hero.imageAccessibilityLabel',
     'paywall.trial.title',
     'paywall.trial.subtitle',
     'paywall.trial.checking',
@@ -340,6 +535,28 @@ describe('Paywall redesign — i18n coverage for new copy, no new hardcoded stri
     'paywall.plans.cadence.annual',
     'paywall.legal.renewalDisclosure',
     'paywall.legal.androidTrialDisclosure',
+    'paywall.sheet.subtitle',
+    'paywall.sheet.afterTrialLabel',
+    'paywall.sheet.startTrial',
+    'paywall.sheet.startTrialToday',
+    'paywall.sheet.trialHeadline',
+    'paywall.sheet.trialHeadlineTail',
+    'paywall.sheet.perMonthSuffix',
+    'paywall.plans.annualDiscountBadge',
+    'paywall.sheet.fixedTrialDuration',
+    'paywall.sheet.fixedZeroToday',
+    'paywall.sheet.annualSupporting',
+    'paywall.sheet.annualSavings',
+    'paywall.sheet.monthlySupporting',
+    'paywall.sheet.assuranceLead',
+    'paywall.sheet.assuranceBody',
+    'paywall.promo.appliedCode',
+    'paywall.aj.intro',
+    'paywall.aj.introWithName',
+    'paywall.aj.introTrial',
+    'paywall.aj.couponApplied',
+    'paywall.aj.activating',
+    'paywall.aj.activatingTrial',
   ];
 
   it.each(NEW_KEYS)('%s exists as a non-empty string in pt-BR, en and es', (key) => {
@@ -357,21 +574,32 @@ describe('Paywall redesign — i18n coverage for new copy, no new hardcoded stri
     }
   });
 
-  it('the eyebrow/headline no longer hardcode "AJ FIT PREMIUM"/"Escolha seu plano" as bare JSX text', () => {
+  it('the headline never hardcodes "AJ FIT PREMIUM"/"Escolha seu plano" as bare JSX text', () => {
     expect(PAYWALL_CODE).not.toMatch(/>AJ FIT PREMIUM</);
     expect(PAYWALL_CODE).not.toMatch(/>Escolha seu plano</);
-    expect(PAYWALL_CODE).toContain("t('paywall.hero.eyebrow')");
   });
 
   it('entryContext-driven plan intro stays copy-only and goes through i18n', () => {
     expect(PAYWALL_CODE).toContain("entryContext?.origin === 'planCompleted'");
     expect(PAYWALL_CODE).toContain("t('paywall.plans.subtitlePlanCompleted')");
-    expect(PAYWALL_CODE).toContain("t('paywall.plans.subtitleDefault')");
-    expect(PAYWALL_CODE).toContain("t('paywall.plans.selectorPrompt')");
-    expect(leaf(PT, 'paywall.plans.selectorPrompt')).toBe(
-      'Escolha seu plano ideal',
-    );
-    expect(PAYWALL_CODE).toContain('<Display\n              size={17}');
+    expect(PAYWALL_CODE).toContain("t('paywall.sheet.subtitle')");
+    // AJ addresses the user by the funnel-provided name and nothing else.
+    expect(PAYWALL_CODE).toContain('const entryName = entryContext?.name ?? null;');
+    expect(PAYWALL_CODE).toContain("t('paywall.aj.introWithName', { name: entryName })");
+  });
+
+  it('AJ never announces a trial, a coupon benefit or a purchase outcome it cannot source', () => {
+    const start = PAYWALL_CODE.indexOf('const ajLines = ():');
+    const end = PAYWALL_CODE.indexOf('const ajMood =', start);
+    const body = PAYWALL_CODE.slice(start, end);
+    // Trial line gated on the confirmed duration; coupon line on the applied
+    // code; every outcome line is the existing classified message.
+    expect(body).toContain('if (presentedTrialDuration) {');
+    expect(body).toContain("promoApplied && promoState.applied?.code");
+    expect(body).toContain('purchaseState.message');
+    expect(body).toContain('restoreState.message');
+    // A cancelled purchase is silent, exactly as the design specifies.
+    expect(body).toContain("if (purchaseState.kind === 'cancelled') return [];");
   });
 
   it('colors and uppercases only the localized free word with the AJ Fit blue emphasis', () => {
@@ -382,60 +610,41 @@ describe('Paywall redesign — i18n coverage for new copy, no new hardcoded stri
     expect(body).toContain("color: accentColor, textTransform: 'uppercase'");
     expect(PAYWALL_CODE).toContain('accentColor={theme.colors.primaryEmphasis}');
   });
-
 });
 
-describe('Paywall redesign — edge-to-edge static image hero', () => {
-  it('uses the requested bundled paywall assets (no remote image)', () => {
-    expect(PAYWALL_CODE).toContain("require('../../assets/paywall/paywall-asset.webp')");
-    expect(PAYWALL_CODE).not.toContain("require('../../assets/antes-depois/");
+describe('Paywall redesign — AJ replaces the photo hero', () => {
+  it('the screen no longer renders a hero photograph', () => {
+    expect(PAYWALL_CODE).not.toContain('function PaywallHeroVisual(');
+    expect(PAYWALL_CODE).not.toContain('resizeMode="cover"');
     expect(PAYWALL_CODE).not.toMatch(/https?:\/\/.*\.(png|jpe?g|webp)/i);
   });
 
-  it('picks the hero image from the questionnaire sex answer, defaulting to the neutral asset', () => {
-    expect(PAYWALL_CODE).toContain("require('../../assets/paywall/paywall-asset-mas.webp')");
-    expect(PAYWALL_CODE).toContain("require('../../assets/paywall/paywall-asset-fem.webp')");
-    const start = PAYWALL_CODE.indexOf('function resolvePaywallHeroImage(');
-    const end = PAYWALL_CODE.indexOf('\n}', start);
-    const body = PAYWALL_CODE.slice(start, end);
-    expect(body).toContain("sex === 'm'");
-    expect(body).toContain("sex === 'f'");
-    expect(body).toContain('PAYWALL_HERO_IMAGE_DEFAULT');
-    expect(PAYWALL_CODE).toContain('resolvePaywallHeroImage(questionnaire?.answers.sex)');
+  it('AJ occupies that area as a single inline mascot, never inside a Modal', () => {
+    expect(PAYWALL_CODE).toContain('<AjSheetScreenAssistant');
+    expect(PAYWALL_CODE.match(/<AjSheetScreenAssistant\b/g)?.length).toBe(1);
+    expect(PAYWALL_CODE).toContain('<AqSheet');
   });
 
-  it('the imagery is accessible and decorative layers do not intercept touches', () => {
-    expect(PAYWALL_CODE).toContain('accessibilityLabel={t(\'paywall.hero.imageAccessibilityLabel\')}');
-    expect(PAYWALL_CODE).toContain('pointerEvents="none"');
+  it('the sex-resolved hero asset mapping is preserved, so reinstating the photo is a render change only', () => {
+    // Intent carried over verbatim from the superseded composition: the
+    // highlight is resolved by the questionnaire's `sex` answer, with a
+    // neutral fallback, from bundled assets only.
+    expect(HERO_IMAGE_CODE).toContain("sex === 'm'");
+    expect(HERO_IMAGE_CODE).toContain("sex === 'f'");
+    expect(HERO_IMAGE_CODE).toContain('PAYWALL_HERO_IMAGE_DEFAULT');
+    expect(HERO_IMAGE_CODE).toContain("require('../../../assets/paywall/paywall-asset.webp')");
+    expect(HERO_IMAGE_CODE).toContain("require('../../../assets/paywall/paywall-asset-mas.webp')");
+    expect(HERO_IMAGE_CODE).toContain("require('../../../assets/paywall/paywall-asset-fem.webp')");
+    expect(HERO_IMAGE_CODE).not.toMatch(/https?:\/\//);
   });
 
-  it('renders the single image with edge-to-edge cover and no card treatment', () => {
-    const start = PAYWALL_CODE.indexOf('function PaywallHeroVisual()');
-    const resolvedStart = start === -1 ? PAYWALL_CODE.indexOf('function PaywallHeroVisual({') : start;
-    const end = PAYWALL_CODE.indexOf('\nfunction ', resolvedStart + 10);
-    const body = PAYWALL_CODE.slice(resolvedStart, end);
-    expect(body).toContain('source={heroImage}');
-    expect(body).toContain('resizeMode="cover"');
-    expect(body).not.toContain('rotate:');
-    expect(body).not.toContain('borderColor: theme.colors.cardBorder');
-  });
-
-  it('uses a responsive ~32% viewport height clamped for small and large phones', () => {
-    const start = PAYWALL_CODE.indexOf('function PaywallHeroVisual({');
-    const end = PAYWALL_CODE.indexOf('\nfunction ', start + 10);
-    const body = PAYWALL_CODE.slice(start, end);
-    expect(body).toContain('Math.min(310, Math.max(240, height * 0.32))');
-  });
-
-  it('overlays close, restore, eyebrow and headline inside the hero and blends into the screen background', () => {
-    const start = PAYWALL_CODE.indexOf('function PaywallHeroVisual({');
-    const end = PAYWALL_CODE.indexOf('\nfunction ', start + 10);
-    const body = PAYWALL_CODE.slice(start, end);
-    expect(body).toContain('<PaywallHeader');
-    expect(body).toContain('overlay');
-    expect(body).toContain("t('paywall.hero.eyebrow')");
-    expect(body).toContain("t('paywall.hero.title')");
-    expect(body).toContain('theme.colors.background,');
-    expect(body).toContain('locations={[0, 0.28, 0.58, 0.82, 1]}');
+  it('the mascot layer never intercepts touches meant for the sheet', () => {
+    // The screen itself no longer draws any decorative layer — the only thing
+    // floating over the content is AJ, who sits in front of the sheet and
+    // must be transparent to every touch aimed at it.
+    const assistant = stripComments(
+      readFileSync('src/components/aj/AjSheetScreenAssistant.tsx', 'utf8'),
+    );
+    expect(assistant).toContain('pointerEvents="none"');
   });
 });

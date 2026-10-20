@@ -27,12 +27,12 @@ const analyzingScreen = readFileSync(
   'utf8',
 );
 
-/** Slice out only `AnalyzingScreen`'s own function body — `StepPill`/
- *  `StepIndicator`/`renderHighlightedTitle` are separate top-level
- *  components declared afterward and legitimately have their own hooks. */
+/** Slice out only `AnalyzingScreen`'s own function body — `StepPill` and
+ *  `StepIndicator` are separate top-level components declared afterward and
+ *  legitimately have their own hooks. */
 function analyzingScreenBody(source: string): string {
   const start = source.indexOf('export function AnalyzingScreen(');
-  const end = source.indexOf('\n// Splits the title', start);
+  const end = source.indexOf('\n// ── Checklist pieces ──', start);
   if (start === -1 || end === -1) {
     throw new Error('AnalyzingScreen function boundaries not found — update this test if the file was restructured');
   }
@@ -65,8 +65,8 @@ describe('AnalyzingScreen — Rules of Hooks regression guard', () => {
     expect(hookCallsAfter).toEqual([]);
   });
 
-  it('renders the shared circular progress component without reintroducing local pulse hooks', () => {
-    expect(body).toContain('<CircularProgressRing');
+  it('delegates the ring and the mascot to one component instead of local animation hooks', () => {
+    expect(body).toContain('<AnalysisAjRing');
     expect(body).not.toContain('useRef(new Animated.Value(0.75))');
   });
 

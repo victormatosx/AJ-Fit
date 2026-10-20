@@ -96,6 +96,7 @@ export interface WorkoutHomeProjectionSyncOutcome {
   schedule: 'COMPLETED' | 'FAILED';
   week: 'COMPLETED' | 'FAILED';
   frequency: 'COMPLETED' | 'FAILED';
+  streak: 'COMPLETED' | 'FAILED';
 }
 
 export type WorkoutDiscardProjectionSyncOutcome = 'COMPLETED' | 'FAILED';
@@ -146,7 +147,7 @@ export async function runWorkoutDiscardFlow(input: {
 }
 
 /**
- * Refreshes only the three projections that must be coherent before the
+ * Refreshes the four projections that must be coherent before the
  * persistent Home surface becomes visible again. Callers start this after
  * durable completion and may await the same Promise at the success -> Home
  * boundary; it is deliberately independent from lifecycle/evolution work.
@@ -155,16 +156,20 @@ export async function runWorkoutHomeProjectionSync(input: {
   refreshSchedule: () => Promise<unknown>;
   refreshWeek: () => Promise<void>;
   refreshFrequency: () => Promise<void>;
+  /** Resolved value is ignored here; `unknown` lets the caller return the freshly-read streak for its own milestone check. */
+  refreshStreak: () => Promise<unknown>;
 }): Promise<WorkoutHomeProjectionSyncOutcome> {
-  const [schedule, week, frequency] = await Promise.allSettled([
+  const [schedule, week, frequency, streak] = await Promise.allSettled([
     input.refreshSchedule(),
     input.refreshWeek(),
     input.refreshFrequency(),
+    input.refreshStreak(),
   ]);
   return {
     schedule: schedule.status === 'fulfilled' ? 'COMPLETED' : 'FAILED',
     week: week.status === 'fulfilled' ? 'COMPLETED' : 'FAILED',
     frequency: frequency.status === 'fulfilled' ? 'COMPLETED' : 'FAILED',
+    streak: streak.status === 'fulfilled' ? 'COMPLETED' : 'FAILED',
   };
 }
 

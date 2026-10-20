@@ -6,19 +6,20 @@ import { db as defaultDb } from '../lib/firebaseAdmin';
 import { logFunctionError, logInfo } from '../lib/logger';
 import { weekdayOfLocalDate } from '../workoutLifecycle/scheduleEngine/calendar';
 import {
-  scheduleEventDocumentId,
   workoutExecutionDocumentId,
 } from '../workoutLifecycle/scheduleEngine/identities';
 import { canonicalIanaTimezone, localDateInTimezone } from '../workoutLifecycle/scheduleEngine/localDate';
-import { detectMissedSessionGap, resolveWorkoutSchedule } from '../workoutLifecycle/scheduleEngine/resolver';
-import type { PendingMissDecision, ScheduleConfig } from '../workoutLifecycle/scheduleEngine/types';
+import {
+  nonPunitiveWorkoutReminder,
+  resolveFreeSchedule,
+} from '../workoutLifecycle/scheduleEngine/freeScheduleResolver';
+import type { PendingMissDecision } from '../workoutLifecycle/scheduleEngine/types';
 import type { Weekday } from '../workoutLifecycle/scheduleEngine/weekday';
 import {
   prescribedSessionCount,
   resolveEffectiveCalendarAuthority,
 } from '../workoutLifecycle/scheduleEngine/calendarAuthority';
 import {
-  buildMissedWorkoutNotification,
   buildRecoveryDayNotification,
   buildWorkoutDayNotification,
 } from './contentPolicy';
@@ -47,6 +48,11 @@ interface ScheduleStateInput {
   cursorDate: string;
   pendingMissDecision: PendingMissDecision | null;
   lastCompletedAt: string | null;
+  /**
+   * Day of effort. Absent on every state written before the field existed,
+   * which is why `lastCompletedAt` stays the fallback for "trained today".
+   */
+  lastPerformedLocalDate?: string | null;
 }
 
 export interface DailyWorkoutContext {
@@ -61,7 +67,6 @@ export interface DailyWorkoutContext {
   weeklySchedule: WeeklyDay[];
   sessionCount: number;
   scheduleState: ScheduleStateInput | null;
-  resolvedMissScheduledDate: string | null;
 }
 
 export type DailyWorkoutContextLoad = DailyWorkoutContext | {
@@ -204,13 +209,17 @@ function parseScheduleState(data: DocumentData | undefined): ScheduleStateInput 
     cursorDate: data.cursorDate,
     pendingMissDecision,
     lastCompletedAt: data.lastCompletedAt ?? null,
+    lastPerformedLocalDate: data.lastPerformedLocalDate ?? null,
   };
 }
 
 export async function loadDailyWorkoutContext(
   db: Firestore,
   uid: string,
-  instant: Date,
+  // Retained for the `loadContext` interface. Its only consumer was the
+  // missed-session gap lookup, which the new model removed; callers resolve
+  // the local date themselves.
+  _instant: Date,
 ): Promise<DailyWorkoutContextLoad> {
   const userRef = db.collection('users').doc(uid);
   const [user, deletionLock, lifecycle, scheduleConfig] = await Promise.all([
@@ -275,9 +284,6 @@ export async function loadDailyWorkoutContext(
   const trainingDays = weeklySchedule
     .filter((day) => day.state === 'TRAINING')
     .map((day) => day.weekday);
-  const activeRecoveryDays = weeklySchedule
-    .filter((day) => day.state === 'ACTIVE_RECOVERY')
-    .map((day) => day.weekday);
   if ((scheduleMode === 'fixed' && trainingDays.length === 0) || sessionCount === 0) {
     return { status: 'SCHEDULE_UNAVAILABLE', timezone };
   }
@@ -285,42 +291,9 @@ export async function loadDailyWorkoutContext(
   const scheduleState = state.exists ? parseScheduleState(state.data()) : null;
   if (state.exists && !scheduleState) return { status: 'SCHEDULE_UNAVAILABLE', timezone };
   const activatedAtLocalDate = localDateInTimezone(instanceData.activatedAt.toDate(), timezone);
-  const todayLocalDate = localDateInTimezone(instant, timezone);
-  const config: ScheduleConfig = {
-    scheduleMode,
-    trainingDays,
-    activeRecoveryDays,
-    timezone,
-    scheduleVersion: 1,
-  };
-  const gap = detectMissedSessionGap({
-    hasActiveProgram: true,
-    sessionCount,
-    scheduleMode,
-    config,
-    state: scheduleState,
-    activatedAtLocalDate,
-    todayLocalDate,
-  });
-  let resolvedMissScheduledDate: string | null = null;
-  if (gap) {
-    const eventId = scheduleEventDocumentId({
-      type: 'MISS_RESOLVED',
-      sessionIndex: gap.missedSessionIndex,
-      scheduledDate: gap.missedScheduledDate,
-      programInstanceId,
-    });
-    const event = await programRef.collection('scheduleEvents').doc(eventId).get();
-    const eventData = event.data();
-    if (
-      event.exists
-      && eventData?.type === 'MISS_RESOLVED'
-      && eventData.programInstanceId === programInstanceId
-      && eventData.sessionIndex === gap.missedSessionIndex
-      && eventData.scheduledDate === gap.missedScheduledDate
-    ) resolvedMissScheduledDate = gap.missedScheduledDate;
-  }
-
+  // The missed-session gap lookup is gone with the concept: nothing is owed,
+  // so there is no gap to detect and no MISS_RESOLVED event to consult. The
+  // historical ledger stays readable and untouched.
   return {
     status: 'READY',
     timezone,
@@ -334,7 +307,6 @@ export async function loadDailyWorkoutContext(
     weeklySchedule,
     sessionCount,
     scheduleState,
-    resolvedMissScheduledDate,
   };
 }
 
@@ -407,61 +379,64 @@ export async function resolveDailyWorkoutCandidate(
   const activeRecoveryDays = context.weeklySchedule
     .filter((day) => day.state === 'ACTIVE_RECOVERY')
     .map((day) => day.weekday);
-  const config: ScheduleConfig = {
-    scheduleMode: 'fixed',
-    trainingDays,
-    activeRecoveryDays,
-    timezone: context.timezone,
-    scheduleVersion: 1,
-  };
-  const input = {
+  // DECISION 2.b — reminders are forward-looking, never punitive.
+  //
+  // `MISSED_WORKOUT` is no longer produced at all: a recommended day the user
+  // did not train is simply a day, and nothing is sent about it afterwards.
+  // `nonPunitiveWorkoutReminder`'s union has no punitive member, so this
+  // cannot regress into one by accident.
+  //
+  // Every SUPPRESSION the preflight relies on is preserved — only two reason
+  // labels change, because they used to be the old resolver's own statuses:
+  //   REST_DAY          -> NOT_A_RECOMMENDED_DAY
+  //   ALREADY_COMPLETED -> ALREADY_TRAINED_TODAY
+  const offered = resolveFreeSchedule({
     hasActiveProgram: true,
     sessionCount: context.sessionCount,
-    config,
     state: context.scheduleState,
-    activatedAtLocalDate: context.activatedAtLocalDate,
+    recommendedWeekdays: trainingDays,
     todayLocalDate: localDate,
-    resolvedMissScheduledDate: context.resolvedMissScheduledDate,
-  };
-  const resolution = resolveWorkoutSchedule(input);
-  const gap = detectMissedSessionGap(input);
-
-  if (resolution.status === 'MISSED_SESSION_DECISION_REQUIRED') {
-    const pending = context.scheduleState?.pendingMissDecision;
-    const missedDate = pending?.missedScheduledDate ?? gap?.missedScheduledDate;
-    if (!missedDate) return { allowed: false, reason: 'MISSED_IDENTITY_UNAVAILABLE' };
-    const plannedSessionIdentity = [
-      context.programInstanceId,
-      missedDate,
-      resolution.missedSessionIndex,
-    ].join(':');
-    return {
-      allowed: true,
-      notificationType: 'MISSED_WORKOUT',
-      build: (locale) => buildMissedWorkoutNotification({ uid, plannedSessionIdentity, locale }),
-    };
-  }
-  if (resolution.status === 'SESSION_READY') {
-    if (!trainingDays.includes(weekdayOfLocalDate(localDate))) {
-      return { allowed: false, reason: 'NO_WORKOUT_TODAY' };
-    }
-    if (await hasFinishedExecution(uid, context, resolution.sessionIndex, localDate)) {
-      return { allowed: false, reason: 'ALREADY_COMPLETED' };
-    }
-    return {
-      allowed: true,
-      notificationType: 'WORKOUT_DAY',
-      build: (locale) => buildWorkoutDayNotification({ uid, localDate, locale }),
-    };
-  }
-  if (resolution.status === 'ACTIVE_RECOVERY_DAY') {
+  });
+  if (offered.status !== 'SESSION_READY') return { allowed: false, reason: offered.status };
+  if (activeRecoveryDays.includes(weekdayOfLocalDate(localDate))) {
     return {
       allowed: true,
       notificationType: 'RECOVERY_DAY',
       build: (locale) => buildRecoveryDayNotification({ uid, localDate, locale }),
     };
   }
-  return { allowed: false, reason: resolution.status };
+  // One credited workout per day: once today is spent there is nothing to
+  // nudge about.
+  //
+  // TWO signals, because neither alone is sufficient:
+  //  - the rotation state's own day of effort (`lastPerformedLocalDate`, with
+  //    `lastCompletedAt` as the pre-field fallback) is the authoritative
+  //    "this user trained today" fact and is already in `context`, so it
+  //    costs no read. It is also what the daily-limit transition guard uses;
+  //  - the deterministic execution probe still covers a completion that
+  //    landed without a rotation write (recovery paths).
+  //
+  // Dropping the first one was a real suppression regression: a user who had
+  // already trained would be nudged anyway.
+  const trainedTodayPerRotation = context.scheduleState !== null
+    && (context.scheduleState.lastPerformedLocalDate === localDate
+      || context.scheduleState.lastCompletedAt === localDate);
+  const creditedToday = trainedTodayPerRotation
+    || await hasFinishedExecution(uid, context, offered.sessionIndex, localDate);
+  const reminder = nonPunitiveWorkoutReminder(resolveFreeSchedule({
+    hasActiveProgram: true,
+    sessionCount: context.sessionCount,
+    state: context.scheduleState,
+    recommendedWeekdays: trainingDays,
+    todayLocalDate: localDate,
+    workoutCreditedToday: creditedToday,
+  }));
+  if (!reminder.send) return { allowed: false, reason: reminder.reason };
+  return {
+    allowed: true,
+    notificationType: 'WORKOUT_DAY',
+    build: (locale) => buildWorkoutDayNotification({ uid, localDate, locale }),
+  };
 }
 
 /** Revalidates a persisted daily workout fact without reapplying the send-hour window. */

@@ -18,6 +18,8 @@ import { buildRecentSlotHistory, evolveCycle } from './prescriptionEngine/prescr
 import { PRESCRIPTION_EVOLUTION_CONFIG } from './prescriptionEngine/prescriptionEvolution/config';
 import { countEarnedIntermediateCycles } from './prescriptionEngine/progressionEngineV2/earnedCycles';
 import { PROGRESSION_V2_CONFIG, resolveProgressionV2Config } from './prescriptionEngine/progressionEngineV2/config';
+import { buildFlexibleWeeklyTargets } from './prescriptionEngine/progressionEngineV2/prescribedOpportunities';
+import { WORKOUT_PILOT_ENROLLMENT_COLLECTION, isWorkoutPilotEnrolled } from './scheduleEngine/workoutPilot';
 import type { TrainingCycle, CurrentTrainingLevel } from './prescriptionEngine/workoutLifecycle/types';
 import type { PrescriptionGenerationVersion } from './prescriptionEngine/workoutPrescription/generationVersion';
 import {
@@ -288,7 +290,7 @@ async function authoritativeEarnedFactWithCycleHistory(
 ): Promise<Record<string, unknown>> {
   const { state, instance, program } = await activeBundle(uid, firestore);
   const root = firestore.collection('users').doc(uid);
-  const [qaMode, scheduleConfigSnapshot, executionsSnapshot, scheduleEventsSnapshot, cyclesSnapshot] = await Promise.all([
+  const [qaMode, scheduleConfigSnapshot, executionsSnapshot, scheduleEventsSnapshot, cyclesSnapshot, pilotEnrolled] = await Promise.all([
     resolveWorkoutLifecycleQaMode(uid, firestore),
     root.collection('workoutProgramState').doc('scheduleConfig').get(),
     root.collection('workoutExecutions').where('programInstanceId', '==', state.activeProgramInstanceId).get(),
@@ -302,6 +304,12 @@ async function authoritativeEarnedFactWithCycleHistory(
         .limit(PROGRESSION_V2_CONFIG.intermediateCyclesForPromotion)
         .get()
       : Promise.resolve(null),
+    // Keyed by the SERVER-AUTHENTICATED uid — nothing the request carries can
+    // influence it. Unreadable always means NOT enrolled, so an outage can
+    // only ever leave an account on the adherence rule it already had.
+    firestore.collection(WORKOUT_PILOT_ENROLLMENT_COLLECTION).doc(uid).get()
+      .then((snapshot) => isWorkoutPilotEnrolled(snapshot.exists ? snapshot.data() : null))
+      .catch(() => false),
   ]);
   const config = resolveProgressionV2Config(progressionPolicyModeFor(qaMode));
   const scheduleConfig = scheduleConfigSnapshot.data() ?? {};
@@ -355,41 +363,63 @@ async function authoritativeEarnedFactWithCycleHistory(
     .filter((event) => event.type === 'COMPLETED' && event.programInstanceId === state.activeProgramInstanceId)
     .map((event) => `${event.scheduledDate}:${event.sessionIndex}`));
   const fulfilled = new Set<string>();
+  /** Fulfilled opportunity key -> the local day the effort actually happened. */
+  const trainedDayByKey = new Map<string, string>();
   for (const execution of executions) {
-    if (scheduleMode === 'fixed' && !opportunityDates.has(execution.scheduledLocalDate)) continue;
+    // PILOT: the recommended-weekday filter is what discards a workout done
+    // on a day the calendar did not name. For an account whose calendar is a
+    // suggestion, that filter is the defect — it scores weekday identity, not
+    // training. Skipped for enrolled accounts; byte-identical for every other.
+    if (scheduleMode === 'fixed' && !pilotEnrolled && !opportunityDates.has(execution.scheduledLocalDate)) continue;
     const session = Array.isArray(program.sessions) ? program.sessions[execution.sessionIndex] : null;
     const key = `${execution.scheduledLocalDate}:${execution.sessionIndex}`;
-    if (completedLedger.has(key) && qualifyingExecution(execution, session, state.activeProgramInstanceId)) fulfilled.add(key);
+    if (completedLedger.has(key) && qualifyingExecution(execution, session, state.activeProgramInstanceId)) {
+      fulfilled.add(key);
+      trainedDayByKey.set(key, typeof execution.performedLocalDate === 'string'
+        ? execution.performedLocalDate
+        : execution.scheduledLocalDate);
+    }
   }
   const prescribedFrequency = Number.isInteger(program.prescribedTrainingFrequency)
     ? program.prescribedTrainingFrequency
     : program.prescribedStructuredDays;
-  const flexibleExpectedByWeek = new Map<string, number>();
-  if (scheduleMode === 'flexible') {
-    const weekdayOffset: Record<string, number> = { MON: 0, TUE: 1, WED: 2, THU: 3, FRI: 4, SAT: 5, SUN: 6 };
-    const activeDaysByWeek = new Map<string, number>();
-    for (const date of countedDates) {
-      const week = addDays(date, -(weekdayOffset[weekday(date)] ?? 0));
-      activeDaysByWeek.set(week, (activeDaysByWeek.get(week) ?? 0) + 1);
-    }
-    for (const [week, activeDays] of activeDaysByWeek) {
-      flexibleExpectedByWeek.set(week, Math.min(prescribedFrequency, activeDays));
-    }
-  }
-  const expected = scheduleMode === 'flexible'
-    ? [...flexibleExpectedByWeek.values()].reduce((sum, count) => sum + count, 0)
+  // One definition of the weekly goal, imported from the same module the
+  // client reads (`src/progressionEngineV2/prescribedOpportunities.ts`,
+  // synced). Replaces the hand-inlined copy this file used to carry, so the
+  // displayed indicator and the EARN decision can no longer drift apart.
+  //
+  // Enrolled accounts use it regardless of `scheduleMode`: the pilot's
+  // premise — any day counts — is the same whether the calendar was authored
+  // as fixed or flexible.
+  const weeklyGoalByWeek = scheduleMode === 'flexible' || pilotEnrolled
+    ? buildFlexibleWeeklyTargets({
+        countedActiveDates: countedDates,
+        prescribedTrainingFrequency: prescribedFrequency,
+      })
+    : null;
+  const expected = weeklyGoalByWeek
+    ? [...weeklyGoalByWeek.values()].reduce((sum, count) => sum + count, 0)
     : opportunityDates.size;
   let fulfilledCount = fulfilled.size;
-  if (scheduleMode === 'flexible') {
+  if (weeklyGoalByWeek) {
     const weekdayOffset: Record<string, number> = { MON: 0, TUE: 1, WED: 2, THU: 3, FRI: 4, SAT: 5, SUN: 6 };
-    const fulfilledByWeek = new Map<string, number>();
+    const mondayOf = (date: string) => addDays(date, -(weekdayOffset[weekday(date)] ?? 0));
+    const countedByWeek = new Map<string, Set<string>>();
     for (const key of fulfilled) {
-      const date = key.slice(0, 10);
-      const week = addDays(date, -(weekdayOffset[weekday(date)] ?? 0));
-      fulfilledByWeek.set(week, (fulfilledByWeek.get(week) ?? 0) + 1);
+      const scheduledDay = key.slice(0, 10);
+      const trainedDay = trainedDayByKey.get(key) ?? scheduledDay;
+      // PILOT counts DISTINCT DAYS, by the day trained — two qualifying
+      // sessions in one day are one day. Legacy flexible keeps counting
+      // `(date, session)` opportunities, keyed on the scheduled day.
+      const week = mondayOf(pilotEnrolled ? trainedDay : scheduledDay);
+      if (!weeklyGoalByWeek.has(week)) continue;
+      const unit = pilotEnrolled ? trainedDay : key;
+      const units = countedByWeek.get(week) ?? new Set<string>();
+      units.add(unit);
+      countedByWeek.set(week, units);
     }
-    fulfilledCount = [...flexibleExpectedByWeek.entries()].reduce(
-      (sum, [week, target]) => sum + Math.min(target, fulfilledByWeek.get(week) ?? 0), 0,
+    fulfilledCount = [...weeklyGoalByWeek.entries()].reduce(
+      (sum, [week, target]) => sum + Math.min(target, countedByWeek.get(week)?.size ?? 0), 0,
     );
   }
   const ratioBp = expected === 0 ? 0 : Math.min(10_000, Math.floor(fulfilledCount * 10_000 / expected));

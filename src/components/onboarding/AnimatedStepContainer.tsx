@@ -1,10 +1,19 @@
 import React, { useEffect, useLayoutEffect, useRef } from 'react';
 import { Animated } from 'react-native';
 import { useReducedMotionPreference } from '../../lib/reducedMotion';
-import { RISE_IN_EASING, RISE_IN_TRANSLATE_Y } from '../ui/RiseIn';
+import { RISE_IN_EASING } from '../ui/RiseIn';
+import { AJ_RISE } from '../aj/ajMomentTiming';
 import type { OnboardingStepId } from '../../onboarding/steps';
 
-const STEP_TRANSITION_DURATION = 320;
+/**
+ * 400ms, matching `AJ_RISE` — the approved design gives every step's content
+ * the same arrival as the blocks inside it, so a step entering and a section
+ * of that step settling are one gesture rather than two speeds. (It was 320ms
+ * before the design landed, chosen for the same reason: responsiveness under
+ * a fast run of taps. 400ms is still comfortably inside that.)
+ */
+const STEP_TRANSITION_DURATION = AJ_RISE.durationMs;
+const STEP_TRANSITION_TRANSLATE_Y = AJ_RISE.translateY;
 
 /**
  * Single, uniform entrance transition for every step in the funnel —
@@ -55,7 +64,7 @@ export function AnimatedStepContainer({
     }
 
     opacity.setValue(0);
-    translateY.setValue(RISE_IN_TRANSLATE_Y);
+    translateY.setValue(STEP_TRANSITION_TRANSLATE_Y);
     animRef.current = Animated.parallel([
       Animated.timing(opacity, {
         toValue: 1,

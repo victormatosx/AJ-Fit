@@ -5,11 +5,12 @@ import { palette } from '../../theme/tokens';
 import { EvoRing } from './EvoRing';
 import { EvoRingCelebration } from './EvoRingCelebration';
 import { useEvoRingCelebration } from './useEvoRingCelebration';
-import { LitFlame } from './LitFlame';
+import { StreakFlame } from './StreakFlame';
 import { CountUp } from './CountUp';
 import { ADHERENCE_EARNED_THRESHOLD_PERCENT, INTERMEDIATE_CYCLES_FOR_ADVANCED } from '../../home/evoRingMetrics';
 import type { EvolutionViewModel } from '../../workoutEvolution/types';
 import type { Streak } from '../../home/streak';
+import type { DailyActivityStreak } from '../../home/dailyActivityStreak';
 
 const evCap = { fontFamily: 'JetBrainsMono_400Regular', fontSize: 10, letterSpacing: 1.6, color: 'rgba(255,255,255,0.38)' } as const;
 const NOOP = () => {};
@@ -34,11 +35,14 @@ function cyclePctFromViewModel(viewModel: EvolutionViewModel): number {
 export function CycleProgressBlock({
   viewModel,
   streak,
+  dailyStreak,
   celebrationRequest = null,
   onCelebrationFinished,
 }: {
   viewModel: EvolutionViewModel;
   streak: Streak | null;
+  /** Daily activity streak (workout OR food entry) — drives the flame and the "Sequência" number. */
+  dailyStreak: DailyActivityStreak | null;
   /** Bumps (new `token`) to play the "evolution reached" ring celebration — set by `AppShell` only after a real `activatePendingEvolution` success, or by the `__DEV__`-only `EvolutionDebugPanel`. `null` outside those triggers. */
   celebrationRequest?: { token: number } | null;
   /** Fires once, when the celebration's full sequence ends — never during the normal (non-celebrating) ring. */
@@ -112,17 +116,20 @@ export function CycleProgressBlock({
       </View>
 
       <View style={{ flex: 1, minWidth: 0 }}>
-        {/* `fixed`-schedule streaks count obligations (days); `flexible`-schedule
-            streaks count consecutive weeks whose weekly goal was met — see
-            `src/home/streak.ts`'s doc comment. Always showing "dias" would
-            misstate a flexible-schedule user's streak (e.g. "3 dias" for a
-            3-WEEK streak), so the unit text follows `streak.unit`. */}
-        <Row last={!intermediate} accessibilityLabel={`${t('evoRing.streakLabel')} ${streak?.current ?? 0} ${t(streak?.unit === 'weeks' ? 'evoRing.streakUnitWeeks' : 'evoRing.streakUnit')}`}>
+        {/* The "Sequência" indicator is the DAILY ACTIVITY streak — consecutive
+            days with a workout or a food entry (`src/home/dailyActivityStreak.ts`).
+            It is always a count of days, so the unit label no longer branches.
+            `streak` (obligations/weeks) is still received for the other
+            schedule-driven metrics and is deliberately NOT used here. */}
+        {/* The unit sits beside a number that is rendered separately, so it
+            has to agree with that number on its own: a streak of one is
+            "1 dia", never "1 dias". */}
+        <Row last={!intermediate} accessibilityLabel={`${t('evoRing.streakLabel')} ${dailyStreak?.current ?? 0} ${t('evoRing.streakUnit', { count: dailyStreak?.current ?? 0 })}`}>
           <Text style={evCap}>{t('evoRing.streakLabel')}</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
-            <LitFlame size={42} lit={(streak?.current ?? 0) > 0} />
-            <CountUp to={streak?.current ?? 0} style={{ fontFamily: 'Anton_400Regular', fontSize: 30, color: '#fff' }} />
-            <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>{t(streak?.unit === 'weeks' ? 'evoRing.streakUnitWeeks' : 'evoRing.streakUnit')}</Text>
+            <StreakFlame days={dailyStreak?.current ?? 0} size={42} />
+            <CountUp to={dailyStreak?.current ?? 0} style={{ fontFamily: 'Anton_400Regular', fontSize: 30, color: '#fff' }} />
+            <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>{t('evoRing.streakUnit', { count: dailyStreak?.current ?? 0 })}</Text>
           </View>
         </Row>
         <Row last={!intermediate} accessibilityLabel={adherencePercent !== null ? `${t('evoRing.adherenceLabel')} ${adherencePercent}%${belowAdherenceThreshold ? t('evoRing.adherenceBelowThreshold') : ''}` : t('evoRing.adherenceLabel')}>

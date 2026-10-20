@@ -66,6 +66,19 @@ function deviceTimezone(): string {
 export type WorkoutExecutionStartError =
   | { code: 'CONFLICT'; active: { executionId: string; sessionIndex: number; scheduledLocalDate: string } }
   | { code: 'LEGACY_PENDING'; executionIds: string[] }
+  /**
+   * Today's single credited workout already exists. Not a failure: it is the
+   * daily limit doing its job, and it has its own friendly copy. Surfaced as
+   * a distinct code because `UNKNOWN` made a correct, expected block read as
+   * a crash.
+   */
+  | { code: 'DAILY_LIMIT' }
+  /**
+   * The deterministic id for this (session, day) is held by a FINISHED
+   * execution and the account is not entitled to a fresh occurrence. Legacy
+   * accounts only — free selection resolves this case by allocating one.
+   */
+  | { code: 'SESSION_ALREADY_FINISHED' }
   | { code: 'UNKNOWN' };
 
 export type WorkoutExecutionStartResult =
@@ -100,6 +113,13 @@ export interface WorkoutExecutionController {
   start: (sessionIndex: number, preparation?: {
     manualSubstitutionContext?: ManualSubstitutionUserContext | null;
     manualSubstitutionContextStatus?: 'loading' | 'ready' | 'error';
+    /**
+     * `scheduleState.suggestionVersion` as the caller saw it. Recorded on the
+     * execution so a finalize landing after a NEWER intentional selection
+     * leaves that newer intent standing — the completion is still recorded in
+     * full, only the suggestion defers (see `sessionSuggestion.ts`).
+     */
+    startedFromSuggestionVersion?: number;
   }) => Promise<WorkoutExecutionStartResult>;
   /** Starts only the resolver-provided next fixed opportunity when it is exactly tomorrow. */
   startAdvanced: (resolution: ScheduleResolution) => Promise<WorkoutExecutionStartResult>;
@@ -242,6 +262,7 @@ export function useWorkoutExecution(
     preparation?: {
       manualSubstitutionContext?: ManualSubstitutionUserContext | null;
       manualSubstitutionContextStatus?: 'loading' | 'ready' | 'error';
+      startedFromSuggestionVersion?: number;
     };
   }): Promise<WorkoutExecutionStartResult> => {
     const unknownError = { execution: null, error: { code: 'UNKNOWN' as const } };
@@ -296,6 +317,9 @@ export function useWorkoutExecution(
           sessionIndex,
           scheduledLocalDate,
           performedLocalDate,
+          ...(Number.isInteger(preparation?.startedFromSuggestionVersion)
+            ? { startedFromSuggestionVersion: preparation!.startedFromSuggestionVersion }
+            : {}),
           preparation: {
             legacyInProgressExecutionIds,
             permanentPreferences,
@@ -347,11 +371,19 @@ export function useWorkoutExecution(
         });
         setExecution(null);
         pendingStartedAtMsRef.current = null;
+        // The service signals these two by message because they are domain
+        // outcomes, not transport failures; mapping them here is what keeps a
+        // legitimate daily-limit block from being presented as UNKNOWN.
+        const message = error instanceof Error ? error.message : '';
         const startError: WorkoutExecutionStartError = error instanceof WorkoutExecutionConflictError
           ? { code: 'CONFLICT', active: error.active }
           : error instanceof WorkoutExecutionLegacyPendingError
             ? { code: 'LEGACY_PENDING', executionIds: error.executionIds }
-            : { code: 'UNKNOWN' };
+            : message === 'WORKOUT_DAILY_LIMIT_REACHED'
+              ? { code: 'DAILY_LIMIT' }
+              : message === 'SESSION_ALREADY_FINISHED'
+                ? { code: 'SESSION_ALREADY_FINISHED' }
+                : { code: 'UNKNOWN' };
         setStartError(startError);
         return { execution: null, error: startError };
       } finally {
@@ -375,6 +407,7 @@ export function useWorkoutExecution(
   const start = useCallback((sessionIndex: number, preparation?: {
     manualSubstitutionContext?: ManualSubstitutionUserContext | null;
     manualSubstitutionContextStatus?: 'loading' | 'ready' | 'error';
+    startedFromSuggestionVersion?: number;
   }): Promise<WorkoutExecutionStartResult> => {
     const todayLocalDate = localDateInTimezone(new Date(), timezone ?? deviceTimezone());
     return startWithDates({
@@ -694,10 +727,26 @@ export function useWorkoutExecution(
     }
   }, [uid]);
 
+  /**
+   * Start instant of the session in wall-clock millis, or `null`.
+   *
+   * `timestampAuthority` describes the document as a whole, and a successful
+   * finalization deliberately drops it to `LOCAL_UI_PROJECTION` — the status,
+   * completion and cardio fields it just patched in memory really are local
+   * projections. `startedAt` is NOT: it was server-confirmed when the session
+   * started and finalization never touches it. Without the fallback below,
+   * that downgrade sent this to the already-cleared pending ref, so every
+   * successfully finalized workout reported a duration of exactly zero
+   * ("0 MIN" on the summary and on every share poster).
+   *
+   * Order matters: while a START is still unreconciled the pending ref is the
+   * trustworthy value and is tried first, exactly as before. The execution's
+   * own `startedAt` is consulted only when the ref holds nothing.
+   */
   const workoutStartedAtMs = execution
     ? execution.timestampAuthority === 'SERVER'
       ? execution.startedAt.toMillis()
-      : pendingStartedAtMsRef.current
+      : pendingStartedAtMsRef.current ?? execution.startedAt?.toMillis() ?? null
     : pendingStartedAtMsRef.current;
 
   return {

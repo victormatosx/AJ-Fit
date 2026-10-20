@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { Display, MonoLabel } from '../components/ui/Display';
 import { Icon } from '../components/ui/Icon';
+import { CtaButton, CtaText } from '../components/ui/CtaButton';
 import { darkTheme, useTheme } from '../theme';
 import { useAuth } from '../state/AuthContext';
 import { getDisplayFirstName } from '../lib/userName';
@@ -16,15 +17,20 @@ import { resolveSessionDisplayName, type LooseTranslate } from '../workoutPrescr
 import { localDateInTimezone, weekdayOfLocalDate, type ScheduleResolution } from '../scheduleEngine';
 import { completedTodayNextLabel } from './completedTodayNote';
 import { HomeEvoTicker } from '../components/home/HomeEvoTicker';
+import { AjCyclePausedMoment } from '../components/aj/AjCyclePausedMoment';
 import { CycleProgressBlock } from '../components/home/CycleProgressBlock';
 import { PendingEvolutionBanner } from '../components/home/PendingEvolutionBanner';
 import type { EvolutionViewModel } from '../workoutEvolution/types';
 import type { PrescriptionDiffSummary } from '../workoutEvolution/diff';
 import { FrequencyHeatmap } from '../components/home/FrequencyHeatmap';
 import type { FrequencyWindowViewModel } from '../home/frequencyHeatmap';
+import type { WeeklyFrequency } from '../home/weeklyFrequency';
 import type { InitialSectionStatus } from '../home/homeInitialReadiness';
 import type { ActiveRest } from '../lib/restTimer';
 import { WorkoutRestHeaderStatus } from '../components/workout/WorkoutRestHeaderStatus';
+import { CompletedTodayButton, useCompletedTodayEntrance } from '../components/workout/CompletedTodayButton';
+import { AdvanceWorkoutButton } from '../components/workout/AdvanceWorkoutButton';
+import { NextWorkoutRow } from '../components/workout/NextWorkoutRow';
 import { SupportInboxButton } from '../components/support/SupportInboxButton';
 import type { AdvancedWorkoutTarget } from '../scheduleEngine/advanceWorkout';
 import { estimateSessionMinutes } from '../home/sessionDuration';
@@ -56,7 +62,9 @@ export function HomeScreen({
   evolutionDiff = null,
   onOpenEvolution,
   streak = null,
+  dailyStreak = null,
   frequencyWindow,
+  weeklyFrequency,
   frequencyLoading,
   frequencySource = 'AUTHORITATIVE',
   frequencyCanGoNext,
@@ -73,6 +81,7 @@ export function HomeScreen({
   onInitialLayoutCommitted,
   ringCelebrationRequest = null,
   onRingCelebrationFinished,
+  ajMomentsAllowed = false,
 }: {
   prescription: PrescriptionResult;
   /**
@@ -110,10 +119,14 @@ export function HomeScreen({
   /** Real source-vs-target diff for a pending evolution — powers `PendingEvolutionBanner`'s swap-count copy. `null` while no diff has resolved yet. */
   evolutionDiff?: PrescriptionDiffSummary | null;
   onOpenEvolution?: () => void;
-  /** Home-only dedicated streak read (`useHomeStreak`) — `null` until the first successful read. */
+  /** Obligations/weeks streak (`useHomeStreak`) — still feeds schedule-driven metrics. */
   streak?: import('../home/streak').Streak | null;
+  /** Daily activity streak (workout OR food entry) — drives the flame and the ticker. */
+  dailyStreak?: import('../home/dailyActivityStreak').DailyActivityStreak | null;
   /** Real "sua frequência" 30-day window (one block at a time) — `null` only until the very first read ever resolves; the section is simply omitted until then rather than showing a fabricated/empty skeleton. Never goes back to `null` afterward — a newly-selected but not-yet-loaded period keeps showing the previous one (see `frequencyLoading`) so the section's geometry never changes and the surrounding scroll position is never disturbed. */
   frequencyWindow?: FrequencyWindowViewModel | null;
+  /** "Frequência desta semana" — distinct days trained over the weekly goal. */
+  weeklyFrequency?: WeeklyFrequency | null;
   /** True while a newly-selected period's data isn't available yet — `frequencyWindow` is still the previous period. */
   frequencyLoading?: boolean;
   frequencySource?: 'CACHE' | 'CURRENT_SESSION' | 'AUTHORITATIVE';
@@ -134,6 +147,8 @@ export function HomeScreen({
   /** Bumps (new `token`) to play the cycle ring's "evolution reached" celebration, scrolling Home to top first — see `CycleProgressBlock`'s matching prop. */
   ringCelebrationRequest?: { token: number } | null;
   onRingCelebrationFinished?: () => void;
+  /** AppShell's "Home is the surface the user is actually looking at, and nothing else owns the screen" gate — the only thing allowed to let AJ's paused-cycle moment appear uninvited. Home itself never derives this; it cannot see the tab or the other overlays. */
+  ajMomentsAllowed?: boolean;
 }) {
   const { theme } = useTheme();
   const scrollRef = useRef<ScrollView>(null);
@@ -162,7 +177,7 @@ export function HomeScreen({
     if (evolutionViewModel.kind !== 'LOADING' && evolutionViewModel.kind !== 'SUMMARY_READY' &&
         evolutionViewModel.kind !== 'ERROR') recordPerfMark('home_evolution_ready');
   }, [evolutionViewModel]);
-  const { t, i18n } = useTranslation(['home', 'profile']);
+  const { t, i18n } = useTranslation(['home', 'profile', 'treino']);
   const [showMissedPendingInfo, setShowMissedPendingInfo] = useState(false);
   // Popover renders in a full-screen Modal (so a tap anywhere outside it can
   // close it, unclipped by the poster's `overflow: hidden`) — its position is
@@ -215,6 +230,13 @@ export function HomeScreen({
   // `requestStartWorkout`), never automatically here.
   const showMissedPendingNotice = todayActionsReady && !workoutInProgress
     && scheduleResolution?.status === 'MISSED_SESSION_DECISION_REQUIRED';
+  // Same copy Treino's own CTA uses (`TreinoScreen`'s `ctaLabel`) — the two
+  // screens start the very same session, so they must never name it differently.
+  const startCtaLabel = t(workoutInProgress
+    ? 'treino:currentWorkout.continue'
+    : prescription.status === 'SUCCESS'
+      ? 'home:todayCard.start'
+      : 'home:todayCard.review');
   const firstSession = prescription.status === 'SUCCESS'
     ? prescription.plan.sessions[scheduledSessionIndex] ?? prescription.plan.sessions[0]
     : null;
@@ -248,6 +270,22 @@ export function HomeScreen({
     && scheduleResolution?.status === 'REST_DAY'
     && advanceWorkoutTarget != null
     && onAdvanceWorkout != null;
+  // AJ's paused-cycle moment (presentation only). `pausedAtLocalDate` is the
+  // same already-computed pause fact the ring above renders as "pausado" —
+  // never a second miss count. It is only offered when the normal "Iniciar
+  // treino" CTA below is genuinely actionable: today isn't already done/rest,
+  // the actions have settled, and there's a real program to start — so AJ
+  // can never ask "quer treinar hoje?" where tapping yes would do nothing.
+  const cyclePaused = evolutionViewModel.kind !== 'LOADING'
+    && evolutionViewModel.kind !== 'ERROR'
+    && evolutionViewModel.kind !== 'UNAVAILABLE'
+    && evolutionViewModel.summary.pausedAtLocalDate !== null;
+  const canStartNow = todayActionsReady
+    && !workoutInProgress
+    && !isBlockedToday
+    && !showLoadingState
+    && !generating
+    && prescription.status === 'SUCCESS';
   // Session letter ("Treino A/B/C...") mirrors the same convention used by
   // EvolutionUnlockScreen's exercise-swap rows — the session's position in
   // the prescribed rotation, not a stored label.
@@ -275,7 +313,7 @@ export function HomeScreen({
         nextWorkoutDate: completedTodayResolution.nextWorkoutDate,
         todayLocalDate: localDateInTimezone(new Date(), Intl.DateTimeFormat().resolvedOptions().timeZone),
         todayLabel: tLoose('treino:agenda.today'),
-        weekdayLabel: (weekday) => tLoose(`treino:agenda.weekday.${weekday}`),
+        tomorrowLabel: tLoose('treino:agenda.tomorrow'),
         locale: i18n.resolvedLanguage ?? i18n.language,
       })
     : null;
@@ -284,6 +322,13 @@ export function HomeScreen({
       ? tLoose('treino:completed.note', { when: completedNextLabel })
       : tLoose('treino:completed.noteNoNext')
     : null;
+  // Only cross-fade when the card flipped to "done" with Home already on
+  // screen (finishing a session from here) — never when Home opens on an
+  // already-completed day, and never when the skeleton settles into it.
+  const completedTodayEntering = useCompletedTodayEntrance(
+    completedTodayResolution != null,
+    todayActionsReady && !isBlockedToday,
+  );
 
   // Today's real locale-formatted calendar date. There is no fixed
   // week-of-program countdown because the lifecycle has no such fact.
@@ -345,7 +390,7 @@ export function HomeScreen({
           <View style={{ marginTop: 4, marginBottom: 8 }}>
             <HomeEvoTicker
               viewModel={evolutionViewModel}
-              streak={streak}
+              streak={dailyStreak}
               sessionsLast30Days={frequencyWindow?.completedCount ?? null}
             />
           </View>
@@ -354,6 +399,7 @@ export function HomeScreen({
             <CycleProgressBlock
               viewModel={evolutionViewModel}
               streak={streak}
+              dailyStreak={dailyStreak}
               celebrationRequest={ringCelebrationRequest}
               onCelebrationFinished={onRingCelebrationFinished}
             />
@@ -469,168 +515,41 @@ export function HomeScreen({
               <View style={{ alignSelf: 'stretch', height: 54, marginTop: 24, borderRadius: 16, backgroundColor: TODAY_WORKOUT_THEME.colors.surfaceMuted }} />
             ) : isBlockedToday ? (
               completedTodayResolution ? (
-                <View style={{ alignSelf: 'stretch' }}>
-                  {/* Blocked, never actionable: `disabled` (not just a muted
-                      look) is what guarantees no second session can be
-                      started today from here — the Schedule Engine's own
-                      resolution is the real block. */}
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityState={{ disabled: true }}
-                    disabled
-                    style={{
-                      alignSelf: 'stretch',
-                      marginTop: 24,
-                      paddingVertical: 17,
-                      borderRadius: 18,
-                      backgroundColor: TODAY_WORKOUT_THEME.colors.surfacePressed,
-                      borderWidth: 1,
-                      borderColor: TODAY_WORKOUT_THEME.colors.dividerStrong,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 9,
-                    }}
-                  >
-                    <Icon name="check" size={15} color={TODAY_WORKOUT_THEME.colors.primaryEmphasis} stroke={2.6} />
-                    <Text
-                      numberOfLines={1}
-                      style={{
-                        flexShrink: 1,
-                        fontFamily: theme.fonts.uiSemi,
-                        fontSize: 16,
-                        color: TODAY_WORKOUT_THEME.colors.textSubtle,
-                      }}
-                    >
-                      {tLoose('treino:completed.button')}
-                    </Text>
-                  </Pressable>
-                  {completedTodayNote && (
-                    <Text
-                      style={{
-                        marginTop: 12,
-                        textAlign: 'center',
-                        fontFamily: theme.fonts.ui,
-                        fontSize: 12.5,
-                        color: TODAY_WORKOUT_THEME.colors.textMuted,
-                      }}
-                    >
-                      {completedTodayNote}
-                    </Text>
-                  )}
-                </View>
+                <CompletedTodayButton
+                  theme={TODAY_WORKOUT_THEME}
+                  label={tLoose('treino:completed.button')}
+                  note={completedTodayNote}
+                  animate={completedTodayEntering}
+                  style={{ alignSelf: 'stretch', marginTop: 20 }}
+                />
               ) : canAdvanceWorkout ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={t('home:schedule.advance.cta', { weekday: advanceWeekday })}
+                <AdvanceWorkoutButton
+                  theme={TODAY_WORKOUT_THEME}
+                  label={t('home:schedule.advance.cta', { weekday: advanceWeekday })}
                   onPress={onAdvanceWorkout}
-                  style={{
-                    alignSelf: 'stretch',
-                    marginTop: 24,
-                    paddingVertical: 18,
-                    borderRadius: 18,
-                    backgroundColor: TODAY_WORKOUT_THEME.colors.primary,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 10,
-                    shadowColor: TODAY_WORKOUT_THEME.colors.primary,
-                    shadowOpacity: 0.45,
-                    shadowRadius: 22,
-                    shadowOffset: { width: 0, height: 8 },
-                    elevation: 10,
-                  }}
-                >
-                  <Icon name="arrow-right" size={15} color={TODAY_WORKOUT_THEME.colors.primaryForeground} />
-                  <Text
-                    numberOfLines={2}
-                    style={{
-                      flexShrink: 1,
-                      fontFamily: theme.fonts.uiBold,
-                      fontSize: 15,
-                      color: TODAY_WORKOUT_THEME.colors.primaryForeground,
-                      textAlign: 'center',
-                    }}
-                  >
-                    {t('home:schedule.advance.cta', { weekday: advanceWeekday })}
-                  </Text>
-                </Pressable>
+                  style={{ alignSelf: 'stretch', marginTop: 24 }}
+                />
               ) : nextWorkoutLine && (
-                <View
-                  style={{
-                    alignSelf: 'stretch',
-                    marginTop: 24,
-                    paddingVertical: 13,
-                    paddingHorizontal: 18,
-                    borderRadius: 16,
-                    borderWidth: 1,
-                    borderColor: TODAY_WORKOUT_THEME.colors.primaryBorderQuiet,
-                    backgroundColor: TODAY_WORKOUT_THEME.colors.surfaceMuted,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 10,
-                  }}
-                >
-                  <Icon name="calendar" size={14} color={TODAY_WORKOUT_THEME.colors.primaryEmphasis} />
-                  <View>
-                    <MonoLabel color={TODAY_WORKOUT_THEME.colors.textFaint}>
-                      {t('home:schedule.nextWorkout.label').toUpperCase()}
-                    </MonoLabel>
-                    <Text
-                      style={{
-                        fontFamily: theme.fonts.uiBold,
-                        fontSize: 13,
-                        color: TODAY_WORKOUT_THEME.colors.textPrimary,
-                        marginTop: 2,
-                      }}
-                    >
-                      {nextWorkoutLine}
-                    </Text>
-                  </View>
-                </View>
+                <NextWorkoutRow
+                  theme={TODAY_WORKOUT_THEME}
+                  label={t('home:schedule.nextWorkout.label')}
+                  value={nextWorkoutLine}
+                  style={{ alignSelf: 'stretch', marginTop: 24 }}
+                />
               )
             ) : (
-              <Pressable
+              <CtaButton
                 onPress={onStart}
-                style={{
-                  alignSelf: 'stretch',
-                  marginTop: 24,
-                  paddingVertical: 18,
-                  paddingHorizontal: workoutInProgress ? 16 : 26,
-                  borderRadius: 18,
-                  backgroundColor: TODAY_WORKOUT_THEME.colors.primary,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 10,
-                  shadowColor: TODAY_WORKOUT_THEME.colors.primary,
-                  shadowOpacity: 0.45,
-                  shadowRadius: 22,
-                  shadowOffset: { width: 0, height: 8 },
-                  elevation: 10,
-                }}
+                style={{ alignSelf: 'stretch', marginTop: 24 }}
+                accessibilityLabel={startCtaLabel}
               >
-                {workoutInProgress ? (
-                  <Icon name="arrow-right" size={15} color={TODAY_WORKOUT_THEME.colors.primaryForeground} />
-                ) : (
-                  <Icon name="play" size={15} color={TODAY_WORKOUT_THEME.colors.primaryForeground} />
-                )}
-                <Text
-                  numberOfLines={1}
-                  style={{
-                    flexShrink: 1,
-                    fontFamily: theme.fonts.uiBold,
-                    fontSize: workoutInProgress ? 13 : 15,
-                    color: TODAY_WORKOUT_THEME.colors.primaryForeground,
-                  }}
-                >
-                  {t(workoutInProgress
-                    ? 'home:activeWorkout.return'
-                    : prescription.status === 'SUCCESS'
-                      ? 'home:todayCard.start'
-                      : 'home:todayCard.review')}
-                </Text>
-              </Pressable>
+                <Icon
+                  name={workoutInProgress ? 'arrow-right' : 'play'}
+                  size={15}
+                  color={TODAY_WORKOUT_THEME.colors.primaryForeground}
+                />
+                <CtaText>{startCtaLabel}</CtaText>
+              </CtaButton>
             )}
           </View>
 
@@ -644,6 +563,7 @@ export function HomeScreen({
                 onNext={onFrequencyNext}
                 source={frequencyWindow ? frequencySource : 'CACHE'}
                 knownThroughLocalDate={frequencyWindow ? undefined : snapshotFrequencyThrough}
+                weeklyFrequency={weeklyFrequency ?? null}
               />
             </View>
           ) : null}
@@ -700,6 +620,16 @@ export function HomeScreen({
           )}
         </Pressable>
       </Modal>
+
+      {/* Presentation only — see AjCyclePausedMoment's doc comment. "Sim"
+          routes straight back into `onStart`, the single real start-workout
+          entry point this card's CTA already uses; nothing here starts,
+          resolves or persists anything itself. */}
+      <AjCyclePausedMoment
+        eligible={cyclePaused && canStartNow}
+        allowed={ajMomentsAllowed}
+        onStartWorkout={onStart}
+      />
 
       {homeInitialDataSettled && !homeInitialVisualReady && onInitialLayoutCommitted ? (
         <View

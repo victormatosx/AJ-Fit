@@ -889,6 +889,23 @@ interface NutritionDiaryItemCommon<TTimestamp> {
   snapshot: NutritionFoodSnapshot;
   loggedAt: TTimestamp;
   revision?: number;
+  /**
+   * Local calendar date (YYYY-MM-DD) this item was CONFIRMED on, resolved
+   * once from the server's own clock in the user's canonical streak timezone
+   * (`users/{uid}/streakSettings/current.timezone`) — never from the diary
+   * date in the document path, which the user chooses freely.
+   *
+   * Written only by `mutateNutritionDiaryV1` on creation, and carried forward
+   * verbatim by edit and move (both spread the stored item), so the day a
+   * food earned for the activity streak can never drift: logging today into
+   * yesterday's diary credits TODAY, and moving the item between meals
+   * tomorrow still credits the original day.
+   *
+   * Absent on every item written before this field existed and on every
+   * legacy (pre-enrollment) client write; readers fall back to
+   * `loggedAt` — see `activityLocalDateForItem`.
+   */
+  activityLocalDate?: string;
 }
 export interface NutritionCatalogLoggedFoodItem<TTimestamp = unknown> extends NutritionDiaryItemCommon<TTimestamp>, NutritionFoodReference {
   source: Exclude<NutritionLoggedFoodSource, 'plan_snapshot'>;

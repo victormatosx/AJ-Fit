@@ -8,13 +8,18 @@ const rules = readFileSync('firestore.rules', 'utf8');
 
 describe('body measurements evolution', () => {
   it('renders the measurement chart below composition with a complete dropdown', () => {
-    expect(view.indexOf('<BodyMeasurementsChart assessments={compositionAssessments} />')).toBeGreaterThan(
+    // The call site gained a `sex` prop for the body map alongside the list;
+    // the wiring this guards is still `compositionAssessments`, below composition.
+    expect(view.indexOf('<BodyMeasurementsChart assessments={compositionAssessments}')).toBeGreaterThan(
       view.indexOf("t('progress.body.composition')"),
     );
     expect(view).toContain('MEASUREMENT_SITE_KEYS.map');
     expect(view).toContain('displayValue: `${formatMeasurement(point.value)} ${displayedUnit.toUpperCase()}`');
     expect(view).toContain("accessibilityHint={t('progress.chartInteractionHint')}");
-    expect(view).toContain("entry.source === 'guided' ? entry.folds[selected] : undefined");
+    // Folds still come from guided assessments only. The series is now built
+    // for every site at once (the list shows each site's own change), so the
+    // lookup key is the loop's `key` rather than the selected site.
+    expect(view).toContain("entry.source === 'guided' ? entry.folds[key] : undefined");
     expect(view).toContain("const displayedUnit = 'mm'");
   });
 

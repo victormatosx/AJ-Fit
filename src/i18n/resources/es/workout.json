@@ -43,7 +43,12 @@
   },
   "startError": {
     "title": "No se pudo iniciar el entrenamiento",
-    "body": "Algo salió mal al iniciar el entrenamiento. Verifica tu conexión e inténtalo de nuevo."
+    "body": "Algo salió mal al iniciar el entrenamiento. Verifica tu conexión e inténtalo de nuevo.",
+    "alreadyFinishedBody": "Esta sesión ya fue completada en esta fecha. Elige otra sesión o inténtalo mañana."
+  },
+  "dailyLimit": {
+    "title": "Entreno de hoy completado",
+    "body": "Ya completaste tu entreno de hoy. ¡Vuelve mañana para el siguiente!"
   },
   "preparing": {
     "kicker": "Sesión segura",
@@ -73,7 +78,11 @@
     "discardConfirmBack": "Volver",
     "discarding": "Descartando…",
     "discardError": "No se pudo descartar. Inténtalo de nuevo.",
-    "dismiss": "Entendido"
+    "dismiss": "Entendido",
+    "aj": {
+      "question": "¿Quieres continuar donde lo dejaste?",
+      "questionNoResume": "¿Qué quieres hacer con él?"
+    }
   },
   "actions": {
     "viewExecution": "Cómo hacer",

@@ -12,6 +12,10 @@ const files = [
     'validateInput'].map((name) => `nutrition/engine/${name}.ts`),
   'nutrition/catalog/math.ts',
   'nutrition/diary/snapshot.ts',
+  // Chama 2.0 — activity provenance + the daily aggregate's arithmetic. Pure,
+  // and shared so the callable that maintains `streakNutritionDays` and the
+  // client that reads it can never disagree about which day a food earned.
+  'nutrition/diary/activity.ts',
   'nutrition/catalog/binding.ts',
   'nutrition/foodLog/search.ts',
   'nutrition/foodLog/qualityAudit.ts',

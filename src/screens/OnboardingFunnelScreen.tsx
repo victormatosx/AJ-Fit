@@ -4,12 +4,17 @@ import { NutritionProfileQuestion } from './nutrition/NutritionProfileScreen';
 import { canContinueProfileStep, isProfileDraftComplete, type ProfileStepId } from '../nutrition/ui/profileSteps';
 import { nutritionDraftAnswers } from '../onboarding/nutritionDraft';
 import { useUnits } from '../state/UnitsContext';
+import {
+  preferenceForUnit,
+  unitForPreference,
+  type DisplayUnit,
+} from '../components/onboarding/unitDisplay';
 import { validateCustomFoodInput } from '../services/nutritionFoods';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useOnboardingFunnel, type OnboardingFunnelMode } from '../onboarding/useOnboardingFunnel';
 import { FUNNEL_QUESTIONS } from '../onboarding/questionDefs';
-import { getNextStepId, MAX_MUSCLE_FOCUS } from '../onboarding/steps';
+import { getNextStepId, getStepSequence, MAX_MUSCLE_FOCUS } from '../onboarding/steps';
 import {
   muscleFocusValuesForVisualGroups,
   visualGroupsForMuscleFocusValues,
@@ -30,6 +35,18 @@ import { MuscleFocusBodyMapPicker } from '../components/onboarding/MuscleFocusBo
 import { isWeeklyScheduleComplete, type WeeklyScheduleValue } from '../onboarding/weeklyScheduleSelection';
 import { DevFunnelNavigator } from '../components/onboarding/DevFunnelNavigator';
 import { AnimatedStepContainer } from '../components/onboarding/AnimatedStepContainer';
+import { AjFunnelStage } from '../components/onboarding/AjFunnelStage';
+import { AjFunnelStepPose } from '../components/onboarding/AjFunnelStepPose';
+import { sectionKeyForStep, shouldReactToStep } from '../components/onboarding/ajFunnelChoreography';
+import {
+  nutritionFunnelQuestion,
+  nutritionOptionKey,
+  NUTRITION_TARGET_WEIGHT_RANGE,
+} from '../components/onboarding/nutritionFunnelQuestions';
+import { AqTextAction } from '../components/ui/AcquisitionControls';
+import { formatWeightInputFromKg } from '../units/weightConversions';
+import { ajReactionLine } from '../components/onboarding/ajReactionLines';
+import type { LooseT } from '../components/onboarding/QuestionRenderer';
 import { useTheme } from '../theme';
 import { OnboardingScreen } from './OnboardingScreen';
 import { SocialProofScreen } from './SocialProofScreen';
@@ -55,10 +72,38 @@ export function OnboardingFunnelScreen({
   onForcedQuestionnaireDone: () => void | Promise<void>;
 }) {
   const { theme } = useTheme();
-  const { t } = useTranslation('quiz');
+  const { t, i18n } = useTranslation('quiz');
   const { t: tn } = useTranslation('nutrition');
+  const tnLoose = tn as unknown as LooseT;
   const { resolvedUnits } = useUnits();
   const [draftError, setDraftError] = useState(false);
+  /**
+   * Which unit the body measurement rulers are *displayed* in.
+   *
+   * Presentation only, and deliberately not persisted: the answers are
+   * stored in cm and kg exactly as before, and the app-wide units
+   * preference (Settings) is not something the questionnaire writes — the
+   * person filling it in is usually not signed in yet. It is seeded from
+   * that preference, which `UnitsProvider` has already resolved against the
+   * device locale, so an en-US phone opens on FT/LB without anyone asking.
+   *
+   * Height and weight are tracked separately (someone may well think in
+   * feet and kilograms), but the two weight steps share one entry so that
+   * picking LB for the current weight carries into the target weight.
+   */
+  const [heightUnit, setHeightUnit] = useState<DisplayUnit>(() =>
+    unitForPreference('height', resolvedUnits));
+  const [weightDisplayUnit, setWeightDisplayUnit] = useState<DisplayUnit>(() =>
+    unitForPreference('weight', resolvedUnits));
+  const measurementUnitFor = (stepId: string): DisplayUnit | null => {
+    if (stepId === 'height') return heightUnit;
+    if (stepId === 'weight' || stepId === 'nutrition_targetWeightKg') return weightDisplayUnit;
+    return null;
+  };
+  const setMeasurementUnit = (stepId: string) => (next: DisplayUnit) => {
+    if (stepId === 'height') setHeightUnit(next);
+    else setWeightDisplayUnit(next);
+  };
   const funnel = useOnboardingFunnel(mode);
   const {
     currentStepId, name, setName, healthIntegrationChoice, setHealthIntegrationChoice,
@@ -161,6 +206,110 @@ export function OnboardingFunnelScreen({
     } catch { setDraftError(true); }
   };
 
+  /**
+   * The mono kicker above a question title. The map lives in
+   * `ajFunnelChoreography`; the funnel resolves it to real copy because it is
+   * the layer that owns the step identity.
+   */
+  // Keys composed from a step id or an answer can't be checked against the
+  // generated key union, which is the same reason `QuestionRenderer` exports
+  // `LooseT`.
+  const tLoose = t as unknown as LooseT;
+
+  const sectionLabelFor = (stepId: typeof currentStepId): string | null => {
+    const key = sectionKeyForStep(stepId);
+    return key ? tLoose(`sections.${key}`) : null;
+  };
+
+  /**
+   * What AJ says back after a key answer. Assembled here, not inside the
+   * question component, because every input it needs is an answer this screen
+   * already holds — and because the only count it uses (how many conditional
+   * health steps became applicable) comes from `getStepSequence`, the real
+   * sequence resolver, rather than from a recount.
+   */
+  const CONDITIONAL_HEALTH_STEP_IDS = [
+    'limits', 'lipedemaScreening', 'dizzinessScreening', 'postSurgicalStatus',
+    'postSurgicalRegion', 'pregnancyWeeks', 'pregnancyCare', 'pregnancyWarningSigns',
+    'postpartumContext', 'postpartumSigns', 'postpartumReturnClearance',
+    'functionalSituations', 'medicalRestrictionDetails',
+  ] as const;
+
+  const reactionLineFor = (stepId: typeof currentStepId): string | null => {
+    const limitLabels = (quiz.limits ?? [])
+      .filter((limit) => limit !== 'none' && limit !== 'other')
+      .map((limit) => tLoose(`limits.options.${limit}`));
+    const allergens = nutritionDraftAnswers(funnel.nutrition).excludedAllergens ?? [];
+    const hasContent = stepId === 'nutrition_excludedAllergens'
+      ? allergens.length > 0
+      : stepId === 'limits'
+        ? limitLabels.length > 0
+        : true;
+    if (!shouldReactToStep(stepId, hasContent)) return null;
+
+    const sequence = getStepSequence(mode, quiz);
+    const applicableHealthStepCount = CONDITIONAL_HEALTH_STEP_IDS
+      .filter((id) => sequence.includes(id)).length;
+
+    return ajReactionLine({
+      stepId,
+      t: tLoose,
+      exists: (key) => i18n.exists(key),
+      name,
+      applicableHealthStepCount,
+      answers: {
+        heightCm: quiz.height,
+        weightKg: quiz.weight,
+        goal: quiz.goal,
+        scheduleMode: quiz.scheduleMode,
+        trainingDayCount: quiz.days,
+        trainingDayLabels: (quiz.trainingDays ?? []).map((day) => tLoose(`trainingDays.options.${day}`)),
+        specialConditions: quiz.specialConditions,
+        limits: quiz.limits,
+        limitLabels,
+        allergens,
+        varietyPreference: nutritionDraftAnswers(funnel.nutrition).varietyPreference,
+        commitment: quiz.commitment,
+      },
+    });
+  };
+
+  /**
+   * The CTA's LABEL reflects what confirming will mean when the answer is
+   * empty; its enabled state is untouched and still comes from
+   * `canContinueQuestion` / `canContinueOverride`. The design asks for this on
+   * the steps where an empty answer is a legitimate choice rather than an
+   * unfinished one — which is why it has to be reachable from the nutrition
+   * branch too, not only from `renderQuestion`.
+   */
+  const emptyAnswerCtaLabel = (): string | undefined => {
+    if (getNextStepId(currentStepId, mode, quiz) === 'analyzing') return t('actions.generatePlan');
+    if (currentStepId === 'muscleFocus' && selectedMuscleGroups.length === 0) {
+      return t('actions.skipMuscleFocus');
+    }
+    const nutritionDraft = nutritionDraftAnswers(funnel.nutrition);
+    if (currentStepId === 'nutrition_excludedAllergens'
+      && (nutritionDraft.excludedAllergens ?? []).length === 0) {
+      return t('actions.noAllergens');
+    }
+    if (currentStepId === 'nutrition_supplements'
+      && (nutritionDraft.supplements ?? []).length === 0) {
+      return t('actions.noSupplements');
+    }
+    // The two catalogue searches are optional: with nothing chosen the CTA
+    // says so. Only the LABEL changes — `canContinueProfileStep` returns true
+    // either way, and the handler is the same.
+    if (currentStepId === 'nutrition_preferredFoodIds') {
+      return (nutritionDraft.preferredFoodIds ?? []).length === 0
+        ? tn('profile.actions.skip') : t('actions.confirm');
+    }
+    if (currentStepId === 'nutrition_excludedFoodIds') {
+      return (nutritionDraft.excludedFoodIds ?? []).length === 0
+        ? tn('profile.actions.skip') : t('actions.confirm');
+    }
+    return t('actions.confirm');
+  };
+
   const renderQuestion = () => {
     let question = FUNNEL_QUESTIONS[currentStepId];
     if (!question) return null;
@@ -172,8 +321,6 @@ export function OnboardingFunnelScreen({
     }
     const isScheduleQuestion = currentStepId === 'days';
     const isMuscleFocusQuestion = currentStepId === 'muscleFocus';
-    const nextId = getNextStepId(currentStepId, mode, quiz);
-    const isLastQuestion = nextId === 'analyzing';
     return (
       <QuestionStepScreen
         // Forces a genuine remount between any two questions — without this,
@@ -192,7 +339,11 @@ export function OnboardingFunnelScreen({
         onBack={canGoBack ? goBack : null}
         stepNumber={progress.current}
         totalSteps={progress.total}
-        ctaLabel={isLastQuestion ? t('actions.generatePlan') : undefined}
+        ctaLabel={emptyAnswerCtaLabel()}
+        sectionLabel={sectionLabelFor(currentStepId)}
+        reactionLine={reactionLineFor(currentStepId)}
+        measurementUnit={measurementUnitFor(currentStepId)}
+        onMeasurementUnitChange={setMeasurementUnit(currentStepId)}
         validateBeforeNext={() => onboardingSafetyBlock(currentStepId, quiz)}
         answerControl={isScheduleQuestion ? (
           <WeeklySchedulePicker value={scheduleValue} onChange={setSchedule} />
@@ -232,32 +383,124 @@ export function OnboardingFunnelScreen({
   if (currentStepId.startsWith('nutrition_') && quiz.goal) {
     const step = currentStepId.slice('nutrition_'.length) as ProfileStepId;
     const draft = nutritionDraftAnswers(funnel.nutrition);
-    const nutritionUnits = funnel.nutrition.targetWeightText ? funnel.nutrition.targetWeightUnits : resolvedUnits;
+    // The target weight has always been stored as text plus the units it was
+    // typed in, so "imperial" is an existing, valid stored form here — the
+    // step's own KG/LB selector simply becomes what decides it, in place of
+    // the app-wide preference. `nutritionDraftAnswers` re-parses using the
+    // units stamped beside the text, so the kilogram value is read back
+    // correctly whichever unit was used to write it.
+    const nutritionUnits = preferenceForUnit(weightDisplayUnit);
+    const setAnswers = (next: Partial<typeof draft>) =>
+      funnel.setNutrition((prev) => ({ ...prev, answers: { ...prev.answers, ...next }, completed: false }));
+
+    // The nutrition block renders through the SAME controls as the training
+    // questions (see `nutritionFunnelQuestions`). Only the two catalogue
+    // searches still need their own composed control.
+    const nutritionQuestion = nutritionFunnelQuestion(step, currentStepId);
+    const subtitleKey = `profile.questions.${step}.subtitle`;
+
+    /**
+     * The target weight is stored as TEXT plus the units it was typed in —
+     * `nutritionDraftAnswers` re-parses that into kilograms and overwrites
+     * whatever `answers.targetWeightKg` holds. So the ruler writes the text,
+     * exactly as the keyboard input it replaces did, and the stored contract
+     * is untouched.
+     */
+    const writeTargetWeight = (kilograms: number) =>
+      funnel.setNutrition((prev) => ({
+        ...prev,
+        targetWeightText: formatWeightInputFromKg(kilograms, nutritionUnits),
+        targetWeightUnits: nutritionUnits,
+        completed: false,
+      }));
+
+    const nutritionValue = (): unknown => {
+      switch (step) {
+        case 'nutritionGoalCategory': return draft.nutritionGoalCategory ?? null;
+        case 'progressionPace': return draft.progressionPace ?? null;
+        case 'nonTrainingActivityLevel': return draft.nonTrainingActivityLevel ?? null;
+        case 'varietyPreference': return draft.varietyPreference ?? null;
+        case 'mealSlots': return draft.mealSlots ?? [];
+        case 'excludedAllergens': return draft.excludedAllergens ?? [];
+        case 'supplements': return draft.supplements ?? [];
+        // A ruler always shows a number. With no target recorded the user's
+        // current weight is the honest starting point — it is where they are,
+        // not an answer, and nothing is written until they confirm.
+        case 'targetWeightKg':
+          return draft.targetWeightKg ?? quiz.weight ?? NUTRITION_TARGET_WEIGHT_RANGE.default;
+        default: return null;
+      }
+    };
+
+    const writeNutritionValue = (value: unknown) => {
+      switch (step) {
+        case 'nutritionGoalCategory': return setAnswers({ nutritionGoalCategory: value as never });
+        case 'progressionPace': return setAnswers({ progressionPace: value as never });
+        case 'nonTrainingActivityLevel': return setAnswers({ nonTrainingActivityLevel: value as never });
+        case 'varietyPreference': return setAnswers({ varietyPreference: value as never });
+        case 'mealSlots': return setAnswers({ mealSlots: value as never });
+        case 'excludedAllergens': return setAnswers({ excludedAllergens: value as never });
+        case 'supplements': return setAnswers({ supplements: value as never });
+        case 'targetWeightKg': return writeTargetWeight(value as number);
+        default: return undefined;
+      }
+    };
+
+    const advance = () => {
+      Keyboard.dismiss();
+      if (step === 'varietyPreference') {
+        if (!isProfileDraftComplete(quiz.goal!, draft)) return;
+        funnel.setNutrition({ ...funnel.nutrition, completed: true });
+      }
+      goNext();
+    };
+
     content = <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <QuestionStepScreen key={currentStepId} question={{ id: currentStepId, kind: 'choice', options: [] }}
-        title={tn(`profile.questions.${step}.title`)} subtitle={null}
-        value={null} onChange={() => {}} onBack={canGoBack ? goBack : null}
+      <QuestionStepScreen key={currentStepId}
+        question={nutritionQuestion ?? { id: currentStepId, kind: 'choice', options: [] }}
+        title={tn(`profile.questions.${step}.title`)}
+        subtitle={tnLoose(subtitleKey, { defaultValue: '' }) || null}
+        value={nutritionQuestion ? nutritionValue() : null}
+        onChange={nutritionQuestion ? writeNutritionValue : () => {}}
+        onBack={canGoBack ? goBack : null}
         stepNumber={progress.current} totalSteps={progress.total}
         canContinueOverride={canContinueProfileStep(step, draft, quiz.goal)}
-        onNext={() => {
-          Keyboard.dismiss();
-          if (step === 'varietyPreference') {
-            if (!isProfileDraftComplete(quiz.goal!, draft)) return;
-            funnel.setNutrition({ ...funnel.nutrition, completed: true });
-          }
-          goNext();
-        }}
-        answerControl={<NutritionProfileQuestion step={step} draft={draft} inputUnits={nutritionUnits} hideTitle currentWeightKg={quiz.weight}
-          targetWeightText={funnel.nutrition.targetWeightText}
-          onTargetWeightText={(targetWeightText) => funnel.setNutrition((prev) => ({ ...prev, targetWeightText, targetWeightUnits: nutritionUnits }))}
-          onChange={(answers) => funnel.setNutrition((prev) => ({ ...prev, answers, completed: false }))}
-          localFoods={funnel.nutrition.customFoods}
-          onCreateLocalFood={async (input) => {
-            validateCustomFoodInput(input);
-            const id = `custom_${randomUUID()}`;
-            funnel.setNutrition((prev) => ({ ...prev, customFoods: [...prev.customFoods, { id, ...input }] }));
-            return id;
-          }} />}
+        sectionLabel={sectionLabelFor(currentStepId)}
+        reactionLine={reactionLineFor(currentStepId)}
+        ctaLabel={emptyAnswerCtaLabel()}
+        optionLabel={(option) => tnLoose(nutritionOptionKey(step, option))}
+        bodyWeightWheel={step === 'targetWeightKg'}
+        measurementUnit={measurementUnitFor(currentStepId)}
+        onMeasurementUnitChange={setMeasurementUnit(currentStepId)}
+        answerFooter={step === 'targetWeightKg' ? (
+          <AqTextAction
+            label={t('actions.skipTargetWeight')}
+            onPress={() => {
+              // Clearing the text is what records "no target" — the same
+              // thing the old skip row did.
+              funnel.setNutrition((prev) => ({ ...prev, targetWeightText: '', completed: false }));
+              advance();
+            }}
+          />
+        ) : undefined}
+        onNext={advance}
+        // The catalogue searches fill the step from the title down, instead
+        // of floating in the middle of it — they are a field plus a growing
+        // list, not a short answer.
+        stretchAnswerControl={!nutritionQuestion}
+        answerControl={nutritionQuestion ? undefined : (
+          <NutritionProfileQuestion step={step} draft={draft} inputUnits={nutritionUnits} hideTitle variant="onboarding" currentWeightKg={quiz.weight}
+            targetWeightText={funnel.nutrition.targetWeightText}
+            onTargetWeightText={(targetWeightText) => funnel.setNutrition((prev) => ({ ...prev, targetWeightText, targetWeightUnits: nutritionUnits }))}
+            onChange={(answers) => funnel.setNutrition((prev) => ({ ...prev, answers, completed: false }))}
+            localFoods={funnel.nutrition.customFoods}
+            onCreateLocalFood={async (input) => {
+              validateCustomFoodInput(input);
+              const id = `custom_${randomUUID()}`;
+              funnel.setNutrition((prev) => ({ ...prev, customFoods: [...prev.customFoods, { id, ...input }] }));
+              return id;
+            }} />
+        )}
       />
     </KeyboardAvoidingView>;
   }
@@ -273,7 +516,13 @@ export function OnboardingFunnelScreen({
       break;
     case 'name':
       content = (
-        <NameStepScreen name={name} onChangeName={setName} progress={progress} onNext={goNext} />
+        <NameStepScreen
+          name={name}
+          onChangeName={setName}
+          progress={progress}
+          onNext={goNext}
+          onBack={canGoBack ? goBack : null}
+        />
       );
       break;
     case 'welcome':
@@ -349,10 +598,18 @@ export function OnboardingFunnelScreen({
       content = renderQuestion();
       break;
     case 'analyzing':
-      content = <AnalyzingScreen name={name} onDone={goNext} onReviewAnswers={goBack} />;
+      content = <AnalyzingScreen onDone={goNext} onReviewAnswers={goBack} />;
       break;
     case 'plan':
-      content = <PlanReadyScreen name={name} onContinue={handlePlanContinue} />;
+      content = (
+        <PlanReadyScreen
+          name={name}
+          onContinue={handlePlanContinue}
+          // Read-only: the Plan panel presents the nutrition answers, it never
+          // writes them back. The draft stays owned by the funnel hook.
+          nutrition={funnel.nutrition}
+        />
+      );
       break;
     case 'healthIntegration':
       content = (
@@ -376,7 +633,17 @@ export function OnboardingFunnelScreen({
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
-      <AnimatedStepContainer stepKey={currentStepId}>{content}</AnimatedStepContainer>
+      {/* The mascot is mounted OUTSIDE `AnimatedStepContainer` on purpose:
+          that container remounts its subtree on every step, and an AJ inside
+          it would be rebuilt 44 times over the funnel, replaying his entrance
+          on each question and making "travel from the previous pose"
+          impossible to express. See `AjFunnelStage`. */}
+      <AjFunnelStage>
+        {/* Outside the remounting container too: the pose declaration for a
+            step must survive that step's own content being rebuilt. */}
+        <AjFunnelStepPose stepId={currentStepId} />
+        <AnimatedStepContainer stepKey={currentStepId}>{content}</AnimatedStepContainer>
+      </AjFunnelStage>
       {draftError ? <Text accessibilityRole="alert" style={{ color: theme.colors.formErrorText }}>{tn('profile.errors.saveFailed')}</Text> : null}
       {__DEV__ && <DevFunnelNavigator currentStepId={currentStepId} onJump={jumpTo} />}
     </View>

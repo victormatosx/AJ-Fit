@@ -44,6 +44,11 @@ describe('FASE 6 — retired Apple Offer Code client path stays absent', () => {
     expect(paywall).toContain('executeIOSPromoPurchase');
     expect(paywall).toContain('await purchase(effectiveRoute.package)');
     expect(paywall).toContain('await purchaseOption(effectiveRoute.option)');
-    expect(paywall).toContain("<CtaText>{t('actions.continue')}</CtaText>");
+    // The purchase button's label is still i18n and still falls back to the
+    // shared continue action. It moved off `CtaText` with the acquisition
+    // redesign (the Paywall no longer uses the app-wide gradient CTA); the
+    // label itself is pinned in `paywallRedesignStructure.test.ts`.
+    expect(paywall).toContain("t('actions.continue')");
+    expect(paywall).toContain('label={purchaseLabel}');
   });
 });

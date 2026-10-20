@@ -197,6 +197,34 @@ export const lightColors = {
   timeline: 'rgba(11,112,249,0.28)',
   hudCorner: '#397FD6',
 
+  // ── Acquisition surfaces (Questionnaire / Plan / Auth / Paywall) ──────────
+  // The approved design is Dark-only. These are the Light counterparts of its
+  // roles: the alpha-on-black speech/label ramp inverts to opaque inks, and
+  // every status hue is darkened until it reads on a light sheet.
+  sheetBackgroundAlt: '#F6F8FC',
+  scheduleDayActive: colors.primary,
+  textSpeech: '#273142',
+  textSpeechSoft: '#374151',
+  textBodySoft: '#3F4A5C',
+  textActionSupport: '#FFFFFF',
+  textLabelFaint: '#5D6676',
+  textLabelQuiet: '#5B6475',
+  textNoteQuiet: '#5B6475',
+  textOptionDescription: '#5B6475',
+  textSubtleStrong: '#4B5565',
+  fieldBorderStrong: '#C8D1DE',
+  fieldErrorBorder: '#C4342B',
+  fieldErrorText: '#A12B22',
+  safetyWarning: '#854A08',
+  safetyCritical: '#B42318',
+  strengthWeak: '#9A4B13',
+  primaryGlowSoft: 'rgba(11,112,249,0.22)',
+  primaryGlowBright: 'rgba(11,112,249,0.30)',
+  radioRing: '#A9B3C2',
+  rulerTickPassed: '#0757B9',
+  rulerTickUpcoming: 'rgba(11,112,249,0.32)',
+  lockedPreviewChip: '#E2EDFF',
+
   // Compatibility aliases mirror the semantic Light roles during migration.
   bg: '#E7E7E7',
   bg2: '#E9EEF6',
@@ -235,6 +263,7 @@ export const lightGradients = {
   sheetAccent: ['rgba(11,112,249,0.18)', 'rgba(11,112,249,0.05)'],
   accentState: ['rgba(11,112,249,0.17)', 'rgba(11,112,249,0.04)'],
   accentSummary: ['rgba(11,112,249,0.14)', 'rgba(11,112,249,0.03)'],
+  stepActive: ['rgba(11,112,249,0.12)', 'rgba(11,112,249,0.03)'],
   subscriptionStatus: [
     'rgba(11,112,249,0.14)',
     'rgba(11,112,249,0.04)',

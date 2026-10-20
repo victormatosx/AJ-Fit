@@ -29,7 +29,6 @@ function context(overrides: Partial<DailyWorkoutContext> = {}): DailyWorkoutCont
     weeklySchedule: week(),
     sessionCount: 1,
     scheduleState: null,
-    resolvedMissScheduledDate: null,
     ...overrides,
   };
 }
@@ -109,7 +108,7 @@ describe('daily workout notification evaluator', () => {
       hasFinishedExecution: vi.fn(async () => true),
     });
     await expect(evaluateDailyWorkoutNotification(UID, dependencies)).resolves.toMatchObject({
-      status: 'SUPPRESSED', reason: 'ALREADY_COMPLETED',
+      status: 'SUPPRESSED', reason: 'ALREADY_TRAINED_TODAY',
     });
     expect(requests).toHaveLength(0);
   });
@@ -124,7 +123,7 @@ describe('daily workout notification evaluator', () => {
       },
     }));
     await expect(evaluateDailyWorkoutNotification(UID, dependencies)).resolves.toMatchObject({
-      status: 'SUPPRESSED', reason: 'TODAY_COMPLETED',
+      status: 'SUPPRESSED', reason: 'ALREADY_TRAINED_TODAY',
     });
     expect(requests).toHaveLength(0);
   });
@@ -143,7 +142,7 @@ describe('daily workout notification evaluator', () => {
       },
     }), { now: () => friday });
     await expect(evaluateDailyWorkoutNotification(UID, dependencies)).resolves.toMatchObject({
-      status: 'SUPPRESSED', reason: 'TODAY_COMPLETED',
+      status: 'SUPPRESSED', reason: 'ALREADY_TRAINED_TODAY',
     });
     expect(requests).toHaveLength(0);
     expect(dependencies.hasFinishedExecution).not.toHaveBeenCalled();
@@ -155,7 +154,7 @@ describe('daily workout notification evaluator', () => {
       activatedAtLocalDate: '2026-09-07',
     }));
     await expect(evaluateDailyWorkoutNotification(UID, dependencies)).resolves.toMatchObject({
-      status: 'SUPPRESSED', reason: 'REST_DAY',
+      status: 'SUPPRESSED', reason: 'NOT_A_RECOMMENDED_DAY',
     });
     expect(requests).toHaveLength(0);
   });
@@ -194,12 +193,16 @@ describe('daily workout notification evaluator', () => {
       },
     }), { now: () => now });
     await expect(evaluateDailyWorkoutNotification(UID, dependencies)).resolves.toMatchObject({
-      status: 'SUPPRESSED', reason: 'REST_DAY',
+      status: 'SUPPRESSED', reason: 'NOT_A_RECOMMENDED_DAY',
     });
     expect(requests).toHaveLength(0);
   });
 
-  it('creates MISSED_WORKOUT only when the canonical resolver exposes an unresolved gap', async () => {
+  // Decision 2.b: a recommended day the user did not train is simply a day.
+  // Nothing is sent about it afterwards — the punitive type is unreachable.
+  // Tuesday IS a recommended day here, so the user gets the FRIENDLY nudge
+  // instead of being told they missed something.
+  it('never creates MISSED_WORKOUT — an elapsed recommended day yields the friendly nudge', async () => {
     const now = Timestamp.fromDate(new Date('2026-09-15T08:30:00.000Z')); // following Tuesday
     const { dependencies, requests } = fixture(context({
       activatedAtLocalDate: '2026-09-01',
@@ -213,12 +216,16 @@ describe('daily workout notification evaluator', () => {
       },
     }), { now: () => now });
     await expect(evaluateDailyWorkoutNotification(UID, dependencies)).resolves.toMatchObject({
-      status: 'DISPATCHED', notificationType: 'MISSED_WORKOUT', localDate: '2026-09-15',
+      status: 'DISPATCHED', notificationType: 'WORKOUT_DAY', localDate: '2026-09-15',
     });
-    expect(requests[0]?.type).toBe('MISSED_WORKOUT');
+    expect(requests[0]?.type).toBe('WORKOUT_DAY');
+    expect(requests.map((request) => request.type)).not.toContain('MISSED_WORKOUT');
   });
 
-  it('gives MISSED_WORKOUT priority over today’s WORKOUT_DAY', async () => {
+  // A legacy `pendingMissDecision` left on the rotation state must not
+  // resurrect the punitive notification, and must not suppress the friendly
+  // one either: it is simply ignored.
+  it('ignores a legacy pending miss decision entirely', async () => {
     const pending = {
       missedSessionIndex: 0,
       calendarSessionIndex: 1,
@@ -234,7 +241,7 @@ describe('daily workout notification evaluator', () => {
       },
     }));
     await evaluateDailyWorkoutNotification(UID, dependencies);
-    expect(requests.map((request) => request.type)).toEqual(['MISSED_WORKOUT']);
+    expect(requests.map((request) => request.type)).toEqual(['WORKOUT_DAY']);
   });
 
   it('persists a device-level outcome without breaking the scheduler', async () => {

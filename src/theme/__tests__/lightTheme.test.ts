@@ -225,22 +225,45 @@ describe('official Light theme', () => {
   it('routes critical CTA contrast through the validated semantic pairs', () => {
     const ctaButton = readFileSync('src/components/ui/CtaButton.tsx', 'utf8');
     const paywall = readFileSync('src/screens/PaywallScreen.tsx', 'utf8');
+    // The Paywall's purchase CTA is the acquisition design's flat accent
+    // button, not the app-wide gradient `CtaButton` (see the rationale at the
+    // top of `AcquisitionControls.tsx`). The guarantee is unchanged — that
+    // CTA's label and fill still come from the validated primary /
+    // primaryForeground pair asserted above — only the component carrying it
+    // moved, so the assertion follows it there.
+    const acquisitionControls = readFileSync(
+      'src/components/ui/AcquisitionControls.tsx',
+      'utf8',
+    );
     const planReady = readFileSync('src/screens/PlanReadyScreen.tsx', 'utf8');
     const home = readFileSync('src/screens/HomeScreen.tsx', 'utf8');
     const workout = readFileSync('src/screens/WorkoutScreen.tsx', 'utf8');
     const treinoTodayBlock = readFileSync('src/components/treino/TreinoTodayBlock.tsx', 'utf8');
+    const advanceWorkoutButton = readFileSync('src/components/workout/AdvanceWorkoutButton.tsx', 'utf8');
 
     expect(ctaButton).toContain('colors={theme.gradients.brand}');
     expect(ctaButton).toContain('color: theme.colors.primaryForeground');
-    expect(paywall).toContain('<CtaButton');
+    expect(paywall).toContain('<AqPrimaryButton');
+    expect(acquisitionControls).toContain('backgroundColor: theme.colors.primary');
+    expect(acquisitionControls).toContain('color: theme.colors.primaryForeground');
     expect(planReady).toContain('backgroundColor: theme.colors.primary');
     expect(planReady).toContain('color: theme.colors.primaryForeground');
-    expect(home).toContain('backgroundColor: TODAY_WORKOUT_THEME.colors.primary');
-    expect(home).toContain('color: TODAY_WORKOUT_THEME.colors.primaryForeground');
+    // Home's filled CTA in the Today card is the shared
+    // `AdvanceWorkoutButton`, which now wears the app-wide gradient
+    // `CtaButton` itself — so its validated pair is the one asserted at the
+    // top of this test, exactly as the Paywall's followed `AqPrimaryButton`.
+    // It is handed a theme by prop so the Today card stays Dark-pinned; that
+    // pin is asserted by the poster test below.
+    expect(home).toContain('<AdvanceWorkoutButton');
+    expect(advanceWorkoutButton).toContain('<CtaButton');
+    expect(advanceWorkoutButton).toContain('<CtaText theme={theme}');
     expect(workout).toContain('backgroundColor: theme.colors.primary');
     expect(workout).toContain('color: theme.colors.primaryForeground');
-    expect(treinoTodayBlock).toContain('backgroundColor: theme.colors.primary');
-    expect(treinoTodayBlock).toContain('color: theme.colors.primaryForeground');
+    // Treino's start CTA is the app-wide gradient `CtaButton` itself, whose
+    // validated pair is asserted at the top of this test — the guarantee
+    // moved into the shared component, it did not go away.
+    expect(treinoTodayBlock).toContain('<CtaButton');
+    expect(treinoTodayBlock).toContain('<CtaText>{ctaLabel}</CtaText>');
   });
 
   it('keeps the theme-aware Treino redesign components free of hardcoded white literals', () => {
@@ -253,7 +276,14 @@ describe('official Light theme', () => {
     const weekStrip = readFileSync('src/components/treino/TreinoWeekStrip.tsx', 'utf8');
     const exerciseList = readFileSync('src/components/treino/TreinoExerciseList.tsx', 'utf8');
     const upcomingList = readFileSync('src/components/treino/TreinoUpcomingList.tsx', 'utf8');
+    // Rendered by the Treino hub too (Home passes it the fixed Dark theme).
+    const completedButton = readFileSync('src/components/workout/CompletedTodayButton.tsx', 'utf8');
+    const advanceButton = readFileSync('src/components/workout/AdvanceWorkoutButton.tsx', 'utf8');
+    const nextWorkoutRow = readFileSync('src/components/workout/NextWorkoutRow.tsx', 'utf8');
 
+    expect(nextWorkoutRow).not.toMatch(WHITE_LITERAL);
+    expect(advanceButton).not.toMatch(WHITE_LITERAL);
+    expect(completedButton).not.toMatch(WHITE_LITERAL);
     expect(todayBlock).not.toMatch(WHITE_LITERAL);
     expect(weekStrip).not.toMatch(WHITE_LITERAL);
     expect(exerciseList).not.toMatch(WHITE_LITERAL);
@@ -269,8 +299,17 @@ describe('official Light theme', () => {
     // app theme — so it stays dark-only in both Light and Dark.
     expect(home).toContain('const TODAY_WORKOUT_THEME = darkTheme;');
     expect(home).toContain('color: TODAY_WORKOUT_THEME.colors.textPrimary');
-    expect(home).toContain('backgroundColor: TODAY_WORKOUT_THEME.colors.primary');
-    expect(home).toContain('color: TODAY_WORKOUT_THEME.colors.primaryForeground');
+    expect(home).toContain('color={TODAY_WORKOUT_THEME.colors.primaryForeground}');
+    // The slot's two shared buttons (`CompletedTodayButton`,
+    // `AdvanceWorkoutButton`) are themed by prop precisely so the card can
+    // hand them the fixed Dark artwork while the Treino hub hands them the
+    // live theme — so the pin has to hold at those call sites too.
+    for (const match of home.matchAll(/<(CompletedTodayButton|AdvanceWorkoutButton|NextWorkoutRow)\b[\s\S]*?\/>/g)) {
+      expect(match[0]).toContain('theme={TODAY_WORKOUT_THEME}');
+    }
+    expect(home).toContain('<CompletedTodayButton');
+    expect(home).toContain('<AdvanceWorkoutButton');
+    expect(home).toContain('<NextWorkoutRow');
   });
 
   it('keeps the Start Workout confirmation on the official Dark artwork in both themes', () => {

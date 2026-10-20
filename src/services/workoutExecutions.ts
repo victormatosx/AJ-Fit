@@ -23,6 +23,8 @@ import { db } from '../lib/firebase';
 import { errorClass, errorCode, logInfo, logWarn } from '../lib/logger';
 import { countFirestoreRead } from '../lib/perf';
 import type { WorkoutProgramSnapshot } from './workoutPrograms';
+import { WORKOUT_DAILY_COMPLETIONS_COLLECTION } from '../scheduleEngine/dailyWorkoutLimit';
+import { loadWorkoutPilotEnrollment } from './workoutPilotEnrollment';
 import {
   authorizeWorkoutLifecycleMutation,
   WORKOUT_LIFECYCLE_AUTHORITY_GRANT_ID,
@@ -351,6 +353,34 @@ export function subscribeToInProgressWorkoutExecutionIds(
  * (offer `abandonWorkoutExecution`) before a new session can start (docs
  * §11/§12). Never auto-picks a winner among multiple legacy executions.
  */
+/**
+ * Has a workout already been credited on `localDate`?
+ *
+ * Reads the authoritative marker `finalizeWorkoutSession` writes inside its
+ * completion transaction (`users/{uid}/workoutDailyCompletions/{localDate}`).
+ * Client-readable by Rules, client-WRITABLE by nobody — so this is a faithful
+ * read of a server fact, never a local opinion about it.
+ */
+export async function hasWorkoutDailyCompletion(uid: string, localDate: string): Promise<boolean> {
+  try {
+    const snapshot = await getDoc(doc(db, USERS, uid, WORKOUT_DAILY_COMPLETIONS_COLLECTION, localDate));
+    return snapshot.exists();
+  } catch (error) {
+    // Fails OPEN, deliberately. This read is a UX pre-check, never the
+    // authority: `finalizeWorkoutSession` re-derives the limit inside its own
+    // transaction and refuses a second credited workout regardless of what
+    // the client believed. The one situation that makes this read fail is the
+    // collection's Rules not being published yet — and failing CLOSED there
+    // would leave the user unable to start any workout at all, which is far
+    // worse than offering a start the backend will refuse.
+    logWarn('workout_execution', 'daily_completion_probe_failed', {
+      errorCode: errorCode(error),
+      errorClass: errorClass(error),
+    });
+    return false;
+  }
+}
+
 export async function startOrResumeWorkoutExecution(input: {
   uid: string;
   program: WorkoutProgramSnapshot;
@@ -358,12 +388,35 @@ export async function startOrResumeWorkoutExecution(input: {
   scheduledLocalDate: string;
   performedLocalDate?: string;
   preparation?: WorkoutExecutionStartPreparation;
+  /**
+   * `scheduleState.suggestionVersion` as the client saw it when this session
+   * was started. Lets `finalizeWorkoutSession` tell a normal completion apart
+   * from one that landed after the user already selected a different session,
+   * and leave the newer selection standing in that case. Omitted by clients
+   * that predate the field, which the backend reads as "current".
+   */
+  startedFromSuggestionVersion?: number;
 }): Promise<PersistedWorkoutExecution> {
   const serviceStartedAtMs = Date.now();
   const { uid, program, sessionIndex, scheduledLocalDate, preparation } = input;
   const performedLocalDate = input.performedLocalDate ?? scheduledLocalDate;
   const session = program.sessions[sessionIndex];
   if (!session) throw new Error('SESSION_INDEX_OUT_OF_RANGE');
+  // One credited workout per day: stop before the user invests a session.
+  // Not the authority — `finalizeWorkoutSession` re-checks inside its own
+  // transaction and Firestore Rules refuse the create — but it turns a
+  // server-side rejection into an immediate, explainable local state.
+  // A restart-after-abandon is unaffected: abandoning never claims the day.
+  // Both reads are issued together so the enrolment lookup costs no extra
+  // latency. `loadWorkoutPilotEnrollment` resolves `false` on any failure, so
+  // an unreadable flag can only ever leave this start on legacy behaviour.
+  const [dailyLimitReached, pilotEnrolled] = await Promise.all([
+    hasWorkoutDailyCompletion(uid, performedLocalDate),
+    loadWorkoutPilotEnrollment(uid),
+  ]);
+  if (dailyLimitReached) {
+    throw new Error('WORKOUT_DAILY_LIMIT_REACHED');
+  }
   const executionScopeId = program.programInstanceId ?? program.programId;
   // `flexible` schedules let the same sessionIndex legitimately recur on the
   // same scheduledLocalDate (agenda-livre multiple-sessions-per-day) — the
@@ -416,6 +469,17 @@ export async function startOrResumeWorkoutExecution(input: {
     // comment. Never omit this; it's the only signal Rules/telemetry have
     // to distinguish this write path from a pre-P0-C client's.
     mutexProtocolVersion: WORKOUT_EXECUTION_MUTEX_PROTOCOL_VERSION,
+    // Only sent when there is a selection to protect (version >= 1). Version 0
+    // means "no intentional selection has ever happened", so there is nothing
+    // a late finalize could override — and omitting the field keeps the
+    // execution's shape identical to what the CURRENTLY PUBLISHED Rules
+    // accept. That is what lets the new client start and finish a workout
+    // before this field's Rules are deployed; `finalizeWorkoutSession` already
+    // treats an absent version as current.
+    ...(Number.isInteger(input.startedFromSuggestionVersion)
+      && (input.startedFromSuggestionVersion as number) > 0
+      ? { startedFromSuggestionVersion: input.startedFromSuggestionVersion }
+      : {}),
     finishedAt: null,
   };
   const pointerFor = (targetExecutionId: string) => ({
@@ -532,7 +596,48 @@ export async function startOrResumeWorkoutExecution(input: {
         // occurrences — without also having to re-locate a specific
         // abandoned non-base doc.)
         if (scheduleMode !== 'flexible') {
-          throw new Error('SESSION_ALREADY_FINISHED');
+          // FREE SELECTION vs. A LEGACY ANTICIPATED EXECUTION.
+          //
+          // The base id is `(instance, sessionIndex, scheduledLocalDate)`, and
+          // under free selection `scheduledLocalDate` is simply TODAY — it is
+          // no longer a calendar opportunity. The old model, though, let a
+          // session be finished AHEAD of its scheduled day ("adiantar
+          // treino"), which produced a terminal document whose
+          // `scheduledLocalDate` is a FUTURE date and whose
+          // `performedLocalDate` is the day of the actual effort. Once that
+          // future date arrives, it is today — and the slot this start needs
+          // is already occupied by an execution performed on a DIFFERENT day.
+          //
+          // Blocking there would break the rule that a workout finished on a
+          // previous day can never stand in the way of a legitimate one
+          // today. So the question is not "is this id taken" but "was this
+          // day's effort already spent":
+          //
+          //  - same `performedLocalDate` -> the day really is claimed by this
+          //    session. Still refused, and with the daily-limit code so the
+          //    user sees the friendly "volte amanhã" state instead of an
+          //    opaque failure. (Normally `hasWorkoutDailyCompletion` above
+          //    catches this first; this is the backstop for completions that
+          //    predate the marker, which the authoritative check inside
+          //    `finalizeWorkoutSession` also covers independently.)
+          //  - different `performedLocalDate` -> a different day's effort is
+          //    merely sitting on the id. A fresh occurrence is allocated
+          //    below, exactly as a `flexible` same-day repeat does: the
+          //    historical document is never touched, read, or rewritten, and
+          //    `_oN` keeps both the execution id and the completion event id
+          //    distinct, so neither history nor idempotency is disturbed.
+          //
+          // Gated on pilot enrolment: for every other account this is
+          // byte-for-byte the published hard stop.
+          const terminalPerformedLocalDate = typeof snapshot.data().performedLocalDate === 'string'
+            ? snapshot.data().performedLocalDate as string
+            // Legacy documents omit the field and are read as if both dates
+            // were equal (see `WorkoutExecution`'s own doc comment).
+            : snapshot.data().scheduledLocalDate as string;
+          if (!pilotEnrolled) throw new Error('SESSION_ALREADY_FINISHED');
+          if (terminalPerformedLocalDate === performedLocalDate) {
+            throw new Error('WORKOUT_DAILY_LIMIT_REACHED');
+          }
         }
         const occurrenceSnapshot = await transaction.get(occurrenceCounterRef);
         // Occurrence 1 is always the base doc itself and is never counted

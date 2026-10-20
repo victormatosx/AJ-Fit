@@ -48,7 +48,6 @@ function workoutContext(overrides: Partial<DailyWorkoutContext> = {}): DailyWork
       pendingMissDecision: null,
       lastCompletedAt: '2026-03-02',
     },
-    resolvedMissScheduledDate: null,
     ...overrides,
   };
 }

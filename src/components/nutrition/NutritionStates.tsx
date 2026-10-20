@@ -1,6 +1,7 @@
 import React from 'react';
 import { Text, View } from 'react-native';
 import { Icon, type IconName } from '../ui/Icon';
+import { CtaButton } from '../ui/CtaButton';
 import { NU, NuButton } from './NuKit';
 
 /** `components.md` §11 — short message, benefit, single CTA. Reused for every "no X yet" surface. */
@@ -26,7 +27,7 @@ export function EmptyNutritionState({
         {body}
       </Text>
       {ctaLabel && onPress ? (
-        <NuButton onPress={onPress} style={{ width: '100%', marginTop: 8 }}>{ctaLabel}</NuButton>
+        <CtaButton onPress={onPress} style={{ width: '100%', marginTop: 8 }}>{ctaLabel}</CtaButton>
       ) : null}
     </View>
   );
@@ -58,7 +59,7 @@ export function NutritionErrorState({
         </Text>
       ) : null}
       {retryLabel && onRetry ? (
-        <NuButton onPress={onRetry} style={{ width: '100%', marginTop: 8 }}>{retryLabel}</NuButton>
+        <CtaButton onPress={onRetry} style={{ width: '100%', marginTop: 8 }}>{retryLabel}</CtaButton>
       ) : null}
       {backLabel && onBack ? (
         <NuButton ghost onPress={onBack} style={{ width: '100%' }}>{backLabel}</NuButton>

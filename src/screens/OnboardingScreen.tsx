@@ -2,7 +2,6 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, {
-  Text as SvgText,
   Defs,
   RadialGradient,
   Stop,
@@ -13,12 +12,21 @@ import { Display, Slash } from '../components/ui/Display';
 import { SegBar } from '../components/ui/SegBar';
 import { CtaButton } from '../components/ui/CtaButton';
 import { Icon } from '../components/ui/Icon';
+import { StepOutlineNumber } from '../components/onboarding/StepOutlineNumber';
+import { PRESENTATION_SLIDE_COUNT } from '../onboarding/steps';
 import { useTheme } from '../theme';
 
 // Fixed step contract — three slides, always in this order. Text comes from
 // `onboarding:slides.stepN.*` via i18n. Renaming a step here breaks its
 // translation lookup — keep in sync with resources/*/onboarding.json.
+// Spelled out rather than generated because the i18n key types need literals.
 const ONBOARD_STEPS = ['step1', 'step2', 'step3'] as const;
+
+// The questionnaire's numbering picks up where these slides leave off, so the
+// two counts must agree. This fails to compile if a slide is added or removed
+// without updating `PRESENTATION_SLIDE_COUNT`.
+const _slideCountMatchesProgressOffset: typeof ONBOARD_STEPS['length'] = PRESENTATION_SLIDE_COUNT;
+void _slideCountMatchesProgressOffset;
 
 export function OnboardingScreen({
   onDone,
@@ -35,7 +43,6 @@ export function OnboardingScreen({
   const stepKey = ONBOARD_STEPS[step];
   const d = useMemo(
     () => ({
-      n: String(step + 1).padStart(2, '0'),
       tag: t(`onboarding:slides.${stepKey}.tag`).toUpperCase(),
       lines: [
         t(`onboarding:slides.${stepKey}.line1`).toUpperCase(),
@@ -46,13 +53,6 @@ export function OnboardingScreen({
     }),
     [step, stepKey, t],
   );
-
-  // Outlined number anchored to the top-right corner — sized so both digits
-  // are visible and only a small slice of the second digit is cropped by
-  // the right edge of the screen.
-  const outlineFontSize = 380;
-  const outlineSvgW = 440;
-  const outlineSvgH = 340;
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background, overflow: 'hidden' }}>
@@ -79,25 +79,7 @@ export function OnboardingScreen({
         </Svg>
       </View>
 
-      <View
-        pointerEvents="none"
-        style={{ position: 'absolute', top: 14, right: -36 }}
-      >
-        <Svg width={outlineSvgW} height={outlineSvgH}>
-          <SvgText
-            x={outlineSvgW}
-            y={outlineSvgH * 0.85}
-            fontFamily={theme.fonts.display}
-            fontSize={outlineFontSize}
-            textAnchor="end"
-            stroke={theme.colors.decorativeOutlineSoft}
-            strokeWidth={1.5}
-            fill="none"
-          >
-            {d.n}
-          </SvgText>
-        </Svg>
-      </View>
+      <StepOutlineNumber value={step + 1} />
 
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         <View

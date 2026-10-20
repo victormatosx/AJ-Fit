@@ -75,9 +75,73 @@ const localFoodLogSearchProvider = createFederatedFoodLogSearchProvider({
  * Also lists the user's own custom foods client-side (bounded, no server
  * text index needed for a small personal list).
  */
+/**
+ * The acquisition design's chrome for the funnel's food steps.
+ *
+ * Local to this file on purpose: the shared `FoodRow`/`SelectableRow`
+ * primitives are used by fourteen nutrition screens outside the funnel, so
+ * restyling them would have redesigned all of those too. These three pieces
+ * carry no state and no handlers — `FoodSearchScreen` passes its own in.
+ */
+function OnboardingSearchField({
+  inputRef, value, placeholder, onChangeText, onClear, clearLabel, onSubmit,
+}: {
+  inputRef: React.RefObject<TextInput | null>;
+  value: string;
+  placeholder: string;
+  onChangeText: (value: string) => void;
+  onClear: () => void;
+  clearLabel: string;
+  onSubmit: () => void;
+}) {
+  const { theme } = useTheme();
+  const [focused, setFocused] = useState(false);
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: focused ? theme.colors.primaryEmphasis : theme.colors.fieldBorderStrong,
+      }}
+    >
+      <Icon name="search" size={18} color={theme.colors.textSubtleStrong} stroke={2} />
+      <TextInput
+        ref={inputRef}
+        value={value}
+        onChangeText={onChangeText}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        accessibilityLabel={placeholder}
+        placeholder={placeholder}
+        placeholderTextColor={theme.colors.inputPlaceholder}
+        selectionColor={theme.colors.primaryEmphasis}
+        autoCorrect={false}
+        returnKeyType="done"
+        onSubmitEditing={onSubmit}
+        style={{
+          flex: 1,
+          paddingVertical: 12,
+          paddingHorizontal: 0,
+          fontFamily: theme.fonts.uiMed,
+          fontSize: 18,
+          color: theme.colors.inputText,
+        }}
+      />
+      {value.length > 0 ? (
+        <Pressable onPress={onClear} accessibilityRole="button" accessibilityLabel={clearLabel} hitSlop={10}>
+          <Icon name="x" size={16} color={theme.colors.textFaint} />
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 export function FoodSearchScreen({
   visible, onClose, onSelect, excludeIds = [], includeRecipes = false, catalog = 'generation', variant = 'profile',
   favoriteFoodIds, recentFoodIds, favoriteRecipeIds, onToggleFavoriteFood, onToggleFavoriteRecipe, overlay, presentation = 'modal', onRequestCreateFood, catalogSearch, localFoods,
+  inlineBelowField,
 }: {
   catalogSearch?: (text: string, options: { cursor?: string }) => Promise<{
     foods: Pick<NutritionFood<Timestamp>, 'id' | 'name' | 'brand' | 'nutritionPer100g' | 'source'>[];
@@ -89,6 +153,13 @@ export function FoodSearchScreen({
   presentation?: 'modal' | 'sheet' | 'inline';
   /** Inline callers own the custom-food overlay outside their page's ScrollView. */
   onRequestCreateFood?: () => void;
+  /**
+   * Rendered between the search field and the results, inline only. The
+   * funnel puts the already-chosen foods there, which is where the approved
+   * design places them; the picker itself still owns neither that list nor
+   * its removal handler.
+   */
+  inlineBelowField?: React.ReactNode;
   onClose: () => void;
   onSelect: (food: NutritionFoodPick) => void;
   excludeIds?: readonly string[];
@@ -102,9 +173,12 @@ export function FoodSearchScreen({
    * `NutritionProfileScreen.tsx`'s preferred/usual/excluded pickers, which
    * are OUTSIDE that redesign's scope and must render exactly as before.
    * `'nutrition'` is the new fixed dark palette, used only by the Diary's
-   * "+ Adicionar alimento" call site. No behavior differs between the two.
+   * "+ Adicionar alimento" call site. `'onboarding'` is the acquisition
+   * design's underlined field and ruled result rows, used only by the funnel's
+   * food steps — the standalone profile wizard keeps `'profile'`. No behavior
+   * differs between any of them.
    */
-  variant?: 'profile' | 'nutrition';
+  variant?: 'profile' | 'nutrition' | 'onboarding';
   /** Heart toggles on each row — omit either pair to render that row type without a heart (e.g. the Profile preferred/usual/excluded pickers). */
   favoriteFoodIds?: readonly string[];
   /** Derived from diary data already subscribed by the shell; never causes a search-path read. */
@@ -381,6 +455,29 @@ export function FoodSearchScreen({
     if (!visible) return null;
     return (
       <View style={{ gap: 10 }}>
+        {/* The ONLY thing the acquisition design changes down here is the
+            field itself. Results, the empty state and the error state are
+            shared with the profile wizard verbatim — they were reverted to
+            exactly that on request, and keeping one branch is what keeps them
+            from drifting apart again. */}
+        {variant === 'onboarding' ? (
+          <OnboardingSearchField
+            inputRef={searchInputRef}
+            value={text}
+            placeholder={t('foodSearch.placeholder')}
+            onChangeText={(value) => {
+              searchRequestRef.current++;
+              setText(value); setResults([]); setCursor(null); setError(false); setLoading(value.trim().length >= 2); setLoadingMore(false);
+            }}
+            onClear={() => {
+              searchRequestRef.current++;
+              setText(''); setResults([]); setCursor(null); setError(false); setLoading(false); setLoadingMore(false);
+              searchInputRef.current?.focus();
+            }}
+            clearLabel={t('foodSearch.clearSearch')}
+            onSubmit={() => runSearch(text)}
+          />
+        ) : (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14,
           minHeight: 52, borderRadius: theme.radii.lg, backgroundColor: theme.colors.inputBackground,
           borderWidth: 1, borderColor: theme.colors.inputBorder }}>
@@ -403,6 +500,8 @@ export function FoodSearchScreen({
             <Icon name="x" size={16} color={theme.colors.textFaint} />
           </Pressable> : null}
         </View>
+        )}
+        {inlineBelowField}
         {text.length > 0 && text.trim().length < 2 ? (
           <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textFaint }}>{t('foodSearch.typeMore')}</Text>
         ) : loading ? (

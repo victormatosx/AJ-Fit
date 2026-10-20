@@ -1,11 +1,6 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, Text, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
-import { darkTheme } from '../../theme';
-import { HudCorners } from '../ui/Card';
-import { Display, Slash } from '../ui/Display';
-import { Icon } from '../ui/Icon';
+import { AjMoment, type AjMomentOption } from '../aj/AjMoment';
 import type { WorkoutSessionRecoveryState } from '../../workoutExecution/useWorkoutSessionRecovery';
 import {
   computeWorkoutElapsedSeconds,
@@ -26,6 +21,14 @@ import {
  * `start()` call, so `startedAt`/progress/logged loads are all preserved
  * exactly as persisted.
  *
+ * Presentation only: the AJ assistant (`AjMoment`) speaks the exact same
+ * body copy this modal always chose and offers the same actions as answers.
+ * Nothing about which actions exist, when they are offered, or what they do
+ * changed — in particular AJ never promises anything the app cannot do (no
+ * "save the sets and don't break the streak": discarding keeps logged sets
+ * in history but doesn't count as completed, which is what
+ * `discardConfirmBody` already says, and nothing freezes the cycle).
+ *
  * Three explicit actions, never conflated:
  * - `onResume` — only ever wired live for `status === 'pending'` with a
  *   matching program; hydrates and never writes to Firestore itself.
@@ -35,13 +38,22 @@ import {
  * - `onDiscard` — the real destructive action (`abandonWorkoutExecution`);
  *   only offered when a real execution doc exists to abandon (`pending` or
  *   `inconsistent`/`EXECUTION_TERMINAL` — the latter is a safe no-op
- *   self-heal of a dangling pointer, never touches the terminal record).
+ *   self-heal of a dangling pointer, never touches the terminal record) and
+ *   still only reached through its own confirmation sub-step.
  *
- * There is deliberately no dismiss action for a real execution. Backdrop
- * taps and Android Back are inert while recovery is unresolved: a pending
- * execution must be continued, finalized, or explicitly discarded. The
- * separate `onAcknowledgeMissing` escape exists only for the defensive
- * EXECUTION_MISSING state, where there is no workout document to act on.
+ * There is deliberately no dismiss action for a real execution:
+ * `dismissible={false}` is what makes backdrop taps and Android Back inert
+ * while recovery is unresolved — a pending execution must be continued,
+ * finalized, or explicitly discarded. The separate `onAcknowledgeMissing`
+ * escape exists only for the defensive EXECUTION_MISSING state, where there
+ * is no workout document to act on.
+ *
+ * How far into the session the user got ("x de y séries") is deliberately
+ * NOT spoken: `execution` carries the raw logged sets, but no shared helper
+ * answers "how many of the prescribed sets count as done" for an
+ * `IN_PROGRESS` execution (`completion` is written only at finalization), and
+ * deriving one here would be a new rule. The session's name and date — the
+ * identity this modal always showed — are spoken instead.
  *
  * Long-session alert: `execution.startedAt` (Firestore) is the ONLY source
  * of truth for how long a session has been open — never a second, locally
@@ -86,7 +98,6 @@ export function WorkoutSessionRecoveryModal({
   /** Defensive escape only for an orphan pointer whose execution document does not exist; never rendered for a pending execution. */
   onAcknowledgeMissing: () => void;
 }) {
-  const theme = darkTheme;
   const { t } = useTranslation('workout');
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
   const visible = state.status === 'pending' || state.status === 'inconsistent';
@@ -125,6 +136,9 @@ export function WorkoutSessionRecoveryModal({
     setConfirmingDiscard(false);
   };
 
+  const resumeOffered = canResume && state.status === 'pending';
+
+  // Unchanged selection logic — only where the string is rendered moved.
   const title = confirmingDiscard
     ? t('sessionRecovery.discardConfirmTitle')
     : executionMissing
@@ -146,239 +160,94 @@ export function WorkoutSessionRecoveryModal({
             ? t('sessionRecovery.longSessionBody', { duration: durationLabel })
             : t('sessionRecovery.body');
 
+  // AJ always ends on a question. In the confirm/orphan sub-steps that
+  // question IS the existing title; in the normal step it depends on whether
+  // continuing is actually one of the answers, so AJ never asks about
+  // resuming a session the program no longer matches.
+  const question = confirmingDiscard || executionMissing
+    ? title
+    : resumeOffered
+      ? t('sessionRecovery.aj.question')
+      : t('sessionRecovery.aj.questionNoResume');
+
+  // Session identity, exactly the line the poster shell showed above the body.
+  const identityLine = !confirmingDiscard && execution && !executionMissing
+    ? `${execution.sessionName} · ${execution.performedLocalDate ?? execution.scheduledLocalDate}`
+    : null;
+
+  const lines = [...(identityLine ? [identityLine] : []), body, question];
+
+  const options: AjMomentOption[] = [];
+  if (confirmingDiscard) {
+    options.push({
+      key: 'discardYes',
+      label: discarding ? t('sessionRecovery.discarding') : t('sessionRecovery.discardConfirmYes'),
+      onPress: onDiscard,
+      loading: discarding,
+      disabled: busy,
+      primary: true,
+    });
+    options.push({
+      key: 'discardBack',
+      label: t('sessionRecovery.discardConfirmBack'),
+      onPress: cancelDiscardConfirm,
+      disabled: busy,
+    });
+  } else if (executionMissing) {
+    options.push({
+      key: 'acknowledgeMissing',
+      label: t('sessionRecovery.dismiss'),
+      onPress: onAcknowledgeMissing,
+      primary: true,
+    });
+  } else {
+    if (resumeOffered) {
+      options.push({
+        key: 'resume',
+        label: resuming ? t('sessionRecovery.resuming') : t('sessionRecovery.resume'),
+        onPress: onResume,
+        loading: resuming,
+        disabled: busy,
+        primary: true,
+      });
+    }
+    if (canFinalize && execution) {
+      options.push({
+        key: 'finish',
+        label: finishing ? t('sessionRecovery.finishing') : t('sessionRecovery.finishNow'),
+        onPress: onFinish,
+        loading: finishing,
+        disabled: busy,
+      });
+    }
+    if (canDiscard) {
+      options.push({
+        key: 'discard',
+        label: t('sessionRecovery.discard'),
+        onPress: requestDiscard,
+        disabled: busy,
+      });
+    }
+  }
+
+  // Both failures can be live at once (a failed finish, then a failed
+  // discard); neither is dropped.
+  const errorText = [
+    finishError ? t('sessionRecovery.finishError') : null,
+    discardError ? t('sessionRecovery.discardError') : null,
+  ].filter(Boolean).join('\n') || null;
+
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={() => undefined} statusBarTranslucent>
-      <View
-        style={{ flex: 1, backgroundColor: theme.colors.overlayStrong, justifyContent: 'center', paddingHorizontal: 34 }}
-      >
-        <View
-          style={{
-            width: '100%',
-            maxWidth: 340,
-            alignSelf: 'center',
-            borderRadius: 16,
-            borderBottomRightRadius: 0,
-            overflow: 'hidden',
-            borderWidth: 1,
-            borderColor: theme.colors.primaryBorderQuiet,
-            backgroundColor: theme.colors.background,
-          }}
-        >
-          <LinearGradient
-            colors={theme.gradients.poster}
-            locations={[0, 0.45, 1]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={{ padding: 18 }}
-          >
-            <HudCorners color={theme.colors.hudCorner} />
-            <Slash accentColor={theme.colors.primaryEmphasis} textColor={theme.colors.textFaint}>
-              {title.toUpperCase()}
-            </Slash>
-            <Display size={20} color={theme.colors.textPrimary} style={{ marginTop: 9 }}>
-              {title.toUpperCase()}
-            </Display>
-            {!confirmingDiscard && execution && !executionMissing && (
-              <Text style={{ color: theme.colors.textFaint, fontFamily: theme.fonts.ui, fontSize: 12, marginTop: 6 }}>
-                {execution.sessionName} · {execution.performedLocalDate ?? execution.scheduledLocalDate}
-              </Text>
-            )}
-            <Text style={{ color: theme.colors.textSecondaryStrong, fontFamily: theme.fonts.ui, fontSize: 13, lineHeight: 19, marginTop: 8 }}>
-              {body}
-            </Text>
-            {finishError && (
-              <Text accessibilityRole="alert" style={{ color: theme.colors.warning, fontFamily: theme.fonts.ui, fontSize: 12, lineHeight: 17, marginTop: 8 }}>
-                {t('sessionRecovery.finishError')}
-              </Text>
-            )}
-            {discardError && (
-              <Text style={{ color: theme.colors.warning, fontFamily: theme.fonts.ui, fontSize: 12, lineHeight: 17, marginTop: 8 }}>
-                {t('sessionRecovery.discardError')}
-              </Text>
-            )}
-
-            {!confirmingDiscard && canResume && state.status === 'pending' && (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ disabled: busy }}
-                disabled={busy}
-                onPress={onResume}
-                style={{
-                  marginTop: 18,
-                  paddingVertical: 12,
-                  paddingHorizontal: 14,
-                  borderRadius: 10,
-                  borderBottomRightRadius: 0,
-                  backgroundColor: theme.colors.inverseSurface,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 10,
-                  opacity: busy ? 0.6 : 1,
-                }}
-              >
-                {resuming ? (
-                  <ActivityIndicator color={theme.colors.inverseForeground} />
-                ) : (
-                  <Icon name="play" size={12} color={theme.colors.inverseForeground} />
-                )}
-                <Text
-                  style={{
-                    color: theme.colors.inverseForeground,
-                    fontFamily: theme.fonts.display,
-                    fontSize: 14,
-                    letterSpacing: 1.2,
-                    textTransform: 'uppercase',
-                  }}
-                >
-                  {resuming ? t('sessionRecovery.resuming') : t('sessionRecovery.resume')}
-                </Text>
-              </Pressable>
-            )}
-
-            {!confirmingDiscard && canFinalize && execution && (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ disabled: busy }}
-                disabled={busy}
-                onPress={onFinish}
-                style={{
-                  marginTop: 10,
-                  paddingVertical: 12,
-                  paddingHorizontal: 14,
-                  borderRadius: 10,
-                  borderBottomRightRadius: 0,
-                  backgroundColor: theme.colors.inverseSurface,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 10,
-                  opacity: busy ? 0.6 : 1,
-                }}
-              >
-                {finishing ? (
-                  <ActivityIndicator color={theme.colors.inverseForeground} />
-                ) : (
-                  <Icon name="check" size={12} color={theme.colors.inverseForeground} />
-                )}
-                <Text
-                  style={{
-                    color: theme.colors.inverseForeground,
-                    fontFamily: theme.fonts.display,
-                    fontSize: 14,
-                    letterSpacing: 1.2,
-                    textTransform: 'uppercase',
-                  }}
-                >
-                  {finishing ? t('sessionRecovery.finishing') : t('sessionRecovery.finishNow')}
-                </Text>
-              </Pressable>
-            )}
-
-            {!confirmingDiscard && canDiscard && (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ disabled: busy }}
-                disabled={busy}
-                onPress={requestDiscard}
-                style={{
-                  marginTop: 10,
-                  paddingVertical: 12,
-                  paddingHorizontal: 14,
-                  borderRadius: 10,
-                  borderBottomRightRadius: 0,
-                  borderWidth: 1,
-                  borderColor: theme.colors.controlBorder,
-                  alignItems: 'center',
-                  opacity: busy ? 0.6 : 1,
-                }}
-              >
-                <Text style={{ color: theme.colors.textSecondaryStrong, fontFamily: theme.fonts.ui, fontSize: 13 }}>
-                  {t('sessionRecovery.discard')}
-                </Text>
-              </Pressable>
-            )}
-
-            {confirmingDiscard && (
-              <>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityState={{ disabled: busy }}
-                  disabled={busy}
-                  onPress={onDiscard}
-                  style={{
-                    marginTop: 18,
-                    paddingVertical: 12,
-                    paddingHorizontal: 14,
-                    borderRadius: 10,
-                    borderBottomRightRadius: 0,
-                    backgroundColor: theme.colors.inverseSurface,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 10,
-                    opacity: busy ? 0.6 : 1,
-                  }}
-                >
-                  {discarding ? (
-                    <ActivityIndicator color={theme.colors.inverseForeground} />
-                  ) : (
-                    <Icon name="x" size={12} color={theme.colors.inverseForeground} />
-                  )}
-                  <Text
-                    style={{
-                      color: theme.colors.inverseForeground,
-                      fontFamily: theme.fonts.display,
-                      fontSize: 14,
-                      letterSpacing: 1.2,
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    {discarding ? t('sessionRecovery.discarding') : t('sessionRecovery.discardConfirmYes')}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityState={{ disabled: busy }}
-                  disabled={busy}
-                  onPress={cancelDiscardConfirm}
-                  style={{ marginTop: 10, paddingVertical: 10, alignItems: 'center' }}
-                >
-                  <Text style={{ color: theme.colors.textMuted, fontFamily: theme.fonts.ui, fontSize: 13 }}>
-                    {t('sessionRecovery.discardConfirmBack')}
-                  </Text>
-                </Pressable>
-              </>
-            )}
-
-            {executionMissing && (
-              <Pressable
-                accessibilityRole="button"
-                onPress={onAcknowledgeMissing}
-                style={{
-                  marginTop: 18,
-                  paddingVertical: 12,
-                  paddingHorizontal: 14,
-                  borderRadius: 10,
-                  borderBottomRightRadius: 0,
-                  backgroundColor: theme.colors.inverseSurface,
-                  alignItems: 'center',
-                }}
-              >
-                <Text
-                  style={{
-                    color: theme.colors.inverseForeground,
-                    fontFamily: theme.fonts.display,
-                    fontSize: 14,
-                    letterSpacing: 1.2,
-                    textTransform: 'uppercase',
-                  }}
-                >
-                  {t('sessionRecovery.dismiss')}
-                </Text>
-              </Pressable>
-            )}
-
-          </LinearGradient>
-        </View>
-      </View>
-    </Modal>
+    <AjMoment
+      visible={visible}
+      lines={lines}
+      options={options}
+      error={errorText}
+      // No dismiss action for a real execution: no close button, and
+      // backdrop taps / Android Back stay inert.
+      dismissible={false}
+      busy={busy}
+      step={confirmingDiscard ? 'discardConfirm' : executionMissing ? 'missing' : 'main'}
+    />
   );
 }

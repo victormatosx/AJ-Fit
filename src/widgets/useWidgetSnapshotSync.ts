@@ -15,7 +15,8 @@ import {
   loadWorkoutExecution,
 } from '../services/workoutExecutions';
 import { beginWidgetSnapshotSession, syncWidgetSnapshot } from './widgetSnapshotSync';
-import { fetchWidgetStreakHistory } from './widgetStreakHistoryFetch';
+import { fetchWidgetDailyActivityStreak, fetchWidgetStreakHistory } from './widgetStreakHistoryFetch';
+import { ensureStreakTimezone, listNutritionActivityDays } from '../services/nutritionActivityDays';
 import { buildWorkoutWidgetData, type WorkoutWidgetExecution } from './workoutWidgetProjection';
 
 export interface WidgetSnapshotSyncInput {
@@ -99,7 +100,11 @@ export function useWidgetSnapshotSync(input: WidgetSnapshotSyncInput): WidgetSna
       // Incremental-block search (Phase 2.5 §A) — never a single
       // unconditionally-wide fetch, never a silent truncation. See
       // `fetchWidgetStreakHistory`'s own doc comment for the cost analysis.
-      const [history, activeExecution] = await Promise.all([
+      // The adherence windows the widget also renders still come from
+      // `fetchWidgetStreakHistory`'s completion data; only the STREAK field
+      // changed source. The two are fetched together and never mixed.
+      const streakSettings = await ensureStreakTimezone(uid, input.timezone);
+      const [history, dailyStreak, activeExecution] = await Promise.all([
         fetchWidgetStreakHistory({
           uid,
           todayLocalDate: today,
@@ -110,6 +115,13 @@ export function useWidgetSnapshotSync(input: WidgetSnapshotSyncInput): WidgetSna
             activeRecoveryDays: input.activeRecoveryDays,
           },
           fetchRange: listCompletedWorkoutActivityDatesInRange,
+        }),
+        fetchWidgetDailyActivityStreak({
+          uid,
+          todayLocalDate: today,
+          settings: streakSettings,
+          fetchWorkoutRange: listCompletedWorkoutActivityDatesInRange,
+          fetchNutritionDays: listNutritionActivityDays,
         }),
         loadAuthoritativeWidgetExecution(uid),
       ]);
@@ -157,6 +169,7 @@ export function useWidgetSnapshotSync(input: WidgetSnapshotSyncInput): WidgetSna
         completedDates: history.completedDates,
         fulfilledScheduledDates: history.fulfilledScheduledDates,
         historyAvailableFromLocalDate: history.historyAvailableFromLocalDate,
+        dailyActivityStreak: dailyStreak.streak,
         workout,
       });
     } catch (error) {
@@ -213,6 +226,11 @@ export function useWidgetSnapshotSync(input: WidgetSnapshotSyncInput): WidgetSna
         generatedAtMs: Date.now(),
         trainingDays: [],
         activeRecoveryDays: [],
+        // A NO_PROGRAM snapshot carries no streak: the authoritative value
+        // needs reads this branch deliberately does not perform. The native
+        // widget renders the no-program state, not a number, so a zero here
+        // is never shown as if it were the user's real streak.
+        dailyActivityStreak: { current: 0, complete: false },
         activatedAtLocalDate: null,
         completedDates: new Set(),
       });

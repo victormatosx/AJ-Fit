@@ -426,6 +426,7 @@
     "createManually": "Cadastrar manualmente"
   },
   "foodSearch": {
+    "removeAccessibility": "Remover {{food}}",
     "title": "Buscar alimento",
     "placeholder": "Buscar por nome…",
     "catalogBadge": "Catálogo AJ Fit",

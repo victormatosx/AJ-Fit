@@ -65,24 +65,40 @@ describe('completed workout -> Profile synchronization', () => {
     expect(followUp).toContain('onProjectionFailure:');
   });
 
-  it('synchronizes Schedule, weekly progress and frequency concurrently for Home', async () => {
+  it('synchronizes Schedule, weekly progress, frequency and streak concurrently for Home', async () => {
     const calls: string[] = [];
     let release!: () => void;
     const pending = new Promise<void>((resolve) => { release = resolve; });
     const refreshSchedule = vi.fn(async () => { calls.push('schedule'); await pending; });
     const refreshWeek = vi.fn(async () => { calls.push('week'); await pending; });
     const refreshFrequency = vi.fn(async () => { calls.push('frequency'); await pending; });
+    const refreshStreak = vi.fn(async () => { calls.push('streak'); await pending; });
 
-    const sync = runWorkoutHomeProjectionSync({ refreshSchedule, refreshWeek, refreshFrequency });
+    const sync = runWorkoutHomeProjectionSync({ refreshSchedule, refreshWeek, refreshFrequency, refreshStreak });
     await Promise.resolve();
-    expect(calls).toEqual(['schedule', 'week', 'frequency']);
+    expect(calls).toEqual(['schedule', 'week', 'frequency', 'streak']);
     release();
     await expect(sync).resolves.toEqual({
-      schedule: 'COMPLETED', week: 'COMPLETED', frequency: 'COMPLETED',
+      schedule: 'COMPLETED', week: 'COMPLETED', frequency: 'COMPLETED', streak: 'COMPLETED',
     });
     expect(refreshSchedule).toHaveBeenCalledOnce();
     expect(refreshWeek).toHaveBeenCalledOnce();
     expect(refreshFrequency).toHaveBeenCalledOnce();
+    expect(refreshStreak).toHaveBeenCalledOnce();
+  });
+
+  it('wires the Home streak reload into the post-finish Home sync so the fire ring never shows a stale streak', () => {
+    const start = appShell.indexOf('workoutHomeSyncRef.current = runWorkoutHomeProjectionSync({');
+    const end = appShell.indexOf('}).then((outcome)', start);
+    const call = appShell.slice(start, end);
+    expect(call).toContain('refreshStreak:');
+    // `refreshStreak` may be passed directly, or wrapped so the resolved
+    // streak can also feed the milestone-celebration check — but the wrapper
+    // must still invoke the real Home streak reload, which is the guarantee
+    // this test exists to protect (the fire ring must never stay stale).
+    expect(call).toMatch(
+      /refreshStreak:\s*(homeStreak\b|reloadHomeStreak\b|async\s*\(\)\s*=>\s*\{[\s\S]*?\breloadHomeStreak\(\)[\s\S]*?\})/,
+    );
   });
 
   it('starts Home synchronization only after durable completion and never awaits it before success', () => {

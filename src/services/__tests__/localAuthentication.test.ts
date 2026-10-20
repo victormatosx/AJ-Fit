@@ -64,6 +64,10 @@ beforeEach(() => {
 });
 
 // ── Capability detection ───────────────────────────────────────────────────
+//
+// `getVaultAuthCapability` stays: it is informational reporting about the
+// device, unrelated to the Vault's access gate, and nothing below depends on
+// it to decide whether the gallery opens.
 
 describe('getVaultAuthCapability', () => {
   it('detects Face ID on an iPhone that has it', async () => {
@@ -154,217 +158,45 @@ describe('getVaultAuthCapability', () => {
   });
 });
 
-// ── Native prompt configuration ────────────────────────────────────────────
+// ── Vault access gate ──────────────────────────────────────────────────────
+//
+// Product decision: opening the gallery no longer requires Face ID, a
+// fingerprint, an iris scan or a device passcode. `authenticateForPhotoVault`
+// is an unconditional success and never touches the native module — on any
+// device profile, enrolled or not, protected or not.
 
-describe('prompt configuration', () => {
-  it('never disables the device fallback', async () => {
-    await authenticateForPhotoVault(PROMPT);
-
-    // This single flag is what gives Face ID → passcode on iOS and
-    // BIOMETRIC | DEVICE_CREDENTIAL on Android.
-    expect(mocks.authenticate.mock.calls[0]![0]).toMatchObject({
-      disableDeviceFallback: false,
-    });
-  });
-
-  it('requires strong biometrics on Android', async () => {
-    device({ types: [FACE], platform: 'android' });
-
-    await authenticateForPhotoVault(PROMPT);
-
-    // 'weak' would accept 2D camera face unlock, defeated by a photograph.
-    expect(mocks.authenticate.mock.calls[0]![0]).toMatchObject({
-      biometricsSecurityLevel: 'strong',
-    });
-  });
-
-  it('does not send Android-only options on iOS', async () => {
-    device({ platform: 'ios' });
-
-    await authenticateForPhotoVault(PROMPT);
-
-    expect(mocks.authenticate.mock.calls[0]![0]).not.toHaveProperty(
-      'biometricsSecurityLevel',
-    );
-  });
-
-  it('opens exactly one native prompt per call', async () => {
-    await authenticateForPhotoVault(PROMPT);
-
-    // No app-built sequencing of face → fingerprint → credential.
-    expect(mocks.authenticate).toHaveBeenCalledTimes(1);
-  });
-});
-
-// ── Results ────────────────────────────────────────────────────────────────
-
-describe('authentication results', () => {
-  it('reports success', async () => {
+describe('authenticateForPhotoVault', () => {
+  it('always succeeds, regardless of device profile', async () => {
     expect(await authenticateForPhotoVault(PROMPT)).toEqual({ status: 'success' });
   });
 
-  it.each([
-    ['user_cancel', 'cancelled'],
-    ['app_cancel', 'cancelled'],
-    ['system_cancel', 'cancelled'],
-    ['lockout', 'lockedOut'],
-    ['not_available', 'notAvailable'],
-    ['not_enrolled', 'notEnrolled'],
-    ['passcode_not_set', 'notConfigured'],
-    ['authentication_failed', 'failed'],
-    ['unable_to_process', 'failed'],
-    ['timeout', 'failed'],
-    ['unknown', 'failed'],
-    ['user_fallback', 'failed'],
-  ])('maps %s onto %s', async (error, expected) => {
-    mocks.authenticate.mockResolvedValue({ success: false, error });
+  it('never opens a native prompt', async () => {
+    await authenticateForPhotoVault(PROMPT);
 
-    expect(await authenticateForPhotoVault(PROMPT)).toEqual({ status: expected });
+    expect(mocks.authenticate).not.toHaveBeenCalled();
   });
 
-  it('treats a thrown module error as a failure, never a success', async () => {
-    mocks.authenticate.mockRejectedValue(new Error('boom'));
+  it('never inspects the device capability to decide', async () => {
+    await authenticateForPhotoVault(PROMPT);
 
-    expect(await authenticateForPhotoVault(PROMPT)).toEqual({ status: 'failed' });
+    expect(mocks.hasHardware).not.toHaveBeenCalled();
+    expect(mocks.isEnrolled).not.toHaveBeenCalled();
+    expect(mocks.supportedTypes).not.toHaveBeenCalled();
+    expect(mocks.enrolledLevel).not.toHaveBeenCalled();
   });
 
-  it('does not log native authentication results or localized payloads', async () => {
-    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
-    mocks.authenticate.mockResolvedValue({
-      success: false,
-      error: 'unknown: 999, native localized details',
-    });
-
-    try {
-      await authenticateForPhotoVault(PROMPT);
-      expect(info).not.toHaveBeenCalled();
-    } finally {
-      info.mockRestore();
-    }
-  });
-});
-
-// ── Devices without a usable mechanism ─────────────────────────────────────
-
-describe('devices without a usable mechanism', () => {
-  it('never prompts on a completely unprotected device', async () => {
+  it('succeeds on a completely unprotected device', async () => {
     device({ hardware: false, enrolled: false, types: [], level: LEVEL_NONE });
 
-    const result = await authenticateForPhotoVault(PROMPT);
-
-    expect(result).toEqual({ status: 'notConfigured' });
+    expect(await authenticateForPhotoVault(PROMPT)).toEqual({ status: 'success' });
     expect(mocks.authenticate).not.toHaveBeenCalled();
   });
 
-  it('reports notEnrolled when hardware exists but nothing is set up', async () => {
-    device({ hardware: true, enrolled: false, types: [FACE], level: LEVEL_NONE });
-
-    const result = await authenticateForPhotoVault(PROMPT);
-
-    expect(result).toEqual({ status: 'notEnrolled' });
-    expect(mocks.authenticate).not.toHaveBeenCalled();
-  });
-
-  it('still authenticates when only a lock screen credential exists', async () => {
-    device({ hardware: false, enrolled: false, types: [], level: LEVEL_SECRET });
-
-    const result = await authenticateForPhotoVault(PROMPT);
-
-    expect(result).toEqual({ status: 'success' });
-    expect(mocks.authenticate).toHaveBeenCalledTimes(1);
-  });
-});
-
-// ── Platform scenarios ─────────────────────────────────────────────────────
-
-describe('iOS scenarios', () => {
-  it('A: Face ID enrolled → authenticates', async () => {
-    device({ types: [FACE], level: LEVEL_STRONG, platform: 'ios' });
-
+  it('succeeds on both platforms', async () => {
+    device({ platform: 'ios' });
     expect(await authenticateForPhotoVault(PROMPT)).toEqual({ status: 'success' });
-  });
 
-  it('B: Touch ID enrolled → authenticates', async () => {
-    device({ types: [FINGERPRINT], level: LEVEL_STRONG, platform: 'ios' });
-
-    expect(await authenticateForPhotoVault(PROMPT)).toEqual({ status: 'success' });
-  });
-
-  it('C: biometrics not enrolled but a passcode is set → the OS uses it', async () => {
-    device({ hardware: true, enrolled: false, types: [FACE], level: LEVEL_SECRET });
-
-    expect(await authenticateForPhotoVault(PROMPT)).toEqual({ status: 'success' });
-  });
-
-  it('D: user cancels → cancelled', async () => {
-    device({ types: [FACE], platform: 'ios' });
-    mocks.authenticate.mockResolvedValue({ success: false, error: 'user_cancel' });
-
-    expect(await authenticateForPhotoVault(PROMPT)).toEqual({ status: 'cancelled' });
-  });
-
-  it('E: biometrics locked out → the native result is respected', async () => {
-    device({ types: [FACE], platform: 'ios' });
-    mocks.authenticate.mockResolvedValue({ success: false, error: 'lockout' });
-
-    // No attempt to work around the lockout.
-    expect(await authenticateForPhotoVault(PROMPT)).toEqual({ status: 'lockedOut' });
-    expect(mocks.authenticate).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('Android scenarios', () => {
-  it('A: strong face biometrics → authenticates', async () => {
-    device({ types: [FACE], level: LEVEL_STRONG, platform: 'android' });
-
-    expect(await authenticateForPhotoVault(PROMPT)).toEqual({ status: 'success' });
-  });
-
-  it('B: fingerprint → authenticates', async () => {
-    device({ types: [FINGERPRINT], level: LEVEL_STRONG, platform: 'android' });
-
-    expect(await authenticateForPhotoVault(PROMPT)).toEqual({ status: 'success' });
-  });
-
-  it('C: face and fingerprint → one native prompt, no app-built selector', async () => {
-    device({ types: [FACE, FINGERPRINT], level: LEVEL_STRONG, platform: 'android' });
-
-    await authenticateForPhotoVault(PROMPT);
-
-    expect(mocks.authenticate).toHaveBeenCalledTimes(1);
-  });
-
-  it('D: fingerprint only → authenticates', async () => {
-    device({ types: [FINGERPRINT], level: LEVEL_STRONG, platform: 'android' });
-
-    expect(await authenticateForPhotoVault(PROMPT)).toEqual({ status: 'success' });
-  });
-
-  it('E: no biometrics but a device credential → native fallback is used', async () => {
-    device({ hardware: false, enrolled: false, types: [], level: LEVEL_SECRET, platform: 'android' });
-
-    expect(await authenticateForPhotoVault(PROMPT)).toEqual({ status: 'success' });
-    expect(mocks.authenticate.mock.calls[0]![0]).toMatchObject({
-      disableDeviceFallback: false,
-    });
-  });
-
-  it('F: no biometrics and no credential → stays unauthenticated', async () => {
-    device({ hardware: false, enrolled: false, types: [], level: LEVEL_NONE, platform: 'android' });
-
-    expect(await authenticateForPhotoVault(PROMPT)).toEqual({ status: 'notConfigured' });
-    expect(mocks.authenticate).not.toHaveBeenCalled();
-  });
-
-  it('G: weak-only face unlock still authenticates via the device credential', async () => {
-    // Class 2 face is excluded by biometricsSecurityLevel: 'strong', but the
-    // credential stays in the allowed set, so the user is not locked out.
-    device({ types: [FACE], level: LEVEL_WEAK, enrolled: true, platform: 'android' });
-
-    const capability = await getVaultAuthCapability();
-    expect(capability.hasStrongBiometrics).toBe(false);
-    expect(capability.hasDeviceCredential).toBe(true);
-
+    device({ platform: 'android' });
     expect(await authenticateForPhotoVault(PROMPT)).toEqual({ status: 'success' });
   });
 });

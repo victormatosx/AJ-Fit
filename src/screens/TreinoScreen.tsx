@@ -29,6 +29,7 @@ import type { FinalWorkoutPlan } from '../workoutPrescription/types';
 import type { ScheduleConfig, ScheduleResolution } from '../scheduleEngine/types';
 import type { EvolutionViewModel } from '../workoutEvolution/types';
 import type { WeekOverviewViewModel } from '../home/weekOverview';
+import type { AdvancedWorkoutTarget } from '../scheduleEngine/advanceWorkout';
 
 export type RepositionOutcome = 'OK' | 'BLOCKED_IN_PROGRESS' | 'ALREADY_COMPLETED_TODAY' | 'ERROR';
 
@@ -52,6 +53,9 @@ export function TreinoScreen({
   onReposition,
   evolutionViewModel,
   weekOverview,
+  advanceWorkoutTarget = null,
+  onAdvanceWorkout,
+  pilotEnrolled = false,
 }: {
   sex: Sex;
   plan: FinalWorkoutPlan;
@@ -65,6 +69,16 @@ export function TreinoScreen({
   onReposition: (targetSessionIndex: number) => Promise<RepositionOutcome>;
   evolutionViewModel: EvolutionViewModel;
   weekOverview: WeekOverviewViewModel | null;
+  /** Same two inputs Home's Today card gets — see `canAdvanceWorkout` below. */
+  advanceWorkoutTarget?: AdvancedWorkoutTarget | null;
+  onAdvanceWorkout?: () => void;
+  /**
+   * Controlled pilot of the new training architecture. Selects the
+   * forward-looking daily-limit copy ("volte amanhã"), which is only true
+   * when any day is trainable. A non-enrolled account keeps the neutral
+   * legacy sentence, because its next session may well be days away.
+   */
+  pilotEnrolled?: boolean;
 }) {
   const { theme } = useTheme();
   const { t, i18n } = useTranslation('treino');
@@ -114,7 +128,7 @@ export function TreinoScreen({
   const statusCopyKey =
     resolution.status === 'REST_DAY' ? 'restDay' :
     resolution.status === 'ACTIVE_RECOVERY_DAY' ? 'activeRecovery' :
-    resolution.status === 'TODAY_COMPLETED' ? 'completedToday' :
+    resolution.status === 'TODAY_COMPLETED' ? (pilotEnrolled ? 'completedTodayFree' : 'completedToday') :
     resolution.status === 'SCHEDULE_SETUP_REQUIRED' ? 'setupRequired' :
     resolution.status === 'MISSED_SESSION_DECISION_REQUIRED' ? 'missedDecision' :
     null;
@@ -198,7 +212,7 @@ export function TreinoScreen({
         nextWorkoutDate,
         todayLocalDate,
         todayLabel: t('agenda.today'),
-        weekdayLabel: (weekday) => t(`agenda.weekday.${weekday}`),
+        tomorrowLabel: t('agenda.tomorrow'),
         locale: i18n.resolvedLanguage ?? i18n.language,
       })
     : null;
@@ -206,6 +220,35 @@ export function TreinoScreen({
     ? completedNextLabel
       ? t('completed.note', { when: completedNextLabel })
       : t('completed.noteNoNext')
+    : null;
+
+  // "Adiantar treino de {dia}", the same affordance Home's Today card offers
+  // in this very slot. Identical gate to Home's `canAdvanceWorkout`: whether
+  // advancing is on offer at all is `advancedWorkoutTarget`'s call in
+  // `AppShell` — this screen only renders it and forwards the intent, and
+  // `onAdvanceWorkout` opens the shared confirmation rather than advancing.
+  const canAdvanceWorkout = !workoutInProgress
+    && resolution.status === 'REST_DAY'
+    && advanceWorkoutTarget != null
+    && onAdvanceWorkout != null;
+  const advanceLabel = canAdvanceWorkout
+    ? tHome('schedule.advance.cta', {
+        weekday: new Intl.DateTimeFormat(i18n.resolvedLanguage ?? i18n.language, { weekday: 'long', timeZone: 'UTC' })
+          .format(new Date(`${advanceWorkoutTarget.scheduledLocalDate}T12:00:00Z`)),
+      })
+    : null;
+
+  // Blocked day with nothing to act on: name the next workout, the same row
+  // (same `home:schedule.nextWorkout.*` copy, same weekday/session inputs)
+  // Home's Today card falls back to — otherwise the slot renders nothing.
+  const nextSession = nextWorkoutDate != null && nextIndex != null
+    ? plan.sessions[nextIndex] ?? null
+    : null;
+  const nextWorkoutValue = !canStartNow && !showCompletedToday && nextSession && nextWorkoutDate
+    ? tHome('schedule.nextWorkout.value', {
+        weekday: tLoose(`quiz:trainingDays.options.${weekdayOfLocalDate(nextWorkoutDate)}`),
+        session: resolveSessionDisplayName(tLoose, nextSession.name, nextSession.type),
+      })
     : null;
 
   const exerciseListItems: TreinoExerciseListItem[] = useMemo(() => {
@@ -307,7 +350,6 @@ export function TreinoScreen({
             <View style={{ marginTop: 24 }}>
               <TreinoWeekStrip
                 days={weekStripDays}
-                dimmed={isFlexible || workoutInProgress}
                 disabled={workoutInProgress}
                 weekSummaryLabel={weekSummaryLabel}
                 onPress={onOpenAgendaEditor}
@@ -333,6 +375,10 @@ export function TreinoScreen({
             onPressCta={onStart}
             completedLabel={showCompletedToday ? t('completed.button') : null}
             completedNote={completedNote}
+            advanceLabel={advanceLabel}
+            onPressAdvance={canAdvanceWorkout ? onAdvanceWorkout : null}
+            nextWorkoutLabel={nextWorkoutValue ? tHome('schedule.nextWorkout.label') : null}
+            nextWorkoutValue={nextWorkoutValue}
           />
 
           <TreinoExerciseList

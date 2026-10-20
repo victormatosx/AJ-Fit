@@ -82,7 +82,25 @@ export function resolveWorkoutSchedule(input: ResolveWorkoutScheduleInput): Sche
   // the walk's starting point, so an activation that lands on a trainingDay
   // still counts as this program's first occurrence (docs §Data de ativação)
   // instead of being skipped as "before the cursor".
-  const cursorDate = state?.cursorDate ?? addDaysLocal(activatedAtLocalDate, -1);
+  const persistedCursorDate = state?.cursorDate ?? addDaysLocal(activatedAtLocalDate, -1);
+  // Self-heals states persisted before `finalizeWorkoutSession` stopped
+  // anchoring the cursor on the SCHEDULED date: an early completion used to
+  // walk the cursor onto the opportunity's own day, swallowing that day's
+  // training slot (doing Monday's A on Sunday left Monday resolving as
+  // REST_DAY instead of offering B). The day actually trained is the real
+  // calendar position consumed.
+  //
+  // Narrowly gated on purpose. `lastCompletedAt === persistedCursorDate` is
+  // the fingerprint of a cursor written BY a completion; without it, a
+  // FOLLOW_SCHEDULE miss resolution — which deliberately advances the cursor
+  // past dates that have no completion behind them — would be undone here and
+  // re-open every skipped day. `lastCompletedAt` alone must never heal the
+  // cursor for that same reason; only an explicit performed date may.
+  const cursorDate = state?.lastPerformedLocalDate != null
+    && state.lastCompletedAt === persistedCursorDate
+    && state.lastPerformedLocalDate < persistedCursorDate
+    ? state.lastPerformedLocalDate
+    : persistedCursorDate;
 
   const occurrences = trainingDayOccurrences(config.trainingDays, cursorDate, todayLocalDate);
 
@@ -102,7 +120,15 @@ export function resolveWorkoutSchedule(input: ResolveWorkoutScheduleInput): Sche
     const nextWorkoutDate = nextTrainingDayOnOrAfter(config.trainingDays, nextWorkoutSearchDate);
     const nextSessionIndex = state?.nextSessionIndex
       ?? anchorSessionIndex(config.trainingDays, weekdayOfLocalDate(nextWorkoutDate), sessionCount);
-    return state?.lastCompletedAt === todayLocalDate
+    // "Already trained today" is a fact about the DAY OF EFFORT, not about the
+    // opportunity that was consumed — so it reads `lastPerformedLocalDate`.
+    // The two differ only after an early completion: finishing Monday's
+    // session on Sunday reports TODAY_COMPLETED on Sunday (when the user
+    // actually trained) and leaves Monday a non-actionable day whose slot is
+    // already accounted for. Falls back to `lastCompletedAt` so every state
+    // written before that field existed resolves exactly as it did before.
+    const lastPerformedAt = state?.lastPerformedLocalDate ?? state?.lastCompletedAt ?? null;
+    return lastPerformedAt === todayLocalDate
       ? { status: 'TODAY_COMPLETED', nextWorkoutDate, nextSessionIndex }
       : config.activeRecoveryDays?.includes(weekdayOfLocalDate(todayLocalDate))
         ? { status: 'ACTIVE_RECOVERY_DAY', nextWorkoutDate, nextSessionIndex }

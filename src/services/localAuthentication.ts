@@ -1,17 +1,17 @@
 import * as LocalAuthentication from 'expo-local-authentication';
-import { Platform } from 'react-native';
 
 /**
  * Device-level authentication for the Photo Vault.
  *
  * This is NOT Firebase reauthentication. Firebase reauth proves account
  * ownership to the backend and is only needed to recover the Vault Key on a
- * new device (see services/photoVaultRecovery.ts). This module proves that
- * the person holding the unlocked phone right now is its owner, and it runs
- * every time the vault is opened.
+ * new device (see services/photoVaultRecovery.ts).
  *
  * AJ Fit never implements its own PIN, password or pattern: authentication
- * is delegated entirely to the operating system.
+ * is delegated entirely to the operating system. Product decision: opening
+ * the gallery no longer requires an OS authentication step at all, so
+ * `authenticateForPhotoVault` below is an unconditional success — the Vault
+ * Key, encryption and Firebase isolation it guarded are untouched.
  */
 
 export type VaultAuthMechanism =
@@ -46,15 +46,6 @@ export type VaultAuthResult =
   | { status: 'notAvailable' }
   | { status: 'notEnrolled' }
   | { status: 'notConfigured' };
-
-/**
- * Android only. `'weak'` (the library default) would accept Class 2
- * biometrics — typically 2D camera face unlock, which is defeated by a
- * photograph. Private photos do not warrant that, so only Class 3 is
- * accepted. A device whose only biometric is weak still authenticates, via
- * the device credential that stays in the allowed set below.
- */
-const ANDROID_BIOMETRIC_SECURITY: LocalAuthentication.BiometricsSecurityLevel = 'strong';
 
 function toMechanism(type: LocalAuthentication.AuthenticationType): VaultAuthMechanism {
   switch (type) {
@@ -121,76 +112,22 @@ export async function getVaultAuthCapability(): Promise<VaultAuthCapability> {
   }
 }
 
-function mapError(error: LocalAuthentication.LocalAuthenticationError): VaultAuthResult {
-  switch (error) {
-    case 'user_cancel':
-    case 'app_cancel':
-    case 'system_cancel':
-      return { status: 'cancelled' };
-    case 'lockout':
-      return { status: 'lockedOut' };
-    case 'not_available':
-      return { status: 'notAvailable' };
-    case 'not_enrolled':
-      return { status: 'notEnrolled' };
-    case 'passcode_not_set':
-      return { status: 'notConfigured' };
-    default:
-      // authentication_failed, unable_to_process, timeout, unknown, …
-      return { status: 'failed' };
-  }
-}
-
 export interface AuthenticateOptions {
   promptMessage: string;
   cancelLabel: string;
 }
 
 /**
- * Runs the OS authentication prompt.
+ * Gate for opening the Photo Vault.
  *
- * `disableDeviceFallback` is deliberately left at its default (`false`), and
- * that single choice is what implements the product's
- * face → fingerprint → device credential preference on both platforms:
- *
- *  - iOS: uses `LAPolicyDeviceOwnerAuthentication`, so the system shows
- *    Face ID or Touch ID (whichever that iPhone has) and falls back to the
- *    device passcode by itself after failed attempts.
- *  - Android: the module passes `BIOMETRIC_STRONG | DEVICE_CREDENTIAL` to
- *    `BiometricPrompt.setAllowedAuthenticators`, so the system offers the
- *    enrolled strong biometric and the lock-screen credential together.
- *
- * AJ Fit therefore never sequences prompts itself and never renders its own
- * "choose face or fingerprint" selector: the OS owns that decision, which is
- * both better UX and the only way to stay inside the platform's security
- * abstraction.
+ * Product decision: the gallery opens directly, with no OS authentication
+ * prompt (Face ID, Touch ID, fingerprint or device passcode) and no
+ * in-app password. `options` is accepted only so the lock state machine
+ * that calls this does not need its own conditional — nothing here reads
+ * it or shows a native prompt.
  */
 export async function authenticateForPhotoVault(
-  options: AuthenticateOptions,
+  _options: AuthenticateOptions,
 ): Promise<VaultAuthResult> {
-  const capability = await getVaultAuthCapability();
-
-  // No biometric and no lock screen: there is nothing secure to authenticate
-  // against, so the vault must stay closed rather than open unprotected.
-  if (!capability.available || !capability.enrolled) {
-    return { status: capability.available ? 'notEnrolled' : 'notConfigured' };
-  }
-
-  let result: LocalAuthentication.LocalAuthenticationResult;
-  try {
-    result = await LocalAuthentication.authenticateAsync({
-      promptMessage: options.promptMessage,
-      cancelLabel: options.cancelLabel,
-      // Never disabled: this is what enables the native passcode fallback.
-      disableDeviceFallback: false,
-      ...(Platform.OS === 'android'
-        ? { biometricsSecurityLevel: ANDROID_BIOMETRIC_SECURITY, requireConfirmation: false }
-        : {}),
-    });
-  } catch {
-    return { status: 'failed' };
-  }
-
-  if (result.success) return { status: 'success' };
-  return mapError(result.error);
+  return { status: 'success' };
 }

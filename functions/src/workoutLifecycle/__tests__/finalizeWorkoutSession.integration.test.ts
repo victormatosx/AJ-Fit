@@ -81,6 +81,12 @@ describe.skipIf(!enabled)('finalizeWorkoutSession — real Firestore Emulator in
   beforeEach(async () => {
     await db.recursiveDelete(root).catch(() => {});
     await db.recursiveDelete(db.collection('users').doc(OTHER_UID)).catch(() => {});
+    // Enrolment is opt-in per test (`enrollPilot`) and must never leak from
+    // a new-model test into a legacy one.
+    await Promise.all([
+      db.collection('workoutPilotEnrollment').doc(UID).delete(),
+      db.collection('workoutPilotEnrollment').doc(OTHER_UID).delete(),
+    ]);
     await Promise.all([
       root.collection('workoutPrograms').doc(PROGRAM_ID).set(program()),
       root.collection('programInstances').doc(INSTANCE_ID).set({
@@ -192,7 +198,20 @@ describe.skipIf(!enabled)('finalizeWorkoutSession — real Firestore Emulator in
     expect((await root.collection('workoutExecutionState').doc('current').get()).exists).toBe(true);
   });
 
-  it('finalizes Friday early on Thursday against the prescribed Friday opportunity', async () => {
+  // New training model: finishing a session carrying a future `scheduledLocalDate`
+  // is no longer a special "advance" — it is an ordinary free completion. The
+  // cursor records the calendar position actually consumed (the day of effort).
+  /**
+   * Enrols this account in the controlled pilot. Called explicitly by the
+   * tests that assert NEW-model behaviour; every other test in this file runs
+   * without it and therefore keeps pinning the published legacy path.
+   */
+  async function enrollPilot(uid = UID) {
+    await db.collection('workoutPilotEnrollment').doc(uid).set({ enabled: true });
+  }
+
+  it('finalizes a session scheduled for Friday on Thursday, consuming Thursday', async () => {
+    await enrollPilot();
     const thursday = '2026-09-17';
     const friday = '2026-09-18';
     const fixedDays = ['MON', 'TUE', 'WED', 'FRI'];
@@ -231,18 +250,22 @@ describe.skipIf(!enabled)('finalizeWorkoutSession — real Firestore Emulator in
         .doc(`${INSTANCE_ID}_completed_3_${friday}`).get(),
       root.collection('workoutExecutions').doc(EXECUTION_ID).get(),
     ]);
-    expect(state.data()).toMatchObject({ nextSessionIndex: 0, cursorDate: friday, lastCompletedAt: friday });
+    expect(state.data()).toMatchObject({
+      nextSessionIndex: 0, suggestedSessionIndex: 0, cursorDate: thursday, lastCompletedAt: thursday,
+    });
     expect(event.data()).toMatchObject({
       type: 'COMPLETED', sessionIndex: 3, scheduledDate: friday, performedLocalDate: thursday,
     });
     expect(completed.data()).toMatchObject({ scheduledLocalDate: friday, performedLocalDate: thursday });
   });
 
-  it.each([
-    ['wrong session', { sessionIndex: 2 }],
-    ['more than one day early', { performedLocalDate: '2026-09-16', createdAt: Timestamp.fromDate(new Date('2026-09-16T12:00:00Z')) }],
-    ['performed after scheduled', { performedLocalDate: '2026-09-19', createdAt: Timestamp.fromDate(new Date('2026-09-19T12:00:00Z')) }],
-  ])('rejects an invalid advanced execution: %s', async (_label, override) => {
+  // The one-day advance window and the "must be the session the rotation owes"
+  // gate were both removed with the new training model, and so was the
+  // calendar-ordering rule (`performed <= scheduled`) — a recommended date can
+  // never block a completion. What still refuses anything here is temporal
+  // PROVENANCE: `performedLocalDate` must equal the day the execution itself
+  // was created, read from the server-set `createdAt`.
+  it('still refuses an execution whose performed date disagrees with its creation day', async () => {
     const fixedDays = ['MON', 'TUE', 'WED', 'FRI'];
     await Promise.all([
       root.collection('workoutPrograms').doc(PROGRAM_ID).set({
@@ -262,17 +285,18 @@ describe.skipIf(!enabled)('finalizeWorkoutSession — real Firestore Emulator in
       root.collection('workoutExecutions').doc(EXECUTION_ID).set(execution({
         sessionIndex: 3,
         scheduledLocalDate: '2026-09-18',
-        performedLocalDate: '2026-09-17',
+        performedLocalDate: '2026-09-19',
+        // Created on the 17th, so the claimed performed day is forged.
         createdAt: Timestamp.fromDate(new Date('2026-09-17T12:00:00Z')),
         startedAt: Timestamp.fromDate(new Date('2026-09-17T12:00:00Z')),
-        ...override,
       })),
     ]);
     await expect(finalize()).rejects.toMatchObject({ code: 'permission-denied' });
     expect((await root.collection('workoutExecutions').doc(EXECUTION_ID).get()).data()?.status).toBe('IN_PROGRESS');
   });
 
-  it('rejects the advanced path for flexible plans', async () => {
+  it('accepts a flexible session finished a day before its scheduled date', async () => {
+    await enrollPilot();
     await Promise.all([
       root.collection('workoutPrograms').doc(PROGRAM_ID).set({
         ...program(), status: 'active', scheduleMode: 'flexible', prescribedTrainingFrequency: 1, weeklySchedule: [],
@@ -287,7 +311,7 @@ describe.skipIf(!enabled)('finalizeWorkoutSession — real Firestore Emulator in
         createdAt: Timestamp.fromDate(new Date('2026-09-17T12:00:00Z')),
       })),
     ]);
-    await expect(finalize()).rejects.toMatchObject({ message: 'advanced_workout_not_next_opportunity' });
+    await expect(finalize()).resolves.toMatchObject({ status: 'COMPLETED', scheduleStatus: 'COMPLETED' });
   });
 
   it('authorizes flexible on any weekday, starts at 0, and advances the authoritative cursor', async () => {
@@ -318,7 +342,12 @@ describe.skipIf(!enabled)('finalizeWorkoutSession — real Firestore Emulator in
   // 2026-10 fix (agenda livre): `programInstanceId + sessionIndex +
   // scheduledLocalDate` is not a unique schedule-event identity under
   // `flexible` — the SAME sessionIndex can legitimately recur same-day.
-  it('flexible same-day repeat of the same sessionIndex: distinct schedule events, each finalize advances the cursor once, retry never double-advances', async () => {
+  // One credited workout per day now applies to `flexible` too. The
+  // `occurrence` machinery (distinct ids for a same-day repeat) is untouched
+  // infrastructure and still produces a DISTINCT execution/event id — it is
+  // just no longer reachable as a second CREDITED workout on the same day.
+  it('flexible same-day repeat of the same sessionIndex is refused by the daily limit, and the first stays intact', async () => {
+    await enrollPilot();
     const EXECUTION_ID_2 = 'exec_finalize_0_o2';
     await Promise.all([
       root.collection('workoutPrograms').doc(PROGRAM_ID).set({
@@ -337,8 +366,7 @@ describe.skipIf(!enabled)('finalizeWorkoutSession — real Firestore Emulator in
       root.collection('workoutExecutions').doc(EXECUTION_ID_2).set(execution({ occurrence: 2 })),
     ]);
 
-    // Occurrence 1 finalizes first — sessionCount is 1, so the cursor wraps
-    // right back to 0, exactly the condition that used to collide.
+    // Occurrence 1 finalizes and claims the day.
     await expect(finalize()).resolves.toMatchObject({ status: 'COMPLETED' });
     const [occurrence1Event, stateAfterFirst] = await Promise.all([
       root.collection('workoutPrograms').doc(PROGRAM_ID).collection('scheduleEvents')
@@ -348,29 +376,28 @@ describe.skipIf(!enabled)('finalizeWorkoutSession — real Firestore Emulator in
     expect(occurrence1Event.exists).toBe(true);
     expect(stateAfterFirst.data()).toMatchObject({ nextSessionIndex: 0, lastCompletedAt: today });
 
-    // Occurrence 2 — same sessionIndex, same scheduledLocalDate, a DIFFERENT
-    // execution — finalizes normally (agenda livre), never rejected as
-    // "already completed today", and gets its OWN, distinct event.
+    // Occurrence 2 — same session, same day, different execution — is now
+    // refused, and writes nothing.
     await expect(finalizeWorkoutSessionHandler(request(UID, { executionId: EXECUTION_ID_2 }), db))
-      .resolves.toMatchObject({ status: 'COMPLETED' });
-    const [occurrence2Event, stateAfterSecond] = await Promise.all([
-      root.collection('workoutPrograms').doc(PROGRAM_ID).collection('scheduleEvents')
-        .doc(`${INSTANCE_ID}_completed_0_${today}_o2`).get(),
-      root.collection('workoutPrograms').doc(PROGRAM_ID).collection('scheduleState').doc(INSTANCE_ID).get(),
-    ]);
-    expect(occurrence2Event.exists).toBe(true);
-    expect(occurrence1Event.id).not.toBe(occurrence2Event.id);
-    expect(stateAfterSecond.data()).toMatchObject({ nextSessionIndex: 0, lastCompletedAt: today });
+      .rejects.toMatchObject({ message: 'workout_daily_limit_reached' });
+    const occurrence2Event = await root.collection('workoutPrograms').doc(PROGRAM_ID)
+      .collection('scheduleEvents').doc(`${INSTANCE_ID}_completed_0_${today}_o2`).get();
+    expect(occurrence2Event.exists).toBe(false);
+    expect((await root.collection('workoutExecutions').doc(EXECUTION_ID_2).get()).data()?.status)
+      .toBe('IN_PROGRESS');
 
-    // Retry of occurrence 2 — idempotent: its event already exists, so no
-    // second COMPLETED event is written and the cursor never advances twice.
-    await expect(finalizeWorkoutSessionHandler(request(UID, { executionId: EXECUTION_ID_2 }), db))
-      .resolves.toMatchObject({ status: 'COMPLETED' });
+    // Exactly one credited workout for the day, and the first one is intact.
     const events = await root.collection('workoutPrograms').doc(PROGRAM_ID).collection('scheduleEvents').get();
-    expect(events.docs.filter((doc) => doc.data().type === 'COMPLETED')).toHaveLength(2);
+    expect(events.docs.filter((doc) => doc.data().type === 'COMPLETED')).toHaveLength(1);
+
+    // Retrying the FIRST one stays idempotent — a replay is not a second workout.
+    await expect(finalize()).resolves.toMatchObject({ status: 'COMPLETED' });
+    const afterReplay = await root.collection('workoutPrograms').doc(PROGRAM_ID).collection('scheduleEvents').get();
+    expect(afterReplay.docs.filter((doc) => doc.data().type === 'COMPLETED')).toHaveLength(1);
   });
 
-  it('rejects a flexible execution whose session differs from nextSessionIndex', async () => {
+  it('accepts a flexible execution whose session differs from the suggestion', async () => {
+    await enrollPilot();
     await Promise.all([
       root.collection('workoutPrograms').doc(PROGRAM_ID).set({
         ...program(), scheduleMode: 'flexible', weeklySchedule: [],
@@ -386,11 +413,14 @@ describe.skipIf(!enabled)('finalizeWorkoutSession — real Firestore Emulator in
         cursorDate: today, lastCompletedAt: null, pendingMissDecision: null,
       }),
     ]);
-    await expect(finalize()).rejects.toMatchObject({ message: 'schedule_completion_session_not_expected' });
-    expect((await root.collection('workoutExecutions').doc(EXECUTION_ID).get()).data()?.status).toBe('IN_PROGRESS');
+    await expect(finalize()).resolves.toMatchObject({ status: 'COMPLETED' });
+    expect((await root.collection('workoutExecutions').doc(EXECUTION_ID).get()).data()?.status).toBe('COMPLETED');
   });
 
-  it('keeps explicit fixed calendar authority even when client-writable config claims flexible', async () => {
+  // Calendar authority no longer gates a completion, so a client-writable
+  // `scheduleConfig` cannot change the outcome either way. What still matters
+  // is that the completion is recorded against the authoritative program.
+  it('completes regardless of what the client-writable config claims about the calendar', async () => {
     await Promise.all([
       root.collection('workoutPrograms').doc(PROGRAM_ID).set({
         ...program(), scheduleMode: 'fixed',
@@ -403,11 +433,10 @@ describe.skipIf(!enabled)('finalizeWorkoutSession — real Firestore Emulator in
         scheduleMode: 'flexible', trainingDays: [], timezone: 'UTC',
       }),
     ]);
-    await expect(finalize()).rejects.toMatchObject({ message: 'schedule_completion_session_not_expected' });
-    expect((await root.collection('workoutExecutions').doc(EXECUTION_ID).get()).data()?.status).toBe('IN_PROGRESS');
+    await expect(finalize()).resolves.toMatchObject({ status: 'COMPLETED' });
   });
 
-  it('treats a legacy program/instance without scheduleMode as fixed', async () => {
+  it('completes for a legacy program/instance carrying no scheduleMode', async () => {
     await Promise.all([
       root.collection('workoutPrograms').doc(PROGRAM_ID).set({
         ...program(), weeklySchedule: [{ weekday: otherWeekday, state: 'TRAINING', sessionIndex: 0 }],
@@ -419,7 +448,7 @@ describe.skipIf(!enabled)('finalizeWorkoutSession — real Firestore Emulator in
         scheduleMode: 'flexible', trainingDays: [], timezone: 'UTC',
       }),
     ]);
-    await expect(finalize()).rejects.toMatchObject({ message: 'schedule_completion_session_not_expected' });
+    await expect(finalize()).resolves.toMatchObject({ status: 'COMPLETED' });
   });
 
   it('persists prescribed cardio in the same durable transition', async () => {
@@ -534,7 +563,12 @@ describe.skipIf(!enabled)('finalizeWorkoutSession — real Firestore Emulator in
     await expect(finalize()).resolves.toMatchObject({ status: 'COMPLETED' });
     const events = await root.collection('workoutPrograms').doc(PROGRAM_ID).collection('scheduleEvents').get();
     expect(events.docs.filter((doc) => doc.data().type === 'COMPLETED')).toHaveLength(1);
-  }, 10_000);
+    // Budget raised from 10s for the same reason as the five-way case below:
+  // the finalize transaction now also reads the per-day completion marker and
+  // queries executions for that date, so contended transactions legitimately
+  // take longer on a shared emulator. The ASSERTIONS are unchanged — one
+  // immutable event, one advance — and pass in ~5s when run alone.
+}, 30_000);
 
   // Audit hardening (concurrency §1): stress variant of the test above —
   // five simultaneous "devices" finalizing the exact same execution. Every
@@ -550,7 +584,12 @@ describe.skipIf(!enabled)('finalizeWorkoutSession — real Firestore Emulator in
     ]);
     expect(events.docs.filter((doc) => doc.data().type === 'COMPLETED')).toHaveLength(1);
     expect(state.data()).toMatchObject({ nextSessionIndex: 0, lastCompletedAt: today });
-  }, 10_000);
+    // Budget raised from 10s: the finalize transaction now also reads the
+  // per-day completion marker and (on the first completion of a day) queries
+  // executions for that date, so five fully-contended transactions legitimately
+  // take longer under a shared emulator. The ASSERTION is unchanged — exactly
+  // one advance — and passes in ~5.5s when this suite runs alone.
+}, 30_000);
 
   // Audit hardening (concurrency §1 — "duas tentativas simultâneas de
   // avançar a mesma sessão"): the advanced/early-finish path
@@ -558,7 +597,8 @@ describe.skipIf(!enabled)('finalizeWorkoutSession — real Firestore Emulator in
   // Schedule validation (`performedResolution` above) before the normal
   // SESSION_READY check — confirms that extra branch is exactly as race-safe
   // as the plain path already proven above.
-  it('two concurrent finalize requests for the SAME advanced (early-finished) execution: exactly one advance, no double-skip', async () => {
+  it('two concurrent finalize requests for the SAME early-finished execution: exactly one advance, no double-skip', async () => {
+    await enrollPilot();
     const thursday = '2026-09-17';
     const friday = '2026-09-18';
     const fixedDays = ['MON', 'TUE', 'WED', 'FRI'];
@@ -599,7 +639,9 @@ describe.skipIf(!enabled)('finalizeWorkoutSession — real Firestore Emulator in
     ]);
     // Advances exactly once: 3 -> 0 (wraps), never 3 -> 1 (which a
     // double-apply of "+1 twice" would produce).
-    expect(state.data()).toMatchObject({ nextSessionIndex: 0, cursorDate: friday, lastCompletedAt: friday });
+    expect(state.data()).toMatchObject({
+      nextSessionIndex: 0, suggestedSessionIndex: 0, cursorDate: thursday, lastCompletedAt: thursday,
+    });
     expect(completedEvents.docs.filter((doc) => doc.data().type === 'COMPLETED')).toHaveLength(1);
   }, 10_000);
 
@@ -705,12 +747,12 @@ describe.skipIf(!enabled)('finalizeWorkoutSession — real Firestore Emulator in
     await expect(finalize()).resolves.toMatchObject({ status: 'COMPLETED' });
   });
 
+  // The rotation position is no longer a rejection reason, so this drives the
+  // rollback with a SCHEDULE-stage failure that still exists: the instance is
+  // no longer the active one.
   it('does not commit any critical write when Schedule validation rejects', async () => {
-    await root.collection('workoutPrograms').doc(PROGRAM_ID).collection('scheduleState').doc(INSTANCE_ID).set({
-      programId: PROGRAM_ID, programInstanceId: INSTANCE_ID, nextSessionIndex: 1,
-      cursorDate: today, lastCompletedAt: null, pendingMissDecision: null,
-    });
-    await expect(finalize()).rejects.toMatchObject({ message: 'schedule_completion_session_not_expected' });
+    await root.collection('workoutLifecycleState').doc('current').set({ activeProgramInstanceId: 'wpi_other' });
+    await expect(finalize()).rejects.toMatchObject({ message: 'execution_program_not_active' });
     expect((await root.collection('workoutExecutions').doc(EXECUTION_ID).get()).data()?.status).toBe('IN_PROGRESS');
     expect((await root.collection('workoutExecutionState').doc('current').get()).exists).toBe(true);
   });
@@ -743,7 +785,8 @@ describe.skipIf(!enabled)('finalizeWorkoutSession — real Firestore Emulator in
   // content under an id of their own choosing. A document that merely
   // EXISTS at the expected deterministic id, with content for a different
   // gap, must never be trusted as resolving THIS gap.
-  it('ignores a MISS_RESOLVED document at the expected id whose content does not match this gap', async () => {
+  it('is unaffected by any client-planted MISS_RESOLVED document — finalize no longer reads the gap ledger', async () => {
+    await enrollPilot();
     const dayMs = 24 * 60 * 60 * 1000;
     const missedDate = new Date(new Date(`${today}T12:00:00Z`).getTime() - 7 * dayMs).toISOString().slice(0, 10);
     const cursorDate = new Date(new Date(`${today}T12:00:00Z`).getTime() - 14 * dayMs).toISOString().slice(0, 10);
@@ -760,7 +803,7 @@ describe.skipIf(!enabled)('finalizeWorkoutSession — real Firestore Emulator in
           scheduledDate: '2099-01-01', decision: 'CONTINUE_SEQUENCE',
         }),
     ]);
-    await expect(finalize()).rejects.toMatchObject({ message: 'schedule_completion_session_not_expected' });
-    expect((await root.collection('workoutExecutions').doc(EXECUTION_ID).get()).data()?.status).toBe('IN_PROGRESS');
+    await expect(finalize()).resolves.toMatchObject({ status: 'COMPLETED' });
+    expect((await root.collection('workoutExecutions').doc(EXECUTION_ID).get()).data()?.status).toBe('COMPLETED');
   });
 });

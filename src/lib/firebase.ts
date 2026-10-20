@@ -9,6 +9,12 @@ import {
 import * as firebaseAuth from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
 import { getStorage, type FirebaseStorage } from 'firebase/storage';
+import { getFunctions } from 'firebase/functions';
+import {
+  assertFullyIsolated,
+  connectAjFitEmulators,
+  emulatorPlan,
+} from './firebaseEmulator';
 import { initializeFirebaseAppCheck } from './firebaseAppCheck';
 import { secureAuthStorage } from './secureAuthStorage';
 import { logError } from './logger';
@@ -98,5 +104,38 @@ export const auth = createAuth();
  */
 export const db: Firestore = getFirestore(app);
 export const storage: FirebaseStorage = getStorage(app);
+
+/**
+ * HOMOLOGATION MODE — development only, opt-in, all-or-nothing.
+ *
+ * `__DEV__` is inlined as the literal `false` by Metro for production
+ * bundles, so this entire block — and `./firebaseEmulator` with it — is dead
+ * code that never ships in a Release/TestFlight/App Store build. Absent
+ * `EXPO_PUBLIC_AJFIT_EMULATOR_HOST` the plan is `null` and nothing is
+ * touched: the default stays the real project.
+ *
+ * Functions is redirected through `getFunctions(app, 'us-central1')` rather
+ * than by importing `./firebaseFunctions`: the SDK caches one instance per
+ * (app, region), so this IS the object that module exports, and wiring it
+ * here guarantees the redirect even if no code path imports that module
+ * first. The other order would leave a window where Firestore is already
+ * isolated while a callable still reaches production.
+ *
+ * Any failure throws on purpose (`assertFullyIsolated`). A half-connected app
+ * is the single outcome that could touch real data, so it must be
+ * unreachable rather than merely unlikely.
+ */
+if (__DEV__) {
+  const plan = emulatorPlan(process.env as Record<string, string | undefined>);
+  if (plan) {
+    connectAjFitEmulators(plan, { auth, db, functions: getFunctions(app, 'us-central1') });
+    assertFullyIsolated();
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[AJ Fit] MODO HOMOLOGACAO: Auth, Firestore e Functions no Emulator ${plan.host}. ` +
+        'Nenhum dado de producao e lido ou escrito.',
+    );
+  }
+}
 
 export { app };

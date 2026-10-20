@@ -11,10 +11,15 @@ export const palette = {
   ink950: '#020010',
   ink900: '#060220',
   ink850: '#0a0620',
+  /** Safety-notice sheet. */
+  ink860: '#0a0920',
   navy800: '#04021c',
   navy700: '#051042',
   navy600: '#0a1a55',
   blue700: '#0b70f9',
+  /** Weekday circles / Plan week dots — one hair warmer than `blue700`. */
+  blue650: '#0d6ff9',
+  blue620: '#1f74ff',
   blue600: '#1f82ff',
   blue500: '#4da3ff',
   blue400: '#7db4ff',
@@ -44,16 +49,25 @@ export const alpha = {
   white09: 'rgba(255,255,255,0.09)',
   white10: 'rgba(255,255,255,0.10)',
   white12: 'rgba(255,255,255,0.12)',
+  white14: 'rgba(255,255,255,0.14)',
   white18: 'rgba(255,255,255,0.18)',
   white20: 'rgba(255,255,255,0.20)',
   white22: 'rgba(255,255,255,0.22)',
   white32: 'rgba(255,255,255,0.32)',
   white35: 'rgba(255,255,255,0.35)',
   white40: 'rgba(255,255,255,0.40)',
+  white42: 'rgba(255,255,255,0.42)',
+  white45: 'rgba(255,255,255,0.45)',
+  white48: 'rgba(255,255,255,0.48)',
+  white50: 'rgba(255,255,255,0.50)',
   white55: 'rgba(255,255,255,0.55)',
   white60: 'rgba(255,255,255,0.60)',
   white65: 'rgba(255,255,255,0.65)',
+  white68: 'rgba(255,255,255,0.68)',
   white70: 'rgba(255,255,255,0.70)',
+  white72: 'rgba(255,255,255,0.72)',
+  white75: 'rgba(255,255,255,0.75)',
+  white78: 'rgba(255,255,255,0.78)',
   white80: 'rgba(255,255,255,0.80)',
   white82: 'rgba(255,255,255,0.82)',
   white85: 'rgba(255,255,255,0.85)',
@@ -66,7 +80,9 @@ export const alpha = {
   blue18: 'rgba(11,112,249,0.18)',
   blue30: 'rgba(11,112,249,0.30)',
   blue40: 'rgba(11,112,249,0.40)',
+  blue45: 'rgba(11,112,249,0.45)',
   blue55: 'rgba(11,112,249,0.55)',
+  blue60: 'rgba(11,112,249,0.60)',
   scrim55: 'rgba(0,0,0,0.55)',
   scrim84: 'rgba(0,0,0,0.84)',
 } as const;
@@ -266,6 +282,63 @@ const semanticDarkColors = {
   badgeBorder: alpha.white18,
   timeline: 'rgba(11,112,249,0.25)',
   hudCorner: 'rgba(77,163,255,0.65)',
+
+  // ── Acquisition surfaces (Questionnaire / Plan / Auth / Paywall) ──────────
+  // Roles introduced for the approved acquisition design. They exist as theme
+  // roles rather than literals because `sharedComponentsTheme.test.ts` forbids
+  // color literals in PlanReadyScreen/PaywallScreen, and because every one of
+  // them needs a legible Light counterpart (see lightTokens.ts).
+
+  /** Safety-notice sheet — one step lighter than `sheetBackground`, per design. */
+  sheetBackgroundAlt: palette.ink860,
+  /** Weekday circles and the Plan week dots. Deliberately distinct from `primary`. */
+  scheduleDayActive: palette.blue650,
+  /** AJ's spoken lines — the primary speech role. */
+  textSpeech: alpha.white78,
+  /** AJ's reaction/secondary lines, and supporting copy under a headline. */
+  textSpeechSoft: alpha.white72,
+  /** Sheet body copy (safety notice, disclosures). */
+  textBodySoft: alpha.white68,
+  /** Secondary CTA sub-label (e.g. the "today" line under a purchase button). */
+  textActionSupport: alpha.white75,
+  /** Mono section labels above a question title. */
+  textLabelFaint: alpha.white42,
+  /** Mono step counter in the questionnaire header. */
+  textLabelQuiet: alpha.white45,
+  /**
+   * Supporting note printed under a blocked action — quieter than
+   * `textMuted` on purpose, so the note never competes with the button it
+   * explains ("Treino de hoje concluído" / "Você já treinou hoje...").
+   */
+  textNoteQuiet: alpha.white45,
+  /** Option descriptions under a choice row label. */
+  textOptionDescription: alpha.white48,
+  /** Subtitles under a question title, and sheet sub-headlines. */
+  textSubtleStrong: alpha.white50,
+  /** Input/chip border at the heavier end of the design's .12–.14 range. */
+  fieldBorderStrong: alpha.white14,
+  /** Input border while showing a validation error. */
+  fieldErrorBorder: '#ff5a6e',
+  /** Validation error message text (inputs, age gate, weekday minimum). */
+  fieldErrorText: '#ff8a7a',
+  /** Safety gate, `REQUIRES_CLEARANCE`. */
+  safetyWarning: '#f0ad42',
+  /** Safety gate, `BLOCKED`. */
+  safetyCritical: '#ff7568',
+  /** Password strength meter below the policy threshold. */
+  strengthWeak: '#ff8a5c',
+  /** Accent glow, soft end of the design's .45–.6 range (primary buttons). */
+  primaryGlowSoft: alpha.blue45,
+  /** Accent glow, bright end (selected radios, weekday circles). */
+  primaryGlowBright: alpha.blue60,
+  /** Unselected radio ring on a borderless choice row. */
+  radioRing: alpha.white22,
+  /** Ruler ticks on the already-passed side of the needle. */
+  rulerTickPassed: palette.blue620,
+  /** Ruler ticks on the upcoming side of the needle. */
+  rulerTickUpcoming: 'rgba(11,112,249,0.42)',
+  /** Locked-preview index chip behind a blurred plan row. */
+  lockedPreviewChip: alpha.blue16,
 } as const;
 
 export const colors = {
@@ -300,6 +373,8 @@ export const gradients = {
   sheetAccent: ['rgba(11,112,249,0.30)', 'rgba(11,112,249,0.08)'] as const,
   accentState: ['rgba(11,112,249,0.28)', 'rgba(11,112,249,0.05)'] as const,
   accentSummary: ['rgba(11,112,249,0.22)', 'rgba(11,112,249,0.04)'] as const,
+  /** The step a timed checklist is currently working on (Analyzing screen). */
+  stepActive: ['rgba(11,112,249,0.16)', 'rgba(11,112,249,0.05)'] as const,
   subscriptionStatus: [
     'rgba(11,112,249,0.18)',
     'rgba(11,112,249,0.03)',

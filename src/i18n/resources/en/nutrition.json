@@ -426,6 +426,7 @@
     "createManually": "Create manually"
   },
   "foodSearch": {
+    "removeAccessibility": "Remove {{food}}",
     "title": "Search food",
     "placeholder": "Search by name…",
     "catalogBadge": "AJ Fit catalog",

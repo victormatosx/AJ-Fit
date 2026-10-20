@@ -1,5 +1,11 @@
 import { addDaysLocal, type LocalDate } from '../scheduleEngine/calendar';
 import { computeStreak, type Streak, type StreakInput } from '../home/streak';
+import {
+  computeDailyActivityStreak,
+  dailyActivityLookbackDays,
+  unionActivityDays,
+  type DailyActivityStreak,
+} from '../home/dailyActivityStreak';
 
 /**
  * Phase 2.5 fix for the Phase 2 truncation bug: fetching a single fixed
@@ -83,5 +89,60 @@ export async function fetchWidgetStreakHistory(
     }
 
     lookbackDays = Math.min(lookbackDays * 2, WIDGET_STREAK_MAX_LOOKBACK_DAYS);
+  }
+}
+
+/**
+ * Chama 2.0 for the widget — the SAME metric the Home shows.
+ *
+ * Deliberately reuses `computeDailyActivityStreak` and the two activity
+ * readers rather than deriving a second definition: the widget and the Home
+ * must never disagree about the number, the colour or the break rule, and the
+ * only way to guarantee that is to share the computation.
+ *
+ * Same incremental widening strategy as `fetchWidgetStreakHistory` above: a
+ * small window first, doubling only while the streak is still unresolved, so
+ * the common case costs one pair of queries instead of a 500-day scan on
+ * every widget resync.
+ */
+export const WIDGET_DAILY_STREAK_BASE_LOOKBACK_DAYS = 35;
+export const WIDGET_DAILY_STREAK_MAX_LOOKBACK_DAYS = dailyActivityLookbackDays(520);
+
+export interface FetchWidgetDailyActivityStreakInput {
+  uid: string;
+  todayLocalDate: LocalDate;
+  /** Canonical streak timezone and aggregate coverage floor (`streakSettings`). */
+  settings: { timezone: string; nutritionEvidenceFrom: LocalDate | null };
+  fetchWorkoutRange: CompletedWorkoutActivityDatesFetcher;
+  fetchNutritionDays: (input: {
+    uid: string; fromLocalDate: LocalDate; timezone: string; evidenceFrom: LocalDate | null;
+  }) => Promise<Set<LocalDate>>;
+}
+
+export async function fetchWidgetDailyActivityStreak(
+  input: FetchWidgetDailyActivityStreakInput,
+): Promise<{ streak: DailyActivityStreak; lookbackDaysUsed: number }> {
+  let lookbackDays = WIDGET_DAILY_STREAK_BASE_LOOKBACK_DAYS;
+
+  for (;;) {
+    const fromLocalDate = addDaysLocal(input.todayLocalDate, -lookbackDays);
+    const [workout, nutrition] = await Promise.all([
+      input.fetchWorkoutRange(input.uid, fromLocalDate, input.todayLocalDate),
+      input.fetchNutritionDays({
+        uid: input.uid,
+        fromLocalDate,
+        timezone: input.settings.timezone,
+        evidenceFrom: input.settings.nutritionEvidenceFrom,
+      }),
+    ]);
+    const streak = computeDailyActivityStreak({
+      todayLocalDate: input.todayLocalDate,
+      activityDates: unionActivityDays(workout.performedDates as LocalDate[], nutrition),
+      historyAvailableFromLocalDate: fromLocalDate,
+    });
+    if (streak.complete || lookbackDays >= WIDGET_DAILY_STREAK_MAX_LOOKBACK_DAYS) {
+      return { streak, lookbackDaysUsed: lookbackDays };
+    }
+    lookbackDays = Math.min(lookbackDays * 2, WIDGET_DAILY_STREAK_MAX_LOOKBACK_DAYS);
   }
 }

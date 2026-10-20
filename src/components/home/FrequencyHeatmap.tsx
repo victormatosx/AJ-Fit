@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { MonoLabel } from '../ui/Display';
 import { Icon } from '../ui/Icon';
 import { GRID_COLUMNS, GRID_ROWS, type FrequencyWindowViewModel } from '../../home/frequencyHeatmap';
+import type { WeeklyFrequency } from '../../home/weeklyFrequency';
 
 // Calendar-grid layout (2026-10-08 restyle) — `GRID_COLUMNS` (7, Monday-first
 // weekdays) cells per row, `GAP` between every adjacent cell. Single source
@@ -54,6 +55,7 @@ export function FrequencyHeatmap({
   onNext,
   source = 'AUTHORITATIVE',
   knownThroughLocalDate,
+  weeklyFrequency = null,
 }: {
   window: FrequencyWindowViewModel | null;
   /** A newer period was selected but isn't displayed yet — `window` is still the previous one. Only ever dims in place, never unmounts/resizes the section. */
@@ -61,6 +63,14 @@ export function FrequencyHeatmap({
   canGoNext: boolean;
   onPrev: () => void;
   onNext: () => void;
+  /**
+   * "Frequência desta semana" — distinct days trained this week over the
+   * weekly goal. Rendered as one compact row above the 30-day grid, which
+   * keeps its own, different semantics untouched. `null`, or a `null`
+   * `percent` (no usable goal), renders nothing at all rather than a
+   * misleading 0%.
+   */
+  weeklyFrequency?: WeeklyFrequency | null;
   source?: 'CACHE' | 'CURRENT_SESSION' | 'AUTHORITATIVE';
   knownThroughLocalDate?: string;
 }) {
@@ -107,6 +117,38 @@ export function FrequencyHeatmap({
   return (
     <View style={{ paddingHorizontal: 22, paddingVertical: 12, opacity: loading ? 0.55 : 1 }}>
       <MonoLabel>{t('activity.frequency.title').toUpperCase()}</MonoLabel>
+
+      {/* "Frequência desta semana" — compact row, existing tokens only (same
+          MonoLabel, same accent `#4da3ff`, same muted white, same 8px radius
+          as the grid cells). Deliberately NOT a card and NOT a replacement for
+          the 30-day grid below: the two answer different questions, and the
+          streak answers a third. Hidden entirely when there is no usable
+          weekly goal — a 0% would claim the user trained nothing. */}
+      {weeklyFrequency && weeklyFrequency.percent !== null && (
+        <View style={{ marginTop: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
+            <MonoLabel color={'rgba(255,255,255,0.5)'}>
+              {t('activity.frequency.weekly.label').toUpperCase()}
+            </MonoLabel>
+            <MonoLabel color={'#4da3ff'}>{`${weeklyFrequency.percent}%`}</MonoLabel>
+          </View>
+          <View
+            accessibilityRole="progressbar"
+            accessibilityValue={{ min: 0, max: 100, now: weeklyFrequency.percent }}
+            style={{ height: 3, borderRadius: 8, marginTop: 8, backgroundColor: 'rgba(255,255,255,0.05)', overflow: 'hidden' }}
+          >
+            <View style={{ width: `${weeklyFrequency.percent}%`, height: '100%', backgroundColor: '#4da3ff' }} />
+          </View>
+          <View style={{ marginTop: 8 }}>
+            <MonoLabel color={'rgba(255,255,255,0.5)'}>
+              {t('activity.frequency.weekly.summary', {
+                trained: weeklyFrequency.trainedDays,
+                goal: weeklyFrequency.goal,
+              }).toUpperCase()}
+            </MonoLabel>
+          </View>
+        </View>
+      )}
 
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14, marginTop: 14 }}>
         <Pressable

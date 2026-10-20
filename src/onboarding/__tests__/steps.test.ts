@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   computeOnboardingProgress,
+  PRESENTATION_SLIDE_COUNT,
   FORCED_QUESTIONNAIRE_STEP_IDS,
   getNextStepId,
   getPreviousStepId,
@@ -116,10 +117,18 @@ describe('getNextStepId / getPreviousStepId', () => {
 });
 
 describe('computeOnboardingProgress', () => {
-  it('is 0/total before the first question (presentation)', () => {
+  it('is 0/total before the first question (presentation numbers its own slides)', () => {
     const { current, total } = computeOnboardingProgress('presentation', 'anonymous');
     expect(current).toBe(0);
     expect(total).toBeGreaterThan(0);
+  });
+
+  it('continues the presentation slide numbering instead of restarting at 1', () => {
+    expect(computeOnboardingProgress('name', 'anonymous').current).toBe(PRESENTATION_SLIDE_COUNT + 1);
+  });
+
+  it('takes no slide offset in forcedQuestionnaire, which skips the presentation', () => {
+    expect(computeOnboardingProgress('sex', 'forcedQuestionnaire').current).toBe(1);
   });
 
   it('increments only on question steps and holds steady on interstitials', () => {

@@ -131,6 +131,19 @@ import { useWorkoutEvolution } from '../workoutEvolution/useWorkoutEvolution';
 import { useWorkoutActivitySnapshot } from '../home/useWorkoutActivitySnapshot';
 import { useFrequencyWindow } from '../home/useFrequencyWindow';
 import { useHomeStreak } from '../home/useHomeStreak';
+import { useDailyActivityStreak } from '../home/useDailyActivityStreak';
+import { subscribeToNutritionActivity } from '../nutrition/streakActivitySignal';
+import type { DailyActivityStreak } from '../home/dailyActivityStreak';
+import {
+  resolveStreakMilestoneCelebration,
+  type StreakMilestoneCelebration,
+} from '../home/streakFlameTiers';
+import {
+  claimStreakMilestoneCelebration,
+  pruneStreakMilestoneCelebrations,
+  readCelebratedStreakMilestones,
+} from '../services/streakCelebrationStorage';
+import { StreakEvolveScreen } from '../components/streak/StreakEvolveScreen';
 import { useWidgetSnapshotSync } from '../widgets/useWidgetSnapshotSync';
 import { deriveHomeInitialReadiness } from '../home/homeInitialReadiness';
 import { useHomeInitialVisualReady } from '../home/useHomeInitialVisualReady';
@@ -145,6 +158,7 @@ import { workoutExercisesFromPlan, type ManualSubstitutionContextStatus } from '
 import { EvolutionUnlockScreen } from './EvolutionUnlockScreen';
 import { EvolutionCelebration } from '../components/evolution/EvolutionCelebration';
 import { EvolutionDebugPanel } from '../components/dev/EvolutionDebugPanel';
+import { AjDebugPanel } from '../components/dev/AjDebugPanel';
 import type { EvolutionDebugPreset } from '../home/evolutionDebugPresets';
 import { NewPlanRevealScreen } from './NewPlanRevealScreen';
 import type { PendingEvolutionType } from '../workoutLifecycle/types';
@@ -216,6 +230,10 @@ function deviceTimezone(): string {
  * (`active`) at a time, and `opacity: 0` siblings never occlude regardless
  * of stacking order. Overlays add their own `zIndex` on top of this base.
  */
+/** Debounce after a food entry: long enough that a burst of additions
+ * settles into one refresh, short enough to feel immediate. */
+const NUTRITION_STREAK_SETTLE_MS = 1200;
+
 const FULL_BLEED = StyleSheet.create({
   tab: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
   overlayZ40: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 40 },
@@ -407,7 +425,7 @@ function AppShellContent({
   // above; reuses the same resolved schedule inputs but owns its own bounded
   // Firestore read (see `useHomeStreak`'s doc comment for why it can't reuse
   // `widgetSnapshotSync`'s already-loaded streak state).
-  const homeStreak = useHomeStreak({
+  const { streak: homeStreak, reload: reloadHomeStreak } = useHomeStreak({
     timezone: schedule.config?.timezone ?? deviceTimezone(),
     hasActiveProgram: activeProgram !== null,
     scheduleMode: schedule.config?.scheduleMode ?? activeProgram?.scheduleMode ?? 'fixed',
@@ -415,12 +433,64 @@ function AppShellContent({
     trainingDays: schedule.config?.trainingDays ?? [],
     activeRecoveryDays: schedule.config?.activeRecoveryDays ?? [],
   });
+  // Streak-flame milestone celebration (visual only — see
+  // `src/home/streakFlameTiers.ts`). `streakAfterCompletionRef` holds the
+  // authoritative streak read by THIS completion's projection sync, and is
+  // the only thing allowed to start a celebration: a value merely rehydrated
+  // on app open or re-rendered from state can never reach it, which is what
+  // keeps "reopened the app at 30 days" silent.
+  const streakAfterCompletionRef = useRef<DailyActivityStreak | null>(null);
+  // Holds the ~250ms delay between durable completion and the celebration, so
+  // it can never fire into an unmounted tree or survive an account switch.
+  const streakCelebrationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [streakCelebration, setStreakCelebration] = useState<{
+    celebration: StreakMilestoneCelebration;
+  } | null>(null);
+  // An account switch must never carry one user's pending milestone (or an
+  // on-screen celebration) into another's session. The persisted claim is
+  // already uid-scoped; this clears the in-memory half.
+  useEffect(() => {
+    streakAfterCompletionRef.current = null;
+    setStreakCelebration(null);
+    return () => {
+      if (streakCelebrationTimerRef.current) {
+        clearTimeout(streakCelebrationTimerRef.current);
+        streakCelebrationTimerRef.current = null;
+      }
+    };
+  }, [user?.uid]);
+  // Daily activity streak — consecutive days with a workout OR a food entry.
+  // Drives the flame, the "Sequência" number and the ticker. Deliberately a
+  // SEPARATE read from `useHomeStreak` above (obligations/weeks), which still
+  // feeds adherence and the schedule surfaces and must not change semantics.
+  // Canonical timezone: the schedule's persisted zone, with the same device
+  // fallback every other Home read already uses — stable across travel.
+  const { streak: dailyStreak, reload: reloadDailyStreak } = useDailyActivityStreak({
+    timezone: schedule.config?.timezone ?? deviceTimezone(),
+  });
   // __DEV__-only Home evolution preview (EvolutionDebugPanel) — stays `null`
   // forever in any build where the panel itself never mounts, so this has
   // zero effect outside local development.
   const [evolutionDebugPreset, setEvolutionDebugPreset] = useState<EvolutionDebugPreset | null>(null);
+  // __DEV__-only: forces the Home flame to a given day count for visual
+  // inspection. Never written outside the debug panel, never persisted, and
+  // never consulted by the celebration path — purely a render override.
+  const [streakFlamePreviewDays, setStreakFlamePreviewDays] = useState<number | null>(null);
+  // __DEV__-only: mounts the real transformation screen with synthetic data,
+  // deliberately BYPASSING `claimStreakMilestoneCelebration` so the six buttons
+  // stay repeatable and never touch the real per-milestone claim.
+  const triggerStreakEvolveDebug = useCallback((milestone: number) => {
+    const celebration = resolveStreakMilestoneCelebration({
+      current: milestone, complete: true, alreadyCelebrated: [],
+    });
+    if (celebration) setStreakCelebration({ celebration });
+  }, []);
   const homeEvolutionViewModel = evolutionDebugPreset?.viewModel ?? evolution.viewModel;
   const homeStreakForDisplay = evolutionDebugPreset?.streak ?? homeStreak;
+  // __DEV__ flame preview overrides the real value without touching Firestore.
+  const dailyStreakForDisplay = streakFlamePreviewDays === null
+    ? dailyStreak
+    : { current: streakFlamePreviewDays, complete: true };
   const { pendingIntent, consumeIntent } = useDeepLinkIntent();
   const [nutritionNavigationRequest, setNutritionNavigationRequest] = useState<{
     destination: 'plan' | 'diary' | 'weekly';
@@ -486,6 +556,16 @@ function AppShellContent({
   const workoutStartInFlightRef = useRef(false);
   const lastWorkoutStartKindRef = useRef<'normal' | 'advanced'>('normal');
   const [startWorkoutError, setStartWorkoutError] = useState<WorkoutExecutionStartError | null>(null);
+  /**
+   * Session to start, when it must NOT be re-read from the rotation pointer.
+   *
+   * Recovering a missed session consumes it off the rotation immediately (the
+   * selection rule), so `schedule.resolution.sessionIndex` already points at
+   * the NEXT one. Without this the user would answer "refazer o A" and start
+   * B. Cleared whenever the start flow leaves, so it can never leak into an
+   * ordinary start.
+   */
+  const [startSessionOverride, setStartSessionOverride] = useState<number | null>(null);
   const [resolvingPendingExecution, setResolvingPendingExecution] = useState(false);
   // The visual completion screen renders as soon as its last set is done,
   // before the durable Execution -> Schedule -> Lifecycle chain necessarily
@@ -563,7 +643,14 @@ function AppShellContent({
   // the Schedule Engine's resolution status, so a tap on the Workout tab
   // while a miss decision was showing could mount a second native `Modal`
   // on top of it — a documented cause of a stuck/unresponsive overlay).
-  const [startWorkoutFlow, setStartWorkoutFlow] = useState<'idle' | 'missedDecision' | 'confirmation'>('idle');
+  const [startWorkoutFlow, setStartWorkoutFlow] = useState<'idle' | 'missedDecision' | 'missedResolved' | 'confirmation'>('idle');
+  /**
+   * The committed outcome of a missed-session decision, captured so AJ can
+   * state what changed. Purely for presentation: the decision is already
+   * resolved and the Schedule Engine's own `SESSION_READY.sessionIndex` is
+   * the only source for which session is now today's.
+   */
+  const [missedResolved, setMissedResolved] = useState<{ decision: MissDecision; sessionIndex: number } | null>(null);
   const [showAdvanceWorkoutConfirmation, setShowAdvanceWorkoutConfirmation] = useState(false);
   const [agendaEditorOpen, setAgendaEditorOpen] = useState(false);
   const [missedDecisionPending, setMissedDecisionPending] = useState<MissDecision | null>(null);
@@ -779,7 +866,16 @@ function AppShellContent({
   // keeps every other modal (evolution unlock, on-demand paywall, etc.) from
   // opening on top of it.
   const recoveryModalOpen = recovery.state.status === 'pending' || recovery.state.status === 'inconsistent';
-  const advanceTarget = activeProgram && schedule.config
+  // The one-day "adiantar treino" exception, pilot-gated.
+  //
+  // ENROLLED: retired. Any session may be started on any day, so there is no
+  // special advance target left to offer — `null` keeps every consumer's
+  // "advance not available" branch, which is then the only reachable one.
+  //
+  // NOT ENROLLED: the published computation, unchanged. A legacy account's
+  // resolver still produces the REST_DAY/SESSION_READY shapes this reads, and
+  // removing it would silently take the feature away from everyone.
+  const advanceTarget = !schedule.pilotEnrolled && activeProgram && schedule.config
     ? advancedWorkoutTarget({
         scheduleMode: schedule.config?.scheduleMode ?? activeProgram.scheduleMode ?? 'fixed',
         resolution: schedule.resolution,
@@ -810,6 +906,31 @@ function AppShellContent({
     !!startWorkoutError ||
     !!supportRoute ||
     recoveryModalOpen;
+  /**
+   * "Home is the surface the user is actually looking at, and nothing else
+   * owns the screen" — the single gate for AJ's paused-cycle moment, the one
+   * AJ moment that appears without the user tapping anything (the missed
+   * decision and session recovery keep their original triggers untouched).
+   *
+   * `overlayOpen` already folds in the whole start-workout flow (missed
+   * decision + confirmation), session recovery, support and every settings
+   * sheet; the remaining terms are the full-screen surfaces that are
+   * deliberately NOT part of `overlayOpen` (it drives the TabBar's inertness,
+   * not "a Modal is up"), plus the live-workout and still-booting cases.
+   * HomeScreen cannot see any of this, so the decision belongs here.
+   */
+  const ajMomentsAllowed = tab === 'home'
+    && homeInitialVisualReady
+    && !snapshotPresentationActive
+    && !overlayOpen
+    && !workoutInProgress
+    && !workoutExecutionVisible
+    && !workoutStartPending
+    && !execution.starting
+    && !showEvolutionUnlock
+    && evolutionCelebration === null
+    && ringCelebrationRequest === null
+    && !pendingHealthIntegrationConfirmation.visible;
   useEffect(() => {
     if (showAdvanceWorkoutConfirmation && !advanceTarget) setShowAdvanceWorkoutConfirmation(false);
   }, [advanceTarget, showAdvanceWorkoutConfirmation]);
@@ -872,9 +993,25 @@ function AppShellContent({
     // function (proactively, at bootstrap); this just stops a tap from
     // opening a second, contradictory overlay on top of it.
     if (recoveryModalOpen) return;
+    // Decision 2.b, pilot-gated. For an ENROLLED account nothing is ever
+    // owed, so no decision may stand between the user and training — and the
+    // resolver cannot report a missed session, which makes this branch dead
+    // for them anyway. For every OTHER account the diversion must stay: it is
+    // the only entry point into the decision modal, so dropping it would
+    // leave a real pending miss with no way to be resolved.
     if (schedule.resolution.status === 'MISSED_SESSION_DECISION_REQUIRED') {
       setMissedDecisionError(false);
       setMissedDecisionContext(missedDecisionIdentity(schedule.resolution));
+      setStartWorkoutFlow('missedDecision');
+      return;
+    }
+    // PILOT — the same Jotinha notice, reached from the same tap and driven by
+    // the same `startWorkoutFlow` state, so there is exactly one modal and one
+    // animation. The difference is that nothing is owed: `schedule.resolution`
+    // is already SESSION_READY, so dismissing this lands straight on a normal
+    // start rather than back into a block.
+    if (schedule.missedNotice) {
+      setMissedDecisionError(false);
       setStartWorkoutFlow('missedDecision');
       return;
     }
@@ -904,40 +1041,74 @@ function AppShellContent({
    */
   const requestReposition = useCallback(async (targetSessionIndex: number): Promise<RepositionOutcome> => {
     if (!user || !activeProgram || !schedule.config) return 'ERROR';
+    // Keeping this guard: changing the rotation under a session that is being
+    // recorded right now is the one case that was never about the calendar.
     if (workoutInProgress || workoutStartPending || execution.starting) return 'BLOCKED_IN_PROGRESS';
-    const expectedCurrentNextSessionIndex = effectiveNextSessionIndex(schedule.resolution);
-    if (expectedCurrentNextSessionIndex === null) return 'ERROR';
-    try {
-      await repositionScheduleCursor({
-        uid: user.uid,
-        programId: activeProgram.programId,
-        programInstanceId: activeProgram.programInstanceId,
-        sessionCount: activeProgram.sessions.length,
-        scheduleMode: schedule.config.scheduleMode ?? 'fixed',
+    if (!schedule.pilotEnrolled) {
+      // LEGACY — the published grant-based cursor move, unchanged. The Rules
+      // still accept it for every non-enrolled account.
+      const expectedCurrentNextSessionIndex = effectiveNextSessionIndex(schedule.resolution);
+      if (expectedCurrentNextSessionIndex === null) return 'ERROR';
+      try {
+        await repositionScheduleCursor({
+          uid: user.uid,
+          programId: activeProgram.programId,
+          programInstanceId: activeProgram.programInstanceId,
+          sessionCount: activeProgram.sessions.length,
+          scheduleMode: schedule.config.scheduleMode ?? 'fixed',
+          targetSessionIndex,
+          todayLocalDate: localDateInTimezone(new Date(), schedule.config.timezone),
+          expectedCurrentNextSessionIndex,
+        });
+        await schedule.reload();
+        return 'OK';
+      } catch (error) {
+        const code = errorCode(error);
+        const reason = errorReason(error);
+        logWarn('workout_schedule', 'reposition_schedule_cursor_failed', {
+          errorCode: code,
+          errorReason: reason,
+          errorClass: errorClass(error),
+          targetSessionIndex,
+          expectedCurrentNextSessionIndex,
+          sessionCount: activeProgram.sessions.length,
+          scheduleMode: schedule.config.scheduleMode ?? 'fixed',
+          scheduledLocalDate: localDateInTimezone(new Date(), schedule.config.timezone),
+          hasProgramInstanceId: Boolean(activeProgram.programInstanceId),
+        });
+        if (reason === 'reposition_target_already_completed_today') return 'ALREADY_COMPLETED_TODAY';
+        if (reason === 'reposition_blocked_by_in_progress_execution') return 'BLOCKED_IN_PROGRESS';
+        return 'ERROR';
+      }
+    }
+    // NEW TRAINING MODEL — intentional selection.
+    //
+    // Replaces `repositionScheduleCursor`, which needed a server-issued grant
+    // because it moved `cursorDate` (a completion-derived fact). Selection
+    // moves only the SUGGESTION: picking B advances it to C immediately,
+    // without concluding anything, and the Rules refuse any write that would
+    // touch `cursorDate`/`lastCompletedAt`/`lastPerformedLocalDate`.
+    //
+    // Deliberately still allowed once today's workout is already credited:
+    // the user may choose what they intend to train TOMORROW. Starting is
+    // what the daily limit blocks, not choosing.
+    const next = await schedule.selectSession(targetSessionIndex);
+    if (next === null) {
+      logWarn('workout_schedule', 'session_selection_rejected', {
         targetSessionIndex,
-        todayLocalDate: localDateInTimezone(new Date(), schedule.config.timezone),
-        expectedCurrentNextSessionIndex,
-      });
-      await schedule.reload();
-      return 'OK';
-    } catch (error) {
-      const code = errorCode(error);
-      const reason = errorReason(error);
-      logWarn('workout_schedule', 'reposition_schedule_cursor_failed', {
-        errorCode: code,
-        errorReason: reason,
-        errorClass: errorClass(error),
-        targetSessionIndex,
-        expectedCurrentNextSessionIndex,
         sessionCount: activeProgram.sessions.length,
-        scheduleMode: schedule.config.scheduleMode ?? 'fixed',
-        scheduledLocalDate: localDateInTimezone(new Date(), schedule.config.timezone),
-        hasProgramInstanceId: Boolean(activeProgram.programInstanceId),
+        workoutCreditedToday: schedule.workoutCreditedToday,
       });
-      if (reason === 'reposition_target_already_completed_today') return 'ALREADY_COMPLETED_TODAY';
-      if (reason === 'reposition_blocked_by_in_progress_execution') return 'BLOCKED_IN_PROGRESS';
       return 'ERROR';
     }
+    // Same reason as the recovered-session case: selecting CONSUMES the
+    // session off the rotation, so `schedule.resolution.sessionIndex` now
+    // points at the NEXT one. The legacy cursor move had the opposite shape —
+    // it made the chosen session BECOME today's — so the caller could start
+    // without saying which. Here it must say, or "Fazer agora" on F opens the
+    // confirmation for A.
+    setStartSessionOverride(targetSessionIndex);
+    return 'OK';
   }, [user, activeProgram, schedule, workoutInProgress, workoutStartPending, execution.starting]);
 
   /** Same N days -> other N days, or fixed <-> flexible with no frequency change (docs §Alteração de agenda). Never touches the program. */
@@ -950,13 +1121,8 @@ function AppShellContent({
       // miss decision is pending must not leave it orphaned either — resolve
       // it as CONTINUE_SEQUENCE (preserves adherence, never SKIPPED) before
       // the mode that can no longer see it (`flexible`) takes over.
-      if (schedule.resolution.status === 'MISSED_SESSION_DECISION_REQUIRED') {
-        const identity = missedDecisionIdentity(schedule.resolution);
-        if (identity) {
-          const outcome = await schedule.resolveMiss('CONTINUE_SEQUENCE', identity);
-          if (outcome.status === 'FAILED') return 'ERROR';
-        }
-      }
+      // No pending miss can exist to orphan: changing modality is now just a
+      // change of RECOMMENDED days, and recommendations owe nothing.
       await saveScheduleConfig(user.uid, {
         scheduleMode: value.scheduleMode,
         trainingDays: value.trainingDays,
@@ -1045,6 +1211,35 @@ function AppShellContent({
 
   const handleMissDecision = async (decision: MissDecision) => {
     if (missDecisionTapInFlightRef.current || missedDecisionPending || schedule.loading) return;
+    // PILOT branch. `missedDecisionContext` is the LEGACY decision identity and
+    // is never latched for an enrolled account, so this runs first and the
+    // legacy path below stays untouched.
+    if (schedule.missedNotice) {
+      missDecisionTapInFlightRef.current = true;
+      setMissedDecisionError(false);
+      setMissedDecisionPending(decision);
+      try {
+        const sessionIndex = await schedule.decideMissedNotice(decision);
+        if (sessionIndex === null) {
+          // Only FOLLOW_SCHEDULE can fail (it writes); it stays retryable and
+          // the notice is deliberately not recorded as answered.
+          setMissedDecisionError(true);
+          return;
+        }
+        // Same confirmation beat as the legacy flow: AJ states what changed
+        // and hands over to the existing start confirmation. Nothing is
+        // started here.
+        setMissedResolved({ decision, sessionIndex });
+        // The rotation has already moved past the recovered session, so the
+        // session to start is carried explicitly from here on.
+        setStartSessionOverride(sessionIndex);
+        setStartWorkoutFlow('missedResolved');
+      } finally {
+        missDecisionTapInFlightRef.current = false;
+        setMissedDecisionPending(null);
+      }
+      return;
+    }
     if (!missedDecisionContext) return;
     missDecisionTapInFlightRef.current = true;
     const expected = missedDecisionContext;
@@ -1066,8 +1261,13 @@ function AppShellContent({
         // the exact same decision after rejecting it, remains retryable.
         setMissedDecisionError(true);
       } else if (outcome.resolution.status === 'SESSION_READY') {
+        // The decision is committed and the engine has already published the
+        // session that is now today's. AJ acknowledges that outcome before
+        // the start confirmation, which is still the only place a workout is
+        // actually started — this step adds a beat, never a second path.
         setMissedDecisionContext(null);
-        setStartWorkoutFlow('confirmation');
+        setMissedResolved({ decision, sessionIndex: outcome.resolution.sessionIndex });
+        setStartWorkoutFlow('missedResolved');
       } else {
         setMissedDecisionContext(null);
         setStartWorkoutFlow('idle');
@@ -1084,6 +1284,15 @@ function AppShellContent({
   // interactive between reload completion and the next start attempt.
   useEffect(() => {
     if (startWorkoutFlow !== 'missedDecision' || missedDecisionPending) return;
+    // LEGACY reconciliation only. It exists to replace a stale legacy decision
+    // with the current canonical one, and it reads that decision off
+    // `schedule.resolution`. The pilot's notice is NOT derived from the
+    // resolution — which is always `SESSION_READY` for an enrolled account —
+    // so without this guard the `else` below would fire on the very first
+    // render (both identities are null, and `sameMissedDecision(null, null)`
+    // is false), closing the notice and jumping straight to the start
+    // confirmation. The notice would never be visible at all.
+    if (schedule.missedNotice) return;
     const currentDecision = missedDecisionIdentity(schedule.resolution);
     if (sameMissedDecision(missedDecisionContext, currentDecision)) return;
     setMissedDecisionError(false);
@@ -1093,7 +1302,7 @@ function AppShellContent({
       setMissedDecisionContext(null);
       setStartWorkoutFlow(schedule.resolution.status === 'SESSION_READY' ? 'confirmation' : 'idle');
     }
-  }, [missedDecisionContext, missedDecisionPending, schedule.resolution, startWorkoutFlow]);
+  }, [missedDecisionContext, missedDecisionPending, schedule.missedNotice, schedule.resolution, startWorkoutFlow]);
 
   // Backdrop-tap dismissal only — there is no "not now" button, and this
   // never resolves/skips the pending decision. It just returns to idle;
@@ -1102,7 +1311,18 @@ function AppShellContent({
   const cancelMissDecision = () => {
     if (missedDecisionPending) return;
     setMissedDecisionError(false);
+    // PILOT: dismissing beat 1 is an answer too ("not now, and stop asking
+    // about Saturday"), and it leaves the rotation exactly as it was — only
+    // the local "already asked" record moves. Dismissing beat 2 ("Depois")
+    // drops the explicit start target; the decision it describes is already
+    // durable, so there is nothing to undo.
+    if (schedule.missedNotice) schedule.dismissMissedNotice();
+    setStartSessionOverride(null);
     setMissedDecisionContext(null);
+    // Also the "Depois" out of the confirmation beat. Dropping the captured
+    // outcome is presentation-only: the decision it describes is already
+    // durable, so there is nothing here to undo.
+    setMissedResolved(null);
     setStartWorkoutFlow('idle');
   };
 
@@ -1181,7 +1401,7 @@ function AppShellContent({
     lastWorkoutStartKindRef.current = 'normal';
     workoutStartInFlightRef.current = true;
     const requestedAtMs = Date.now();
-    const sessionIndex = schedule.resolution.sessionIndex;
+    const sessionIndex = startSessionOverride ?? schedule.resolution.sessionIndex;
     const attemptId = ++workoutStartAttemptSequenceRef.current;
     logInfo('workout_execution', 'start_user_confirmed', { attemptId, sessionIndex });
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
@@ -1210,6 +1430,10 @@ function AppShellContent({
       const { execution: started, error } = await execution.start(sessionIndex, {
         manualSubstitutionContext: manualSubstitutionContextState.context,
         manualSubstitutionContextStatus: manualSubstitutionContextState.status,
+        // Stamps the execution with the suggestion version it was started
+        // from, so a finalize arriving after a newer intentional selection
+        // leaves that newer intent standing.
+        startedFromSuggestionVersion: schedule.suggestionVersion,
       });
       const durationMs = Date.now() - requestedAtMs;
       if (!started) {
@@ -1219,6 +1443,7 @@ function AppShellContent({
         setWorkoutInProgress(false);
         setWorkoutExecutionVisible(false);
         setWorkoutStartAttempt(null);
+        setStartSessionOverride(null);
         setTab('home');
         setStartWorkoutError(error);
         logWarn('workout_execution', 'start_ui_rolled_back', {
@@ -1233,6 +1458,9 @@ function AppShellContent({
       // surface for WorkoutScreen in place, without another navigation.
       setWorkoutInProgress(true);
       setWorkoutStartPending(false);
+      // The persisted execution now carries the session identity; keeping the
+      // override alive could only leak into a later ordinary start.
+      setStartSessionOverride(null);
       beginPersistedWorkoutSession(started, sessionIndex);
       void widgetSnapshotSync.resyncNow();
       logInfo('workout_execution', 'start_ui_confirmed', { attemptId, sessionIndex, durationMs });
@@ -1243,6 +1471,7 @@ function AppShellContent({
       setWorkoutInProgress(false);
       setWorkoutExecutionVisible(false);
       setWorkoutStartAttempt(null);
+      setStartSessionOverride(null);
       setTab('home');
       setStartWorkoutError({ code: 'UNKNOWN' });
       logWarn('workout_execution', 'start_ui_rolled_back', {
@@ -1349,13 +1578,30 @@ function AppShellContent({
   // matches the account's currently active one — a program that changed
   // since the session started could never be safely rendered by
   // WorkoutScreen (wrong exercises/prescriptions), only discarded.
-  const recoveryCanResume = recovery.state.status === 'pending' && !!activeProgram
-    && (recovery.state.execution.programInstanceId ?? recovery.state.execution.programId)
-      === (activeProgram.programInstanceId ?? activeProgram.programId);
   const recoveryExecution = recovery.state.status === 'pending' || recovery.state.status === 'inconsistent'
     ? recovery.state.execution
     : null;
+  /**
+   * One credited workout per day makes a stale execution UNRECOVERABLE when
+   * the day it belongs to is already claimed by another completion: the
+   * backend will refuse `workout_daily_limit_reached` forever, so offering
+   * "Continuar"/"Finalizar" would be offering an action that can only fail.
+   * Discarding stays available, which is the honest way out — and it never
+   * touches the legitimate completion that claimed the day.
+   *
+   * Compared on the execution's OWN performed day, not on "today", so this
+   * also covers reopening the app the next morning with yesterday's orphan.
+   */
+  const recoveryDayAlreadyCredited = !!recoveryExecution
+    && schedule.workoutCreditedToday
+    && (recoveryExecution.performedLocalDate ?? recoveryExecution.scheduledLocalDate)
+      === localDateInTimezone(new Date(), schedule.config?.timezone ?? deviceTimezone());
+  const recoveryCanResume = recovery.state.status === 'pending' && !!activeProgram
+    && !recoveryDayAlreadyCredited
+    && (recovery.state.execution.programInstanceId ?? recovery.state.execution.programId)
+      === (activeProgram.programInstanceId ?? activeProgram.programId);
   const recoveryCanFinalize = !!recoveryExecution && !!activeProgram
+    && !recoveryDayAlreadyCredited
     && ['IN_PROGRESS', 'COMPLETED', 'PARTIALLY_COMPLETED'].includes(recoveryExecution.status)
     && (recoveryExecution.programInstanceId ?? recoveryExecution.programId)
       === (activeProgram.programInstanceId ?? activeProgram.programId);
@@ -1647,12 +1893,34 @@ function AppShellContent({
             refreshSchedule: schedule.reload,
             refreshWeek: activitySnapshot.reload,
             refreshFrequency: frequencyWindow.reload,
+            // Captures the post-completion streak for the milestone check in
+            // `finishWorkoutSession`. Reading the resolved value here (rather
+            // than the `homeStreak` state) is what ties a celebration to THIS
+            // completion instead of to whatever the UI happens to hold.
+            refreshStreak: async () => {
+              // Both are refreshed: `reloadHomeStreak` keeps the existing
+              // obligations/weeks projection coherent (adherence, widget),
+              // while the DAILY streak is what the flame and the milestone
+              // check read. Only the daily value is captured for the
+              // celebration — it is the one this feature is about.
+              const [, daily] = await Promise.all([reloadHomeStreak(), reloadDailyStreak()]);
+              streakAfterCompletionRef.current = daily;
+              return daily;
+            },
           }).then((outcome) => {
             logInfo('workout_performance', 'home_sync_end', {
               timestampMs: Date.now(),
               durationMs: Date.now() - homeSyncStartedAtMs,
               success: Object.values(outcome).every((status) => status === 'COMPLETED'),
             });
+            // The streak celebration belongs HERE, not after navigation: it
+            // must land on top of (and therefore be dismissed before) the
+            // end-of-workout summary, and every completion path — normal,
+            // retry and cold-start recovery — funnels through this sync, so
+            // none of them can silently skip the milestone.
+            streakCelebrationTimerRef.current = setTimeout(() => {
+              void maybeCelebrateStreakMilestone();
+            }, 250);
             return outcome;
           });
           let autoActivated = false;
@@ -1931,6 +2199,83 @@ function AppShellContent({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finishingSession, workoutCompletionResult, workoutInProgress]);
 
+  /**
+   * Shows the streak transformation screen when — and only when — the
+   * completion that just became durable landed exactly on a milestone.
+   *
+   * Every condition the feature requires is enforced here or in the pure
+   * helpers it calls:
+   *  - the streak value comes from `streakAfterCompletionRef`, which is set
+   *    only inside this completion's projection sync (never from rehydrated
+   *    or optimistic state), and is consumed exactly once;
+   *  - `resolveStreakMilestoneCelebration` requires an EXACT milestone hit
+   *    and refuses an inexact (`complete: false`) streak;
+   *  - `claimStreakMilestoneCelebration` is an atomic read-prune-write, so a
+   *    duplicate finalize callback, a re-sync or an app restart loses the
+   *    claim and stays silent — while a broken-and-rebuilt streak releases
+   *    its milestones and can legitimately celebrate again.
+   *
+   * Everything is best-effort: the workout is already durable, so any
+   * failure here is swallowed and simply costs the animation.
+   */
+  const maybeCelebrateStreakMilestone = async () => {
+    const streakAfter = streakAfterCompletionRef.current;
+    // Consume it immediately: a second call for the same completion (retry,
+    // duplicate callback) must not find a value to act on.
+    streakAfterCompletionRef.current = null;
+    if (!streakAfter || !user) return;
+    try {
+      const candidate = resolveStreakMilestoneCelebration({
+        current: streakAfter.current,
+        complete: streakAfter.complete,
+        alreadyCelebrated: await readCelebratedStreakMilestones(user.uid),
+      });
+      if (!candidate) {
+        // Not a milestone, but still a confirmed completion: let a streak
+        // that broke release its old milestones now, so the next real
+        // milestone is not silently blocked by a previous run's record.
+        await pruneStreakMilestoneCelebrations({ uid: user.uid, current: streakAfter.current });
+        return;
+      }
+      const claimed = await claimStreakMilestoneCelebration({
+        uid: user.uid,
+        milestone: candidate.milestone,
+        current: streakAfter.current,
+      });
+      if (!claimed || !appShellMountedRef.current) return;
+      setStreakCelebration({ celebration: candidate });
+    } catch (error) {
+      logWarn('workout', 'streak_milestone_celebration_failed', { error });
+    }
+  };
+
+  // A food entry is the OTHER way a day becomes valid. The signal is
+  // debounced so a user adding several foods in a row gets at most one
+  // refresh and one celebration, and so nothing pops while they are still
+  // mid-entry. The streak is always RE-DERIVED, never incremented.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const unsubscribe = subscribeToNutritionActivity(() => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = null;
+        void reloadDailyStreak().then((refreshed) => {
+          if (!refreshed) return;
+          streakAfterCompletionRef.current = refreshed;
+          return maybeCelebrateStreakMilestone();
+        });
+      }, NUTRITION_STREAK_SETTLE_MS);
+    });
+    return () => {
+      if (timer) clearTimeout(timer);
+      unsubscribe();
+    };
+    // `maybeCelebrateStreakMilestone` and `reloadDailyStreak` are stable
+    // enough for this subscription's lifetime; re-subscribing on every
+    // render would drop in-flight debounces.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadDailyStreak]);
+
   const finishWorkoutSession = async () => {
     await runWorkoutCompletionSingleFlight(finishSessionInFlightRef, async () => {
       if (!workoutInProgress) {
@@ -2063,6 +2408,7 @@ function AppShellContent({
             evolutionDiff={evolution.diff}
             onOpenEvolution={() => setShowEvolutionUnlock(true)}
             frequencyWindow={frequencyPresentation.source === 'AUTHORITATIVE' ? frequencyPresentation.value : null}
+            weeklyFrequency={activitySnapshot.weeklyFrequency}
             frequencyLoading={frequencyWindow.loading}
             frequencySource={frequencyPresentation.source === 'CACHE' ? 'CACHE'
               : frequencyWindow.loading ? 'CURRENT_SESSION' : 'AUTHORITATIVE'}
@@ -2084,8 +2430,10 @@ function AppShellContent({
             homeInitialVisualReady={homeInitialVisualReady}
             onInitialLayoutCommitted={onInitialLayoutCommitted}
             streak={homeStreakForDisplay}
+            dailyStreak={dailyStreakForDisplay}
             ringCelebrationRequest={ringCelebrationRequest}
             onRingCelebrationFinished={handleRingCelebrationFinished}
+            ajMomentsAllowed={ajMomentsAllowed}
           />
         </PersistentScreen>
         <PersistentScreen active={tab === 'nutrition' && nutritionEnabled === true} activeStyle={FULL_BLEED.tab} inactiveMode="materialized">
@@ -2101,7 +2449,19 @@ function AppShellContent({
           canTriggerCelebration={prescription.status === 'SUCCESS'}
           onTriggerCelebration={triggerEvolutionCelebrationDebug}
           onTriggerRingCelebration={triggerRingCelebrationDebug}
+          streakFlamePreviewDays={streakFlamePreviewDays}
+          onPreviewStreakFlame={setStreakFlamePreviewDays}
+          onTriggerStreakEvolve={triggerStreakEvolveDebug}
         />
+        {/*
+          __DEV__-only preview of the AJ assistant's three moments. Gated by
+          the SAME `ajMomentsAllowed` the real paused-cycle moment uses, so a
+          preview can never mount a second native Modal on top of a real
+          overlay (the missed decision, session recovery, a confirmation, a
+          settings sheet) — exactly what `startWorkoutFlow`'s single state
+          machine exists to prevent.
+        */}
+        <AjDebugPanel visible={ajMomentsAllowed} />
         {tab === 'workout' && workoutStartAttempt && (
           <WorkoutStartVisibilityMetric
             key={workoutStartAttempt.id}
@@ -2141,8 +2501,14 @@ function AppShellContent({
               onStart={requestStartWorkout}
               onOpenAgendaEditor={() => setAgendaEditorOpen(true)}
               onReposition={requestReposition}
+              pilotEnrolled={schedule.pilotEnrolled}
               evolutionViewModel={evolution.viewModel}
               weekOverview={activitySnapshot.week}
+              // The same target/intent Home's Today card gets, so "adiantar
+              // treino" is one decision and one confirmation, reachable from
+              // either screen.
+              advanceWorkoutTarget={advanceTarget}
+              onAdvanceWorkout={requestAdvanceWorkout}
             />
           )}
         </PersistentScreen>
@@ -2151,6 +2517,14 @@ function AppShellContent({
             initialScheduleMode={schedule.config?.scheduleMode ?? 'fixed'}
             initialTrainingDays={schedule.config?.trainingDays ?? []}
             currentFrequency={activeProgram.prescribedTrainingFrequency ?? activeProgram.prescribedStructuredDays ?? activeProgram.sessions.length}
+            // Same week, same letters and same "próximo treino" the faixa da
+            // semana (`TreinoScreen`) is already showing behind the sheet —
+            // the inputs, not a second reading of them.
+            weekOverview={activitySnapshot.week}
+            sessions={activeProgram.sessions}
+            resolution={schedule.resolution}
+            nextSessionIndex={effectiveNextSessionIndex(schedule.resolution)}
+            todayLocalDate={localDateInTimezone(new Date(), schedule.config?.timezone ?? deviceTimezone())}
             onClose={() => setAgendaEditorOpen(false)}
             onSave={handleSaveAgenda}
             onChangeFrequency={handleChangeFrequency}
@@ -2298,11 +2672,11 @@ function AppShellContent({
         visible={startWorkoutFlow === 'confirmation' && !workoutInProgress}
         prescription={prescription}
         resolution={schedule.resolution}
-        sessionIndex={schedule.resolution.status === 'SESSION_READY'
+        sessionIndex={startSessionOverride ?? (schedule.resolution.status === 'SESSION_READY'
           ? schedule.resolution.sessionIndex
-          : 0}
+          : 0)}
         loading={prescriptionLoading}
-        onCancel={() => setStartWorkoutFlow('idle')}
+        onCancel={() => { setStartSessionOverride(null); setStartWorkoutFlow('idle'); }}
         onConfirm={startWorkout}
         generating={generatingWorkout}
         onGenerate={() => { void generateWorkout(); }}
@@ -2357,13 +2731,48 @@ function AppShellContent({
           onAcknowledgeMissing={acknowledgeMissingRecovery}
         />
       ) : null}
+      {/*
+        Both beats of the missed-session conversation (ask, then confirm the
+        committed outcome) are ONE overlay on purpose. Handing over between
+        two native Modals would mean presenting one while the other is still
+        dismissing — iOS drops that, and the second screen never appears.
+        `missedResolved` is still its own `startWorkoutFlow` value, so this
+        can never be `visible` alongside StartWorkoutConfirmation.
+      */}
+      {/* Decision 2.b, pilot-gated by construction rather than by a flag.
+          For an ENROLLED account `resolveFreeSchedule` never reports
+          `MISSED_SESSION_DECISION_REQUIRED`, so `startWorkoutFlow` has no path
+          to `missedDecision` and this stays closed — nothing is owed, so there
+          is nothing to decide. For every OTHER account the legacy resolver can
+          still produce that status, and the modal must still open and be
+          actionable (see `resolveMiss`'s own gate). */}
       <MissedSessionDecisionModal
-        visible={startWorkoutFlow === 'missedDecision'}
+        /*
+         * BOTH beats of the same AjMoment, which is why this is not just
+         * `=== 'missedDecision'`. The component renders beat 2 from its
+         * `resolved` prop (`step={letter ? 'resolved' : 'decision'}`), and
+         * that prop is only non-null while `startWorkoutFlow` is
+         * `missedResolved` — so gating visibility on the decision beat alone
+         * made the modal vanish at the exact moment it should have said what
+         * changed and offered to start the session. Found in the Simulator:
+         * answering "Sim, refazer hoje" closed everything and the Home fell
+         * back to the rotation pointer, offering the NEXT session instead of
+         * the recovered one.
+         *
+         * `StartWorkoutConfirmation` is gated on `'confirmation'`, so the two
+         * overlays still can never be visible at once.
+         */
+        visible={startWorkoutFlow === 'missedDecision' || startWorkoutFlow === 'missedResolved'}
         pending={missedDecisionPending}
         refreshing={schedule.loading}
         error={missedDecisionError}
+        resolved={startWorkoutFlow === 'missedResolved' ? missedResolved : null}
         onChoose={(decision) => { void handleMissDecision(decision); }}
         onCancel={cancelMissDecision}
+        onStartResolved={() => {
+          setMissedResolved(null);
+          setStartWorkoutFlow('confirmation');
+        }}
       />
       {pendingHealthIntegrationConfirmation.visible && user && (
         <PendingHealthIntegrationConfirmationSheet
@@ -2445,6 +2854,14 @@ function AppShellContent({
           />
         ) : null}
       </Modal>
+      {streakCelebration && (
+        <View style={{ position: 'absolute', inset: 0, zIndex: FULL_BLEED.overlayZ80.zIndex }}>
+          <StreakEvolveScreen
+            celebration={streakCelebration.celebration}
+            onContinue={() => setStreakCelebration(null)}
+          />
+        </View>
+      )}
       {evolutionCelebration?.phase === 'celebrating' && (
         <View style={{ position: 'absolute', inset: 0, zIndex: FULL_BLEED.overlayZ80.zIndex }}>
           <EvolutionCelebration
@@ -3204,24 +3621,33 @@ function WorkoutTabBlockedState({
   resolution,
   plan,
   onDone,
+  pilotEnrolled = false,
 }: {
   resolution: Exclude<ScheduleResolution, { status: 'SESSION_READY' }>;
   plan: FinalWorkoutPlan;
   onDone: () => void;
+  /** Selects the free-training copy for the daily-limit state. */
+  pilotEnrolled?: boolean;
 }) {
   const { theme } = useTheme();
   const { t } = useTranslation('home');
   const tLoose = t as unknown as LooseTranslate;
 
+  // For an ENROLLED account only `TODAY_COMPLETED` is reachable — the daily
+  // limit's friendly state — and it gets the forward-looking copy, because
+  // tomorrow really is available. The calendar-shaped keys (`restDay`,
+  // `activeRecovery`, `setupRequired`) and the punitive one
+  // (`missedDecision`) stay selectable for every other account, whose
+  // resolver still produces those statuses.
   const copyKey =
-    resolution.status === 'TODAY_COMPLETED' ? 'completedToday' :
+    resolution.status === 'TODAY_COMPLETED' ? (pilotEnrolled ? 'completedTodayFree' : 'completedToday') :
     resolution.status === 'REST_DAY' ? 'restDay' :
     resolution.status === 'ACTIVE_RECOVERY_DAY' ? 'activeRecovery' :
     resolution.status === 'SCHEDULE_SETUP_REQUIRED' ? 'setupRequired' :
     resolution.status === 'MISSED_SESSION_DECISION_REQUIRED' ? 'missedDecision' :
     null;
 
-  const nextUp = resolution.status === 'REST_DAY' || resolution.status === 'ACTIVE_RECOVERY_DAY' || resolution.status === 'TODAY_COMPLETED'
+  const nextUp = resolution.status === 'TODAY_COMPLETED'
     ? { session: plan.sessions[resolution.nextSessionIndex] ?? null, date: resolution.nextWorkoutDate }
     : null;
 

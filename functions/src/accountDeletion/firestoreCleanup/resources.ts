@@ -53,12 +53,17 @@ export const NUTRITION_USER_RESOURCES = [
   'onboardingNutritionState', 'nutritionProfile', 'nutritionPlans', 'nutritionDailyLogs', 'nutritionRecipes',
   'nutritionFoods', 'nutritionPreferences', 'nutritionFavoriteMealOptions',
   'nutritionGenerationJobs', 'nutritionMealAlternatives', 'nutritionCatalogLogReceipts', 'nutritionDiaryProtocol', 'nutritionDiaryOperationReceipts',
+  // Chama 2.0 — the nutrition evidence aggregate and the canonical streak
+  // timezone. Both are user-scoped and must leave with the account, same as
+  // every other nutrition resource above.
+  'streakNutritionDays', 'streakSettings',
 ] as const;
 const PROGRESS_PHOTOS_COLLECTION = 'progressPhotos';
 const WORKOUT_PROGRAMS_COLLECTION = 'workoutPrograms';
 const WORKOUT_PROGRAM_STATE_COLLECTION = 'workoutProgramState';
 const WORKOUT_EXECUTIONS_COLLECTION = 'workoutExecutions';
 const WORKOUT_FINALIZATION_ATTEMPTS_COLLECTION = 'workoutFinalizationAttempts';
+const WORKOUT_DAILY_COMPLETIONS_COLLECTION = 'workoutDailyCompletions';
 const WORKOUT_EXECUTION_STATE_COLLECTION = 'workoutExecutionState';
 const WORKOUT_EXECUTION_OCCURRENCE_COUNTERS_COLLECTION = 'workoutExecutionOccurrenceCounters';
 const EXERCISE_SUBSTITUTION_PREFERENCES_COLLECTION = 'exerciseSubstitutionPreferences';
@@ -462,6 +467,16 @@ export function deleteUserWorkoutFinalizationAttempts(uid: string, db: Firestore
     uid,
     WORKOUT_FINALIZATION_ATTEMPTS_COLLECTION,
     'workoutFinalizationAttempts',
+    db,
+  );
+}
+
+/** One-credited-workout-per-day markers; user-scoped, leave with the account. */
+export function deleteUserWorkoutDailyCompletions(uid: string, db: Firestore = defaultDb) {
+  return deleteWorkoutLifecycleCollection(
+    uid,
+    WORKOUT_DAILY_COMPLETIONS_COLLECTION,
+    'workoutDailyCompletions',
     db,
   );
 }

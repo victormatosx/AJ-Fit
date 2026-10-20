@@ -276,6 +276,13 @@ const QUESTION_STEP_IDS: readonly OnboardingStepId[] = ONBOARDING_STEPS.filter(
 ).map((s) => s.id);
 
 /**
+ * How many slides the `presentation` step shows before the questionnaire
+ * starts. Authority for both the slides themselves (`OnboardingScreen`) and
+ * the offset the question numbering continues from.
+ */
+export const PRESENTATION_SLIDE_COUNT = 3 as const;
+
+/**
  * Progresso para `SegBar`: só perguntas contam. Interstitials/prova
  * social/presentation/processing/result "congelam" a barra no valor da
  * última pergunta respondida em vez de fazê-la andar e parar.
@@ -286,19 +293,20 @@ export function computeOnboardingProgress(
   answers?: OnboardingFlowAnswers,
 ): { current: number; total: number } {
   const seq = getStepSequence(mode, answers);
-  const total = seq.filter((id) => QUESTION_STEP_IDS.includes(id)).length;
+  // `presentation` renders PRESENTATION_SLIDE_COUNT slides of its own,
+  // numbered from 01. The questionnaire continues that count instead of
+  // restarting, so the user sees one unbroken sequence. `forcedQuestionnaire`
+  // skips the presentation entirely and therefore takes no offset.
+  const slideOffset = seq.includes('presentation') ? PRESENTATION_SLIDE_COUNT : 0;
+  const total = seq.filter((id) => QUESTION_STEP_IDS.includes(id)).length + slideOffset;
   const idx = seq.indexOf(currentStepId);
   let current = 0;
   for (let i = 0; i <= idx; i++) {
     if (QUESTION_STEP_IDS.includes(seq[i])) current++;
   }
-  // Non-question steps (interstitials etc.) show the count of the last
-  // answered question rather than 0, so the bar holds its position.
-  if (!QUESTION_STEP_IDS.includes(currentStepId) && current === 0) {
-    // Before the first question (presentation/name is itself a question, so
-    // this only applies to 'presentation').
-    current = 0;
-  }
+  // The presentation itself stays at 0: it numbers its own slides internally,
+  // and the bar has nothing to hold at yet.
+  if (current > 0) current += slideOffset;
   return { current, total };
 }
 

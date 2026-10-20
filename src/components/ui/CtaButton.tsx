@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { displayLineHeight } from '../../theme/tokens';
-import { useTheme } from '../../theme';
+import { useTheme, type AppTheme } from '../../theme';
 
 type Props = {
   children: React.ReactNode;
@@ -24,6 +24,14 @@ type Props = {
    */
   accessibilityLabel?: string;
   accessibilityHint?: string;
+  /**
+   * Overrides the active app theme. Only for surfaces pinned to a fixed art
+   * direction — Home's Today card is Dark in both themes
+   * (`TODAY_WORKOUT_THEME`), so the CTAs inside it must be handed that theme
+   * instead of resolving the live one. Omitted everywhere else, which keeps
+   * the ordinary `useTheme()` behavior untouched.
+   */
+  theme?: AppTheme;
 };
 
 export function CtaButton({
@@ -35,8 +43,10 @@ export function CtaButton({
   accessibilityState,
   accessibilityLabel,
   accessibilityHint,
+  theme: themeOverride,
 }: Props) {
-  const { theme } = useTheme();
+  const { theme: activeTheme } = useTheme();
+  const theme = themeOverride ?? activeTheme;
   const a11y = {
     accessibilityRole: 'button' as const,
     accessibilityLabel,
@@ -154,12 +164,28 @@ export function CtaButton({
   );
 }
 
-export function CtaText({ children }: { children: React.ReactNode }) {
-  const { theme } = useTheme();
+export function CtaText({
+  children,
+  theme: themeOverride,
+  numberOfLines,
+}: {
+  children: React.ReactNode;
+  /** Same purpose as `CtaButton`'s own `theme` — see its doc comment. */
+  theme?: AppTheme;
+  /**
+   * Lets a long label wrap instead of overflowing the button's fixed height.
+   * Omitted keeps the single-line default every existing caller relies on.
+   */
+  numberOfLines?: number;
+}) {
+  const { theme: activeTheme } = useTheme();
+  const theme = themeOverride ?? activeTheme;
 
   return (
     <Text
+      numberOfLines={numberOfLines}
       style={{
+        flexShrink: 1,
         color: theme.colors.primaryForeground,
         fontFamily: theme.fonts.display,
         fontSize: 17,

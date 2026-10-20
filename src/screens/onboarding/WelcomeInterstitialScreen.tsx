@@ -1,142 +1,39 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Animated } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, useWindowDimensions } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { AJMark } from '../../components/ui/AJMark';
-import { Display } from '../../components/ui/Display';
-import { spacing } from '../../theme/tokens';
+import { AjSpeechText } from '../../components/aj/AjSpeechText';
+import {
+  AJ_INTERSTITIAL,
+  AJ_REACT_STAGE,
+  AJ_TYPING_MS_PER_CHAR,
+} from '../../components/aj/ajMomentTiming';
+import { useAjFunnelDirector } from '../../components/onboarding/AjFunnelStage';
 import { useTheme } from '../../theme';
-import { useReducedMotionPreference } from '../../lib/reducedMotion';
 
-// Typewriter timing — tuned to read as a small brand detail, not a "look, an
-// animation" moment. Interval scales down for longer strings (see
-// `charIntervalFor`) so a long line never runs on forever.
-const TYPE_INITIAL_DELAY_MS = 180;
-const HEADING_TYPE_CONFIG = { charInterval: 55, maxTotalMs: 1200, minCharInterval: 18 };
-// Heading cursor lingers after the line finishes, a small pause before the
-// screen advances.
-const HEADING_CURSOR_HOLD_MS = 400;
-const HEADING_CURSOR_FADE_MS = 220;
-const CURSOR_CHAR = '|';
-
-// Advances a fixed delay after the greeting genuinely finishes typing, so
-// it's tied to the real animation instead of an estimate of it.
+/**
+ * Advances a fixed delay after the greeting genuinely finishes typing, so
+ * it's tied to the real reveal instead of an estimate of it.
+ */
 const ADVANCE_DELAY_AFTER_TYPING_MS = 500;
 
-type TypeConfig = { charInterval: number; maxTotalMs: number; minCharInterval: number };
-
-function charIntervalFor(length: number, config: TypeConfig): number {
-  if (length <= 0) return config.charInterval;
-  const budgeted = config.maxTotalMs / length;
-  return Math.max(config.minCharInterval, Math.min(config.charInterval, budgeted));
-}
-
-function delayForChar(char: string, baseInterval: number): number {
-  if (char === ' ') return baseInterval * 0.5;
-  if (/[.,!?;:¡¿]/.test(char)) return baseInterval + 90;
-  return baseInterval;
-}
-
 /**
- * Reveals `text` one grapheme at a time, starting only once `start` becomes
- * true (so the body line can wait for the heading to fully settle before it
- * begins). Runs once per `start` per mount — the funnel genuinely unmounts
- * this screen on navigation, so re-entering Welcome is a fresh mount and
- * replays naturally. A single chained timeout drives the reveal instead of
- * one timer per character, so there's at most one pending timer to clean up
- * on unmount/skip.
- */
-function useTypewriter(text: string, reduceMotion: boolean, start: boolean, config: TypeConfig) {
-  const chars = useMemo(() => Array.from(text), [text]);
-  const [count, setCount] = useState(reduceMotion ? chars.length : 0);
-  const [started, setStarted] = useState(reduceMotion);
-  const [finished, setFinished] = useState(reduceMotion);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const startedRef = useRef(false);
-
-  useEffect(() => {
-    if (reduceMotion) {
-      setCount(chars.length);
-      setStarted(true);
-      setFinished(true);
-      return;
-    }
-    if (!start || startedRef.current) return;
-    startedRef.current = true;
-    setStarted(true);
-
-    setCount(0);
-    setFinished(false);
-    const interval = charIntervalFor(chars.length, config);
-
-    let index = 0;
-    const step = () => {
-      index += 1;
-      setCount(index);
-      if (index >= chars.length) {
-        setFinished(true);
-        return;
-      }
-      timeoutRef.current = setTimeout(step, delayForChar(chars[index], interval));
-    };
-
-    timeoutRef.current = setTimeout(step, TYPE_INITIAL_DELAY_MS);
-
-    return () => {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- starts once per mount when `start` first flips true, not on every `text`/`reduceMotion` identity change
-  }, [start, reduceMotion]);
-
-  return { displayText: chars.slice(0, count).join(''), started, finished };
-}
-
-/**
- * Drives a typing cursor's visibility: hidden until its line has actually
- * `started` typing (so the bottom line shows no cursor while the top line
- * is still being revealed), then hold-then-fades once `finished` — a short
- * hold for the line mid-handoff (feels like "Enter" moved the cursor down),
- * a longer hold for the final line (a small pause before the screen
- * advances).
- */
-function useTypewriterCursor(
-  started: boolean,
-  finished: boolean,
-  reduceMotion: boolean,
-  holdMs: number,
-  fadeMs: number,
-) {
-  const [showCursor, setShowCursor] = useState(false);
-  const cursorOpacity = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    if (reduceMotion || !started) return;
-    cursorOpacity.setValue(1);
-    setShowCursor(true);
-  }, [started, reduceMotion, cursorOpacity]);
-
-  useEffect(() => {
-    if (reduceMotion || !finished) return;
-    const holdTimer = setTimeout(() => {
-      Animated.timing(cursorOpacity, {
-        toValue: 0,
-        duration: fadeMs,
-        useNativeDriver: true,
-      }).start(({ finished: animFinished }) => {
-        if (animFinished) setShowCursor(false);
-      });
-    }, holdMs);
-    return () => clearTimeout(holdTimer);
-  }, [finished, reduceMotion, cursorOpacity, holdMs, fadeMs]);
-
-  return { showCursor, cursorOpacity };
-}
-
-/**
- * Pure transition screen — no progress bar, no eyebrow, no CTA. Advances on
- * its own `ADVANCE_DELAY_AFTER_TYPING_MS` after the greeting finishes typing,
- * same pattern as SplashScreen (timer owns the `onDone` call, cleaned up on
- * unmount so a stale timer can't fire onto whatever screen the funnel
- * already moved to).
+ * Pure transition screen — no progress bar, no eyebrow, no CTA. It still
+ * advances on its own, exactly as before: a timer fires
+ * `ADVANCE_DELAY_AFTER_TYPING_MS` after the greeting lands, cleaned up on
+ * unmount so a stale timer can't fire onto whatever step the funnel already
+ * moved to. The approved design draws a CTA here; adding one would turn a
+ * screen that passes through by itself into one that demands a tap, which is
+ * a behaviour change rather than a visual one. Recorded as a difference.
+ *
+ * Two things this screen used to own are gone, both because the funnel now
+ * provides them:
+ *
+ * - Its own `AJMark`. The funnel's single persistent AJ is already on screen
+ *   at this step (`AjFunnelStepPose`), and a second mark beside him would be
+ *   a second mascot.
+ * - Its own typewriter. `AjSpeechText` is the app's one typing effect; two
+ *   implementations of the same reveal is exactly the duplication the
+ *   assistant's motion contract exists to prevent.
  */
 export function WelcomeInterstitialScreen({
   name,
@@ -147,22 +44,15 @@ export function WelcomeInterstitialScreen({
 }) {
   const { t } = useTranslation('onboarding');
   const { theme } = useTheme();
+  const { height } = useWindowDimensions();
+  const aj = useAjFunnelDirector();
   const advancing = useRef(false);
-  const reduceMotion = useReducedMotionPreference();
+  const [finished, setFinished] = useState(false);
 
   const greeting = name ? t('welcome.greeting', { name }) : t('welcome.greetingNoName');
 
-  const greetingTyping = useTypewriter(greeting, reduceMotion, true, HEADING_TYPE_CONFIG);
-  const greetingCursor = useTypewriterCursor(
-    greetingTyping.started,
-    greetingTyping.finished,
-    reduceMotion,
-    HEADING_CURSOR_HOLD_MS,
-    HEADING_CURSOR_FADE_MS,
-  );
-
   useEffect(() => {
-    if (!greetingTyping.finished) return;
+    if (!finished) return () => undefined;
     const timer = setTimeout(() => {
       if (advancing.current) return;
       advancing.current = true;
@@ -170,47 +60,36 @@ export function WelcomeInterstitialScreen({
     }, ADVANCE_DELAY_AFTER_TYPING_MS);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fires once per mount when typing genuinely finishes, not on every onContinue identity change
-  }, [greetingTyping.finished]);
+  }, [finished]);
 
   return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: theme.colors.background,
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingHorizontal: spacing[6],
-        paddingBottom: spacing[12],
-      }}
-    >
-      <AJMark size={120} />
-      <View style={{ marginTop: -spacing[4], alignSelf: 'stretch' }}>
-        {/* Ghost reserves the final layout (text + cursor width) so the
-            revealed text never shifts once typing finishes. */}
-        <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-          <Display size={26} style={{ textAlign: 'center', opacity: 0 }}>
-            {greeting}
-            {CURSOR_CHAR}
-          </Display>
-        </View>
-        <View
-          style={{ position: 'absolute', top: 0, left: 0, right: 0 }}
-          accessible
-          accessibilityLabel={greeting}
-          importantForAccessibility="yes"
-        >
-          <View importantForAccessibility="no-hide-descendants">
-            <Display size={26} style={{ textAlign: 'center' }}>
-              {greetingTyping.displayText}
-              {greetingCursor.showCursor && (
-                <Animated.Text style={{ opacity: greetingCursor.cursorOpacity, color: theme.colors.textPrimary }}>
-                  {CURSOR_CHAR}
-                </Animated.Text>
-              )}
-            </Display>
-          </View>
-        </View>
-      </View>
+    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+      <AjSpeechText
+        text={greeting}
+        msPerChar={AJ_TYPING_MS_PER_CHAR.headline}
+        reduceMotion={aj.reduceMotion}
+        onStart={() => {
+          aj.setTalking(true);
+          aj.setMood('talk');
+        }}
+        onDone={() => {
+          aj.setTalking(false);
+          aj.setMood('happy');
+          setFinished(true);
+        }}
+        style={{
+          position: 'absolute',
+          top: height * AJ_INTERSTITIAL.yFraction + AJ_REACT_STAGE.speechOffsetY,
+          left: 30,
+          right: 30,
+          textAlign: 'center',
+          fontFamily: theme.fonts.uiSemi,
+          fontSize: 27,
+          lineHeight: 33,
+          letterSpacing: -0.4,
+          color: theme.colors.textPrimary,
+        }}
+      />
     </View>
   );
 }

@@ -30,6 +30,25 @@ vi.mock('../../onboarding/onboardingAnalytics', () => ({ logOnboardingEvent: vi.
 vi.mock('../../onboarding/onboardingVideoPreload', () => ({ preloadMethodologyVideo: vi.fn(), preloadGuidedWorkoutVideo: vi.fn(),
   releaseMethodologyVideoPlayer: vi.fn(), releaseGuidedWorkoutVideoPlayer: vi.fn() }));
 vi.mock('../../components/onboarding/AnimatedStepContainer', () => ({ AnimatedStepContainer: ({ children }: { children: React.ReactNode }) => React.createElement('main', null, children) }));
+// The funnel's persistent AJ layer. Rendered as a transparent pass-through
+// here for the same reason `AnimatedStepContainer` is: it wraps the step tree
+// without participating in step routing, and its real implementation reaches
+// for Reanimated and safe-area insets that this Node-only SSR harness has no
+// device for. Every assertion below is about WHICH step renders WHICH control
+// and with what progress/continue state — none of which this wrapper decides.
+vi.mock('../../components/onboarding/AjFunnelStage', () => {
+  const inertDirector = () => ({
+    reduceMotion: true,
+    layout: { width: 0, height: 0, safeTop: 0, safeBottom: 0 },
+    direct: vi.fn(), setMood: vi.fn(), setLook: vi.fn(),
+    setTalking: vi.fn(), play: vi.fn(), setVisible: vi.fn(),
+  });
+  return {
+    AjFunnelStage: ({ children }: { children: React.ReactNode }) => React.createElement('div', null, children),
+    useAjFunnelDirector: inertDirector,
+    useAjStagePose: inertDirector,
+  };
+});
 vi.mock('../../components/onboarding/QuestionStepScreen', () => ({ QuestionStepScreen: (props: QuestionProps) => {
   harness.question = props;
   return React.createElement('section', { 'data-step': props.question.id },
@@ -51,6 +70,45 @@ vi.mock('../onboarding/EvolutionInterstitialScreen', () => ({ EvolutionInterstit
 vi.mock('../onboarding/MethodologyInterstitialScreen', () => ({ MethodologyInterstitialScreen: () => null }));
 vi.mock('../onboarding/GuidedWorkoutInterstitialScreen', () => ({ GuidedWorkoutInterstitialScreen: () => null }));
 vi.mock('../onboarding/AjFitProgressInterstitialScreen', () => ({ AjFitProgressInterstitialScreen: () => React.createElement('div', null, 'ajfit-progress') }));
+
+/**
+ * Which control draws each nutrition step.
+ *
+ * The eight steps that map onto a questionnaire `kind` now render through
+ * `QuestionStepScreen`'s own controls — the same ruled rows, radio and ruler
+ * the training questions use — instead of `NutritionProfileQuestion`'s
+ * `SelectableRow`/`SelectableChip`. Those primitives are shared with fourteen
+ * nutrition screens outside the funnel, so they stayed put and the funnel
+ * moved instead (see `nutritionFunnelQuestions.ts`).
+ *
+ * The two catalogue searches have no questionnaire `kind` that describes
+ * them and still come from `NutritionProfileQuestion`.
+ *
+ * Pinning the KIND per step is stricter than the marker this replaced: it
+ * fails if a step silently changes control, not merely if it loses one.
+ */
+const NATIVE_CONTROL_KIND: Record<string, string> = {
+  nutritionGoalCategory: 'choice-large',
+  progressionPace: 'choice-large',
+  nonTrainingActivityLevel: 'choice-large',
+  varietyPreference: 'choice-large',
+  mealSlots: 'multi',
+  excludedAllergens: 'multi',
+  supplements: 'multi',
+  targetWeightKg: 'wheel',
+};
+
+function expectStepControl(html: string, step: string, id: string, question: QuestionProps | null) {
+  const nativeKind = NATIVE_CONTROL_KIND[step];
+  if (!nativeKind) {
+    expect(html).toContain(`data-nutrition-control="${step}"`);
+    return;
+  }
+  expect(question?.question.id).toBe(id);
+  expect(question?.question.kind).toBe(nativeKind);
+  // Rendered by the step screen itself, not handed in as a composed control.
+  expect(question?.answerControl).toBeUndefined();
+}
 
 function renderStep(id: OnboardingStepId, goal: NutritionGoal = 'lose_fat') {
   const quiz = { goal, weight: 80, muscleFocus: [], specialConditions: [], trainingDays: [] };
@@ -80,7 +138,7 @@ describe('onboarding nutrition rendered content', () => {
         expect(getNextStepId(previous, 'anonymous', { goal })).toBe(id);
         const { html, funnel } = renderStep(id, goal);
         expect(html).toContain(`data-step="${id}"`);
-        expect(html).toContain(`data-nutrition-control="${step}"`);
+        expectStepControl(html, step, id, harness.question);
         expect(html).toContain(`profile.questions.${step}.title`);
         expect(html).toContain('Continuar');
         expect(harness.question?.stepNumber).toBe(funnel.progress.current);
@@ -98,9 +156,9 @@ describe('onboarding nutrition rendered content', () => {
     const first = getNextStepId('interstitial_ajFitProgress', 'anonymous', { goal: 'lose_fat' })!;
     const next = getNextStepId(first, 'anonymous', { goal: 'lose_fat' })!;
     expect(getPreviousStepId(next, 'anonymous', { goal: 'lose_fat' })).toBe(first);
-    expect(renderStep(first).html).toContain('data-nutrition-control="progressionPace"');
-    expect(renderStep(next).html).toContain('data-nutrition-control="targetWeightKg"');
-    expect(renderStep(first).html).toContain('data-nutrition-control="progressionPace"');
+    expectStepControl(renderStep(first).html, 'progressionPace', first, harness.question);
+    expectStepControl(renderStep(next).html, 'targetWeightKg', next, harness.question);
+    expectStepControl(renderStep(first).html, 'progressionPace', first, harness.question);
   });
 
   it('preserves required pace validation and advances the optional target-weight question', () => {

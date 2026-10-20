@@ -43,22 +43,35 @@ describe('evolution chart interaction', () => {
     expect(bodyView).toContain('displayValue: `${formatWeightFromKg(entry.weightKg, resolvedUnits)}');
     expect(bodyView).toContain('displayValue: `${formatMeasurement(point.value)}');
 
-    expect(loadsView.match(/<EvolutionAreaChart/g)).toHaveLength(1);
-    expect(loadsView).toContain('displayValue: `${formatWorkoutLoadFromKg(point.loadKg');
-    expect(loadsView).toContain('label: dateFormatter.format(localDateAsDate(point.localDate))');
+    // The per-exercise chart moved to its own screen — Cargas itself no
+    // longer renders a chart directly.
+    expect(loadsView.match(/<EvolutionAreaChart/g)).toBeNull();
+
+    const exerciseDetail = readFileSync('src/components/fitness/ExerciseEvolutionDetail.tsx', 'utf8');
+    expect(exerciseDetail.match(/<EvolutionAreaChart/g)).toHaveLength(1);
+    expect(exerciseDetail).toContain('displayValue: `${formatWorkoutLoadFromKg(point.loadKg');
+    expect(exerciseDetail).toContain('label: dateFormatter.format(localDateAsDate(point.localDate))');
   });
 });
 
-describe('loads evolution locked preview', () => {
-  it('wraps the real panel in EvolutionLockedPreview, fed by demo data, only when there is no real load history', () => {
-    expect(loadsView).toContain("import { EvolutionLockedPreview } from './EvolutionLockedPreview'");
-    expect(loadsView).toContain(
-      "import { buildDemoLoadExercises, buildDemoLoadRecords } from './demoLoadProgressData'",
+describe('loads evolution empty state', () => {
+  it('replaces the panel with the empty state on the same "no history" condition, keeping the same CTA', () => {
+    expect(loadsView).toContain('if (exercises.length === 0) {');
+    expect(loadsView).toContain('<LoadsEmptyState sex={sex} onStartWorkout={onStartWorkout} />');
+    expect(loadsView).toContain("onPress={onStartWorkout}");
+  });
+
+  it('never dresses the empty state with demo data or an invented figure', () => {
+    // The blurred demo-fed preview is gone: the panel no longer builds, nor
+    // imports, a single sample series. Every slot the real panel would fill
+    // with a number is a dash here.
+    expect(loadsView).not.toContain('demoLoadProgressData');
+    expect(loadsView).not.toContain('EvolutionLockedPreview');
+    expect(loadsView).toContain("const NO_VALUE = '—'");
+    const emptyState = loadsView.slice(
+      loadsView.indexOf('function LoadsEmptyState('),
+      loadsView.indexOf('export function LoadsEvolutionView('),
     );
-    expect(loadsView).toContain('const displayExercises = exercises.length ? exercises : demoExercises');
-    expect(loadsView).toContain('<EvolutionLockedPreview');
-    expect(loadsView).toContain("title={t('progress.loads.empty.title')}");
-    expect(loadsView).toContain("description={t('progress.loads.empty.description')}");
-    expect(loadsView).toContain('onPress={onStartWorkout}');
+    expect(emptyState).not.toMatch(/formatWorkoutLoadFromKg|formatPercent/);
   });
 });

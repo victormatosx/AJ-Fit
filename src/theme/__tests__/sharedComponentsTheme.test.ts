@@ -33,6 +33,8 @@ const PHASE_3_THEME_AWARE_AREAS = [
   'src/components/fitness/PhysicalAssessmentSummaryCard.tsx',
   'src/components/fitness/BodyEvolutionView.tsx',
   'src/components/fitness/LoadsEvolutionView.tsx',
+  'src/components/fitness/ExerciseEvolutionDetail.tsx',
+  'src/components/fitness/EvolutionProgressTicker.tsx',
   'src/screens/WorkoutScreen.tsx',
   'src/screens/AssessmentScreen.tsx',
   'src/screens/AuthScreen.tsx',
@@ -66,12 +68,15 @@ const PHASE_5_THEME_AWARE_AREAS = [
   'src/screens/onboarding/NameStepScreen.tsx',
   'src/screens/onboarding/WelcomeInterstitialScreen.tsx',
   'src/screens/onboarding/MethodologyInterstitialScreen.tsx',
-  'src/screens/onboarding/GuidedWorkoutInterstitialScreen.tsx',
-  'src/screens/onboarding/EvolutionInterstitialScreen.tsx',
-  'src/screens/onboarding/AjFitProgressInterstitialScreen.tsx',
+  // The chrome every interstitial now renders through. It replaced the
+  // per-screen copies of that chrome, so it is where the theme guarantee has
+  // to hold; the screens that delegate to it are checked separately below.
+  'src/components/onboarding/AjInterstitialLayout.tsx',
+  'src/components/ui/AcquisitionControls.tsx',
   'src/components/ui/PhoneFrame.tsx',
   'src/components/fitness/ExerciseGif.tsx',
   'src/components/onboarding/QuestionStepScreen.tsx',
+  'src/components/onboarding/AnalysisAjRing.tsx',
   'src/components/onboarding/GuidedWorkoutCarousel.tsx',
   'src/components/onboarding/EvolutionCarousel.tsx',
   'src/components/onboarding/AjFitProgressCarousel.tsx',
@@ -85,6 +90,20 @@ const PHASE_5_THEME_AWARE_AREAS = [
   'src/components/photoVault/PhotoVaultEmptyState.tsx',
   'src/components/photoVault/PhotoVaultFilterEmptyState.tsx',
   'src/components/photoVault/PhotoVaultDayRow.tsx',
+] as const;
+
+/**
+ * Interstitial steps that render no chrome of their own: they pick copy and
+ * media and hand both to `AjInterstitialLayout`. "Consumes `useTheme`" cannot
+ * be the check for these, because they consume nothing visual at all — so
+ * they are held to the stricter rule instead: no colour literal, and no theme
+ * read either. A file that stays in this list cannot drift into hardcoding a
+ * Dark value, which is the guarantee the `useTheme` check exists to provide.
+ */
+const PHASE_5_DELEGATED_PRESENTATION = [
+  'src/screens/onboarding/GuidedWorkoutInterstitialScreen.tsx',
+  'src/screens/onboarding/EvolutionInterstitialScreen.tsx',
+  'src/screens/onboarding/AjFitProgressInterstitialScreen.tsx',
 ] as const;
 
 const STATIC_VISUAL_IMPORT =
@@ -188,6 +207,15 @@ describe('Phase 5 remaining visible UI coverage', () => {
 
     expect(source).toContain('useTheme');
     expect(source).not.toMatch(STATIC_VISUAL_IMPORT);
+  });
+
+  it.each(PHASE_5_DELEGATED_PRESENTATION)('%s owns no visual values at all', (path) => {
+    const source = readFileSync(path, 'utf8');
+
+    expect(source).not.toMatch(STATIC_VISUAL_IMPORT);
+    expect(source).not.toMatch(/#[0-9a-f]{3,8}|rgba?\(/i);
+    expect(source).not.toContain('theme.colors');
+    expect(source).not.toContain('theme.fonts');
   });
 
   it('keeps Photo Vault security/export media isolated while theming its UI chrome', () => {

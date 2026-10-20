@@ -3,7 +3,7 @@ import { Animated, Easing, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useIsScreenActive } from '../../state/ScreenActivity';
 import type { EvolutionViewModel } from '../../workoutEvolution/types';
-import type { Streak } from '../../home/streak';
+import type { DailyActivityStreak } from '../../home/dailyActivityStreak';
 import { buildHomeEvoTickerItems, type HomeEvoTickerItem, type HomeEvoTickerTranslate } from './homeEvoTickerItems';
 
 const LOOP_DURATION_MS = 18000;
@@ -36,8 +36,8 @@ export function HomeEvoTicker({
   sessionsLast30Days,
 }: {
   viewModel: EvolutionViewModel;
-  /** `null` while the dedicated streak read (`useHomeStreak`) hasn't resolved yet — that item is simply omitted, never shown as 0. */
-  streak: Streak | null;
+  /** `null` while `useDailyActivityStreak` hasn't resolved yet — that item is simply omitted, never shown as 0. */
+  streak: DailyActivityStreak | null;
   /** Real count from the already-loaded 30-day frequency window — `null` while unavailable, item omitted. */
   sessionsLast30Days: number | null;
 }) {

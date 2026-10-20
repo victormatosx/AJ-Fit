@@ -33,10 +33,8 @@ describe('minimized active workout UX', () => {
   it('turns the Today card into a return-to-workout design', () => {
     expect(home).toContain("'home:activeWorkout.kicker'");
     expect(home).toContain("'home:activeWorkout.cardStatus'");
-    expect(home).toContain("'home:activeWorkout.return'");
-    expect(home).toContain('name="arrow-right"');
-    expect(home).toContain('paddingHorizontal: workoutInProgress ? 16 : 26');
-    expect(home).toContain('fontSize: workoutInProgress ? 13 : 15');
+    expect(home).toContain("'treino:currentWorkout.continue'");
+    expect(home).toContain("name={workoutInProgress ? 'arrow-right' : 'play'}");
   });
 
   it('shows the active-workout control before the first set, during rest, and between rests', () => {

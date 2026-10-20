@@ -9,10 +9,21 @@ import { describe, expect, it } from 'vitest';
  * (Firestore `execution.startedAt`, via the shared `workoutSessionTimer`
  * helpers), no locally-owned ticking, and a plain (non-alarming) fallback
  * for a normal, recently-started session.
+ *
+ * The modal's BODY became an `AjMoment` (the AJ assistant presents the same
+ * decision), so the assertions below moved from JSX props to the option
+ * descriptors handed to that overlay. The invariants they pin are unchanged
+ * and deliberately not weakened: three separate actions wired to three
+ * distinct handlers, discard only through its own confirmation sub-step, no
+ * dismiss path of any kind for a real execution, and the orphan-pointer
+ * acknowledgement reachable only from EXECUTION_MISSING.
  */
 const source = readFileSync(new URL('../WorkoutSessionRecoveryModal.tsx', import.meta.url), 'utf8');
 const appShell = readFileSync(new URL('../../../screens/AppShell.tsx', import.meta.url), 'utf8');
 const workoutScreen = readFileSync(new URL('../../../screens/WorkoutScreen.tsx', import.meta.url), 'utf8');
+const ajMoment = readFileSync(new URL('../../aj/AjMoment.tsx', import.meta.url), 'utf8');
+/** Same comment-stripping convention `missedWorkoutDecisionFlow.test.ts` uses. */
+const sourceCode = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
 
 describe('WorkoutSessionRecoveryModal — long-session alert', () => {
   it('derives elapsed/format/threshold from the shared workoutSessionTimer module, never a reimplementation', () => {
@@ -55,8 +66,20 @@ describe('explicit recovery resolution — continue, finish, or discard', () => 
   });
 
   it('keeps the orphan-pointer acknowledgement strictly unavailable to a real pending execution', () => {
-    expect(source).toContain('{executionMissing && (');
-    expect(source).toContain('onPress={onAcknowledgeMissing}');
+    // It is the ONLY option built in the `executionMissing` branch, and that
+    // branch is mutually exclusive with the one that offers resume/finish/
+    // discard — an orphan pointer can never reach a real action, and a real
+    // pending execution can never reach this escape.
+    expect(source).toContain('} else if (executionMissing) {');
+    expect(source).toContain('onPress: onAcknowledgeMissing,');
+    const missingBranch = source.slice(
+      source.indexOf('} else if (executionMissing) {'),
+      source.indexOf('} else {', source.indexOf('} else if (executionMissing) {')),
+    );
+    expect(missingBranch).toContain('onPress: onAcknowledgeMissing,');
+    expect(missingBranch).not.toContain('onResume');
+    expect(missingBranch).not.toContain('onFinish');
+    expect(missingBranch).not.toContain('onDiscard');
     const start = appShell.indexOf('const acknowledgeMissingRecovery = () => {');
     const end = appShell.indexOf('const runWorkoutCompletion = (', start);
     const body = appShell.slice(start, end);
@@ -66,19 +89,77 @@ describe('explicit recovery resolution — continue, finish, or discard', () => 
   });
 
   it('does not dismiss on backdrop press or Android Back', () => {
-    expect(source).toContain('onRequestClose={() => undefined}');
-    const modalBody = source.slice(source.indexOf('<Modal'), source.indexOf('</Modal>'));
-    expect(modalBody).toContain('<View\n        style={{ flex: 1');
-    expect(modalBody).not.toContain('onPress={dismiss}');
+    // `dismissible={false}` is what AjMoment turns into "no close button,
+    // inert backdrop, inert Android Back" — the single switch that replaced
+    // the old inert `<View>` backdrop and `onRequestClose={() => undefined}`.
+    expect(source).toContain('dismissible={false}');
+    expect(source).not.toContain('dismissible\n');
+    expect(source).not.toContain('onDismiss');
+    expect(ajMoment).toContain('onRequestClose={dismissible && !busy ? requestDismiss : () => undefined}');
+    expect(ajMoment).toContain('disabled={!dismissible || busy}');
+    const requestDismissBody = ajMoment.slice(
+      ajMoment.indexOf('const requestDismiss = () => {'),
+      ajMoment.indexOf('};', ajMoment.indexOf('const requestDismiss = () => {')),
+    );
+    expect(requestDismissBody).toContain('if (!dismissible || busy || !onDismiss) return;');
   });
 
   it('renders the finish action with loading and disables every action while it is in flight', () => {
     expect(source).toContain("t('sessionRecovery.finishNow')");
     expect(source).toContain("t('sessionRecovery.finishing')");
     expect(source).toContain('const busy = resuming || finishing || discarding');
-    expect(source).toContain('onPress={onFinish}');
-    expect(source).toContain('disabled={busy}');
+    expect(source).toContain('onPress: onFinish,');
+    expect(source).toContain('loading: finishing,');
+    // Every option built in the normal branch carries `disabled: busy`, so a
+    // second tap can never fire a second resolution.
+    expect(source.match(/disabled: busy,/g)?.length).toBeGreaterThanOrEqual(4);
     expect(source).toContain("t('sessionRecovery.finishError')");
+  });
+
+  it('offers the three real actions as three separate options, each under its original condition', () => {
+    expect(source).toContain('const resumeOffered = canResume && state.status === \'pending\';');
+    expect(source).toContain('if (resumeOffered) {');
+    expect(source).toContain('if (canFinalize && execution) {');
+    expect(source).toContain('if (canDiscard) {');
+    expect(source).toContain('onPress: onResume,');
+    expect(source).toContain('onPress: onFinish,');
+    // Discard still never fires straight from its own row.
+    expect(source).toContain('onPress: requestDiscard,');
+    expect(source).toContain('onPress: onDiscard,');
+    const discardRow = source.slice(source.indexOf("key: 'discard',"), source.indexOf("key: 'discard',") + 200);
+    expect(discardRow).not.toContain('onDiscard');
+  });
+
+  it('keeps the discard confirmation as its own sub-step, with both answers intact', () => {
+    expect(source).toContain('if (confirmingDiscard) {');
+    expect(source).toContain("t('sessionRecovery.discardConfirmYes')");
+    expect(source).toContain("t('sessionRecovery.discardConfirmBack')");
+    expect(source).toContain('onPress: cancelDiscardConfirm,');
+    expect(source).toContain('loading: discarding,');
+    expect(source).toContain("t('sessionRecovery.discardError')");
+    // The sub-step is a distinct `step`, so AJ retypes instead of the lines
+    // mutating mid-sentence.
+    expect(source).toContain("step={confirmingDiscard ? 'discardConfirm' : executionMissing ? 'missing' : 'main'}");
+  });
+
+  it('never promises anything the app cannot do — no cycle freeze, no "sets do not count against the streak"', () => {
+    // The design prototype offered both; neither exists in the app. Checked
+    // against the CODE only (comments stripped), since this file's own doc
+    // comment has to name what was deliberately left out.
+    expect(sourceCode).not.toMatch(/freeze|congel|streak|sequência/i);
+    // Every string this modal speaks still comes from i18n — a fabricated
+    // promise could only arrive as a literal, and there are none.
+    expect(sourceCode).not.toMatch(/label: ['"]/);
+    // Discard's real consequence is still stated by the existing copy alone.
+    expect(source).toContain("t('sessionRecovery.discardConfirmBody')");
+  });
+
+  it('speaks the body the existing logic chose, and ends on a question that matches the actions actually offered', () => {
+    expect(source).toContain('const lines = [...(identityLine ? [identityLine] : []), body, question];');
+    // No "continue where you left off?" when resuming is not one of the answers.
+    expect(source).toContain("? t('sessionRecovery.aj.question')");
+    expect(source).toContain(": t('sessionRecovery.aj.questionNoResume');");
+    expect(source).toMatch(/const question = confirmingDiscard \|\| executionMissing[\s\S]*resumeOffered/);
   });
 
   it('keeps Continue and Discard wired to their original, distinct handlers', () => {

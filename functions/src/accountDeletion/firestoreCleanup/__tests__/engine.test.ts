@@ -200,7 +200,7 @@ describe('runFirestoreCleanup — ordering (Fase 6 §10)', () => {
       'notificationProductWindows', 'notificationAchievementMilestones', 'dailyNotificationRegistration', 'entitlementSignal',
       'workoutProgramDescendants',
       'workoutLifecycleEvents', 'workoutLifecycleAuthorityGrants', 'workoutLifecycleTrustedTelemetryReceipts', 'pendingEvolutions', 'programInstances', 'trainingCycles', 'workoutLifecycleState',
-      'workoutPrograms', 'workoutProgramState', 'exerciseSubstitutionPreferences', 'workoutExecutionState', 'workoutExecutionOccurrenceCounters', 'workoutFinalizationAttempts', 'workoutExecutions', 'userProfile',
+      'workoutPrograms', 'workoutProgramState', 'exerciseSubstitutionPreferences', 'workoutExecutionState', 'workoutExecutionOccurrenceCounters', 'workoutFinalizationAttempts', 'workoutDailyCompletions', 'workoutExecutions', 'userProfile',
     ]);
   });
 });

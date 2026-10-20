@@ -212,6 +212,13 @@ export interface WidgetSnapshotBuilderInput {
    * reflects reality instead of silently defaulting to "exact."
    */
   historyAvailableFromLocalDate?: LocalDate | null;
+  /**
+   * Chama 2.0, already resolved by `fetchWidgetDailyActivityStreak` — the same
+   * computation the Home runs, so the two can never disagree. It is NOT
+   * derived from `completedDates` here: the streak also counts days backed
+   * only by a confirmed food entry, which this builder never sees.
+   */
+  dailyActivityStreak: { current: number; complete: boolean };
   /** Fully resolved by the app domain; native widgets only render it. */
   workout?: WorkoutWidgetData | null;
 }
@@ -289,16 +296,25 @@ function buildReadyEntryFields(
     fulfilledScheduledDates: input.fulfilledScheduledDates,
   });
 
-  const streak = computeStreak({
-    todayLocalDate,
-    scheduleMode,
-    prescribedTrainingFrequency: input.prescribedTrainingFrequency,
-    trainingDays: input.trainingDays,
-    activeRecoveryDays: input.activeRecoveryDays,
-    completedDates: input.completedDates,
-    fulfilledScheduledDates: input.fulfilledScheduledDates,
-    historyAvailableFromLocalDate: input.historyAvailableFromLocalDate,
-  });
+  // Chama 2.0 — the SAME number, colour and break rule the Home shows.
+  //
+  // `computeStreak` (training obligations / goal-met weeks) no longer feeds
+  // this field: it answered a different question and would show a different
+  // number than the app, which is exactly what the integration had to fix.
+  // The adherence data the widget also renders (`weeklyActivity`,
+  // `frequencyWindow`, `monthlyActivity`) is untouched and still derived from
+  // completions — the two are deliberately not mixed.
+  //
+  // `unit: 'days'` is new. The Android label map (`AJFitWidgetSnapshot.kt`'s
+  // `unitLabel`) has no `days` case yet and would fall through to
+  // "TREINO/TREINOS"; the number and colour are already correct, only the
+  // label needs the native one-liner. See the hand-off report §15.
+  const streak: Streak = {
+    scheduleMode: 'fixed',
+    unit: 'days',
+    current: input.dailyActivityStreak.current,
+    complete: input.dailyActivityStreak.complete,
+  } as unknown as Streak;
 
   const month = monthBounds(todayLocalDate);
   const monthlyCompletedLocalDates: LocalDate[] = [];

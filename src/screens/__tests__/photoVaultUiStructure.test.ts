@@ -89,7 +89,96 @@ describe('no durable cache of decrypted photos', () => {
   });
 });
 
-describe('locked state reveals no private photo data', () => {
+describe('the gallery opens directly, with no unlock gate', () => {
+  const LOCKED_CODE = readCode('src/components/photoVault/PhotoVaultLockedState.tsx');
+  const LOCAL_AUTH = readCode('src/services/localAuthentication.ts');
+
+  it('opens the session itself instead of waiting for a user action', () => {
+    expect(SCREEN).toMatch(
+      /useEffect\(\(\) => \{\s*if \(!appActive \|\| status !== 'locked' \|\| openFailure\) return;\s*void unlock\(\);\s*\}, \[appActive, status, openFailure, unlock\]\)/,
+    );
+  });
+
+  /**
+   * The session must never open behind an app-switcher preview, and
+   * `unlockPhotoVault` cancels itself if the app is not foregrounded. So
+   * returning to the foreground is also what reopens a session the lifecycle
+   * closed — otherwise the gallery would sit on a retry control after every
+   * backgrounding.
+   */
+  it('reopens on returning to the foreground, never while backgrounded', () => {
+    expect(SCREEN).toContain("AppState.currentState === 'active'");
+    expect(SCREEN).toContain("setAppActive(next === 'active')");
+    expect(SCREEN).toContain('subscription.remove()');
+  });
+
+  it('treats a lifecycle cancellation as transient, not as a failure to report', () => {
+    expect(SCREEN).toMatch(
+      /openFailure =\s*lastIssue !== null && lastIssue !== 'vaultAuthCancelled' \? lastIssue : null/,
+    );
+    // The transition only ever sees real failures, so it cannot show a retry
+    // control for the app simply having been backgrounded.
+    expect(SCREEN).toContain('issue={openFailure}');
+    expect(SCREEN).not.toContain('issue={lastIssue}');
+  });
+
+  it('never runs an OS authentication prompt to open the gallery', () => {
+    // The whole point: no Face ID, Touch ID, fingerprint, iris or device
+    // passcode stands between the user and their own photos.
+    expect(LOCAL_AUTH).toContain('export async function authenticateForPhotoVault');
+    const gate = LOCAL_AUTH.slice(
+      LOCAL_AUTH.indexOf('export async function authenticateForPhotoVault'),
+    );
+    expect(gate).toContain("return { status: 'success' }");
+    expect(gate).not.toContain('authenticateAsync');
+    expect(gate).not.toContain('getVaultAuthCapability');
+  });
+
+  it('offers no unlock control, only a retry for a real technical failure', () => {
+    // A lock button would invite the user to unlock something that is not
+    // locked. The retry exists because opening the session can still fail on
+    // temp-file cleanup or the native app-switcher guard.
+    expect(LOCKED_CODE).toContain("status === 'locked' && issue !== null");
+    expect(LOCKED_CODE).toContain('{showRetry ? (');
+    expect(LOCKED_CODE).toContain('testID="photo-vault-open-retry"');
+    expect(LOCKED_CODE).toContain('name="refresh"');
+    expect(LOCKED_CODE).not.toContain("name={iconOpen ? 'lock-open' : 'lock'}");
+    expect(LOCKED_CODE).not.toContain('openSettings');
+    expect(LOCKED_CODE).not.toContain('notConfigured');
+  });
+
+  it('treats the blurred skeleton as a loading transition, not a gate', () => {
+    // The layer clears the moment the session opens — no success flash on a
+    // control that no longer exists, and no delay waiting for one.
+    expect(LOCKED_CODE).toContain('revealOpacity.value = withTiming(0');
+    expect(LOCKED_CODE).toContain('runOnJS(onRevealComplete)');
+    expect(LOCKED_CODE).not.toContain('successFlash');
+    expect(LOCKED_CODE).not.toContain('setIconOpen');
+  });
+
+  it('clears the transition by fading the layer, never by weakening the blur', () => {
+    // Animating the blur's intensity to zero would spend the whole reveal
+    // making the skeleton legible and end on several frames of a sharp grid
+    // of placeholder tiles (or cached, degraded previews) under the real
+    // header. The blur is therefore a constant, and the opacity is what
+    // moves.
+    expect(LOCKED_CODE).toContain('intensity={BLUR_INTENSITY}');
+    expect(LOCKED_CODE).not.toContain('blurIntensity');
+    expect(LOCKED_CODE).not.toContain('useAnimatedProps');
+    // And the whole layer — blur included — is what fades.
+    expect(LOCKED_CODE).toContain('style={[{ flex: 1 }, revealStyle]}');
+  });
+
+  it('snaps the transition back the instant the session closes mid-reveal', () => {
+    // A background lock while the layer is fading out must restore it
+    // immediately: a half-faded locked layer is a half-visible gallery.
+    expect(LOCKED_CODE).toMatch(
+      /if \(status === 'unlocked'\) return;\s*revealOpacity\.value = 1;/,
+    );
+  });
+});
+
+describe('the opening transition reveals no private photo data', () => {
   const LOCKED_CODE = readCode('src/components/photoVault/PhotoVaultLockedState.tsx');
 
   it('returns the locked component before rendering any content', () => {
@@ -117,7 +206,7 @@ describe('locked state reveals no private photo data', () => {
     );
   });
 
-  it('uses the available locked height to keep the lock control centered', () => {
+  it('uses the available height so the transition fills the screen', () => {
     expect(SCREEN).toContain("contentContainerStyle={{ flexGrow: 1, paddingBottom: 12 }}");
     expect(LOCKED_CODE).toContain('flex: 1');
   });
@@ -177,7 +266,7 @@ describe('locked state reveals no private photo data', () => {
     expect(LOCKED_CODE).toContain("t('progress.photos.locked.title')");
   });
 
-  it('flashes red and shakes on a real auth failure, without visible error text', () => {
+  it('flashes red and shakes on a real failure, without visible error text', () => {
     expect(LOCKED_CODE).toContain('withSequence');
     expect(LOCKED_CODE).toContain('shakeX');
     expect(LOCKED_CODE).toContain('dangerFlash');
@@ -186,9 +275,7 @@ describe('locked state reveals no private photo data', () => {
     expect(LOCKED_CODE).not.toMatch(/<Text[^>]*>\s*\{errorMessage\}/);
   });
 
-  it('flashes green and fades the blur out on success, then reveals the gallery', () => {
-    expect(LOCKED_CODE).toContain('successFlash');
-    expect(LOCKED_CODE).toContain('setIconOpen(true)');
+  it('fades the blur out once the session opens, then reveals the gallery', () => {
     expect(LOCKED_CODE).toContain('onRevealComplete');
     expect(LOCKED_CODE).toContain('runOnJS(onRevealComplete)');
   });
@@ -294,13 +381,44 @@ describe('the locked empty-gallery hint', () => {
   });
 });
 
-describe('viewer and sheet close with the vault', () => {
-  it('locks the vault when the private screen unmounts', () => {
+describe('the vault session is bound to the active Evolution screen', () => {
+  const EVOLUTION = read('src/screens/ProgressScreen.tsx');
+
+  it('locks the moment Evolution stops being the active screen', () => {
+    // The session used to be scoped to the Fotos panel's mount, which made
+    // every tab switch re-open the vault and reload the gallery. It now
+    // belongs to the screen — but ONLY while that screen is active, never
+    // merely mounted: this tab stays mounted behind Home/Treino.
+    // `useScreenFocusEffect`'s cleanup fires on deactivation and on unmount
+    // (logout) alike.
+    expect(EVOLUTION).toContain("} = usePhotoVault();");
+    expect(EVOLUTION).toContain('useScreenFocusEffect(() => () => lockVault());');
+  });
+
+  it('opens it only while the screen is active and the app is foregrounded', () => {
+    // Never behind an app-switcher preview, and never retrying a genuine
+    // failure in a loop.
+    expect(EVOLUTION).toMatch(
+      /if \(!isScreenActive \|\| !appActive \|\| vaultStatus !== 'locked'\) return;/,
+    );
+    expect(EVOLUTION).toMatch(
+      /if \(vaultIssue !== null && vaultIssue !== 'vaultAuthCancelled'\) return;/,
+    );
+    expect(EVOLUTION).toContain('void unlockVault();');
+  });
+
+  it('leaves no second owner of the session in the Fotos panel', () => {
+    // Two owners would mean the panel's unmount could close a session the
+    // screen still considers open — the exact tab-switch re-lock this
+    // replaced.
     expect(SCREEN).toContain('} = usePhotoVault();');
     expect(SCREEN).toContain('status,');
-    expect(SCREEN).toContain('lock,');
-    expect(SCREEN).toMatch(/useEffect\(\(\) => \(\) => lock\(\), \[lock\]\)/);
+    expect(SCREEN).not.toMatch(/useEffect\(\(\) => \(\) => lock\(\), \[lock\]\)/);
+    expect(SCREEN).not.toMatch(/^\s*lock,$/m);
   });
+});
+
+describe('viewer and sheet close with the vault', () => {
 
   it('clears the viewer and sheet when the vault is not unlocked', () => {
     expect(SCREEN).toMatch(

@@ -39,6 +39,34 @@
     "nutrition": "Diet"
   },
   "paywall": {
+    "sheet": {
+      "subtitle": "Full training, diet and AJ with you from today.",
+      "afterTrialLabel": "AFTER THE TRIAL",
+      "startTrial": "Start my {{duration}} free",
+      "startTrialToday": "{{price}} today",
+      "trialHeadline": "{{duration}} free",
+      "trialHeadlineTail": "to try everything",
+      "perMonthSuffix": "/mo",
+      "fixedTrialDuration": "7 days",
+      "fixedZeroToday": "R$ 0.00 today",
+      "annualSupporting": "{{price}} per year · save",
+      "annualSavings": "R$ 398.90",
+      "monthlySupporting": "Billed every month, no lock-in",
+      "assuranceLead": "Zero risk.",
+      "assuranceBody": "Not for you? Cancel in 2 taps before day 7 and pay nothing."
+    },
+    "aj": {
+      "introWithName": "{{name}}, one step left to unlock your plan.",
+      "intro": "One step left to unlock your plan.",
+      "introTrial": "The first {{duration}} are on me. You try everything and decide after.",
+      "comparePerMonth": "On {{plan}} you pay {{price}} a month.",
+      "comparePerPeriod": "On {{plan}} you pay {{price}}.",
+      "couponApplied": "Coupon {{code}} applied.",
+      "activating": "Activating your subscription...",
+      "activatingTrial": "Activating your free trial...",
+      "restoring": "Looking for your subscription...",
+      "done": "Done. Everything unlocked."
+    },
     "header": {
       "restore": "Restore",
       "restoreAccessibilityLabel": "Restore previous purchases"
@@ -71,7 +99,8 @@
       "cadence": {
         "monthly": "monthly",
         "annual": "annually"
-      }
+      },
+      "annualDiscountBadge": "-33%"
     },
     "legal": {
       "renewalDisclosure": "Auto-renewing subscription, billed by the store each cycle. Cancel anytime before renewal in your store account settings.",
@@ -79,7 +108,7 @@
     },
     "promo": {
       "label": "PROMO CODE",
-      "placeholder": "e.g.: CUPOM10",
+      "placeholder": "Promo code",
       "inputAccessibilityLabel": "Promo code",
       "applyAccessibilityLabel": "Apply promo code",
       "applyButton": "Apply",
@@ -115,7 +144,8 @@
         "unauthenticated": "Your session expired. Sign in again before purchasing.",
         "intentMismatch": "The purchase authorization no longer matches the selected plan. Please try again.",
         "intentExpired": "The promotional authorization expired. Tap Continue to request a new one."
-      }
+      },
+      "appliedCode": "Code {{code}}"
     },
     "feedback": {
       "purchaseConfirmed": "Subscription confirmed. Your Premium access is active.",

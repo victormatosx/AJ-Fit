@@ -12,6 +12,7 @@ import { CtaButton } from '../../components/ui/CtaButton';
 import { Icon } from '../../components/ui/Icon';
 import { SelectableChip, SelectableRow } from '../../components/nutrition/NutritionPrimitives';
 import { FoodRow } from '../../components/nutrition/FoodRow';
+import { useAjFunnelDirector } from '../../components/onboarding/AjFunnelStage';
 import { useTheme } from '../../theme';
 import { useUnits } from '../../state/UnitsContext';
 import { formatWeightFromKg, formatWeightInputFromKg, weightUnit } from '../../units/weightConversions';
@@ -121,10 +122,59 @@ export function NutritionProfileScreen({
 
 
 /** Controlled question body shared by onboarding and the internal profile. */
+/**
+ * A chosen food, as the acquisition design draws it: a filled accent pill
+ * that removes itself when tapped. Local to this file because the shared
+ * `SelectableChip` is used across the nutrition area and must not change.
+ */
+function SelectedFoodChip({
+  label, onPress, accessibilityLabel,
+}: {
+  label: string;
+  onPress: () => void;
+  accessibilityLabel: string;
+}) {
+  const { theme } = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 7,
+        paddingVertical: 9,
+        paddingHorizontal: 13,
+        borderRadius: theme.radii.pill,
+        backgroundColor: theme.colors.primary,
+        borderWidth: 1,
+        borderColor: theme.colors.primary,
+        shadowColor: theme.colors.primaryGlowSoft,
+        shadowOpacity: 1,
+        shadowRadius: 14,
+        shadowOffset: { width: 0, height: 0 },
+      }}
+    >
+      <Text style={{ fontFamily: theme.fonts.uiMed, fontSize: 14, color: theme.colors.primaryForeground }}>
+        {label}
+      </Text>
+      <Icon name="x" size={12} color={theme.colors.primaryForeground} stroke={2.4} />
+    </Pressable>
+  );
+}
+
 export function NutritionProfileQuestion({ step, draft, onChange, currentWeightKg, targetWeightText,
   onTargetWeightText: setTargetWeightText, favoriteFoodIds, onToggleFavoriteFood, localFoods, onCreateLocalFood, hideTitle = false, inputUnits,
+  variant = 'profile',
 }: {
   inputUnits?: ResolvedUnits;
+  /**
+   * Purely visual, mirroring `FoodSearchScreen`'s own switch. `'profile'`
+   * keeps the standalone nutrition wizard exactly as it was; `'onboarding'`
+   * is the acquisition design, used only by the funnel.
+   */
+  variant?: 'profile' | 'onboarding';
   hideTitle?: boolean;
   localFoods?: readonly OnboardingCustomFood[];
   onCreateLocalFood?: (input: CustomFoodInput) => Promise<string>;
@@ -139,6 +189,10 @@ export function NutritionProfileQuestion({ step, draft, onChange, currentWeightK
   const resolvedUnits = inputUnits ?? preferredUnits;
   const unit = weightUnit(resolvedUnits);
   const profile = draft;
+  const onboarding = variant === 'onboarding';
+  // The funnel's single persistent mascot. Outside the funnel this resolves
+  // to an inert director, so the standalone wizard is unaffected.
+  const aj = useAjFunnelDirector();
   const targetWeightValid = canContinueProfileStep('targetWeightKg', draft);
   const patch = (next: Partial<ProfileDraft>) => onChange({ ...draft, ...next });
   const [creatingFoodTarget, setCreatingFoodTarget] = useState<FoodPickerTarget>(null);
@@ -184,6 +238,56 @@ export function NutritionProfileQuestion({ step, draft, onChange, currentWeightK
     target: Exclude<FoodPickerTarget, null>; titleKey: string; emptyKey: string; showTitle?: boolean;
   }) {
     const ids = (draft[target] as string[] | undefined) ?? [];
+    const atLimit = ids.length >= 10;
+
+    // The chosen foods. The acquisition design puts them directly under the
+    // field as removable chips; the profile wizard keeps its original rows.
+    // Both call the same `removeFoodId`.
+    const chosen = onboarding ? (
+      ids.length > 0 ? (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          {ids.map((id) => (
+            <SelectedFoodChip
+              key={id}
+              label={foodNames[id] ?? id}
+              accessibilityLabel={t('foodSearch.removeAccessibility', { food: foodNames[id] ?? id })}
+              onPress={() => {
+                aj.setLook([0, 2.2]);
+                aj.play('nod');
+                removeFoodId(target, id);
+              }}
+            />
+          ))}
+        </View>
+      ) : null
+    ) : null;
+
+    if (onboarding) {
+      return (
+        <View style={{ gap: 18 }}>
+          {atLimit ? (
+            <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13.5, lineHeight: 19, color: theme.colors.textSubtleStrong }}>
+              {t('foodSearch.selectionLimit', { count: 10 })}
+            </Text>
+          ) : null}
+          {atLimit ? chosen : (
+            <FoodSearchScreen
+              key={target} catalogSearch={localFoods ? searchOnboardingCatalog : undefined} localFoods={localFoods}
+              visible presentation="inline" variant="onboarding" catalog="generation" onClose={Keyboard.dismiss}
+              excludeIds={ids} favoriteFoodIds={favoriteFoodIds} onToggleFavoriteFood={onToggleFavoriteFood}
+              inlineBelowField={chosen}
+              onSelect={(pick) => {
+                aj.setLook([0, 2.2]);
+                aj.play('hop');
+                addFoodId(target, pick);
+              }}
+              onRequestCreateFood={() => setCreatingFoodTarget(target)}
+            />
+          )}
+        </View>
+      );
+    }
+
     return (
       <View style={{ gap: 10 }}>
         {showTitle && !hideTitle ? <Text style={{ fontFamily: theme.fonts.display, fontSize: 22, color: theme.colors.textPrimary }}>

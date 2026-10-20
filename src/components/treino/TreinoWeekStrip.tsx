@@ -42,14 +42,11 @@ function DayGlyph({ day }: { day: TreinoWeekStripDayViewModel }) {
  */
 export function TreinoWeekStrip({
   days,
-  dimmed,
   disabled,
   weekSummaryLabel,
   onPress,
 }: {
   days: TreinoWeekStripDayViewModel[];
-  /** Flexible mode or workout-in-progress — visually de-emphasized, still pressable unless `disabled`. */
-  dimmed: boolean;
   /** Workout in progress — the strip never opens the agenda while a session is running. */
   disabled: boolean;
   /** "{completed} de {scheduled} treinos esta semana" — folded into a11y only, see spec §9.3. */
@@ -69,7 +66,6 @@ export function TreinoWeekStrip({
       style={{
         paddingHorizontal: 22,
         flexDirection: 'row',
-        opacity: dimmed ? 0.4 : 1,
       }}
     >
       {days.map((day) => (

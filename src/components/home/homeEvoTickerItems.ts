@@ -1,5 +1,5 @@
 import type { EvolutionViewModel } from '../../workoutEvolution/types';
-import type { Streak } from '../../home/streak';
+import type { DailyActivityStreak } from '../../home/dailyActivityStreak';
 
 /**
  * Loose stand-in for react-i18next's strictly-keyed `t`, same role as
@@ -33,7 +33,7 @@ export interface HomeEvoTickerItem { label: string; value: string }
  */
 export function buildHomeEvoTickerItems(
   viewModel: EvolutionViewModel,
-  streak: Streak | null,
+  streak: DailyActivityStreak | null,
   sessionsLast30Days: number | null,
   t: HomeEvoTickerTranslate,
 ): HomeEvoTickerItem[] {
@@ -41,13 +41,10 @@ export function buildHomeEvoTickerItems(
   const { summary } = viewModel;
   const result: HomeEvoTickerItem[] = [];
   if (streak) {
-    // `fixed`-schedule streaks count obligations (days); `flexible`-schedule
-    // streaks count consecutive weeks whose weekly goal was met — see
-    // `src/home/streak.ts`'s doc comment. Rendering a `flexible` streak with
-    // the "days" unit text would misstate the number (e.g. "3 dias" for a
-    // 3-WEEK streak), so the two units need their own value key.
-    const streakValueKey = streak.unit === 'weeks' ? 'home:evoTicker.streakValueWeeks' : 'home:evoTicker.streakValue';
-    result.push({ label: t('home:evoTicker.streakLabel'), value: t(streakValueKey, { count: streak.current }) });
+    // The daily activity streak is always a count of DAYS (a workout or a
+    // food entry on that calendar day), so unlike the obligations/weeks
+    // streak it needs no per-unit value key.
+    result.push({ label: t('home:evoTicker.streakLabel'), value: t('home:evoTicker.streakValue', { count: streak.current }) });
   }
   if (summary.activeDays !== null) {
     result.push({

@@ -76,7 +76,17 @@ describe('Schedule refresh authority', () => {
 
     expect(failedReload).toContain("kind: 'failure'");
     expect(failedReload).not.toContain('setResolution(notAvailable)');
-    expect(hook).toContain('if (reloadId === reloadSequenceRef.current) setConfig(effectiveConfig);');
+    // The invariant is the GATE, not its formatting: everything a successful
+    // reload publishes must be guarded by the latest reload id, so a slower
+    // reload can never overwrite a newer one's result. Asserted on the guarded
+    // block rather than a single-line shape (it now publishes config, the
+    // completed-today scope and the suggestion together).
+    const gateStart = hook.indexOf('if (reloadId === reloadSequenceRef.current) {');
+    expect(gateStart).toBeGreaterThan(-1);
+    const gatedBlock = hook.slice(gateStart, hook.indexOf('\n      }', gateStart));
+    expect(gatedBlock).toContain('setConfig(effectiveConfig)');
+    expect(gatedBlock).toContain('setCompletedToday(');
+    expect(gatedBlock).toContain('setSuggestion(');
     expect(hook).toContain('if (reloadId === reloadSequenceRef.current) setLoading(false);');
   });
 });

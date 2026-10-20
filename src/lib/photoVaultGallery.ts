@@ -463,7 +463,13 @@ function galleryPhotoFromMetadata(photo: ProgressPhoto, previous?: GalleryPhoto)
 export async function loadGallery(): Promise<void> {
   const requestGeneration = generation;
   const finishTrace = startPhotoVaultTrace('gallery.load.start', { requestGeneration });
-  emit({ status: 'loading', issue: null });
+  // `loading` is for a gallery with nothing to show. With cards already on
+  // screen this revalidates behind them instead: the listing almost always
+  // comes back identical, and replacing a gallery the user is already
+  // looking at with a spinner is what made re-entering Fotos read as a cold
+  // start. An emptied listing still lands — it is the same `ready` emit
+  // below that publishes it.
+  emit(state.photos.length === 0 ? { status: 'loading', issue: null } : { issue: null });
   try {
     const metadata = await listProgressPhotos();
     if (requestGeneration !== generation) {

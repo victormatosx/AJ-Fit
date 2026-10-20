@@ -93,6 +93,7 @@ describe('official Dark theme', () => {
       sheetAccent: ['rgba(11,112,249,0.30)', 'rgba(11,112,249,0.08)'],
       accentState: ['rgba(11,112,249,0.28)', 'rgba(11,112,249,0.05)'],
       accentSummary: ['rgba(11,112,249,0.22)', 'rgba(11,112,249,0.04)'],
+      stepActive: ['rgba(11,112,249,0.16)', 'rgba(11,112,249,0.05)'],
       subscriptionStatus: [
         'rgba(11,112,249,0.18)',
         'rgba(11,112,249,0.03)',

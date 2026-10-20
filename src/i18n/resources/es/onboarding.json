@@ -118,6 +118,7 @@
   },
   "analyzing": {
     "compiling": "Compilando",
+    "completed": "Completado",
     "titleLine1": "Creando",
     "titleLine2": "tu plan",
     "steps": {
@@ -127,8 +128,19 @@
       "periodization": "Periodizando tus semanas",
       "plan": "Creando tu plan premium"
     },
+    "speech": {
+      "profile": "Empezando por tu perfil físico.",
+      "volume": "Ajustando volumen e intensidad a tu nivel.",
+      "exercises": "Eligiendo tus ejercicios.",
+      "periodization": "Organizando la progresión de tus semanas.",
+      "plan": "Terminando tu plan.",
+      "done": "Listo. Tu plan está armado."
+    },
     "accessibility": {
-      "progress": "Creación de tu plan: {{progress}} por ciento"
+      "progress": "Creación de tu plan: {{progress}} por ciento",
+      "stepDone": "{{label}}, completado",
+      "stepActive": "{{label}}, en curso",
+      "stepPending": "{{label}}, pendiente"
     },
     "titleWithNameLine1": "Estamos estructurando",
     "titleWithNameLine2": "tu camino, {{name}}.",

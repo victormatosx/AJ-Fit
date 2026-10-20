@@ -86,7 +86,10 @@ describe('Body Map sex propagation architecture', () => {
       return [...contents.matchAll(/<BodyMuscleMap\b[\s\S]*?\/>/g)].map((match) => ({ file, tag: match[0] }));
     });
 
-    expect(tags).toHaveLength(5);
+    // Onboarding picker, Treino today card, workout summary, two share
+    // posters, plus the two Evolution panels (Corpo measurements, Cargas
+    // strength map) in both their populated and their empty state.
+    expect(tags).toHaveLength(9);
     for (const { file, tag } of tags) {
       expect(tag, file).toMatch(/\bsex=\{/);
     }

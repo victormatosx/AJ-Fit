@@ -1,25 +1,56 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, Animated, Easing } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  View,
+  Text,
+  Animated,
+  Easing,
+  Pressable,
+  ScrollView,
+  useWindowDimensions,
+} from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import { Icon } from '../components/ui/Icon';
 import { CtaButton } from '../components/ui/CtaButton';
-import { CircularProgressRing } from '../components/ui/CircularProgressRing';
+import { MonoLabel } from '../components/ui/Display';
+import { AjSpeechText } from '../components/aj/AjSpeechText';
+import { AnalysisAjRing } from '../components/onboarding/AnalysisAjRing';
+import {
+  ANALYSIS_LAYOUT,
+  analysisComposition,
+  analysisLookAt,
+} from '../components/onboarding/analysisComposition';
 import { displayLineHeight } from '../theme/tokens';
 import { useTheme } from '../theme';
 import { useAppState } from '../state/AppState';
+import { useReducedMotionPreference } from '../lib/reducedMotion';
 import { logInfo, logWarn } from '../lib/logger';
 import { prepareWorkoutProgramLocally } from '../services/workoutPrograms';
 import type { PrescriptionResult } from '../workoutPrescription/types';
 import { onboardingGenerationFailurePresentation } from '../workoutPrescription/uiOutcome';
 
+/**
+ * The five checkpoints the screen narrates. One key per step: the pill's
+ * label and the line AJ says while that step is active come from the same
+ * entry, so the two can never drift apart.
+ *
+ * Deliberately label-only. The design prototype printed a value under each
+ * finished row ("165 cm · 62 kg · IMC 22,8", "46 exercícios", "2.250 kcal"),
+ * but those numbers are invented there; nothing this screen or the real
+ * prescription computes is exposed as a per-step readout, so no value line is
+ * rendered rather than a fabricated one.
+ */
+const STEP_KEYS = ['profile', 'volume', 'exercises', 'periodization', 'plan'] as const;
+
+/** Design cadence for AJ's narration — slower than a question, faster than prose. */
+const SPEECH_MS_PER_CHAR = 22;
+
 export function AnalyzingScreen({
-  name,
   onDone,
   onReviewAnswers,
 }: {
-  name?: string | null;
   onDone: () => void;
   onReviewAnswers: () => void;
 }) {
@@ -27,14 +58,12 @@ export function AnalyzingScreen({
   const { t } = useTranslation('onboarding');
   const { t: tPlan } = useTranslation('plan');
   const { quiz, setPreparedWorkoutProgram } = useAppState();
+  const reduceMotion = useReducedMotionPreference();
+  const { height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const [progress, setProgress] = useState(0);
-  const steps = [
-    t('analyzing.steps.profile'),
-    t('analyzing.steps.volume'),
-    t('analyzing.steps.exercises'),
-    t('analyzing.steps.periodization'),
-    t('analyzing.steps.plan'),
-  ];
+  const [talking, setTalking] = useState(false);
+  const steps = STEP_KEYS.map((key) => t(`analyzing.steps.${key}`));
 
   // Phase 3, Part D — the REAL Prescription Engine now runs here (pre-auth,
   // local sources — `prepareWorkoutProgramLocally`), not just a timed
@@ -118,6 +147,21 @@ export function AnalyzingScreen({
     }
   }, [progress, computeStatus]);
 
+  // Everything the presentation needs is derived from that same pair — the
+  // visual state never runs ahead of, or behind, what the screen actually
+  // knows. `completed` is true exactly when `onDone` has been scheduled, so
+  // the celebration occupies the delay that already existed; no time is added.
+  const completed = progress >= 100 && computeStatus === 'success';
+  // Active step index: 0..steps.length-1. Clamped so the final step stays
+  // "active" until the real result lands (never enters the "done" state on a
+  // timer alone).
+  const stepFloat = (progress / 100) * steps.length;
+  const activeIdx = Math.min(steps.length - 1, Math.floor(stepFloat));
+  const look = useMemo(
+    () => (completed ? ([0, 0] as const) : analysisLookAt(activeIdx, STEP_KEYS.length)),
+    [completed, activeIdx],
+  );
+
   if (computeStatus === 'error') {
     const presentation = failureStatus
       ? onboardingGenerationFailurePresentation(failureStatus)
@@ -162,38 +206,94 @@ export function AnalyzingScreen({
     );
   }
 
-  // Active step index: 0..steps.length-1. Clamped so the final step stays
-  // "active" until onDone fires (never enters the "done" state itself).
-  const stepFloat = (progress / 100) * steps.length;
-  const activeIdx = Math.min(steps.length - 1, Math.floor(stepFloat));
+  const composition = analysisComposition(height - insets.top, steps.length);
+  const percent = Math.max(0, Math.min(100, Math.round(progress)));
+  // Announced at step granularity, never per frame: a live region that
+  // retriggered on every 1% tick would talk over itself for five seconds.
+  const announcedPercent = completed
+    ? 100
+    : Math.round((activeIdx / steps.length) * 100);
+  const line = completed
+    ? t('analyzing.speech.done')
+    : t(`analyzing.speech.${STEP_KEYS[activeIdx]}`);
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
-      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+      {/* Only the top edge is a safe-area inset: the design's own 36pt
+          bottom gap already clears the home indicator, and adding the inset
+          on top of it would push the checklist off a 844pt screen. */}
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <View
           style={{
             flex: 1,
             paddingHorizontal: 24,
-            paddingTop: 40,
-            paddingBottom: 36,
+            paddingTop: ANALYSIS_LAYOUT.paddingTop,
+            paddingBottom: Math.max(ANALYSIS_LAYOUT.paddingBottom, insets.bottom),
           }}
         >
-          <View style={{ marginBottom: 26 }}>
-            <CircularProgressRing
-              progress={progress}
-              label={t('analyzing.compiling')}
-              accessibilityLabel={t('analyzing.accessibility.progress', { progress })}
-              pulseGlow
+          <View style={{ marginBottom: ANALYSIS_LAYOUT.ringGap }}>
+            <AnalysisAjRing
+              geometry={composition.ring}
+              progress={percent / 100}
+              stepIndex={activeIdx}
+              completed={completed}
+              mood={completed ? 'happy' : talking ? 'talk' : 'think'}
+              look={look}
+              talking={talking}
+              reduceMotion={reduceMotion}
             />
           </View>
 
+          {/* ── Percentage ── */}
+          <View
+            accessible
+            accessibilityLiveRegion="polite"
+            accessibilityLabel={t('analyzing.accessibility.progress', { progress: announcedPercent })}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'baseline',
+              justifyContent: 'center',
+              gap: 8,
+              marginBottom: ANALYSIS_LAYOUT.percentGap,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+              <Text
+                style={{
+                  fontFamily: theme.fonts.display,
+                  fontSize: 26,
+                  lineHeight: displayLineHeight(26),
+                  color: theme.colors.textPrimary,
+                  fontVariant: ['tabular-nums'],
+                  transform: [{ skewX: '-8deg' }],
+                }}
+              >
+                {percent}
+              </Text>
+              <Text
+                style={{
+                  fontFamily: theme.fonts.display,
+                  fontSize: 14,
+                  lineHeight: displayLineHeight(26),
+                  color: theme.colors.primaryEmphasis,
+                  transform: [{ skewX: '-8deg' }],
+                }}
+              >
+                %
+              </Text>
+            </View>
+            <MonoLabel>
+              {(completed ? t('analyzing.completed') : t('analyzing.compiling')).toUpperCase()}
+            </MonoLabel>
+          </View>
+
           {/* ── Title ── */}
-          <View style={{ alignItems: 'center', marginBottom: 24 }}>
+          <View style={{ alignItems: 'center', marginBottom: ANALYSIS_LAYOUT.titleGap }}>
             <Text
               style={{
                 fontFamily: theme.fonts.display,
-                fontSize: 32,
-                lineHeight: displayLineHeight(32),
+                fontSize: composition.titleSize,
+                lineHeight: displayLineHeight(composition.titleSize),
                 letterSpacing: 0.5,
                 textTransform: 'uppercase',
                 color: theme.colors.textPrimary,
@@ -201,79 +301,127 @@ export function AnalyzingScreen({
                 transform: [{ skewX: '-8deg' }],
               }}
             >
-              {renderHighlightedTitle(
-                name
-                  ? `${t('analyzing.titleWithNameLine1').toUpperCase()}\n${t('analyzing.titleWithNameLine2', { name }).toUpperCase()}`
-                  : `${t('analyzing.titleLine1').toUpperCase()}\n${t('analyzing.titleLine2').toUpperCase()}`,
-                theme.colors.primaryEmphasis,
-              )}
+              {`${t('analyzing.titleLine1')}\n${t('analyzing.titleLine2')}`}
             </Text>
           </View>
 
+          {/* ── What AJ is saying about the step in progress ── */}
+          <View
+            accessibilityLiveRegion="polite"
+            style={{
+              minHeight: ANALYSIS_LAYOUT.speechMinHeight,
+              marginBottom: ANALYSIS_LAYOUT.speechGap,
+              paddingHorizontal: 10,
+              alignItems: 'center',
+            }}
+          >
+            <AjSpeechText
+              key={line}
+              text={line}
+              msPerChar={SPEECH_MS_PER_CHAR}
+              reduceMotion={reduceMotion}
+              onStart={() => setTalking(true)}
+              onDone={() => setTalking(false)}
+              style={{
+                fontFamily: theme.fonts.ui,
+                fontSize: 14.5,
+                lineHeight: 21,
+                color: theme.colors.textSecondaryStrong,
+                textAlign: 'center',
+              }}
+            />
+          </View>
+
           {/* ── Synced checklist ── */}
-          <View style={{ gap: 10 }}>
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ gap: ANALYSIS_LAYOUT.rowGap }}
+            showsVerticalScrollIndicator={false}
+          >
             {steps.map((label, i) => {
-              const done = i < activeIdx;
-              const active = i === activeIdx;
+              const done = completed || i < activeIdx;
+              const active = !completed && i === activeIdx;
               return (
                 <StepPill
-                  key={i}
+                  key={STEP_KEYS[i]}
                   label={label}
+                  paddingVertical={composition.rowPaddingVertical}
+                  reduceMotion={reduceMotion}
                   state={done ? 'done' : active ? 'active' : 'pending'}
+                  accessibilityLabel={t(
+                    done
+                      ? 'analyzing.accessibility.stepDone'
+                      : active
+                        ? 'analyzing.accessibility.stepActive'
+                        : 'analyzing.accessibility.stepPending',
+                    { label },
+                  )}
                 />
               );
             })}
-          </View>
+          </ScrollView>
+
+          {/* ── Escape hatch — unchanged behaviour, it still goes back a step ── */}
+          <Pressable
+            accessibilityRole="button"
+            onPress={onReviewAnswers}
+            style={{
+              minHeight: ANALYSIS_LAYOUT.reviewMinHeight,
+              marginTop: ANALYSIS_LAYOUT.reviewGap,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Text
+              style={{
+                fontFamily: theme.fonts.uiSemi,
+                fontSize: 13.5,
+                color: theme.colors.textSubtle,
+              }}
+            >
+              {t('analyzing.error.reviewAnswers')}
+            </Text>
+          </Pressable>
         </View>
       </SafeAreaView>
     </View>
   );
 }
 
-// Splits the title on "jornada" (any case) and paints that word in the
-// accent blue — the rest of the title stays white.
-function renderHighlightedTitle(text: string, highlightColor: string) {
-  const parts = text.split(/(jornada)/i);
-  if (parts.length === 1) return text;
-  return parts.map((part, i) =>
-    /^jornada$/i.test(part) ? (
-      <Text key={i} style={{ color: highlightColor }}>
-        {part}
-      </Text>
-    ) : (
-      part
-    ),
-  );
-}
+// ── Checklist pieces ────────────────────────────────────────────────────────
 
 type StepState = 'pending' | 'active' | 'done';
 
-function StepPill({ label, state }: { label: string; state: StepState }) {
+function StepPill({
+  label,
+  state,
+  paddingVertical,
+  reduceMotion,
+  accessibilityLabel,
+}: {
+  label: string;
+  state: StepState;
+  paddingVertical: number;
+  reduceMotion: boolean;
+  accessibilityLabel: string;
+}) {
   const { theme } = useTheme();
   const isActive = state === 'active';
-  const opacity = state === 'pending' ? 0.5 : 1;
 
-  return (
-    <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 14,
-        paddingVertical: 15,
-        paddingHorizontal: 18,
-        borderRadius: 16,
-        backgroundColor: isActive ? theme.colors.primarySurfaceActive : theme.colors.surfaceQuiet,
-        borderWidth: 1,
-        borderColor: isActive ? theme.colors.primaryBorderActive : theme.colors.border,
-        shadowColor: isActive ? theme.colors.primaryEmphasis : 'transparent',
-        shadowOpacity: isActive ? 0.75 : 0,
-        shadowRadius: isActive ? 28 : 0,
-        shadowOffset: { width: 0, height: 0 },
-        elevation: isActive ? 10 : 0,
-        opacity,
-      }}
-    >
-      <StepIndicator state={state} />
+  const row = {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 14,
+    paddingVertical,
+    paddingHorizontal: 18,
+    borderRadius: 16,
+    borderWidth: 1,
+    opacity: state === 'pending' ? 0.5 : 1,
+  };
+
+  const content = (
+    <>
+      <StepIndicator state={state} reduceMotion={reduceMotion} />
       <Text
         style={{
           fontFamily: theme.fonts.uiSemi,
@@ -284,16 +432,53 @@ function StepPill({ label, state }: { label: string; state: StepState }) {
       >
         {label}
       </Text>
-    </View>
+    </>
+  );
+
+  if (!isActive) {
+    return (
+      <View
+        accessible
+        accessibilityLabel={accessibilityLabel}
+        style={{
+          ...row,
+          backgroundColor: theme.colors.surfaceQuiet,
+          borderColor: theme.colors.border,
+        }}
+      >
+        {content}
+      </View>
+    );
+  }
+
+  return (
+    <LinearGradient
+      accessible
+      accessibilityLabel={accessibilityLabel}
+      colors={theme.gradients.stepActive}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 0, y: 1 }}
+      style={{
+        ...row,
+        borderColor: theme.colors.primaryBorderFocus,
+        shadowColor: theme.colors.primary,
+        shadowOpacity: 0.55,
+        shadowRadius: 22,
+        shadowOffset: { width: 0, height: 0 },
+        elevation: 8,
+      }}
+    >
+      {content}
+    </LinearGradient>
   );
 }
 
-function StepIndicator({ state }: { state: StepState }) {
+function StepIndicator({ state, reduceMotion }: { state: StepState; reduceMotion: boolean }) {
   const { theme } = useTheme();
   // Active step spins — mirrors @keyframes aj2-spin-slow (0.9s linear).
   const spin = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    if (state !== 'active') return;
+    if (state !== 'active' || reduceMotion) return;
     const loop = Animated.loop(
       Animated.timing(spin, {
         toValue: 1,
@@ -307,11 +492,10 @@ function StepIndicator({ state }: { state: StepState }) {
       loop.stop();
       spin.setValue(0);
     };
-  }, [state, spin]);
+  }, [state, reduceMotion, spin]);
 
   if (state === 'done') {
-    // Flat solid-blue disc + white check. No halo — the item has already
-    // finished; the LED bloom lives on the active step only.
+    // Solid blue disc, white check, and the design's soft bloom around it.
     return (
       <View
         style={{
@@ -321,6 +505,10 @@ function StepIndicator({ state }: { state: StepState }) {
           backgroundColor: theme.colors.primary,
           alignItems: 'center',
           justifyContent: 'center',
+          shadowColor: theme.colors.primary,
+          shadowOpacity: 0.6,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: 0 },
         }}
       >
         <Icon name="check" size={14} color={theme.colors.primaryForeground} stroke={2.6} />
@@ -347,26 +535,15 @@ function StepIndicator({ state }: { state: StepState }) {
             cy="13"
             r="10"
             fill="none"
-            stroke={theme.colors.borderStrong}
+            stroke={theme.colors.primaryBorderQuiet}
             strokeWidth={2.5}
           />
-          {/* Fake drop-shadow: a wider, softer twin sits beneath the arc so
-              the moving head reads as a lit-up LED (RN-SVG can't do a real
-              filter="drop-shadow"). */}
-          <Path
-            d="M13 3 a10 10 0 0 1 10 10"
-            fill="none"
-            stroke={theme.colors.primary}
-            strokeWidth={6}
-            strokeLinecap="round"
-            opacity={0.55}
-          />
-          {/* Bright blue arc on top */}
+          {/* Quarter arc, the moving head of the spinner */}
           <Path
             d="M13 3 a10 10 0 0 1 10 10"
             fill="none"
             stroke={theme.colors.primaryEmphasis}
-            strokeWidth={2.8}
+            strokeWidth={2.5}
             strokeLinecap="round"
           />
         </Svg>

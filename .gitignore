@@ -66,3 +66,4 @@ perf-runs/
 /scripts/nutrition/sources/off-brazil-bulk.jsonl
 /scripts/nutrition/sources/off-brazil-csv.jsonl
 /scripts/nutrition/sources/*.checkpoint.json
+.streak-test-scratch/

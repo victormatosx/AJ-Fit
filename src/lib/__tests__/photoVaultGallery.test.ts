@@ -225,6 +225,26 @@ beforeEach(() => {
 });
 
 describe('metadata and thumbnail loading', () => {
+  it('announces `loading` only when there is nothing on screen to keep', async () => {
+    // A cold gallery has to say it is loading. A refresh over cards the user
+    // is already looking at must revalidate behind them instead — flipping
+    // to `loading` there replaces the gallery with a spinner and makes a
+    // simple revisit read as a cold start.
+    const cold: string[] = [];
+    const unsubscribeCold = subscribeToGallery((next) => cold.push(next.status));
+    await loadGallery();
+    unsubscribeCold();
+    expect(cold).toContain('loading');
+    expect(getGalleryState().photos.length).toBeGreaterThan(0);
+
+    const warm: string[] = [];
+    const unsubscribeWarm = subscribeToGallery((next) => warm.push(next.status));
+    await loadGallery();
+    unsubscribeWarm();
+    expect(warm).not.toContain('loading');
+    expect(getGalleryState().status).toBe('ready');
+  });
+
   it('renders metadata without eagerly downloading thumbnails or full images', async () => {
     await loadGallery();
 

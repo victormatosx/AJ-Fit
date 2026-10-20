@@ -4,7 +4,6 @@
   },
   "evoTicker": {
     "streakLabel": "SEQUÊNCIA",
-    "streakValue": "{{count}} DIAS",
     "streakValueWeeks": "{{count}} SEMANAS",
     "activeDaysLabel": "DIAS ATIVOS",
     "activeDaysValue": "{{count}}/{{required}}",
@@ -15,7 +14,9 @@
     "levelLabel": "NÍVEL",
     "levelValue": "{{level}}",
     "sessions30dLabel": "TREINOS",
-    "sessions30dValue": "{{count}} NOS ÚLTIMOS 30 DIAS"
+    "sessions30dValue": "{{count}} NOS ÚLTIMOS 30 DIAS",
+    "streakValue_one": "{{count}} DIA",
+    "streakValue_other": "{{count}} DIAS"
   },
   "evoRing": {
     "ofCycle": "DO CICLO",
@@ -24,12 +25,13 @@
     "unlocked": "Evolução liberada",
     "cycleComplete": "Ciclo concluído",
     "streakLabel": "SEQUÊNCIA",
-    "streakUnit": "dias",
     "streakUnitWeeks": "semanas",
     "adherenceLabel": "ADERÊNCIA",
     "adherenceBelowThreshold": ", abaixo do ideal",
     "towardAdvanced": "RUMO AO AVANÇADO",
-    "towardAdvancedUnit": "/ {{count}} ciclos"
+    "towardAdvancedUnit": "/ {{count}} ciclos",
+    "streakUnit_one": "dia",
+    "streakUnit_other": "dias"
   },
   "evoPending": {
     "cycleTitle": "{{count}} exercícios novos no ciclo {{number}}",
@@ -114,6 +116,10 @@
       "title": "Treino concluído",
       "body": "Você já concluiu seu treino de hoje."
     },
+    "completedTodayFree": {
+      "title": "Treino concluído",
+      "body": "Treino de hoje concluído. Volte amanhã para o próximo!"
+    },
     "nextWorkout": {
       "label": "Próximo treino",
       "value": "{{weekday}} · {{session}}"
@@ -141,6 +147,23 @@
       "followSchedule": {
         "title": "Seguir planejamento",
         "subtitle": "Pule o treino pendente e faça o treino previsto para hoje"
+      },
+      "aj": {
+        "question": "Quer refazer esse treino hoje?",
+        "continueSequence": "Sim, refazer hoje",
+        "followSchedule": "Não, seguir o planejamento",
+        "resolvedContinueSequence": "Feito. O treino {{letter}} virou o de hoje e a sequência continua a partir dele.",
+        "resolvedFollowSchedule": "Feito. Seguimos o planejamento: hoje é o treino {{letter}}.",
+        "startSession": "Iniciar treino {{letter}}",
+        "later": "Depois"
+      }
+    },
+    "cyclePaused": {
+      "aj": {
+        "context": "Você faltou em alguns treinos e seu ciclo ficou pausado.",
+        "question": "Quer treinar hoje para retomar?",
+        "start": "Sim, treinar hoje",
+        "later": "Agora não"
       }
     }
   },
@@ -178,8 +201,13 @@
   },
   "progress": {
     "header": {
-      "eyebrow": "Seu progresso",
       "title": "Evolução"
+    },
+    "ticker": {
+      "weightSince": "Peso",
+      "lastAssessment": "Última avaliação",
+      "records90d": "Recordes (90d)",
+      "assessmentsLogged": "Avaliações"
     },
     "tabs": {
       "body": "Corpo",
@@ -187,10 +215,13 @@
       "photos": "Fotos"
     },
     "chartInteractionHint": "Toque no gráfico para ver o valor e a data de cada registro.",
+    "noRecord": "sem registro",
     "body": {
       "currentWeight": "Peso atual",
       "composition": "Composição",
       "measuredAt": "Medido em {{date}}",
+      "sinceMeasured": "desde {{from}} · medido em {{measured}}",
+      "lastAssessment": "Última avaliação em {{date}}",
       "delta": "{{direction}} {{value}} {{unit}}",
       "singleEntry": "Registre outro peso para ver a curva de evolução.",
       "loading": "Carregando sua evolução…",
@@ -219,6 +250,7 @@
       "measurements": {
         "title": "Medidas",
         "selectLabel": "Dobra cutânea",
+        "since": "desde {{date}}",
         "singleEntry": "Registre essa dobra em outra avaliação para ver a curva de evolução.",
         "empty": "Nenhum registro de {{measurement}} encontrado nas avaliações.",
         "options": {
@@ -238,13 +270,46 @@
       "empty": {
         "title": "Desbloqueie sua evolução corporal",
         "description": "Faça sua primeira avaliação física para acompanhar suas mudanças ao longo do tempo.",
-        "cta": "Fazer avaliação"
+        "cta": "Fazer avaliação",
+        "headline": "Registre sua primeira avaliação",
+        "body": "Peso, medidas e composição corporal. A cada nova avaliação, você vê o quanto mudou.",
+        "action": "Registrar avaliação",
+        "weightSection": "Peso",
+        "chartNote": "O gráfico aparece a partir da 2ª avaliação",
+        "noRecords": "sem registros"
       }
     },
     "loads": {
       "eyebrow": "Cargas",
       "loading": "Carregando cargas",
       "records90Title": "Recordes nos últimos 90 dias",
+      "records90Meta": "{{count}} em 90 dias",
+      "sessionsCount_one": "{{count}} treino",
+      "sessionsCount_other": "{{count}} treinos",
+      "ago": {
+        "today": "hoje",
+        "days_one": "há {{count}} dia",
+        "days_other": "há {{count}} dias",
+        "weeks_one": "há {{count}} semana",
+        "weeks_other": "há {{count}} semanas",
+        "months_one": "há {{count}} mês",
+        "months_other": "há {{count}} meses"
+      },
+      "filters": {
+        "mostTrained": "Mais feitos",
+        "heaviest": "Mais pesados",
+        "recent": "Recentes",
+        "accessibility": "Ordenar exercícios por {{filter}}"
+      },
+      "muscleGroups": {
+        "title": "Por grupo muscular",
+        "hint": "toque para ver no corpo",
+        "topEyebrow": "Mais evoluiu · {{days}} dias",
+        "eyebrow": "Força · {{days}} dias",
+        "caption": "de carga · melhor marca {{exercise}} {{load}}",
+        "accessibilitySelect": "Exibir {{muscle}} no mapa corporal",
+        "accessibilityMap": "Mapa de força. Grupo em destaque: {{muscle}}"
+      },
       "recordsCount_one": "recorde batido",
       "recordsCount_other": "recordes batidos",
       "topRecords": "Principais recordes",
@@ -291,9 +356,20 @@
         "chart": "Gráfico de evolução de {{exercise}}. Carga atual: {{value}} {{unit}}"
       },
       "empty": {
-        "title": "Sua evolução começa aqui",
-        "description": "Registre as cargas dos seus exercícios para acompanhar sua força e seus recordes pessoais.",
-        "cta": "Iniciar treino"
+        "title": "Seu mapa começa no primeiro treino",
+        "description": "Registre as cargas durante o treino e o mapa mostra quais músculos estão ficando mais fortes.",
+        "cta": "Iniciar treino",
+        "eyebrow": "Mapa de força",
+        "howItWorks": "Como funciona",
+        "steps": {
+          "1": "Inicie um treino da sua sequência",
+          "2": "Registre carga e repetições em cada série",
+          "3": "Ao repetir um exercício, a evolução aparece aqui"
+        },
+        "noRecords": "sem registros",
+        "accessibility": {
+          "step": "Passo {{number}}: {{text}}"
+        }
       },
       "error": {
         "title": "Não foi possível carregar suas cargas",
@@ -508,8 +584,8 @@
         "TODAY_COMPLETED": "Treino de hoje concluído",
         "TODAY_PENDING": "Treino de hoje pendente",
         "MISSED": "Treino não realizado",
-      "UPCOMING": "Treino programado",
-      "FULFILLED_EARLY": "Treino cumprido antecipadamente",
+        "UPCOMING": "Treino programado",
+        "FULFILLED_EARLY": "Treino cumprido antecipadamente",
         "ACTIVE_RECOVERY": "Recuperação ativa",
         "REST": "Dia de descanso",
         "BEFORE_PROGRAM": "Antes do início do programa"
@@ -517,6 +593,10 @@
     },
     "frequency": {
       "title": "Sua frequência",
+      "weekly": {
+        "label": "Frequência desta semana",
+        "summary": "{{trained}} de {{goal}} dias treinados"
+      },
       "summaryCurrent": "{{count}} treinos nos últimos 30 dias",
       "cachedSummary": "Histórico salvo · atualizando",
       "refreshingSummary": "Atualizando histórico",
@@ -555,5 +635,47 @@
     "body": "O AJ Fit não mostra um calendário até que o histórico de treinos concluídos possa sustentá-lo.",
     "note": "Nenhum dado de exemplo é exibido",
     "back": "Voltar"
+  },
+  "streak": {
+    "evolve": {
+      "label": "SEQUÊNCIA",
+      "daysInRow": "dias seguidos sem falhar",
+      "title": "Sua chama ficou {{color}}",
+      "next": "Siga sem falhar. Com {{count}} dias ela fica {{color}}.",
+      "max": "Você chegou ao nível mais alto. Agora é manter a sequência.",
+      "before": "Antes",
+      "now": "Agora",
+      "nextMilestone": "Próximo marco",
+      "nextDays": "{{count}} dias",
+      "none": "—",
+      "continue": "Continuar"
+    },
+    "color": {
+      "spark": "azul",
+      "flame": "amarela",
+      "ember": "laranja",
+      "blaze": "vermelha",
+      "legendary": "roxa",
+      "plasma": "ciano",
+      "stellar": "branca"
+    },
+    "colorCap": {
+      "spark": "Azul",
+      "flame": "Amarela",
+      "ember": "Laranja",
+      "blaze": "Vermelha",
+      "legendary": "Roxa",
+      "plasma": "Ciano",
+      "stellar": "Branca"
+    },
+    "tier": {
+      "spark": "Faísca",
+      "flame": "Chama",
+      "ember": "Brasa",
+      "blaze": "Incêndio",
+      "legendary": "Lendária",
+      "plasma": "Plasma",
+      "stellar": "Estelar"
+    }
   }
 }

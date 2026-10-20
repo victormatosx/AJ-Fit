@@ -1,4 +1,51 @@
 {
+  "kicker": "SEU PLANO",
+  "tabs": {
+    "workout": "Treino",
+    "diet": "Dieta",
+    "accessibility": "Painéis do plano"
+  },
+  "workoutPanel": {
+    "subtitle": "{{goal}} · {{level}}",
+    "frequencyBadge": "{{count}}x/SEM",
+    "statsFrequency_one": "{{count}}x por semana",
+    "statsFrequency_other": "{{count}}x por semana",
+    "statsDuration": "{{minutes}} min por treino",
+    "flexibleSlot": "{{index}}º",
+    "lockedRow": "Treino {{index}}",
+    "lockedFooter": "Exercícios, séries e cargas liberados na assinatura"
+  },
+  "dietPanel": {
+    "title": "Dieta AJ",
+    "subtitle": "{{category}}",
+    "subtitleWithPace": "{{category}} · ritmo {{pace}}",
+    "meals_one": "{{count}} refeição por dia",
+    "meals_other": "{{count}} refeições por dia",
+    "withoutAllergens": "Sem {{allergens}}",
+    "allergenCount_one": "{{count}} alérgeno",
+    "allergenCount_other": "{{count}} alérgenos",
+    "protein": "Proteína",
+    "carbs": "Carboidratos",
+    "fat": "Gorduras",
+    "gramsSuffix": "g",
+    "kcalPerDay": "{{kcal}} kcal por dia",
+    "mealKcal": "{{kcal}} kcal",
+    "lockedFooter": "Cardápio, quantidades e substituições liberados na assinatura"
+  },
+  "aj": {
+    "intro": "Pronto, {{name}}. Este é o plano que montei para você.",
+    "introNoName": "Pronto. Este é o plano que montei para você.",
+    "strategy": "Seu plano é focado em {{goal}}, no nível {{level}}.",
+    "volume_one": "{{count}} treino por semana, {{minutes}} minutos cada.",
+    "volume_other": "{{count}} treinos por semana, {{minutes}} minutos cada.",
+    "volumeFlexible_one": "Treino livre: {{count}} sessão por semana de {{minutes}} minutos.",
+    "volumeFlexible_other": "Treino livre: {{count}} sessões por semana de {{minutes}} minutos.",
+    "diet_one": "Na dieta: {{category}}, em {{count}} refeição por dia.",
+    "diet_other": "Na dieta: {{category}}, em {{count}} refeições por dia.",
+    "dietWithMacros_one": "Na dieta: {{category}}, em {{count}} refeição por dia, {{kcal}} kcal e {{protein}} g de proteína.",
+    "dietWithMacros_other": "Na dieta: {{category}}, em {{count}} refeições por dia, {{kcal}} kcal e {{protein}} g de proteína.",
+    "closing": "Treino e cardápio já estão prontos. Eles ficam liberados quando você assinar."
+  },
   "header": {
     "eyebrow": "Sua primeira fase",
     "titleWithName": "{{name}}, sua primeira fase está pronta.",

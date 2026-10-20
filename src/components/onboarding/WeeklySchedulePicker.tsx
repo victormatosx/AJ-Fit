@@ -12,7 +12,11 @@ import {
   type WeeklyScheduleValue,
 } from '../../onboarding/weeklyScheduleSelection';
 import { Icon } from '../ui/Icon';
+import { useAjFunnelDirector } from './AjFunnelStage';
 import type { LooseT } from './QuestionRenderer';
+
+/** Diameter of a weekday / frequency circle in the approved design. */
+const DAY_CIRCLE = 42;
 
 export function ScheduleModeLink({
   value,
@@ -30,19 +34,95 @@ export function ScheduleModeLink({
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ selected }}
+      // Clearing whatever the other mode had recorded is `selectFixedSchedule`
+      // / `selectFlexibleSchedule`'s job, unchanged — this only flips which
+      // one runs.
       onPress={() => onChange(selected ? selectFixedSchedule() : selectFlexibleSchedule(value))}
-      style={{ alignSelf: 'center', paddingHorizontal: 8, paddingVertical: 4 }}
+      style={{ alignSelf: 'center', paddingHorizontal: 12, paddingVertical: 8 }}
     >
       <Text
         style={{
-          color: theme.colors.textMuted,
+          color: theme.colors.textSubtle,
           fontFamily: theme.fonts.uiSemi,
           fontSize: 14,
           textDecorationLine: 'underline',
+          textDecorationColor: theme.colors.textSubtle,
         }}
       >
         {tLoose(selected ? 'days.fixedModeLink' : 'days.flexible.label')}
       </Text>
+    </Pressable>
+  );
+}
+
+/** One circle, shared by the weekday grid and the frequency row. */
+function DayCircle({
+  label,
+  caption,
+  selected,
+  accessibilityRole,
+  accessibilityLabel,
+  onPress,
+}: {
+  label?: string;
+  caption?: string;
+  selected: boolean;
+  accessibilityRole: 'checkbox' | 'radio';
+  accessibilityLabel: string;
+  onPress: () => void;
+}) {
+  const { theme } = useTheme();
+  return (
+    <Pressable
+      accessibilityRole={accessibilityRole}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ checked: selected }}
+      onPress={onPress}
+      style={{ flex: 1, alignItems: 'center' }}
+    >
+      {caption ? (
+        <Text
+          style={{
+            color: selected ? theme.colors.primaryEmphasis : theme.colors.textPrimary,
+            fontFamily: theme.fonts.uiSemi,
+            fontSize: 14,
+            lineHeight: 18,
+            marginBottom: 10,
+          }}
+        >
+          {caption}
+        </Text>
+      ) : null}
+      <View
+        style={{
+          width: DAY_CIRCLE,
+          height: DAY_CIRCLE,
+          borderRadius: DAY_CIRCLE / 2,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: selected ? theme.colors.scheduleDayActive : theme.colors.surfaceMuted,
+          borderWidth: selected ? 0 : 1,
+          borderColor: theme.colors.fieldBorderStrong,
+          shadowColor: selected ? theme.colors.primaryGlowBright : 'transparent',
+          shadowOpacity: selected ? 1 : 0,
+          shadowRadius: selected ? 16 : 0,
+          shadowOffset: { width: 0, height: 0 },
+        }}
+      >
+        {label ? (
+          <Text
+            style={{
+              color: selected ? theme.colors.primaryForeground : theme.colors.textPrimary,
+              fontFamily: theme.fonts.uiSemi,
+              fontSize: 14,
+            }}
+          >
+            {label}
+          </Text>
+        ) : selected ? (
+          <Icon name="check" size={16} color={theme.colors.primaryForeground} stroke={2.8} />
+        ) : null}
+      </View>
     </Pressable>
   );
 }
@@ -55,111 +135,97 @@ export function WeeklySchedulePicker({
   onChange: (value: WeeklyScheduleValue) => void;
 }) {
   const { theme } = useTheme();
+  // The funnel's persistent mascot, reached directly rather than through a
+  // prop chain: outside the funnel this resolves to an inert director, so the
+  // picker works unchanged anywhere else.
+  const aj = useAjFunnelDirector();
+  const onToggled = (selected: boolean) => {
+    aj.setLook([0, 2.2]);
+    aj.play(selected ? 'hop' : 'nod');
+  };
   const { t } = useTranslation('quiz');
   const tLoose = t as unknown as LooseT;
   const flexible = value.scheduleMode === 'flexible';
   const selectedDays = value.scheduleMode === 'fixed' ? value.trainingDays ?? [] : [];
+  // Below the minimum the status line turns into the correction, in the error
+  // colour — the CTA's own disabled state still comes from
+  // `isWeeklyScheduleComplete`, untouched.
+  const belowMinimum = !flexible && selectedDays.length > 0 && selectedDays.length < 2;
+
+  const statusStyle = {
+    fontFamily: theme.fonts.ui,
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center' as const,
+    color: belowMinimum ? theme.colors.fieldErrorText : theme.colors.textMuted,
+  };
 
   return (
-    <View style={{ height: 90 }}>
+    <View>
       {flexible ? (
-        <View style={{ height: 90 }}>
-          <Text style={{ color: theme.colors.textPrimary, fontFamily: theme.fonts.uiSemi, fontSize: 14, lineHeight: 16 }}>
+        <View>
+          <Text
+            style={{
+              color: theme.colors.textPrimary,
+              fontFamily: theme.fonts.uiSemi,
+              fontSize: 15,
+              lineHeight: 20,
+              textAlign: 'center',
+              marginBottom: 18,
+            }}
+          >
             {tLoose('days.flexibleFrequency')}
           </Text>
-          <View style={{ position: 'absolute', top: 26, right: 0, left: 0, flexDirection: 'row', justifyContent: 'space-between' }}>
-            {AVAILABLE_FREQUENCIES.map((frequency) => {
-              const selected = value.days === frequency;
-              return (
-                <View key={frequency} style={{ flex: 1, alignItems: 'center' }}>
-                  <Pressable
-                    accessibilityRole="radio"
-                    accessibilityLabel={tLoose('days.frequencyAccessibilityLabel', { count: frequency })}
-                    accessibilityState={{ checked: selected }}
-                    onPress={() => onChange(selectFlexibleFrequency(frequency))}
-                    style={{
-                      width: 38,
-                      height: 38,
-                      borderRadius: 19,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: selected ? theme.colors.primaryEmphasis : theme.colors.surfaceElevated,
-                      borderWidth: selected ? 0 : 1.5,
-                      borderColor: selected ? theme.colors.primaryEmphasis : theme.colors.inputBorder,
-                      shadowColor: selected ? theme.colors.primaryEmphasis : 'transparent',
-                      shadowOpacity: selected ? 0.4 : 0,
-                      shadowRadius: 10,
-                      shadowOffset: { width: 0, height: 0 },
-                    }}
-                  >
-                    <Text style={{ color: selected ? theme.colors.choiceIndicator : theme.colors.textPrimary, fontFamily: theme.fonts.uiBold, fontSize: 13 }}>
-                      {frequency}
-                    </Text>
-                  </Pressable>
-                </View>
-              );
-            })}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            {AVAILABLE_FREQUENCIES.map((frequency) => (
+              <DayCircle
+                key={frequency}
+                label={String(frequency)}
+                selected={value.days === frequency}
+                accessibilityRole="radio"
+                accessibilityLabel={tLoose('days.frequencyAccessibilityLabel', { count: frequency })}
+                onPress={() => {
+                  onChange(selectFlexibleFrequency(frequency));
+                  onToggled(true);
+                }}
+              />
+            ))}
           </View>
+          <Text style={[statusStyle, { marginTop: 18 }]}>
+            {tLoose('days.flexibleStatus', { count: value.days ?? 0 })}
+          </Text>
         </View>
       ) : (
-        <View style={{ height: 90 }}>
+        <View>
           <View
             accessibilityLabel={tLoose('days.fixedDaysAccessibilityLabel')}
-            style={{ position: 'absolute', top: 0, right: 0, left: 0, flexDirection: 'row', justifyContent: 'space-between' }}
+            style={{ flexDirection: 'row', justifyContent: 'space-between' }}
           >
             {WEEKDAY_ORDER.map((day) => {
               const selected = selectedDays.includes(day);
-              const label = tLoose(`trainingDays.options.${day}`);
               return (
-                <Pressable
+                <DayCircle
                   key={day}
+                  caption={tLoose(`trainingDays.options.${day}`)}
+                  selected={selected}
                   accessibilityRole="checkbox"
-                  accessibilityLabel={label}
-                  accessibilityState={{ checked: selected }}
-                  onPress={() => onChange(toggleFixedTrainingDay(value, day))}
-                  style={{ flex: 1, height: 64, alignItems: 'center' }}
-                >
-                  <Text
-                    style={{
-                      color: selected ? theme.colors.primaryEmphasis : theme.colors.textPrimary,
-                      fontFamily: theme.fonts.uiBold,
-                      fontSize: 13,
-                      lineHeight: 16,
-                    }}
-                  >
-                    {label}
-                  </Text>
-                  <View
-                    style={{
-                      width: 38,
-                      height: 38,
-                      borderRadius: 19,
-                      marginTop: 10,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: selected ? theme.colors.primaryEmphasis : theme.colors.surfaceElevated,
-                      borderWidth: selected ? 0 : 1.5,
-                      borderColor: selected ? theme.colors.primaryEmphasis : theme.colors.inputBorder,
-                      shadowColor: selected ? theme.colors.primaryEmphasis : 'transparent',
-                      shadowOpacity: selected ? 0.4 : 0,
-                      shadowRadius: 10,
-                      shadowOffset: { width: 0, height: 0 },
-                    }}
-                  >
-                    {selected ? <Icon name="check" size={18} color={theme.colors.choiceIndicator} stroke={2.8} /> : null}
-                  </View>
-                </Pressable>
+                  accessibilityLabel={tLoose(`trainingDays.options.${day}`)}
+                  onPress={() => {
+                    onChange(toggleFixedTrainingDay(value, day));
+                    onToggled(!selected);
+                  }}
+                />
               );
             })}
           </View>
 
-          <View style={{ position: 'absolute', top: 72, right: 0, left: 0, height: 18, justifyContent: 'center' }}>
-            {selectedDays.length === 1 ? (
-              <Text style={{ color: theme.colors.textMuted, fontFamily: theme.fonts.ui, fontSize: 13, textAlign: 'center' }}>
+          <View style={{ marginTop: 18, minHeight: 19, justifyContent: 'center' }}>
+            {belowMinimum ? (
+              <Text accessibilityRole="alert" style={statusStyle}>
                 {tLoose('days.minimumSelectionHint')}
               </Text>
             ) : selectedDays.length > 1 ? (
-              <Text style={{ color: theme.colors.textMuted, fontFamily: theme.fonts.ui, fontSize: 13, textAlign: 'center' }}>
+              <Text style={statusStyle}>
                 {tLoose('days.selectedCount', { count: selectedDays.length })}
               </Text>
             ) : null}

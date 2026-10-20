@@ -15,6 +15,22 @@ export interface UseHomeStreakInput {
   activeRecoveryDays: readonly Weekday[];
 }
 
+export interface UseHomeStreakResult {
+  streak: Streak | null;
+  /**
+   * Re-runs the same bounded read on demand — callers must invoke this after
+   * finishing a workout, since none of this hook's own effect deps (schedule
+   * config) change when a session completes.
+   *
+   * Resolves with the freshly-read `Streak` so a caller that needs the value
+   * at a precise moment (the post-completion milestone check in `AppShell`)
+   * can use it directly, instead of racing the `streak` state commit. `null`
+   * means "no authoritative value" — no user/program, or the read failed —
+   * and must never be treated as a streak of 0.
+   */
+  reload: () => Promise<Streak | null>;
+}
+
 /**
  * Home-only streak read — deliberately separate from `useWidgetSnapshotSync`
  * (never modifies it). Reuses the exact same pure/service functions the
@@ -23,21 +39,21 @@ export interface UseHomeStreakInput {
  * Home load/foreground, never a new calculation (Home redesign plan,
  * "Sequência (streak)" decision).
  *
- * Returns `null` until the first successful read — the Home ticker/ring must
- * simply omit the streak item while this is `null`, never show a fabricated
- * 0.
+ * `streak` is `null` until the first successful read — the Home ticker/ring
+ * must simply omit the streak item while this is `null`, never show a
+ * fabricated 0.
  */
-export function useHomeStreak(input: UseHomeStreakInput): Streak | null {
+export function useHomeStreak(input: UseHomeStreakInput): UseHomeStreakResult {
   const { user } = useAuth();
   const [streak, setStreak] = useState<Streak | null>(null);
   const uid = user?.uid ?? null;
   const trainingDaysKey = input.trainingDays.join(',');
   const activeRecoveryDaysKey = input.activeRecoveryDays.join(',');
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (): Promise<Streak | null> => {
     if (!uid || !input.hasActiveProgram) {
       setStreak(null);
-      return;
+      return null;
     }
     try {
       const today = localDateInTimezone(new Date(), input.timezone);
@@ -53,9 +69,11 @@ export function useHomeStreak(input: UseHomeStreakInput): Streak | null {
         fetchRange: listCompletedWorkoutActivityDatesInRange,
       });
       setStreak(result.streak);
+      return result.streak;
     } catch {
       // A transient failure must never blank an already-shown real streak —
       // same "never flash a worse state" contract the rest of Home follows.
+      return null;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -72,5 +90,5 @@ export function useHomeStreak(input: UseHomeStreakInput): Streak | null {
     void load();
   }, [load]);
 
-  return streak;
+  return { streak, reload: load };
 }

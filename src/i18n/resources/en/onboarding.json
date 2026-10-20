@@ -118,6 +118,7 @@
   },
   "analyzing": {
     "compiling": "Compiling",
+    "completed": "Completed",
     "titleLine1": "Building",
     "titleLine2": "your plan",
     "steps": {
@@ -127,8 +128,19 @@
       "periodization": "Periodizing your weeks",
       "plan": "Building your premium plan"
     },
+    "speech": {
+      "profile": "Starting with your physical profile.",
+      "volume": "Tuning volume and intensity to your level.",
+      "exercises": "Picking your exercises.",
+      "periodization": "Organizing how your weeks progress.",
+      "plan": "Finishing your plan.",
+      "done": "All set. Your plan is ready."
+    },
     "accessibility": {
-      "progress": "Building your plan: {{progress}} percent"
+      "progress": "Building your plan: {{progress}} percent",
+      "stepDone": "{{label}}, done",
+      "stepActive": "{{label}}, in progress",
+      "stepPending": "{{label}}, pending"
     },
     "titleWithNameLine1": "We're structuring",
     "titleWithNameLine2": "your journey, {{name}}.",

@@ -1,7 +1,11 @@
 import React from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { MonoLabel } from '../ui/Display';
 import { Icon } from '../ui/Icon';
+import { CtaButton, CtaText } from '../ui/CtaButton';
+import { CompletedTodayButton, useCompletedTodayEntrance } from '../workout/CompletedTodayButton';
+import { AdvanceWorkoutButton } from '../workout/AdvanceWorkoutButton';
+import { NextWorkoutRow } from '../workout/NextWorkoutRow';
 import { BodyMuscleMap } from '../fitness/BodyMuscleMap';
 import { useTheme } from '../../theme';
 import { displayLineHeight } from '../../theme/tokens';
@@ -56,6 +60,10 @@ export function TreinoTodayBlock({
   onPressCta,
   completedLabel,
   completedNote,
+  advanceLabel,
+  onPressAdvance,
+  nextWorkoutLabel,
+  nextWorkoutValue,
 }: {
   kicker: string | null;
   sessionLabel: string | null;
@@ -79,8 +87,24 @@ export function TreinoTodayBlock({
    */
   completedLabel: string | null;
   completedNote: string | null;
+  /**
+   * Rest day whose next session may be pulled forward: the same "adiantar
+   * treino" affordance Home's Today card offers, in the same slot. Null
+   * whenever `AppShell`'s `advancedWorkoutTarget` says advancing isn't on
+   * offer — this block never decides that itself.
+   */
+  advanceLabel: string | null;
+  onPressAdvance: (() => void) | null;
+  /**
+   * Last resort for the slot: a blocked day with nothing to act on still says
+   * when the next workout is, exactly as Home's Today card does — otherwise
+   * the slot would simply be empty.
+   */
+  nextWorkoutLabel: string | null;
+  nextWorkoutValue: string | null;
 }) {
   const { theme } = useTheme();
+  const completedEntering = useCompletedTodayEntrance(!ctaVisible && completedLabel != null, ctaVisible);
 
   return (
     <View style={{ paddingHorizontal: 22, marginTop: 28, paddingTop: 24, borderTopWidth: 1, borderTopColor: theme.colors.divider }}>
@@ -202,74 +226,45 @@ export function TreinoTodayBlock({
       )}
 
       {ctaVisible && (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ disabled: ctaDisabled }}
+        <CtaButton
           disabled={ctaDisabled}
           onPress={onPressCta}
-          style={{
-            marginTop: 20,
-            paddingVertical: 17,
-            borderRadius: 12,
-            backgroundColor: theme.colors.primary,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 9,
-            opacity: ctaDisabled ? 0.6 : 1,
-          }}
+          style={{ marginTop: 20 }}
+          accessibilityLabel={ctaLabel}
         >
-          <Icon name="play" size={13} color={theme.colors.primaryForeground} />
-          <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 16, color: theme.colors.primaryForeground }}>
-            {ctaLabel}
-          </Text>
-        </Pressable>
+          <Icon name="play" size={15} color={theme.colors.primaryForeground} />
+          <CtaText>{ctaLabel}</CtaText>
+        </CtaButton>
       )}
 
       {!ctaVisible && completedLabel && (
-        <>
-          {/* Blocked, never actionable: `disabled` (not just a muted look) is
-              what guarantees no second session can be started today from
-              here — the Schedule Engine's resolution is the real block. */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ disabled: true }}
-            disabled
-            style={{
-              marginTop: 20,
-              paddingVertical: 17,
-              borderRadius: 12,
-              backgroundColor: theme.colors.surfacePressed,
-              borderWidth: 1,
-              borderColor: theme.colors.dividerStrong,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 9,
-            }}
-          >
-            <Icon name="check" size={15} color={theme.colors.primaryEmphasis} stroke={2.6} />
-            <Text
-              numberOfLines={1}
-              style={{ flexShrink: 1, fontFamily: theme.fonts.uiSemi, fontSize: 16, color: theme.colors.textSubtle }}
-            >
-              {completedLabel}
-            </Text>
-          </Pressable>
-          {completedNote && (
-            <Text
-              style={{
-                marginTop: 12,
-                textAlign: 'center',
-                fontFamily: theme.fonts.ui,
-                fontSize: 12.5,
-                color: theme.colors.textMuted,
-              }}
-            >
-              {completedNote}
-            </Text>
-          )}
-        </>
+        <CompletedTodayButton
+          theme={theme}
+          label={completedLabel}
+          note={completedNote}
+          animate={completedEntering}
+          style={{ marginTop: 20 }}
+        />
+      )}
+
+      {!ctaVisible && !completedLabel && advanceLabel && onPressAdvance && (
+        <AdvanceWorkoutButton
+          theme={theme}
+          label={advanceLabel}
+          onPress={onPressAdvance}
+          style={{ marginTop: 20 }}
+        />
+      )}
+
+      {/* Same order Home's card resolves the slot in: start CTA, then today's
+          completion, then the advance offer, and only then this. */}
+      {!ctaVisible && !completedLabel && !advanceLabel && nextWorkoutLabel && nextWorkoutValue && (
+        <NextWorkoutRow
+          theme={theme}
+          label={nextWorkoutLabel}
+          value={nextWorkoutValue}
+          style={{ marginTop: 20 }}
+        />
       )}
     </View>
   );

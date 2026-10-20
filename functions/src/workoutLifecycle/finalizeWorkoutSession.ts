@@ -6,11 +6,14 @@ import { requireAuth } from '../lib/auth';
 import { logInfo, logWarn, type LogContext } from '../lib/logger';
 import { buildScheduleAuthorityContext, prescribedExecutionCounts } from './finalizationAuthority';
 import { validateMaterializedExecutionSubstitutions } from './exerciseSubstitution';
-import { detectMissedSessionGap, resolveWorkoutSchedule } from './scheduleEngine/resolver';
-import { scheduleEventDocumentId } from './scheduleEngine/identities';
 import { addDaysLocal } from './scheduleEngine/calendar';
 import { localDateInTimezone } from './scheduleEngine/localDate';
 import type { ScheduleResolution } from './scheduleEngine/types';
+import { completeSession, readSessionSuggestion } from './scheduleEngine/sessionSuggestion';
+import { detectMissedSessionGap, resolveWorkoutSchedule } from './scheduleEngine/resolver';
+import { scheduleEventDocumentId } from './scheduleEngine/identities';
+import { WORKOUT_PILOT_ENROLLMENT_COLLECTION, isWorkoutPilotEnrolled } from './scheduleEngine/workoutPilot';
+import { WORKOUT_DAILY_COMPLETIONS_COLLECTION, consumesDailyLimit, resolveDailyLimit } from './scheduleEngine/dailyWorkoutLimit';
 
 export const MAX_CARDIO_ACTUAL_DURATION_SECONDS = 3 * 60 * 60;
 
@@ -180,7 +183,7 @@ function safeReasonCode(error: unknown): string {
       case 'execution_program_not_active': return 'PROGRAM_NOT_ACTIVE';
       case 'program_instance_mismatch': return 'PROGRAM_INSTANCE_MISMATCH';
       case 'schedule_not_configured': return 'SCHEDULE_NOT_CONFIGURED';
-      case 'advanced_workout_not_next_opportunity': return 'ADVANCE_NOT_NEXT_OPPORTUNITY';
+      case 'workout_daily_limit_reached': return 'DAILY_LIMIT_REACHED';
       case 'invalid_execution_performed_date': return 'INVALID_PERFORMED_DATE';
       case 'execution_does_not_match_authoritative_prescription': return 'PRESCRIPTION_MISMATCH';
       // Diagnostic-only labels below — purely for log readability; they were
@@ -366,19 +369,43 @@ async function finalizeWorkoutSessionCore(
     occurrence,
   ));
   const currentRef = root.collection('workoutExecutionState').doc('current');
+  // One credited workout per user per day. Keyed by the execution's own
+  // performed date, which the schedule validation below proves equals the day
+  // this execution was created in the user's schedule timezone.
+  const dailyCompletionRef = root.collection(WORKOUT_DAILY_COMPLETIONS_COLLECTION)
+    .doc(typeof initialExecution.performedLocalDate === 'string'
+      ? initialExecution.performedLocalDate
+      : initialExecution.scheduledLocalDate);
   const validatedShape = executionShape(initialExecution);
+
+  // CONTROLLED PILOT ENROLMENT — read here, outside the transaction, so that
+  // ANY failure (absent document, Rules change, outage) resolves to `false`
+  // and the account simply runs the legacy path. Reading it inside the
+  // transaction would turn an unreadable flag into a failed finalize.
+  //
+  // Keyed by the SERVER-AUTHENTICATED uid; nothing the request carries can
+  // influence it. The uid is never echoed into logs here — `diag` already
+  // masks it the way every other log line in this file does.
+  const pilotEnrolled = await firestore
+    .collection(WORKOUT_PILOT_ENROLLMENT_COLLECTION).doc(uid).get()
+    .then((snapshot) => isWorkoutPilotEnrolled(snapshot.exists ? snapshot.data() : null))
+    .catch((error) => {
+      logWarn('workout.finalize', 'pilot_enrollment_unreadable', { reasonCode: safeReasonCode(error) });
+      return false;
+    });
+  diag.pilotEnrolled = pilotEnrolled;
 
   mark(startedAt, 'transaction_start');
   let result: FinalizeWorkoutSessionResult;
   try {
     result = await firestore.runTransaction(async (transaction) => {
     const [executionSnapshot, instanceSnapshot, programSnapshot, configSnapshot, stateSnapshot, eventSnapshot,
-      currentSnapshot, activeProgramSnapshot, lifecycleStateSnapshot]
+      currentSnapshot, activeProgramSnapshot, lifecycleStateSnapshot, dailyCompletionSnapshot]
       = await Promise.all([
         transaction.get(executionRef), transaction.get(instanceRef), transaction.get(programRef),
         transaction.get(scheduleConfigRef), transaction.get(scheduleStateRef),
         transaction.get(completionEventRef), transaction.get(currentRef), transaction.get(activeProgramRef),
-        transaction.get(lifecycleStateRef),
+        transaction.get(lifecycleStateRef), transaction.get(dailyCompletionRef),
       ]);
     if (!executionSnapshot.exists || !instanceSnapshot.exists || !programSnapshot.exists) {
       throw new HttpsError('failed-precondition', 'execution_prescription_referent_missing');
@@ -422,6 +449,109 @@ async function finalizeWorkoutSessionCore(
       throw new HttpsError('failed-precondition', 'schedule_not_configured', { stage: 'SCHEDULE' });
     }
     if (!eventSnapshot.exists) {
+      // CONTROLLED PILOT GATE.
+      //
+      // The new training architecture is a product change for the whole base,
+      // so it reaches exactly the enrolled account. Everyone else runs the
+      // ORIGINAL validation below, byte-for-byte: the calendar gate, the
+      // one-day advance exception and the missed-session gap lookup.
+      //
+      // Gated on the SERVER-AUTHENTICATED uid (`requireAuth`'s return), never
+      // on anything the request carries. Enrolment is read outside this
+      // transaction and any failure already resolved to `false`, so an
+      // unreadable flag can only ever leave an account on legacy behaviour.
+      if (pilotEnrolled) {
+        // NEW TRAINING MODEL — the calendar no longer authorizes a completion.
+        //
+        // What was removed: the `SESSION_READY` gate (which refused any session
+        // the fixed rotation did not owe TODAY), the one-day "advance" exception
+        // and its `advanced_workout_not_next_opportunity` check, and the
+        // missed-session gap lookup that existed only to stop that gate from
+        // rejecting a legitimately recovered session. Recommended weekdays are
+        // suggestions now; refusing a completion because of them would make the
+        // product's core promise unenforceable.
+        //
+        // What replaced it, so nothing weakened:
+        //  - the session must resolve to a REAL session of the authoritative
+        //    program (`initialSession`/`session` lookups above, which reject an
+        //    out-of-range `sessionIndex` with
+        //    `execution_does_not_match_authoritative_prescription`);
+        //  - the program, the instance and the lifecycle pointer must all still
+        //    be the active ones (unchanged, below);
+        //  - `performedLocalDate` must equal the execution's own server-side
+        //    creation day in the user's timezone and may never be in the future
+        //    of its scheduled date (unchanged, below) — a completion still
+        //    cannot be backdated or forged;
+        //  - the deterministic COMPLETED event id still makes the whole write
+        //    idempotent (`!eventSnapshot.exists`).
+        if (program.status !== 'active'
+          || instance.supersededAt !== null
+          || activeProgramSnapshot.data()?.programId !== execution.programId
+          || lifecycleStateSnapshot.data()?.activeProgramInstanceId !== execution.programInstanceId) {
+          throw new HttpsError('failed-precondition', 'execution_program_not_active', { stage: 'SCHEDULE' });
+        }
+        const performedLocalDate = typeof execution.performedLocalDate === 'string'
+          ? execution.performedLocalDate
+          : execution.scheduledLocalDate;
+        // Temporal PROVENANCE only — never calendar ordering.
+        //
+        // `performedLocalDate <= scheduledLocalDate` used to be enforced here as
+        // the tail of the one-day advance window ("you may finish early, never
+        // late"). With recommended days demoted to suggestions that constraint
+        // has no product meaning left: a session carrying a past recommended
+        // date must still be completable today, or the recommendation would be
+        // blocking training again through the back door.
+        //
+        // What remains is the only check that was ever an anti-fraud guarantee,
+        // and it is untouched: `performedLocalDate` must equal the day the
+        // EXECUTION ITSELF was created, measured from the server-set `createdAt`
+        // in the user's own schedule timezone. A client cannot move `createdAt`
+        // (Rules pin it, and the document is immutable on that field), so it
+        // cannot claim a day it did not train on — in either direction.
+        if (!validLocalDate(execution.scheduledLocalDate)
+          || !validLocalDate(performedLocalDate)
+          || !(execution.createdAt instanceof Timestamp)
+          || localDateInTimezone(execution.createdAt.toDate(), context.config.timezone) !== performedLocalDate) {
+          throw new HttpsError('permission-denied', 'invalid_execution_performed_date', { stage: 'SCHEDULE' });
+        }
+
+        // ONE CREDITED WORKOUT PER DAY.
+        //
+        // The marker was read inside this transaction, so Firestore aborts and
+        // retries if anything claims the day between that read and the commit
+        // below: two devices finishing two different sessions at the same
+        // instant serialize, and exactly one is credited. Being user-scoped, it
+        // cannot be dodged by switching session, program or instance.
+        //
+        // A replay of this SAME execution never reaches here — the COMPLETED
+        // event gate above already returned — but the decision still recognizes
+        // it explicitly, so a redelivered call can never be mistaken for a
+        // second workout.
+        // Only when the day has no marker yet — i.e. the first completion of
+        // this day — look across EVERY program and instance for an execution
+        // already credited on it. That closes the one gap the marker alone
+        // leaves: a completion from before this rule (no marker written), and a
+        // program/instance switch in between (whose fresh rotation state carries
+        // no history). One indexed equality query per day, never per finalize.
+        const creditedExecutionIdsToday = dailyCompletionSnapshot.exists
+          ? []
+          : (await transaction.get(
+              root.collection('workoutExecutions').where('performedLocalDate', '==', performedLocalDate),
+            )).docs.filter(item => consumesDailyLimit(item.data().status)).map(item => item.id);
+        const dailyLimit = resolveDailyLimit({
+          performedLocalDate,
+          executionId: data.executionId,
+          marker: dailyCompletionSnapshot.exists ? dailyCompletionSnapshot.data()! : null,
+          creditedExecutionIdsToday,
+          lastPerformedLocalDate: context.state?.lastPerformedLocalDate ?? null,
+        });
+        if (dailyLimit.status === 'LIMIT_REACHED') {
+          logWarn('workout.finalize', 'workout_daily_limit_reached', {
+            ...diag, performedLocalDate, reason: dailyLimit.reason,
+          });
+          throw new HttpsError('failed-precondition', 'workout_daily_limit_reached', { stage: 'SCHEDULE' });
+        }
+      } else {
       // A gap that's already been decided (docs §Decisão idempotente) must
       // not re-trip the guard below — mirrors the same lookup the client
       // does before reading the schedule (`src/services/workoutSchedule.ts`).
@@ -532,6 +662,7 @@ async function finalizeWorkoutSessionCore(
           resolvedMissScheduledDate,
         });
         throw new HttpsError('permission-denied', 'schedule_completion_session_not_expected', { stage: 'SCHEDULE' });
+        }
       }
     }
     mark(startedAt, 'schedule_validation_end', { scheduleAlreadyCompleted: eventSnapshot.exists });
@@ -571,25 +702,100 @@ async function finalizeWorkoutSessionCore(
       transaction.delete(currentRef);
     }
     if (!eventSnapshot.exists) {
+      // Legacy executions omit `performedLocalDate` and are read as if both
+      // dates were equal (see `WorkoutExecution`'s own doc comment).
+      const performedLocalDate = typeof execution.performedLocalDate === 'string'
+        ? execution.performedLocalDate
+        : execution.scheduledLocalDate;
+      // PILOT-GATED WRITES. A non-enrolled account must come out of this
+      // transaction with EXACTLY the documents the published code writes
+      // today: no daily marker, no suggestion fields, and the original
+      // `min(performed, scheduled)` cursor. Anything else would change their
+      // behaviour (and subject them to a limit they never opted into) the
+      // moment this Function ships.
+      if (pilotEnrolled) {
+        // Claims the day. `set` (not `create`) because the day was read
+        // transactionally above: that read is what provides exclusion, and it
+        // keeps a redelivered call idempotent instead of failing with a
+        // non-retryable ALREADY_EXISTS.
+        transaction.set(dailyCompletionRef, {
+          localDate: performedLocalDate,
+          executionId: data.executionId,
+          programInstanceId: execution.programInstanceId,
+          sessionIndex: execution.sessionIndex,
+          completedAt: FieldValue.serverTimestamp(),
+        });
+      }
       transaction.set(completionEventRef, {
         type: 'COMPLETED',
         programInstanceId: execution.programInstanceId,
         sessionIndex: execution.sessionIndex,
+        // The occurrence's own identity — immutable history, and the reason
+        // the scheduled date is never lost by the cursor change below.
         scheduledDate: execution.scheduledLocalDate,
-        performedLocalDate: typeof execution.performedLocalDate === 'string'
-          ? execution.performedLocalDate
-          : execution.scheduledLocalDate,
+        performedLocalDate,
         occurredAt: FieldValue.serverTimestamp(),
       });
-      transaction.set(scheduleStateRef, {
-        programId: execution.programId,
-        programInstanceId: execution.programInstanceId,
-        nextSessionIndex: (execution.sessionIndex + 1) % context.sessionCount,
-        cursorDate: execution.scheduledLocalDate,
-        lastCompletedAt: execution.scheduledLocalDate,
-        pendingMissDecision: null,
-        updatedAt: FieldValue.serverTimestamp(),
-      });
+      if (pilotEnrolled) {
+        // Suggestion advance. Selection and completion resolve to the SAME
+        // assignment — `(sessionIndex + 1) % sessionCount` — so finishing a
+        // session the user already selected recomputes the pointer it is
+        // already on and cannot advance it twice. A retried finalize, a
+        // cold-start recovery and a redelivered callable are all equally inert.
+        //
+        // `UNCHANGED`/`REJECTED` both mean "leave the pointer alone": REJECTED
+        // here is only ever `STALE_SUGGESTION_VERSION`, i.e. the user selected
+        // something else while this session was in flight. The completion is
+        // still recorded in full above — only the suggestion defers to the
+        // user's newer intent.
+        const storedSuggestion = readSessionSuggestion(
+          stateSnapshot.exists ? stateSnapshot.data()! : null, context.sessionCount,
+        );
+        const suggestionTransition = completeSession(storedSuggestion, {
+          sessionIndex: execution.sessionIndex,
+          sessionCount: context.sessionCount,
+          ...(Number.isInteger(execution.startedFromSuggestionVersion)
+            ? { startedFromVersion: execution.startedFromSuggestionVersion as number }
+            : {}),
+        });
+        const suggestion = suggestionTransition.status === 'APPLIED'
+          ? suggestionTransition.suggestion
+          : storedSuggestion;
+        transaction.set(scheduleStateRef, {
+          programId: execution.programId,
+          programInstanceId: execution.programInstanceId,
+          nextSessionIndex: suggestion.suggestedSessionIndex,
+          suggestedSessionIndex: suggestion.suggestedSessionIndex,
+          suggestionVersion: suggestion.version,
+          lastSelectedSessionIndex: suggestion.lastSelectedSessionIndex,
+          // The day the user actually trained. With the calendar no longer
+          // gating anything for this account, `min(performed, scheduled)`
+          // would put the cursor BEHIND the effort whenever a session carrying
+          // a past recommended date is finished today.
+          cursorDate: performedLocalDate,
+          lastCompletedAt: performedLocalDate,
+          lastPerformedLocalDate: performedLocalDate,
+          pendingMissDecision: null,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      } else {
+        // Byte-for-byte the published write: `min` so a session performed on
+        // its own day keeps the exact cursor it had, and an early completion
+        // never swallows the later calendar opportunity.
+        const consumedThroughLocalDate = performedLocalDate < execution.scheduledLocalDate
+          ? performedLocalDate
+          : execution.scheduledLocalDate;
+        transaction.set(scheduleStateRef, {
+          programId: execution.programId,
+          programInstanceId: execution.programInstanceId,
+          nextSessionIndex: (execution.sessionIndex + 1) % context.sessionCount,
+          cursorDate: consumedThroughLocalDate,
+          lastCompletedAt: performedLocalDate,
+          lastPerformedLocalDate: performedLocalDate,
+          pendingMissDecision: null,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
     }
     return {
       status: 'COMPLETED' as const,

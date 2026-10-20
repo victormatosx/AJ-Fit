@@ -142,21 +142,21 @@ describe('daily workout retry preflight', () => {
       },
     );
     await expect(runNotificationPreflight(harness.db as never, workoutDay('2026-09-07'), MONDAY))
-      .resolves.toEqual({ allowed: false, reason: 'ALREADY_COMPLETED' });
+      .resolves.toEqual({ allowed: false, reason: 'ALREADY_TRAINED_TODAY' });
   });
 
   it('suppresses WORKOUT_DAY when the schedule no longer prescribes today', async () => {
     const harness = createFakeFirestore();
     seedProgram(harness, { weeklySchedule: week({ MON: 'REST', FRI: 'TRAINING' }) });
     await expect(runNotificationPreflight(harness.db as never, workoutDay('2026-09-07'), MONDAY))
-      .resolves.toEqual({ allowed: false, reason: 'REST_DAY' });
+      .resolves.toEqual({ allowed: false, reason: 'NOT_A_RECOMMENDED_DAY' });
   });
 
   it('never delivers yesterday’s WORKOUT_DAY on a later retry day', async () => {
     const harness = createFakeFirestore();
     seedProgram(harness);
     await expect(runNotificationPreflight(harness.db as never, workoutDay('2026-09-07'), TUESDAY))
-      .resolves.toEqual({ allowed: false, reason: 'REST_DAY' });
+      .resolves.toEqual({ allowed: false, reason: 'NOT_A_RECOMMENDED_DAY' });
   });
 
   it('never lets a stale WORKOUT_DAY ride a new day that happens to be valid', async () => {
@@ -186,7 +186,7 @@ describe('daily workout retry preflight', () => {
     const dropped = createFakeFirestore();
     seedProgram(dropped, { weeklySchedule: week({ MON: 'TRAINING', TUE: 'REST' }) });
     await expect(runNotificationPreflight(dropped.db as never, recoveryDay('2026-09-08'), TUESDAY))
-      .resolves.toEqual({ allowed: false, reason: 'REST_DAY' });
+      .resolves.toEqual({ allowed: false, reason: 'NOT_A_RECOMMENDED_DAY' });
   });
 
   it('never delivers a RECOVERY_DAY built for another local day', async () => {
@@ -196,7 +196,11 @@ describe('daily workout retry preflight', () => {
       .resolves.toEqual({ allowed: false, reason: 'DAILY_WORKOUT_FACT_CHANGED' });
   });
 
-  it('allows MISSED_WORKOUT while the pending decision is still open', async () => {
+  // Decision 2.b: `MISSED_WORKOUT` can no longer be produced, so a dispatch
+  // of that type is ALWAYS suppressed — the strictest possible outcome, and
+  // the reason it is safe to leave the type in the schema while the stored
+  // dispatches drain.
+  it('never allows MISSED_WORKOUT, even while a legacy pending decision is open', async () => {
     const harness = createFakeFirestore();
     seedProgram(harness);
     seedScheduleState(harness, {
@@ -210,11 +214,14 @@ describe('daily workout retry preflight', () => {
         detectedOnDate: '2026-09-07',
       },
     });
+    // Monday IS a recommended day, so the candidate resolves to WORKOUT_DAY —
+    // never to the punitive type the stored dispatch asks for. A type
+    // mismatch is a suppression, which is exactly the desired outcome.
     await expect(runNotificationPreflight(
       harness.db as never,
       missedWorkout(`${INSTANCE}:2026-08-31:0`),
       MONDAY,
-    )).resolves.toEqual({ allowed: true });
+    )).resolves.toMatchObject({ allowed: false });
   });
 
   it('suppresses MISSED_WORKOUT once the user resolved the pending decision', async () => {
@@ -308,6 +315,6 @@ describe('daily workout retry preflight', () => {
       timezone: 'Pacific/Kiritimati',
     });
     await expect(runNotificationPreflight(harness.db as never, workoutDay('2026-09-07'), MONDAY))
-      .resolves.toEqual({ allowed: false, reason: 'REST_DAY' });
+      .resolves.toEqual({ allowed: false, reason: 'NOT_A_RECOMMENDED_DAY' });
   });
 });

@@ -5,7 +5,16 @@ import React, {
   useState,
   type ReactNode,
 } from 'react';
-import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  AppState,
+  Modal,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { AddPhotoSheet, type PickedPhoto } from '../components/photoVault/AddPhotoSheet';
@@ -86,7 +95,6 @@ export function ProgressPhotosScreen({
     status,
     lastIssue,
     unlock,
-    lock,
     setHasPhotoVaultContent,
   } = usePhotoVault();
   const { logout, user } = useAuth();
@@ -146,10 +154,12 @@ export function ProgressPhotosScreen({
     tracePhotoVault('viewerDismiss.reactStateChanged', { viewerOpen: viewerId !== null });
   }, [viewerId]);
 
-  // Screen capture protection is scoped to the private area. Leaving the
-  // Photo Vault revokes the session, removes its plaintext and lets the
-  // provider release the native guard after the safe locked frame renders.
-  useEffect(() => () => lock(), [lock]);
+  // The session's lifetime is NOT this panel's mount — `ProgressScreen` owns
+  // it for as long as Evolution is the active screen, so switching to
+  // Corpo/Cargas and back lands straight on the open gallery instead of
+  // re-opening the vault and reloading from scratch each time. Leaving
+  // Evolution altogether (or backgrounding the app) still revokes the
+  // session, removes its plaintext and releases the native capture guard.
 
   const unlocked = status === 'unlocked';
   /**
@@ -166,8 +176,42 @@ export function ProgressPhotosScreen({
     if (!unlocked) setShowLocked(true);
   }, [unlocked]);
 
-  // Temporary trace. Kept in effects of their own so the two lifecycle rules
-  // above — lock on unmount, load on unlock — keep their exact shape.
+  /**
+   * A cancellation is not a failure the user should see: it only means the
+   * app left the foreground while the session was opening, and the effect
+   * below reopens it on return. Everything else is a genuine technical
+   * problem (temp files that could not be cleared, the native app-switcher
+   * guard refusing to install) and does get a retry control.
+   */
+  const openFailure =
+    lastIssue !== null && lastIssue !== 'vaultAuthCancelled' ? lastIssue : null;
+
+  const [appActive, setAppActive] = useState(AppState.currentState === 'active');
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (next) =>
+      setAppActive(next === 'active'),
+    );
+    return () => subscription.remove();
+  }, []);
+
+  /**
+   * Opens the gallery directly — no biometrics, passcode or unlock screen.
+   *
+   * Gated on the app being foregrounded for two reasons: the session must
+   * never open behind an app-switcher preview, and `unlockPhotoVault` would
+   * otherwise fail with a cancellation it could not recover from on its own.
+   * Returning to the foreground is therefore also what reopens a session the
+   * lifecycle closed. `openFailure` stops a real failure from retrying in a
+   * loop; tapping retry clears it and resumes.
+   */
+  useEffect(() => {
+    if (!appActive || status !== 'locked' || openFailure) return;
+    void unlock();
+  }, [appActive, status, openFailure, unlock]);
+
+  // Temporary trace. Kept in an effect of its own so the lifecycle rule
+  // above — load on unlock — keeps its exact shape.
   useEffect(() => {
     tracePhotoVault('screen.photos.mount');
     return () => tracePhotoVault('screen.photos.unmount');
@@ -541,7 +585,7 @@ export function ProgressPhotosScreen({
         {pageHeader}
         <PhotoVaultLockedState
           status={status}
-          issue={lastIssue}
+          issue={openFailure}
           onUnlock={() => void unlock()}
           onRevealComplete={() => setShowLocked(false)}
         />

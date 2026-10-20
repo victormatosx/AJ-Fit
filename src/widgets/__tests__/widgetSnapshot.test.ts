@@ -15,6 +15,7 @@ const baseFixedInput: WidgetSnapshotBuilderInput = {
   trainingDays: ['MON', 'WED', 'FRI'],
   activeRecoveryDays: [],
   activatedAtLocalDate: '2026-08-01',
+  dailyActivityStreak: { current: 0, complete: true },
   completedDates: new Set(['2026-09-07', '2026-09-09']), // today (Wed) already completed — settled
 };
 
@@ -40,7 +41,7 @@ describe('buildWidgetSnapshot — empty states', () => {
     const snapshot = buildWidgetSnapshot({ ...baseFixedInput, completedDates: new Set() });
     expect(snapshot.status).toBe('READY');
     if (snapshot.status !== 'READY') throw new Error('unreachable');
-    expect(snapshot.streak).toEqual({ scheduleMode: 'fixed', unit: 'obligations', current: 0, complete: true });
+    expect(snapshot.streak).toEqual({ scheduleMode: 'fixed', unit: 'days', current: 0, complete: true });
     expect(snapshot.monthlyActivity.completedLocalDates).toEqual([]);
     expect(snapshot.frequencyWindow.completedLocalDates).toEqual([]);
     expect(snapshot.weeklyActivity).toHaveLength(7);
@@ -51,10 +52,39 @@ describe('buildWidgetSnapshot — empty states', () => {
 });
 
 describe('buildWidgetSnapshot — fixed schedule', () => {
-  it('derives streak via the exact same computeStreak used elsewhere in the domain', () => {
-    const snapshot = buildWidgetSnapshot(baseFixedInput);
+  // Chama 2.0: the streak field carries the SAME metric the Home shows, and it
+  // is resolved by `fetchWidgetDailyActivityStreak` (workouts UNION confirmed
+  // food entries) before reaching this builder. It is deliberately no longer
+  // derived from `completedDates`, because a day backed only by a food entry
+  // is a real streak day that completions cannot see.
+  it('passes the resolved Chama 2.0 through verbatim, never re-deriving it', () => {
+    const snapshot = buildWidgetSnapshot({
+      ...baseFixedInput,
+      dailyActivityStreak: { current: 17, complete: true },
+    });
     if (snapshot.status !== 'READY') throw new Error('unreachable');
-    expect(snapshot.streak).toEqual({ scheduleMode: 'fixed', unit: 'obligations', current: 2, complete: true });
+    expect(snapshot.streak).toEqual({ scheduleMode: 'fixed', unit: 'days', current: 17, complete: true });
+  });
+
+  it('reports an inexact streak as inexact — never as an exact value', () => {
+    const snapshot = buildWidgetSnapshot({
+      ...baseFixedInput,
+      dailyActivityStreak: { current: 520, complete: false },
+    });
+    if (snapshot.status !== 'READY') throw new Error('unreachable');
+    expect(snapshot.streak).toMatchObject({ current: 520, complete: false });
+  });
+
+  it('keeps the adherence data independent of the streak — the two are never mixed', () => {
+    const snapshot = buildWidgetSnapshot({
+      ...baseFixedInput,
+      dailyActivityStreak: { current: 99, complete: true },
+    });
+    if (snapshot.status !== 'READY') throw new Error('unreachable');
+    // Completions still drive the week/month/frequency surfaces.
+    expect(snapshot.weeklyActivity.find((d) => d.weekday === 'MON')!.status).toBe('COMPLETED');
+    expect(snapshot.monthlyActivity.completedLocalDates.length).toBeGreaterThan(0);
+    expect(snapshot.streak.current).toBe(99);
   });
 
   it('weeklyActivity is exactly buildWeekOverview output for the same inputs — never re-derived', () => {
@@ -107,7 +137,9 @@ describe('buildWidgetSnapshot — fixed schedule', () => {
     });
     if (snapshot.status !== 'READY') throw new Error('unreachable');
     expect(snapshot.weeklyActivity.find((d) => d.weekday === 'FRI')!.status).toBe('FULFILLED_EARLY');
-    expect(snapshot.streak).toEqual({ scheduleMode: 'fixed', unit: 'obligations', current: 2, complete: true });
+    // The streak no longer reacts to completion shapes at all — it is the
+    // value handed in.
+    expect(snapshot.streak.unit).toBe('days');
   });
 
   it('multiple executions on the same day never double-count in monthlyActivity (completedDates is already deduplicated per day)', () => {
@@ -118,27 +150,22 @@ describe('buildWidgetSnapshot — fixed schedule', () => {
 });
 
 describe('buildWidgetSnapshot — streak truncation (Phase 2.5 §A)', () => {
-  it('propagates complete: false when historyAvailableFromLocalDate cuts off before a real break is found', () => {
-    const snapshot = buildWidgetSnapshot({
-      ...baseFixedInput,
-      historyAvailableFromLocalDate: '2026-09-07', // narrower than the real unbroken run
-    });
-    if (snapshot.status !== 'READY') throw new Error('unreachable');
-    expect(snapshot.streak.complete).toBe(false);
+  // `historyAvailableFromLocalDate` still bounds the ADHERENCE windows; the
+  // streak's own truncation is decided by `fetchWidgetDailyActivityStreak`
+  // and arrives already resolved in `dailyActivityStreak.complete`.
+  it('propagates the streak exactness it was given, in both directions', () => {
+    for (const complete of [true, false]) {
+      const snapshot = buildWidgetSnapshot({
+        ...baseFixedInput,
+        historyAvailableFromLocalDate: '2026-09-07',
+        dailyActivityStreak: { current: 5, complete },
+      });
+      if (snapshot.status !== 'READY') throw new Error('unreachable');
+      expect(snapshot.streak.complete).toBe(complete);
+    }
   });
 
-  it('propagates complete: true when a real MISSED is found before the floor', () => {
-    const snapshot = buildWidgetSnapshot({
-      ...baseFixedInput,
-      todayLocalDate: '2026-09-11',
-      completedDates: new Set(['2026-09-11']), // Wed missing — breaks immediately
-      historyAvailableFromLocalDate: '2026-01-01',
-    });
-    if (snapshot.status !== 'READY') throw new Error('unreachable');
-    expect(snapshot.streak).toEqual({ scheduleMode: 'fixed', unit: 'obligations', current: 1, complete: true });
-  });
-
-  it('omitting historyAvailableFromLocalDate preserves complete: true for a found break (back-compat default)', () => {
+  it('omitting historyAvailableFromLocalDate still bounds only the adherence windows', () => {
     const snapshot = buildWidgetSnapshot(baseFixedInput);
     if (snapshot.status !== 'READY') throw new Error('unreachable');
     expect(snapshot.streak.complete).toBe(true);
@@ -152,26 +179,34 @@ describe('buildWidgetSnapshot — streak truncation (Phase 2.5 §A)', () => {
       trainingDays: ['MON', 'WED', 'FRI'],
       completedDates: new Set(['2026-09-07']), // Monday completed, unbroken run going back further than the floor
       historyAvailableFromLocalDate: '2026-09-07',
+      dailyActivityStreak: { current: 12, complete: false },
     });
     if (snapshot.status !== 'READY') throw new Error('unreachable');
     expect(snapshot.futureEntries.length).toBeGreaterThan(0);
+    // Every pre-computed future day carries the same resolved streak: a
+    // future entry must never present an inexact value as exact, and must
+    // never invent a different number than the current entry.
     for (const entry of snapshot.futureEntries) {
-      expect(entry.streak.complete).toBe(false);
+      expect(entry.streak).toEqual({ scheduleMode: 'fixed', unit: 'days', current: 12, complete: false });
     }
   });
 });
 
 describe('buildWidgetSnapshot — flexible schedule', () => {
-  it('streak uses the week unit, never obligations', () => {
+  // Chama 2.0 is the same metric in both modalities: consecutive DAYS with a
+  // valid activity. `flexible` no longer gets a different unit, because the
+  // streak never consulted the modality in the first place.
+  it('reports the same day-based streak for a flexible schedule', () => {
     const snapshot = buildWidgetSnapshot({
       ...baseFixedInput,
       scheduleMode: 'flexible',
       prescribedTrainingFrequency: 2,
       trainingDays: [],
       completedDates: new Set(['2026-09-07', '2026-09-08']),
+      dailyActivityStreak: { current: 4, complete: true },
     });
     if (snapshot.status !== 'READY') throw new Error('unreachable');
-    expect(snapshot.streak).toEqual({ scheduleMode: 'flexible', unit: 'weeks', current: 1, complete: true });
+    expect(snapshot.streak).toEqual({ scheduleMode: 'fixed', unit: 'days', current: 4, complete: true });
   });
 
   it('flexible weeklyActivity never marks an untrained day MISSED', () => {

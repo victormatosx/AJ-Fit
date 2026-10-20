@@ -11,6 +11,10 @@ import { NUTRITION_MEAL_SLOTS, type NutritionLoggedFoodItem, type NutritionLogge
 import { calculateRecipeBreakdown, nutrientsForGrams, roundNutrition, roundNutritionValues, validateNutritionValues } from '../shared/nutrition/catalog/math';
 import { DIARY_MAX_ITEMS_PER_DAY, DIARY_MAX_ITEMS_PER_MEAL, DIARY_NUTRIENTS,
   planSnapshotNutrition, validatePlanSnapshotBase } from '../shared/nutrition/diary/snapshot';
+import { NUTRITION_ACTIVITY_SCHEMA_VERSION, STREAK_NUTRITION_DAYS_COLLECTION,
+  STREAK_SETTINGS_COLLECTION, STREAK_SETTINGS_DOC_ID, canonicalStreakTimezone,
+  resolveActivityDayWrite, nutritionActivityDeltas, nutritionActivityLocalDate,
+  isStreakLocalDate } from '../shared/nutrition/diary/activity';
 
 export const DIARY_PROTOCOL_COLLECTION = 'nutritionDiaryProtocol';
 export const DIARY_RECEIPTS_COLLECTION = 'nutritionDiaryOperationReceipts';
@@ -134,7 +138,12 @@ export async function mutateNutritionDiaryV1Handler(request: CallableRequest, db
   return db.runTransaction(async tx => {
     const protocolRef = user.collection(DIARY_PROTOCOL_COLLECTION).doc('current');
     const receiptRef = user.collection(DIARY_RECEIPTS_COLLECTION).doc(`request_${hash(d.requestId)}`);
-    const [lock, account, protocol, receipt] = await Promise.all([tx.get(db.collection('accountDeletionLocks').doc(uid)), tx.get(user), tx.get(protocolRef), tx.get(receiptRef)]);
+    // Chama 2.0: the streak's canonical timezone. Read here (never written by
+    // a client, see firestore.rules) so the activity day assigned below comes
+    // from a stable, persisted zone instead of whatever zone the device
+    // happens to be in — travelling must never reinterpret past evidence.
+    const streakSettingsRef = user.collection(STREAK_SETTINGS_COLLECTION).doc(STREAK_SETTINGS_DOC_ID);
+    const [lock, account, protocol, receipt, streakSettings] = await Promise.all([tx.get(db.collection('accountDeletionLocks').doc(uid)), tx.get(user), tx.get(protocolRef), tx.get(receiptRef), tx.get(streakSettingsRef)]);
     if (lock.exists || !account.exists) fail('ACCOUNT_INACTIVE');
     const { requestId: _requestId, ...payload } = d; const fingerprint = hash(payload);
     if (receipt.exists) {
@@ -170,20 +179,26 @@ export async function mutateNutritionDiaryV1Handler(request: CallableRequest, db
       || (!day.exists && oldItems.length)) fail('DIARY_INCONSISTENT');
     const after = new Map([...before].map(([s, items]) => [s, [...items]]));
     const current = after.get(d.slot) ?? []; after.set(d.slot, current); const now = Timestamp.now();
+    // The streak's own clock: the SERVER instant resolved in the canonical
+    // zone, never `d.localDate` (the diary date the client picked). Logging
+    // today into yesterday's diary therefore earns TODAY.
+    const streakTimezone = canonicalStreakTimezone(streakSettings.get('timezone'))
+      ?? canonicalStreakTimezone(d.timezone) ?? 'UTC';
+    const activityLocalDate = nutritionActivityLocalDate(now.toDate(), streakTimezone);
     let itemIds: string[] = [];
     if (selected) {
       itemIds = selected.bases.map((base, itemIndex) => {
         const itemId = `ps_${registrationRef!.id.slice(7, 47)}_${itemIndex}`;
         const planReference: NutritionPlanSnapshotReference = { collection: selected.collection, documentId: selected.documentId, optionId: selected.option.id, slot: d.slot, itemIndex };
         current.push({ id: itemId, source: 'plan_snapshot', quantity: base.quantity, unit: base.unit, preparationNote: base.preparationNote,
-          base, planReference, snapshot: { name: base.name, ...base.nutrition }, loggedAt: now, revision: 0 }); return itemId;
+          base, planReference, snapshot: { name: base.name, ...base.nutrition }, loggedAt: now, revision: 0, activityLocalDate }); return itemId;
       });
     } else if (d.action === 'add') {
       const food = await manualNutrition(tx, db, uid, d.source!, d.foodId!);
       const n = roundNutritionValues(nutrientsForGrams(food.nutritionPer100g, d.quantity!));
       const itemId = `di_${hash(d.requestId).slice(0, 40)}`; itemIds = [itemId];
       current.push({ id: itemId, source: d.source!, foodId: d.foodId!, grams: d.quantity!,
-        snapshot: { name: food.name, kcal: n.kcal, proteinG: n.proteinG, carbsG: n.carbsG, fatG: n.fatG, ...(n.fiberG != null ? { fiberG: n.fiberG } : {}) }, loggedAt: now, revision: 0 });
+        snapshot: { name: food.name, kcal: n.kcal, proteinG: n.proteinG, carbsG: n.carbsG, fatG: n.fatG, ...(n.fiberG != null ? { fiberG: n.fiberG } : {}) }, loggedAt: now, revision: 0, activityLocalDate });
     } else {
       const index = current.findIndex(x => x.id === d.itemId);
       if (index < 0) fail('DIARY_ITEM_NOT_FOUND');
@@ -211,9 +226,87 @@ export async function mutateNutritionDiaryV1Handler(request: CallableRequest, db
       || [...after].some(([s, items]) => items.length > DIARY_MAX_ITEMS_PER_MEAL && items.length > (before.get(s)?.length ?? 0))) fail('DIARY_ITEM_LIMIT');
     const dailyTotals = sumDay(after);
     try { validateNutritionValues(dailyTotals); } catch { fail('DIARY_INVALID_QUANTITY'); }
+
+    // Chama 2.0 — which activity days this operation changes. Derived by
+    // diffing item IDENTITIES between `before` and `after`, so an edit and a
+    // move (same id on both sides, even across slots) contribute nothing at
+    // all, while only genuine creations and genuine deletions move a counter.
+    // A replay never reaches here: both receipt gates above already returned.
+    const beforeIds = new Set(oldItems.map(item => item.id));
+    const afterIds = new Set(all.map(item => item.id));
+    const activityDeltas = nutritionActivityDeltas({
+      created: all.filter(item => !beforeIds.has(item.id)),
+      removed: oldItems.filter(item => !afterIds.has(item.id)),
+      timezone: streakTimezone,
+    });
+    // Last reads of the transaction: only the aggregate days actually touched
+    // (one for a creation, one for a deletion — never a scan of history).
+    const evidenceFrom = isStreakLocalDate(streakSettings.get('nutritionEvidenceFrom'))
+      ? streakSettings.get('nutritionEvidenceFrom') as string : null;
+    const activityDays = await Promise.all([...activityDeltas].map(async ([localDate, delta]) => {
+      const ref = user.collection(STREAK_NUTRITION_DAYS_COLLECTION).doc(localDate);
+      const snapshot = await tx.get(ref);
+      return {
+        ref,
+        localDate,
+        delta,
+        outcome: resolveActivityDayWrite({
+          exists: snapshot.exists,
+          storedCount: snapshot.get('activeItemCount'),
+          delta,
+          localDate,
+          evidenceFrom,
+        }),
+      };
+    }));
+    // A defect in the streak's own bookkeeping must never be papered over: it
+    // would either invent credit or erase a day that still has surviving
+    // items. Same controlled failure the surrounding transaction already uses
+    // for an inconsistent diary — nothing is written, nothing is repaired.
+    if (activityDays.some(day => day.outcome.status === 'INCONSISTENT')) fail('DIARY_INCONSISTENT');
+    const activityWrites = activityDays.flatMap(day =>
+      day.outcome.status === 'WRITE' ? [{ ...day, outcome: day.outcome }] : []);
+
     const result = { status: 'recorded', itemIds };
     // All reads above; writers below. Account-wide cutover and first mutation are atomic.
     if (!protocol.exists) tx.create(protocolRef, { version: 1, enrolledAt: now });
+    for (const day of activityWrites) {
+      tx.set(day.ref, {
+        localDate: day.localDate,
+        activeItemCount: day.outcome.activeItemCount,
+        timezone: streakTimezone,
+        schemaVersion: NUTRITION_ACTIVITY_SCHEMA_VERSION,
+        updatedAt: now,
+      });
+    }
+    if (!streakSettings.exists || activityWrites.length) {
+      // `nutritionEvidenceFrom` is the first activity day this account's
+      // aggregate is authoritative for. A reader must NOT conclude "no food
+      // that day" from a missing aggregate document older than this — it
+      // falls back to the legacy day-document heuristic instead of inventing
+      // evidence, or the absence of it, for records predating the counter.
+      // `nutritionRevocations` only ever moves on a decrement: deletions are
+      // the single operation that can retroactively break a past day, so a
+      // client caching a resolved streak can detect exactly that and nothing
+      // else, without polling.
+      const revocations = activityWrites.filter(day => day.delta < 0).length;
+      tx.set(streakSettingsRef, {
+        timezone: streakTimezone,
+        schemaVersion: NUTRITION_ACTIVITY_SCHEMA_VERSION,
+        ...(streakSettings.exists ? {} : { createdAt: now }),
+        // Only a real aggregate WRITE establishes the floor. A skipped
+        // decrement (an item older than the counter) tracked nothing, so it
+        // must not claim coverage it does not have.
+        ...(activityWrites.length
+          ? { nutritionEvidenceFrom: evidenceFrom ?? activityLocalDate }
+          : {}),
+        ...(revocations
+          ? { nutritionRevocations: (Number.isInteger(streakSettings.get('nutritionRevocations'))
+            ? streakSettings.get('nutritionRevocations') as number : 0) + revocations }
+          : {}),
+        updatedAt: now,
+      }, { merge: true });
+    }
     const touched = new Set([d.slot, ...(d.toSlot ? [d.toSlot] : [])]);
     for (const s of touched) {
       const meal = dayRef.collection('meals').doc(s); const items = after.get(s) ?? [];

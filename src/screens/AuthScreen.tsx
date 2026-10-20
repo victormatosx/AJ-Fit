@@ -11,14 +11,20 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import { ScreenBg } from '../components/ui/ScreenBg';
-import { Display, Slash } from '../components/ui/Display';
-import { CtaButton } from '../components/ui/CtaButton';
 import { Icon, IconName } from '../components/ui/Icon';
-import { OutlineNumber } from '../components/ui/OutlineNumber';
+import {
+  AqMonoLabel,
+  AqPrimaryButton,
+  AqSecondaryButton,
+  AqSheet,
+  AqTextAction,
+} from '../components/ui/AcquisitionControls';
+import { AjSheetScreenAssistant } from '../components/aj/AjSheetScreenAssistant';
+import { AJ_SHEET_SCREEN, AJ_TYPING_MS_PER_CHAR } from '../components/aj/ajMomentTiming';
+import { useReducedMotionPreference } from '../lib/reducedMotion';
 import { radii, sizes, spacing } from '../theme/tokens';
 import { useTheme } from '../theme';
 import { useAuth } from '../state/AuthContext';
@@ -49,6 +55,16 @@ import { LegalDocumentModal, type LegalDocumentKind } from '../components/legal/
 import { authErrorTranslationKey } from '../lib/authErrorPresentation';
 
 type Mode = 'signup' | 'login' | 'reset';
+
+/**
+ * Visual sub-steps of the signup form. These are PRESENTATION ONLY: they
+ * decide which fields are on screen, never what is required. `validate()` is
+ * unchanged and still demands name, email, a policy-compliant password, a
+ * matching confirmation and legal acceptance — splitting the form across two
+ * screens does not relax any of that, and "Continuar" on the first sub-step
+ * does not call `validate()`.
+ */
+type SignupStep = 'choice' | 'details' | 'password';
 
 type LinkingState = { email: string; methods: string[]; attempted: SocialProvider };
 
@@ -173,6 +189,32 @@ export function AuthScreen({
     }).start();
   }, [mode, fadeAnim]);
 
+  /* ── Presentation state (nothing below gates an auth operation) ───────── */
+
+  const insets = useSafeAreaInsets();
+  const reduceMotion = useReducedMotionPreference();
+  const [signupStep, setSignupStep] = useState<SignupStep>('choice');
+  const [sheetHeight, setSheetHeight] = useState(0);
+  const nameRef = useRef<TextInput>(null);
+  const emailRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
+
+  // Switching mode returns the form to its first sub-step: the sub-steps only
+  // exist for signup, and leaving one behind would show a password field on a
+  // login screen.
+  useEffect(() => {
+    setSignupStep('choice');
+  }, [mode]);
+
+  // The design's auto-focus, once the sheet has settled into place.
+  useEffect(() => {
+    if (mode !== 'signup') return () => undefined;
+    const target = signupStep === 'details' ? nameRef : signupStep === 'password' ? passwordRef : null;
+    if (!target) return () => undefined;
+    const timer = setTimeout(() => target.current?.focus(), AJ_SHEET_SCREEN.autoFocusAtMs);
+    return () => clearTimeout(timer);
+  }, [mode, signupStep]);
+
   useEffect(() => {
     let active = true;
     if (Platform.OS === 'ios') {
@@ -191,27 +233,7 @@ export function AuthScreen({
   const showGoogle = true;
   const googleReallyAvailable = Platform.OS !== 'web' && googleAvailable;
   const showApple = Platform.OS === 'ios' && appleAvailable;
-  const showSocial = showGoogle || showApple;
   const busy = loading || socialBusy !== null;
-
-  const copy =
-    mode === 'signup'
-      ? {
-          kicker: t('signup.kicker'),
-          title: [t('signup.titleLine1'), t('signup.titleLine2')],
-          sub: t('signup.subtitle'),
-        }
-      : mode === 'login'
-        ? {
-            kicker: t('login.kicker'),
-            title: [t('login.titleLine1'), t('login.titleLine2')],
-            sub: t('login.subtitle'),
-          }
-        : {
-            kicker: t('reset.kicker'),
-            title: [t('reset.titleLine1'), t('reset.titleLine2')],
-            sub: t('reset.subtitle'),
-          };
 
   function switchMode(next: Mode) {
     clearPendingSocialAuthState();
@@ -424,316 +446,479 @@ export function AuthScreen({
           ? t('actions.sendLinkCooldown', { seconds: resetCooldownSeconds })
           : t('actions.sendLink');
 
-  return (
-    <ScreenBg>
-      <OutlineNumber
-        size={260}
-        style={{ position: 'absolute', top: -40, right: -50, opacity: 0.35 }}
-      >
-        AJ
-      </OutlineNumber>
+  /* ── Presentation derived from the state above ───────────────────────── */
 
-      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
-          <ScrollView
-            contentContainerStyle={{ flexGrow: 1 }}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            <Animated.View
+  // `validate()` runs over the WHOLE form regardless of which sub-step is on
+  // screen, so a name or email problem can surface while the password fields
+  // are showing. This only moves the user back to the sub-step that owns the
+  // offending field — it does not change the message, the rule, or when the
+  // rule runs.
+  const nameOrEmailErrors = [
+    t('validation.nameRequired'),
+    t('validation.emailRequired'),
+    t('validation.emailInvalid'),
+  ];
+  useEffect(() => {
+    if (!error || signupStep !== 'password') return;
+    if (nameOrEmailErrors.includes(error)) setSignupStep('details');
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts to a new error, not to the recreated message array
+  }, [error, signupStep]);
+
+  const passwordPolicyMet =
+    mode === 'signup'
+      && password.length > 0
+      && validateAuthFormPasswordPolicy('signup', password) === null;
+
+  const providerLabel = socialBusy ? PROVIDER_LABELS[`${socialBusy}.com`] ?? t('social.genericProvider') : '';
+
+  const assistantLines = (): string[] => {
+    if (socialBusy) return [t('aj.connecting', { provider: providerLabel })];
+    if (loading) {
+      return [mode === 'signup' ? t('aj.creating') : mode === 'login' ? t('aj.login') : t('aj.reset')];
+    }
+    if (linking) return [t('aj.linking')];
+    if (error) return [error];
+    if (mode === 'reset') return [t('aj.reset')];
+    if (mode === 'login') return [t('aj.login')];
+    if (signupStep === 'details') return [t('aj.email')];
+    if (signupStep === 'password') {
+      return passwordPolicyMet ? [t('aj.passwordOk')] : [t('aj.password')];
+    }
+    return [
+      entryContext?.name ? t('aj.introWithName', { name: entryContext.name }) : t('aj.intro'),
+      t('aj.introSecondary'),
+    ];
+  };
+
+  const assistantMood = loading || socialBusy || linking ? 'think' : error ? 'idle' : 'idle';
+  // A nod marks a new error and the moment the policy starts being met; the
+  // mascot never celebrates a failure.
+  const [assistantPhase, setAssistantPhase] = useState<'idle' | 'hop' | 'nod'>('idle');
+  useEffect(() => {
+    if (reduceMotion) return () => undefined;
+    if (!error && !passwordPolicyMet) return () => undefined;
+    setAssistantPhase('idle');
+    const start = setTimeout(() => setAssistantPhase('nod'), 0);
+    const end = setTimeout(() => setAssistantPhase('idle'), 600);
+    return () => {
+      clearTimeout(start);
+      clearTimeout(end);
+    };
+  }, [error, passwordPolicyMet, reduceMotion]);
+
+  const showBackButton = mode === 'signup' && signupStep !== 'choice';
+  const handleVisualBack = () => {
+    // Moves between the form's sub-steps only. It never changes `mode`, so it
+    // can't drop the user out of signup.
+    setSignupStep((current) => (current === 'password' ? 'details' : 'choice'));
+  };
+
+  const detailsComplete = name.trim().length > 0 && email.trim().length > 0;
+  const legalBlock = (mode === 'signup' || pendingNewSocialProvider !== null);
+
+  return (
+    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+      <SafeAreaView edges={['top']}>
+        {showBackButton ? (
+          <View style={{ paddingHorizontal: 22, paddingTop: 15 }}>
+            <Pressable
+              onPress={handleVisualBack}
+              accessibilityRole="button"
+              accessibilityLabel={t('actions.back')}
+              hitSlop={12}
               style={{
-                flex: 1,
-                paddingHorizontal: 26,
-                paddingTop: 20,
-                paddingBottom: 36,
-                opacity: fadeAnim,
+                width: 38,
+                height: 38,
+                borderRadius: 19,
+                borderWidth: 1,
+                borderColor: theme.colors.dividerStrong,
+                alignItems: 'center',
+                justifyContent: 'center',
               }}
             >
-              <View>
-                {mode !== 'signup' && (
-                  <Pressable
-                    onPress={() => switchMode(mode === 'reset' ? 'login' : 'signup')}
-                    accessibilityRole="button"
-                    accessibilityLabel={t('actions.back')}
-                    hitSlop={12}
-                    style={{ marginBottom: 18, flexDirection: 'row', alignItems: 'center', gap: 8 }}
-                  >
-                    <Icon name="arrow-left" size={18} color={theme.colors.textSubtle} />
-                    <Text style={{ color: theme.colors.textMuted, fontFamily: theme.fonts.uiMed, fontSize: 13 }}>
-                      {t('actions.back')}
-                    </Text>
-                  </Pressable>
-                )}
-                <Slash style={{ marginBottom: 14 }}>{copy.kicker.toUpperCase()}</Slash>
-                <Display size={38}>{copy.title[0].toUpperCase()}</Display>
-                <Display size={38}>{copy.title[1].toUpperCase()}</Display>
-                <Text
-                  style={{
-                    marginTop: 14,
-                    color: theme.colors.textMuted,
-                    fontSize: 14.5,
-                    fontFamily: theme.fonts.ui,
-                  }}
-                >
-                  {copy.sub}
-                </Text>
-              </View>
+              <Icon name="arrow-left" size={16} color={theme.colors.textPrimary} />
+            </Pressable>
+          </View>
+        ) : null}
+      </SafeAreaView>
 
-              <View style={{ marginTop: 30, gap: 12 }}>
-                {mode === 'signup' && (
-                  <AuthInput
-                    icon="user"
-                    placeholder={t('fields.name')}
-                    value={name}
-                    onChangeText={setName}
-                    keyboardType="default"
-                    autoCapitalize="words"
-                    autoComplete="name"
-                    textContentType="name"
-                    editable={!loading}
-                  />
-                )}
+      {/* This screen's own AJ. It is outside the onboarding funnel (App.tsx
+          owns it), so there is no persistent mascot to borrow — one inline
+          `AjBot`, never inside a Modal. */}
+      <AjSheetScreenAssistant
+        sheetHeight={sheetHeight}
+        lines={assistantLines()}
+        msPerChar={AJ_TYPING_MS_PER_CHAR.auth}
+        mood={assistantMood}
+        phase={assistantPhase}
+        look={signupStep === 'choice' ? undefined : [0, 2.2]}
+        reduceMotion={reduceMotion}
+        topInset={insets.top}
+      />
 
-                <AuthInput
-                  icon="mail"
-                  placeholder={t('fields.email')}
-                  value={email}
-                  onChangeText={setEmail}
-                  keyboardType="email-address"
-                  autoComplete="email"
-                  textContentType="emailAddress"
-                  editable={!loading}
-                />
-
-                {mode !== 'reset' && (
-                  <AuthInput
-                    icon="lock"
-                    placeholder={t('fields.password')}
-                    value={password}
-                    onChangeText={setPassword}
-                    secure={!showPass}
-                    trailing="eye"
-                    onTrailingPress={() => setShowPass((s) => !s)}
-                    trailingAccessibilityLabel={t('accessibility.togglePassword')}
-                    autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-                    textContentType={mode === 'signup' ? 'newPassword' : 'password'}
-                    maxLength={mode === 'signup' ? PASSWORD_POLICY_MAX_LENGTH : undefined}
-                    editable={!loading}
-                  />
-                )}
-
-                {mode === 'signup' && (
-                  <AuthInput
-                    icon="lock"
-                    placeholder={t('fields.confirmPassword')}
-                    value={confirm}
-                    onChangeText={setConfirm}
-                    secure={!showPass}
-                    autoComplete="new-password"
-                    textContentType="newPassword"
-                    maxLength={PASSWORD_POLICY_MAX_LENGTH}
-                    editable={!loading}
-                  />
-                )}
-
-                {mode === 'signup' && (
-                  <Text
-                    style={{
-                      color: theme.colors.textFaint,
-                      fontFamily: theme.fonts.ui,
-                      fontSize: 12.5,
-                      lineHeight: 18,
-                    }}
-                  >
-                    {t('validation.passwordGuidance', {
-                      min: PASSWORD_POLICY_MIN_LENGTH,
-                    })}
-                  </Text>
-                )}
-
-                {(mode === 'signup' || pendingNewSocialProvider !== null) && (
-                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
-                    <Pressable
-                      onPress={handleLegalAcceptanceToggle}
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: legalAccepted }}
-                      accessibilityLabel={t('legal.acceptanceLabel')}
-                      hitSlop={8}
-                      style={{
-                        width: 22,
-                        height: 22,
-                        borderRadius: 5,
-                        borderWidth: 1,
-                        borderColor: legalAccepted ? theme.colors.primaryEmphasis : theme.colors.inputBorderSubtle,
-                        backgroundColor: legalAccepted ? theme.colors.primary : theme.colors.inputBackgroundSubtle,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      {legalAccepted ? <Icon name="check" size={15} color={theme.colors.primaryForeground} stroke={2.5} /> : null}
-                    </Pressable>
-                    <Text style={{ flex: 1, color: theme.colors.textMuted, fontFamily: theme.fonts.ui, fontSize: 12.5, lineHeight: 19 }}>
-                      {t('legal.acceptancePrefix')}{' '}
-                      <Text
-                        accessibilityRole="link"
-                        onPress={() => setLegalDocument('terms')}
-                        style={{ color: theme.colors.primaryEmphasis, textDecorationLine: 'underline', fontFamily: theme.fonts.uiSemi }}
-                      >
-                        {t('legal.terms')}
-                      </Text>{' '}
-                      {t('legal.acceptanceMiddle')}{' '}
-                      <Text
-                        accessibilityRole="link"
-                        onPress={() => setLegalDocument('privacy')}
-                        style={{ color: theme.colors.primaryEmphasis, textDecorationLine: 'underline', fontFamily: theme.fonts.uiSemi }}
-                      >
-                        {t('legal.privacy')}
-                      </Text>
-                      {t('legal.acceptanceSuffix')}
-                    </Text>
-                  </View>
-                )}
-
-                {mode === 'login' && (
-                  <Pressable
-                    onPress={() => switchMode('reset')}
-                    hitSlop={8}
-                    style={{ alignSelf: 'flex-end' }}
-                  >
-                    <Text
-                      style={{ color: theme.colors.primaryEmphasis, fontFamily: theme.fonts.uiSemi, fontSize: 13 }}
-                    >
-                      {t('actions.forgotPassword')}
-                    </Text>
-                  </Pressable>
-                )}
-
-                {error && <Feedback tone="error" text={error} />}
-                {info && <Feedback tone="info" text={info} />}
-              </View>
-
-              <View style={{ flex: 1, minHeight: 24 }} />
-
-              <View style={{ gap: 11 }}>
-                <CtaButton
-                  onPress={handleSubmit}
-                  disabled={busy || (mode === 'reset' && resetCooldownSeconds > 0)}
-                >
-                  {loading ? (
-                    <ActivityIndicator color={theme.colors.primaryForeground} />
-                  ) : (
-                    <>
-                      <Text
-                        style={{
-                          color: theme.colors.primaryForeground,
-                          fontFamily: theme.fonts.display,
-                          fontSize: 17,
-                          letterSpacing: 1.5,
-                          textTransform: 'uppercase',
-                        }}
-                      >
-                        {submitLabel}
-                      </Text>
-                      <Icon name="arrow-right" size={18} color={theme.colors.primaryForeground} />
-                    </>
-                  )}
-                </CtaButton>
-
-                {linking && (
-                  <LinkingPanel
-                    linking={linking}
-                    busy={busy}
-                    password={linkPassword}
-                    onChangePassword={setLinkPassword}
-                    onLinkPassword={handleLinkWithPassword}
-                    onLinkProvider={handleLinkWithProvider}
-                    onCancel={() => {
-                      clearPendingSocialAuthState();
-                      setLinking(null);
-                      setLinkPassword('');
-                    }}
-                  />
-                )}
-
-                {mode !== 'reset' && showSocial && !linking && (
-                  <>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                      <View style={{ flex: 1, height: 1, backgroundColor: theme.colors.divider }} />
-                      <Text
-                        style={{
-                          fontFamily: theme.fonts.mono,
-                          fontSize: 10,
-                          letterSpacing: 2,
-                          color: theme.colors.textFaint,
-                        }}
-                      >
-                        {t('social.separator').toUpperCase()}
-                      </Text>
-                      <View style={{ flex: 1, height: 1, backgroundColor: theme.colors.divider }} />
+      <KeyboardAvoidingView
+        style={{ flex: 1, justifyContent: 'flex-end' }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <AqSheet
+          delay={reduceMotion ? 0 : AJ_SHEET_SCREEN.sheetRiseAtMs}
+          reduceMotion={reduceMotion}
+          onSheetLayout={setSheetHeight}
+          style={{ paddingBottom: Math.max(34, insets.bottom + 16) }}
+        >
+          <ScrollView
+            contentContainerStyle={{ gap: 14 }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+          >
+            <Animated.View style={{ gap: 14, opacity: fadeAnim }}>
+              {loading ? (
+                <AuthLoadingState label={t('loading.title')} />
+              ) : (
+                <>
+                  {mode === 'signup' && signupStep === 'choice' ? (
+                    <View style={{ gap: 8 }}>
+                      <AqMonoLabel>{t('signup.kicker').toUpperCase()}</AqMonoLabel>
+                      <Text style={sheetTitleStyle(theme)}>{t('steps.chooseTitle')}</Text>
                     </View>
+                  ) : null}
+                  {mode === 'login' ? (
+                    <View style={{ gap: 8 }}>
+                      <AqMonoLabel>{t('login.kicker').toUpperCase()}</AqMonoLabel>
+                      <Text style={sheetTitleStyle(theme)}>{t('steps.loginTitle')}</Text>
+                    </View>
+                  ) : null}
+                  {mode === 'reset' ? (
+                    <View style={{ gap: 8 }}>
+                      <AqMonoLabel>{t('reset.kicker').toUpperCase()}</AqMonoLabel>
+                      <Text style={sheetTitleStyle(theme)}>{t('steps.resetTitle')}</Text>
+                    </View>
+                  ) : null}
+                  {mode === 'signup' && signupStep === 'details' ? (
+                    <AqMonoLabel>{t('steps.detailsLabel')}</AqMonoLabel>
+                  ) : null}
+                  {mode === 'signup' && signupStep === 'password' ? (
+                    <AqMonoLabel>{t('steps.passwordLabel')}</AqMonoLabel>
+                  ) : null}
 
-                    {showApple && (
-                      <CtaButton ghost onPress={() => handleSocial('apple')} disabled={busy}>
-                        {socialBusy === 'apple' ? (
-                          <ActivityIndicator color={theme.colors.textPrimary} />
+                  {/* ── Signup, method choice ── */}
+                  {mode === 'signup' && signupStep === 'choice' && !linking ? (
+                    <>
+                      {showApple && (
+                        socialBusy === 'apple' ? (
+                          <SocialBusyButton tone="inverse" />
                         ) : (
-                          <>
-                            <Icon name="apple" size={19} color="#fff" />
-                            <Text style={{ color: theme.colors.textPrimary, fontFamily: theme.fonts.uiSemi, fontSize: 14 }}>
-                              {t('social.continueWith', { provider: 'Apple' })}
-                            </Text>
-                          </>
-                        )}
-                      </CtaButton>
-                    )}
-
-                    {showGoogle && (
-                      <CtaButton ghost onPress={() => handleSocial('google')} disabled={busy}>
-                        {socialBusy === 'google' ? (
-                          <ActivityIndicator color={theme.colors.textPrimary} />
+                          <AqSecondaryButton
+                            label={t('social.continueWith', { provider: 'Apple' })}
+                            onPress={() => handleSocial('apple')}
+                            disabled={busy}
+                            icon={<Icon name="apple" size={19} color="#fff" />}
+                            style={{
+                              backgroundColor: theme.colors.inverseSurface,
+                              borderColor: theme.colors.inverseSurface,
+                            }}
+                            textStyle={{ color: theme.colors.inverseForeground }}
+                          />
+                        )
+                      )}
+                      {showGoogle && (
+                        socialBusy === 'google' ? (
+                          <SocialBusyButton tone="outline" />
                         ) : (
-                          <>
-                            <Icon name="google" size={17} color="#fff" />
-                            <Text style={{ color: theme.colors.textPrimary, fontFamily: theme.fonts.uiSemi, fontSize: 14 }}>
-                              {t('social.continueWith', { provider: 'Google' })}
-                            </Text>
-                          </>
-                        )}
-                      </CtaButton>
-                    )}
-                  </>
-                )}
+                          <AqSecondaryButton
+                            label={t('social.continueWith', { provider: 'Google' })}
+                            onPress={() => handleSocial('google')}
+                            disabled={busy}
+                            icon={<Icon name="google" size={17} color="#fff" />}
+                          />
+                        )
+                      )}
+                      <AqSecondaryButton
+                        label={t('steps.continueWithEmail')}
+                        onPress={() => setSignupStep('details')}
+                        disabled={busy}
+                        icon={<Icon name="mail" size={17} color={theme.colors.textPrimary} />}
+                      />
+                    </>
+                  ) : null}
 
-                {mode !== 'reset' && (
-                  <Pressable
-                    onPress={() => switchMode(mode === 'signup' ? 'login' : 'signup')}
-                    disabled={loading}
-                    hitSlop={8}
-                  >
-                    <Text
-                      style={{
-                        textAlign: 'center',
-                        marginTop: 6,
-                        fontSize: 13,
-                        color: theme.colors.textMuted,
-                        fontFamily: theme.fonts.ui,
-                      }}
-                    >
-                      {mode === 'signup' ? t('switchMode.hasAccount') : t('switchMode.needsAccount')}{' '}
-                      <Text style={{ color: theme.colors.primaryEmphasis, fontFamily: theme.fonts.uiSemi }}>
-                        {mode === 'signup' ? t('actions.signIn') : t('actions.createAccount')}
+                  {/* ── Signup, sub-step 1 of 2 ── */}
+                  {mode === 'signup' && signupStep === 'details' && !linking ? (
+                    <>
+                      <AuthInput
+                        inputRef={nameRef}
+                        icon="user"
+                        placeholder={t('fields.name')}
+                        value={name}
+                        onChangeText={setName}
+                        keyboardType="default"
+                        autoCapitalize="words"
+                        autoComplete="name"
+                        textContentType="name"
+                        editable={!loading}
+                        valid={name.trim().length > 0}
+                        returnKeyType="next"
+                        onSubmitEditing={() => emailRef.current?.focus()}
+                      />
+                      <AuthInput
+                        inputRef={emailRef}
+                        icon="mail"
+                        placeholder={t('fields.email')}
+                        value={email}
+                        onChangeText={setEmail}
+                        keyboardType="email-address"
+                        autoComplete="email"
+                        textContentType="emailAddress"
+                        editable={!loading}
+                        valid={EMAIL_RE.test(email.trim())}
+                        invalid={error === t('validation.emailInvalid')}
+                        returnKeyType="next"
+                        onSubmitEditing={() => detailsComplete && setSignupStep('password')}
+                      />
+                      <AqPrimaryButton
+                        label={t('steps.next')}
+                        onPress={() => setSignupStep('password')}
+                        disabled={!detailsComplete || busy}
+                      />
+                    </>
+                  ) : null}
+
+                  {/* ── Signup, sub-step 2 of 2 ── */}
+                  {mode === 'signup' && signupStep === 'password' && !linking ? (
+                    <>
+                      <AuthInput
+                        inputRef={passwordRef}
+                        icon="lock"
+                        placeholder={t('fields.password')}
+                        value={password}
+                        onChangeText={setPassword}
+                        secure={!showPass}
+                        trailing="eye"
+                        onTrailingPress={() => setShowPass((s) => !s)}
+                        trailingAccessibilityLabel={t('accessibility.togglePassword')}
+                        autoComplete="new-password"
+                        textContentType="newPassword"
+                        maxLength={PASSWORD_POLICY_MAX_LENGTH}
+                        editable={!loading}
+                        valid={passwordPolicyMet}
+                      />
+                      <AuthInput
+                        icon="lock"
+                        placeholder={t('fields.confirmPassword')}
+                        value={confirm}
+                        onChangeText={setConfirm}
+                        secure={!showPass}
+                        autoComplete="new-password"
+                        textContentType="newPassword"
+                        maxLength={PASSWORD_POLICY_MAX_LENGTH}
+                        editable={!loading}
+                        valid={confirm.length > 0 && confirm === password}
+                        invalid={confirm.length > 0 && confirm !== password}
+                        returnKeyType="done"
+                        onSubmitEditing={handleSubmit}
+                      />
+                      <PasswordStrengthMeter met={passwordPolicyMet} />
+                      <Text
+                        style={{
+                          color: theme.colors.textSubtleStrong,
+                          fontFamily: theme.fonts.ui,
+                          fontSize: 12,
+                          lineHeight: 18,
+                        }}
+                      >
+                        {t('validation.passwordGuidance', { min: PASSWORD_POLICY_MIN_LENGTH })}
                       </Text>
-                    </Text>
-                  </Pressable>
-                )}
-              </View>
+                    </>
+                  ) : null}
+
+                  {/* ── Login ── */}
+                  {mode === 'login' && !linking ? (
+                    <>
+                      <AuthInput
+                        icon="mail"
+                        placeholder={t('fields.email')}
+                        value={email}
+                        onChangeText={setEmail}
+                        keyboardType="email-address"
+                        autoComplete="email"
+                        textContentType="emailAddress"
+                        editable={!loading}
+                        valid={EMAIL_RE.test(email.trim())}
+                      />
+                      <AuthInput
+                        icon="lock"
+                        placeholder={t('fields.password')}
+                        value={password}
+                        onChangeText={setPassword}
+                        secure={!showPass}
+                        trailing="eye"
+                        onTrailingPress={() => setShowPass((s) => !s)}
+                        trailingAccessibilityLabel={t('accessibility.togglePassword')}
+                        autoComplete="current-password"
+                        textContentType="password"
+                        editable={!loading}
+                        returnKeyType="done"
+                        onSubmitEditing={handleSubmit}
+                      />
+                      <AqTextAction
+                        label={t('actions.forgotPassword')}
+                        onPress={() => switchMode('reset')}
+                        style={{ alignSelf: 'flex-end' }}
+                      />
+                      {showApple && (
+                        <AqSecondaryButton
+                          label={t('social.continueWith', { provider: 'Apple' })}
+                          onPress={() => handleSocial('apple')}
+                          disabled={busy}
+                          icon={<Icon name="apple" size={19} color="#fff" />}
+                          style={{
+                            backgroundColor: theme.colors.inverseSurface,
+                            borderColor: theme.colors.inverseSurface,
+                          }}
+                          textStyle={{ color: theme.colors.inverseForeground }}
+                        />
+                      )}
+                      {showGoogle && (
+                        <AqSecondaryButton
+                          label={t('social.continueWith', { provider: 'Google' })}
+                          onPress={() => handleSocial('google')}
+                          disabled={busy}
+                          icon={<Icon name="google" size={17} color="#fff" />}
+                        />
+                      )}
+                    </>
+                  ) : null}
+
+                  {/* ── Reset ── */}
+                  {mode === 'reset' && !linking ? (
+                    <AuthInput
+                      icon="mail"
+                      placeholder={t('fields.email')}
+                      value={email}
+                      onChangeText={setEmail}
+                      keyboardType="email-address"
+                      autoComplete="email"
+                      textContentType="emailAddress"
+                      editable={!loading}
+                      valid={EMAIL_RE.test(email.trim())}
+                      returnKeyType="done"
+                      onSubmitEditing={handleSubmit}
+                    />
+                  ) : null}
+
+                  {/* Legal acceptance. Required for BOTH paths and therefore
+                      rendered on both: the method-choice step (social signup
+                      checks it before opening the native sheet) and the
+                      password step (email signup checks it in `validate()`).
+                      One state, one handler — the condition is unchanged. */}
+                  {legalBlock && !linking
+                    && (signupStep !== 'details' || pendingNewSocialProvider !== null) ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+                      <Pressable
+                        onPress={handleLegalAcceptanceToggle}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: legalAccepted }}
+                        accessibilityLabel={t('legal.acceptanceLabel')}
+                        hitSlop={8}
+                        style={{
+                          width: 22,
+                          height: 22,
+                          borderRadius: 5,
+                          borderWidth: 1,
+                          borderColor: legalAccepted ? theme.colors.primaryEmphasis : theme.colors.fieldBorderStrong,
+                          backgroundColor: legalAccepted ? theme.colors.primary : theme.colors.surfaceMuted,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        {legalAccepted ? <Icon name="check" size={15} color={theme.colors.primaryForeground} stroke={2.5} /> : null}
+                      </Pressable>
+                      <Text style={{ flex: 1, color: theme.colors.textMuted, fontFamily: theme.fonts.ui, fontSize: 12.5, lineHeight: 19 }}>
+                        {t('legal.acceptancePrefix')}{' '}
+                        <Text
+                          accessibilityRole="link"
+                          onPress={() => setLegalDocument('terms')}
+                          style={{ color: theme.colors.primaryEmphasis, textDecorationLine: 'underline', fontFamily: theme.fonts.uiSemi }}
+                        >
+                          {t('legal.terms')}
+                        </Text>{' '}
+                        {t('legal.acceptanceMiddle')}{' '}
+                        <Text
+                          accessibilityRole="link"
+                          onPress={() => setLegalDocument('privacy')}
+                          style={{ color: theme.colors.primaryEmphasis, textDecorationLine: 'underline', fontFamily: theme.fonts.uiSemi }}
+                        >
+                          {t('legal.privacy')}
+                        </Text>
+                        {t('legal.acceptanceSuffix')}
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  {googleUnavailableNotice && !linking ? (
+                    <Feedback tone="error" text={t('social.unavailable.message')} />
+                  ) : null}
+                  {error && <Feedback tone="error" text={error} />}
+                  {info && <Feedback tone="info" text={info} />}
+
+                  {linking && (
+                    <LinkingPanel
+                      linking={linking}
+                      busy={busy}
+                      password={linkPassword}
+                      onChangePassword={setLinkPassword}
+                      onLinkPassword={handleLinkWithPassword}
+                      onLinkProvider={handleLinkWithProvider}
+                      onCancel={() => {
+                        clearPendingSocialAuthState();
+                        setLinking(null);
+                        setLinkPassword('');
+                      }}
+                    />
+                  )}
+
+                  {/* The submit button. `disabled` is exactly the expression it
+                      has always been, and the only sub-step that hides it is
+                      the one where no credential has been entered yet. */}
+                  {!linking && !(mode === 'signup' && signupStep === 'details') ? (
+                    <AqPrimaryButton
+                      label={submitLabel}
+                      onPress={handleSubmit}
+                      disabled={busy || (mode === 'reset' && resetCooldownSeconds > 0)}
+                      style={{ marginTop: 4 }}
+                    />
+                  ) : null}
+
+                  {mode !== 'reset' && !linking ? (
+                    <Pressable
+                      onPress={() => switchMode(mode === 'signup' ? 'login' : 'signup')}
+                      disabled={loading}
+                      accessibilityRole="button"
+                      hitSlop={8}
+                    >
+                      <Text
+                        style={{
+                          textAlign: 'center',
+                          marginTop: 2,
+                          fontSize: 13.5,
+                          color: theme.colors.textSubtle,
+                          fontFamily: theme.fonts.ui,
+                        }}
+                      >
+                        {mode === 'signup' ? t('switchMode.hasAccount') : t('switchMode.needsAccount')}{' '}
+                        <Text style={{ color: theme.colors.primaryEmphasis, fontFamily: theme.fonts.uiSemi }}>
+                          {mode === 'signup' ? t('actions.signIn') : t('actions.createAccount')}
+                        </Text>
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                </>
+              )}
             </Animated.View>
           </ScrollView>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
+        </AqSheet>
+      </KeyboardAvoidingView>
 
       <Modal
         visible={googleUnavailableNotice}
@@ -759,7 +944,7 @@ export function AuthScreen({
               borderRadius: radii.xl,
               borderWidth: 1,
               borderColor: theme.colors.borderStrong,
-              backgroundColor: theme.colors.sheetBackground,
+              backgroundColor: theme.colors.sheetBackgroundAlt,
               gap: 12,
             }}
           >
@@ -772,24 +957,135 @@ export function AuthScreen({
             <Text style={{ color: theme.colors.textMuted, fontFamily: theme.fonts.ui, fontSize: 13.5, lineHeight: 19 }}>
               {t('social.unavailable.message')}
             </Text>
-            <CtaButton onPress={() => setGoogleUnavailableNotice(false)}>
-              <Text
-                style={{
-                  color: theme.colors.primaryForeground,
-                  fontFamily: theme.fonts.display,
-                  fontSize: 15,
-                  letterSpacing: 1,
-                  textTransform: 'uppercase',
-                }}
-              >
-                {t('social.unavailable.dismiss')}
-              </Text>
-            </CtaButton>
+            <AqPrimaryButton
+              label={t('social.unavailable.dismiss')}
+              onPress={() => setGoogleUnavailableNotice(false)}
+            />
           </View>
         </View>
       </Modal>
       <LegalDocumentModal document={legalDocument} onClose={() => setLegalDocument(null)} />
-    </ScreenBg>
+    </View>
+  );
+}
+
+/**
+ * A social button that has been tapped and is waiting on the native sheet.
+ * Keeps the button's exact footprint so the sheet does not reflow mid-flight,
+ * and keeps the per-provider busy state visible rather than collapsing every
+ * provider into one global spinner.
+ */
+function SocialBusyButton({ tone }: { tone: 'inverse' | 'outline' }) {
+  const { theme } = useTheme();
+  const inverse = tone === 'inverse';
+  return (
+    <View
+      accessibilityRole="progressbar"
+      style={{
+        width: '100%',
+        paddingVertical: 15,
+        borderRadius: theme.radii.md,
+        borderWidth: 1,
+        borderColor: inverse ? theme.colors.inverseSurface : theme.colors.fieldBorderStrong,
+        backgroundColor: inverse ? theme.colors.inverseSurface : theme.colors.surface,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <ActivityIndicator color={inverse ? theme.colors.inverseForeground : theme.colors.textPrimary} />
+    </View>
+  );
+}
+
+/** Sheet heading shared by every mode. */
+function sheetTitleStyle(theme: ReturnType<typeof useTheme>['theme']) {
+  return {
+    fontFamily: theme.fonts.uiSemi,
+    fontSize: 22,
+    lineHeight: 28,
+    letterSpacing: -0.3,
+    color: theme.colors.textPrimary,
+  } as const;
+}
+
+/**
+ * The in-sheet loading state. It reports that work is in progress and nothing
+ * else — in particular it never shows a success screen on a timer. When the
+ * account genuinely exists, the central gate swaps the screen; this component
+ * has no idea that happened, which is exactly right.
+ */
+function AuthLoadingState({ label }: { label: string }) {
+  const { theme } = useTheme();
+  const reduceMotion = useReducedMotionPreference();
+  const spin = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (reduceMotion) return () => undefined;
+    const animation = Animated.loop(
+      Animated.timing(spin, { toValue: 1, duration: 900, useNativeDriver: true }),
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [spin, reduceMotion]);
+
+  return (
+    <View
+      accessibilityRole="progressbar"
+      accessibilityLabel={label}
+      style={{ alignItems: 'center', gap: 16, paddingVertical: 24 }}
+    >
+      <Animated.View
+        style={{
+          width: 44,
+          height: 44,
+          borderRadius: 22,
+          borderWidth: 2,
+          borderColor: theme.colors.primaryBorderSoft,
+          borderTopColor: theme.colors.primaryEmphasis,
+          transform: [
+            { rotate: spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) },
+          ],
+        }}
+      />
+      <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 15, color: theme.colors.textPrimary }}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+/**
+ * Three bars that say whether the password satisfies the policy.
+ *
+ * Deliberately two states, not a graded score. The design draws an
+ * intermediate "good" step between weak and strong, but
+ * `validateAuthFormPasswordPolicy` reports only the FIRST unmet rule, not a
+ * per-rule result — so a proportion would either have to re-implement the
+ * policy here or depend on the private order in which `passwordPolicy.ts`
+ * happens to check its rules. Both are worse than showing the one thing the
+ * function actually answers. Recorded as a difference from the design.
+ */
+function PasswordStrengthMeter({ met }: { met: boolean }) {
+  const { theme } = useTheme();
+  return (
+    <View
+      accessible
+      accessibilityRole="progressbar"
+      accessibilityValue={{ now: met ? 3 : 0, min: 0, max: 3 }}
+      style={{ flexDirection: 'row', gap: 4 }}
+    >
+      {[0, 1, 2].map((index) => (
+        <View
+          key={index}
+          style={{
+            flex: 1,
+            height: 3,
+            borderRadius: 2,
+            backgroundColor: met ? theme.colors.primaryEmphasis : theme.colors.surfaceElevated,
+          }}
+        />
+      ))}
+    </View>
   );
 }
 
@@ -861,23 +1157,15 @@ function LinkingPanel({
             textContentType="password"
             editable={!busy}
           />
-          <CtaButton onPress={onLinkPassword} disabled={busy}>
-            {busy ? (
-              <ActivityIndicator color={theme.colors.primaryForeground} />
-            ) : (
-              <Text
-                style={{
-                  color: theme.colors.primaryForeground,
-                  fontFamily: theme.fonts.display,
-                  fontSize: 16,
-                  letterSpacing: 1.2,
-                  textTransform: 'uppercase',
-                }}
-              >
-                {t('linking.signInAndLink')}
-              </Text>
-            )}
-          </CtaButton>
+          {busy ? (
+            <ActivityIndicator color={theme.colors.primaryForeground} />
+          ) : (
+            <AqPrimaryButton
+              label={t('linking.signInAndLink')}
+              onPress={onLinkPassword}
+              disabled={busy}
+            />
+          )}
         </>
       ) : existingSocial ? (
         <>
@@ -888,18 +1176,16 @@ function LinkingPanel({
               attemptedProvider: attemptedLabel,
             })}
           </Text>
-          <CtaButton ghost onPress={() => onLinkProvider(existingSocial)} disabled={busy}>
-            {busy ? (
-              <ActivityIndicator color={theme.colors.textPrimary} />
-            ) : (
-              <>
-                <Icon name={existingSocial === 'apple' ? 'apple' : 'google'} size={18} color="#fff" />
-                <Text style={{ color: theme.colors.textPrimary, fontFamily: theme.fonts.uiSemi, fontSize: 14 }}>
-                  {t('social.continueWith', { provider: existingProviderLabel })}
-                </Text>
-              </>
-            )}
-          </CtaButton>
+          {busy ? (
+            <ActivityIndicator color={theme.colors.textPrimary} />
+          ) : (
+            <AqSecondaryButton
+              label={t('social.continueWith', { provider: existingProviderLabel })}
+              onPress={() => onLinkProvider(existingSocial)}
+              disabled={busy}
+              icon={<Icon name={existingSocial === 'apple' ? 'apple' : 'google'} size={18} color="#fff" />}
+            />
+          )}
         </>
       ) : (
         <Text style={{ color: theme.colors.textMuted, fontFamily: theme.fonts.ui, fontSize: 13, lineHeight: 18 }}>
@@ -979,6 +1265,16 @@ function AuthInput({
   textContentType,
   maxLength,
   editable = true,
+  inputRef,
+  returnKeyType,
+  onSubmitEditing,
+  /**
+   * Border state only. Neither flag decides whether anything can be
+   * submitted — `validate()` remains the single authority for that, and both
+   * are computed by the caller from values it already has.
+   */
+  valid,
+  invalid,
 }: {
   icon: IconName;
   placeholder: string;
@@ -994,8 +1290,19 @@ function AuthInput({
   textContentType?: 'name' | 'emailAddress' | 'password' | 'newPassword';
   maxLength?: number;
   editable?: boolean;
+  inputRef?: React.RefObject<TextInput | null>;
+  returnKeyType?: 'next' | 'done';
+  onSubmitEditing?: () => void;
+  valid?: boolean;
+  invalid?: boolean;
 }) {
   const { theme } = useTheme();
+  const [focused, setFocused] = useState(false);
+  const borderColor = invalid
+    ? theme.colors.fieldErrorBorder
+    : focused || valid
+      ? theme.colors.primaryEmphasis
+      : theme.colors.fieldBorderStrong;
   return (
     <View
       style={{
@@ -1003,20 +1310,23 @@ function AuthInput({
         alignItems: 'center',
         gap: 12,
         paddingHorizontal: 16,
-        height: 56,
-        borderRadius: 14,
-        backgroundColor: theme.colors.authInputBackground,
+        paddingVertical: 15,
+        borderRadius: 12,
+        backgroundColor: theme.colors.surfaceMuted,
         borderWidth: 1,
-        borderColor: theme.colors.authInputBorder,
+        borderColor,
         opacity: editable ? 1 : 0.6,
       }}
     >
       <Icon name={icon} size={18} color={theme.colors.authInputIcon} />
       <TextInput
+        ref={inputRef}
         placeholder={placeholder}
         placeholderTextColor={theme.colors.authInputPlaceholder}
         value={value}
         onChangeText={onChangeText}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
         secureTextEntry={secure}
         autoCapitalize={autoCapitalize}
         autoComplete={autoComplete}
@@ -1024,12 +1334,16 @@ function AuthInput({
         maxLength={maxLength}
         autoCorrect={false}
         editable={editable}
+        returnKeyType={returnKeyType}
+        onSubmitEditing={onSubmitEditing}
+        selectionColor={theme.colors.primaryEmphasis}
         keyboardType={keyboardType ?? (icon === 'mail' ? 'email-address' : 'default')}
         style={{
           flex: 1,
           color: theme.colors.inputText,
-          fontSize: 15,
-          fontFamily: theme.fonts.ui,
+          fontSize: 16,
+          fontFamily: theme.fonts.uiMed,
+          padding: 0,
         }}
       />
       {trailing && (
@@ -1038,6 +1352,7 @@ function AuthInput({
           hitSlop={10}
           accessibilityRole="button"
           accessibilityLabel={trailingAccessibilityLabel}
+          style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
         >
           <Icon name={trailing} size={18} color={theme.colors.authInputIcon} />
         </Pressable>

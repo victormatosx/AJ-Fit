@@ -40,7 +40,8 @@ describe('functions/src/workoutLifecycle/scheduleEngine sync', () => {
   it('checks every file the generator is responsible for, never a partial list', () => {
     expect(sync.FILES).toEqual([
       'calendar.ts', 'resolver.ts', 'types.ts', 'localDate.ts', 'identities.ts',
-      'calendarAuthority.ts', 'reposition.ts',
+      'calendarAuthority.ts', 'reposition.ts', 'sessionSuggestion.ts', 'dailyWorkoutLimit.ts',
+      'freeScheduleResolver.ts', 'workoutPilot.ts',
     ]);
   });
 });

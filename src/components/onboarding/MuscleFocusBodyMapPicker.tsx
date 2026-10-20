@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Text, View, type LayoutChangeEvent } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { BodyMuscleMap } from '../fitness/BodyMuscleMap';
+import { useAjFunnelDirector } from './AjFunnelStage';
 import { useTheme } from '../../theme';
 import type { Sex } from '../../state/AppState';
 import type { MuscleId } from '../../types/exercise';
@@ -34,6 +35,7 @@ export function MuscleFocusBodyMapPicker({
 }) {
   const { theme } = useTheme();
   const { t } = useTranslation('quiz');
+  const aj = useAjFunnelDirector();
   const selectedMapMuscles = mapMusclesForVisualGroups(value);
 
   // The map row's actual box (not the window) drives sizing, since the
@@ -73,8 +75,8 @@ export function MuscleFocusBodyMapPicker({
         paddingBottom: 16,
         borderRadius: 18,
         borderWidth: 1,
-        borderColor: theme.colors.choiceBorder,
-        backgroundColor: theme.colors.surfaceElevated,
+        borderColor: theme.colors.divider,
+        backgroundColor: theme.colors.surfaceMuted,
       }}
     >
       <View
@@ -144,12 +146,20 @@ export function MuscleFocusBodyMapPicker({
           gap={MAP_GAP}
           activeColor={theme.colors.primaryEmphasis}
           baseColor={theme.colors.choiceBorder}
-          outlineColor={theme.colors.textMuted}
+          // White, per the calibrated reference map — the silhouette has to
+          // read as an outline drawing, not as a dim shape.
+          outlineColor={theme.colors.textPrimary}
           selectableMuscles={SELECTABLE_MUSCLE_FOCUS_MAP_MUSCLES}
           muscleAccessibilityLabel={accessibilityLabel}
-          onMusclePress={(muscle) => onChange(
-            toggleMuscleFocusVisualGroup(value, muscle, maxSelections),
-          )}
+          onMusclePress={(muscle) => {
+            const next = toggleMuscleFocusVisualGroup(value, muscle, maxSelections);
+            // AJ watches the map and reacts to the gesture. Presentation only:
+            // the selection itself is `toggleMuscleFocusVisualGroup`'s, with
+            // the same max it always had.
+            aj.setLook([0, 2.2]);
+            aj.play(next.length > value.length ? 'hop' : 'nod');
+            onChange(next);
+          }}
         />
       </View>
 
@@ -161,7 +171,7 @@ export function MuscleFocusBodyMapPicker({
           textAlign: 'center',
           fontFamily: theme.fonts.uiSemi,
           fontSize: 14,
-          color: selectedNames ? theme.colors.text : theme.colors.textMuted,
+          color: selectedNames ? theme.colors.textPrimary : theme.colors.textMuted,
         }}
       >
         {selectedNames || t('muscleFocus.noneSelected')}

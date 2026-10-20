@@ -38,7 +38,8 @@ function inputFor(uid: string, todayLocalDate = '2026-09-09'): WidgetSnapshotBui
     trainingDays: ['MON', 'WED', 'FRI'],
     activeRecoveryDays: [],
     activatedAtLocalDate: '2026-08-01',
-    completedDates: new Set(uid === 'A' ? ['2026-09-07'] : ['2026-09-07', '2026-09-09']),
+    dailyActivityStreak: { current: 0, complete: true },
+  completedDates: new Set(uid === 'A' ? ['2026-09-07'] : ['2026-09-07', '2026-09-09']),
   };
 }
 

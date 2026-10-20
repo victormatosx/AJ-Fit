@@ -43,7 +43,12 @@
   },
   "startError": {
     "title": "Couldn't start workout",
-    "body": "Something went wrong starting your workout. Check your connection and try again."
+    "body": "Something went wrong starting your workout. Check your connection and try again.",
+    "alreadyFinishedBody": "This session was already completed on this date. Pick another session or try again tomorrow."
+  },
+  "dailyLimit": {
+    "title": "Today's workout is done",
+    "body": "You've already completed today's workout. Come back tomorrow for the next one!"
   },
   "preparing": {
     "kicker": "Secure session",
@@ -73,7 +78,11 @@
     "discardConfirmBack": "Back",
     "discarding": "Discarding…",
     "discardError": "Couldn't discard it. Please try again.",
-    "dismiss": "Got it"
+    "dismiss": "Got it",
+    "aj": {
+      "question": "Want to continue where you left off?",
+      "questionNoResume": "What do you want to do with it?"
+    }
   },
   "actions": {
     "viewExecution": "See how to",

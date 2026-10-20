@@ -1,4 +1,51 @@
 {
+  "kicker": "YOUR PLAN",
+  "tabs": {
+    "workout": "Training",
+    "diet": "Diet",
+    "accessibility": "Plan panels"
+  },
+  "workoutPanel": {
+    "subtitle": "{{goal}} · {{level}}",
+    "frequencyBadge": "{{count}}x/WK",
+    "statsFrequency_one": "{{count}}x a week",
+    "statsFrequency_other": "{{count}}x a week",
+    "statsDuration": "{{minutes}} min per session",
+    "flexibleSlot": "{{index}}",
+    "lockedRow": "Session {{index}}",
+    "lockedFooter": "Exercises, sets and loads unlock with your subscription"
+  },
+  "dietPanel": {
+    "title": "AJ Diet",
+    "subtitle": "{{category}}",
+    "subtitleWithPace": "{{category}} · {{pace}} pace",
+    "meals_one": "{{count}} meal a day",
+    "meals_other": "{{count}} meals a day",
+    "withoutAllergens": "No {{allergens}}",
+    "allergenCount_one": "{{count}} allergen",
+    "allergenCount_other": "{{count}} allergens",
+    "protein": "Protein",
+    "carbs": "Carbs",
+    "fat": "Fat",
+    "gramsSuffix": "g",
+    "kcalPerDay": "{{kcal}} kcal a day",
+    "mealKcal": "{{kcal}} kcal",
+    "lockedFooter": "Menu, portions and swaps unlock with your subscription"
+  },
+  "aj": {
+    "intro": "Done, {{name}}. This is the plan I built for you.",
+    "introNoName": "Done. This is the plan I built for you.",
+    "strategy": "Your plan is focused on {{goal}}, at {{level}} level.",
+    "volume_one": "{{count}} session a week, {{minutes}} minutes each.",
+    "volume_other": "{{count}} sessions a week, {{minutes}} minutes each.",
+    "volumeFlexible_one": "Flexible training: {{count}} session a week, {{minutes}} minutes.",
+    "volumeFlexible_other": "Flexible training: {{count}} sessions a week, {{minutes}} minutes each.",
+    "diet_one": "On the diet: {{category}}, across {{count}} meal a day.",
+    "diet_other": "On the diet: {{category}}, across {{count}} meals a day.",
+    "dietWithMacros_one": "On the diet: {{category}}, across {{count}} meal a day, {{kcal}} kcal and {{protein}} g of protein.",
+    "dietWithMacros_other": "On the diet: {{category}}, across {{count}} meals a day, {{kcal}} kcal and {{protein}} g of protein.",
+    "closing": "Training and menu are both ready. They unlock when you subscribe."
+  },
   "header": {
     "eyebrow": "Your first phase",
     "titleWithName": "{{name}}, your first phase is ready.",

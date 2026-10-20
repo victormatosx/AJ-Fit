@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -9,21 +8,16 @@ import {
   ScrollView,
   Text,
   TextInput,
-  useWindowDimensions,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import type { PurchasesPackage } from 'react-native-purchases';
 import { logInfo, logWarn } from '../lib/logger';
 import { requestCommercialGateConfirmation } from '../services/commercialGate';
 import type { OnboardingAuthContext } from '../onboarding/authContext';
-import { useAuth } from '../state/AuthContext';
-import { ScreenBg } from '../components/ui/ScreenBg';
-import { CtaButton, CtaText } from '../components/ui/CtaButton';
-import { Display, MonoLabel } from '../components/ui/Display';
+import { Display } from '../components/ui/Display';
 import { FullScreenLoading } from '../components/ui/FullScreenLoading';
 import { Icon } from '../components/ui/Icon';
 import { useSubscription } from '../hooks/useSubscription';
@@ -73,6 +67,17 @@ import {
   PREMIUM_ENTITLEMENT_ID,
 } from '../services/revenueCatService';
 import { authorizePromoPurchase } from '../services/promoCodeService';
+import {
+  AqPrimaryButton,
+  AqSecondaryButton,
+  AqSegmented,
+  AqSheet,
+} from '../components/ui/AcquisitionControls';
+import { AjBot } from '../components/aj/AjBot';
+import { splitStorePrice } from './paywall/storePriceParts';
+import { AjSheetScreenAssistant } from '../components/aj/AjSheetScreenAssistant';
+import { AJ_SHEET_SCREEN, AJ_TYPING_MS_PER_CHAR } from '../components/aj/ajMomentTiming';
+import { useReducedMotionPreference } from '../lib/reducedMotion';
 import { useTheme } from '../theme';
 import { useDevSubscriptionOverrideContext } from '../dev/DevSubscriptionOverrideContext';
 import {
@@ -157,17 +162,6 @@ function androidFreeTrialDuration(pkg: PurchasesPackage): TrialDuration | null {
     : null;
 }
 
-const PAYWALL_HERO_IMAGE_DEFAULT = require('../../assets/paywall/paywall-asset.webp');
-const PAYWALL_HERO_IMAGE_MASCULINO = require('../../assets/paywall/paywall-asset-mas.webp');
-const PAYWALL_HERO_IMAGE_FEMININO = require('../../assets/paywall/paywall-asset-fem.webp');
-
-/** `sex` comes from the user's questionnaire answers (`Quiz['sex']`) — `null` covers both "not answered yet" and any flow that skipped it, and always falls back to the neutral asset. */
-function resolvePaywallHeroImage(sex: 'm' | 'f' | null | undefined) {
-  if (sex === 'm') return PAYWALL_HERO_IMAGE_MASCULINO;
-  if (sex === 'f') return PAYWALL_HERO_IMAGE_FEMININO;
-  return PAYWALL_HERO_IMAGE_DEFAULT;
-}
-
 type PurchaseUiState =
   | { kind: 'idle' }
   | { kind: 'purchasing' }
@@ -221,8 +215,10 @@ export function PaywallScreen({
     purchaseOption,
     restore,
   } = useSubscription();
-  const { questionnaire } = useAuth();
-  const heroImage = resolvePaywallHeroImage(questionnaire?.answers.sex);
+  // The approved design replaces the hero photograph with AJ (§7.4). The
+  // sex-resolved asset mapping is preserved in `paywall/paywallHeroImage.ts`
+  // so reinstating the photo is a render change, not a rebuild.
+  const entryName = entryContext?.name ?? null;
 
   // Dev/QA only — same DevSubscriptionOverrideContext as Settings > Developer
   // (see docs/13_assinaturas_e_billing.md). Lets a brand-new account, which
@@ -238,6 +234,10 @@ export function PaywallScreen({
   } = useDevSubscriptionOverrideContext();
   const [devOverridePickerOpen, setDevOverridePickerOpen] = useState(false);
   const [legalDocument, setLegalDocument] = useState<LegalDocumentKind | null>(null);
+  // Presentation only — none of these reach a commercial decision.
+  const insets = useSafeAreaInsets();
+  const reduceMotion = useReducedMotionPreference();
+  const [sheetHeight, setSheetHeight] = useState(0);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [purchaseState, setPurchaseState] = useState<PurchaseUiState>({ kind: 'idle' });
@@ -943,13 +943,135 @@ export function PaywallScreen({
   // start only inside the Paywall and never block a Premium user from AppShell.
   if (centerState === 'loading') return <FullScreenLoading />;
 
+  /* ── Presentation ───────────────────────────────────────────────────────
+   * Everything below is layout. `effectiveRoute`, `handlePurchase`,
+   * `handleRestore`, `selectedId`, the promo state and the CTA's `disabled`
+   * expression are all exactly as they were — the tree moved, the commercial
+   * decisions did not.
+   * ──────────────────────────────────────────────────────────────────────── */
+
+  const trialDurationLabel = trialHighlight?.kind === 'ios_confirmed'
+    ? formatIntroDuration(t, trialHighlight.duration)
+    : null;
+  // The "free today" line is shown ONLY when the Store itself confirmed a
+  // zero-cost introductory price — `resolveFreeTrialTerms` refuses to build
+  // `free_trial` terms otherwise.
+  const zeroCostTodayString = selectedIntroPresentation?.kind === 'free_trial'
+    && selectedIntroPresentation.terms.introductoryPrice === 0
+    ? selectedIntroPresentation.terms.introductoryPriceString
+    : null;
+
+  /**
+   * The trial duration the sheet PRESENTS, which is not always the one the
+   * Store has confirmed.
+   *
+   * `trialDurationLabel` is the confirmed one and is still preferred whenever
+   * StoreKit supplies it. When it does not — eligibility still resolving, no
+   * introductory offer returned, a build without the offer configured — the
+   * sheet falls back to the offer's fixed duration instead of hiding the
+   * trial, per the product owner's instruction that the AJ Fit offer is a
+   * fixed 7-day trial and will not change (`paywall.sheet.fixedTrialDuration`).
+   *
+   * Android is deliberately excluded: Google Play decides trial eligibility
+   * per account, there is no API to confirm it, and the reviewed Android copy
+   * must keep its "até …*" hedge and its eligibility disclosure. So Android
+   * keeps exactly the behaviour it had — confirmed-signal copy or nothing.
+   */
+  const presentedTrialDuration =
+    trialDurationLabel ??
+    (Platform.OS === 'android' ? null : t('paywall.sheet.fixedTrialDuration'));
+
+  // The headline the approved design draws: the trial phrase in accent blue,
+  // the promise after it in white ("7 dias grátis" / "para testar tudo").
+  //
+  // Android's conditional trial cannot take that two-part form — its reviewed
+  // sentence carries the mandatory hedge, and splitting or rewording it would
+  // drop that — so it stays whole in `headlineTail`, where `TrialHeroTitle`
+  // still picks the localized "free" word out in accent. With no trial signal
+  // at all it falls back to the existing commercial title.
+  const headlineAccent =
+    presentedTrialDuration && trialHighlight?.kind !== 'android_possible'
+      ? t('paywall.sheet.trialHeadline', { duration: presentedTrialDuration })
+      : null;
+  const headlineTail = headlineAccent
+    ? t('paywall.sheet.trialHeadlineTail')
+    : trialHeroTitle ?? t('paywall.hero.title');
+
+  const purchaseLabel = presentedTrialDuration
+    ? t('paywall.sheet.startTrial', { duration: presentedTrialDuration })
+    : t('actions.continue');
+
+  // Equivalent monthly price when RevenueCat supplies one, otherwise the
+  // package's own price string. Never reformatted, never recomputed.
+  const headlinePrice = selectedPackage
+    ? selectedPackage.product.pricePerMonthString ?? selectedPackage.product.priceString
+    : null;
+  // "/mês" belongs under the big number ONLY when that number really is the
+  // per-month equivalent. On the fallback it is the package's own price, so
+  // the cadence shown is the package's own period instead.
+  const headlinePricePeriod = selectedPackage
+    ? selectedPackage.product.pricePerMonthString
+      ? t('paywall.sheet.perMonthSuffix')
+      : packagePeriodLabel(selectedPackage)
+    : null;
+  /**
+   * The line under the big number.
+   *
+   * Annual restates what is actually charged — that price IS the store's —
+   * and carries the design's savings clause after it. Monthly carries the
+   * design's billing note, since the number above it is already the charge
+   * and repeating it says nothing.
+   *
+   * The savings figure itself is fixed copy (`paywall.sheet.annualSavings`),
+   * per the product owner's instruction that the plan prices are fixed. It is
+   * NOT derived from the store prices and does not follow them — see the
+   * report note on this.
+   */
+  const supportingPrice = !selectedPackage
+    ? null
+    : selectedPackage.packageType === 'ANNUAL'
+      ? t('paywall.sheet.annualSupporting', {
+          price: packagePriceString(selectedPackage),
+        })
+      : selectedPackage.packageType === 'MONTHLY'
+        ? t('paywall.sheet.monthlySupporting')
+        : // Any other period (weekly, six-month, lifetime) gets the plain
+          // store price and its own cadence — the two fixed lines above
+          // describe the two plans this offering actually ships.
+          [packagePriceString(selectedPackage), packagePeriodLabel(selectedPackage)]
+            .filter(Boolean)
+            .join(' ');
+  const supportingSavings =
+    selectedPackage?.packageType === 'ANNUAL' ? t('paywall.sheet.annualSavings') : null;
+
+  const ajLines = (): string[] => {
+    if (isPurchasing) return [presentedTrialDuration ? t('paywall.aj.activatingTrial') : t('paywall.aj.activating')];
+    if (isRestoring) return [t('paywall.aj.restoring')];
+    if (purchaseState.kind === 'error') return [purchaseState.message];
+    if (restoreState.kind === 'error') return [restoreState.message];
+    if (purchaseState.kind === 'notice') return [purchaseState.message];
+    if (restoreState.kind === 'notice') return [restoreState.message];
+    if (promoApplied && promoState.applied?.code) {
+      return [t('paywall.aj.couponApplied', { code: promoState.applied.code })];
+    }
+    // Purchase cancelled: the design is explicit that AJ says nothing.
+    if (purchaseState.kind === 'cancelled') return [];
+    const intro = entryName ? t('paywall.aj.introWithName', { name: entryName }) : t('paywall.aj.intro');
+    if (presentedTrialDuration) {
+      return [intro, t('paywall.aj.introTrial', { duration: presentedTrialDuration })];
+    }
+    return [intro];
+  };
+
+  const ajMood = isPurchasing || isRestoring ? 'think' : 'idle';
+
+  // Exactly two packages is the one shape the design's segmented selector
+  // describes; anything else keeps the vertical `PackageCard` list.
+  const useSegmentedSelector = packages.length === 2;
+
   return (
-    <ScreenBg>
-      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
+    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+      <SafeAreaView edges={['top']}>
         {/* Dev/QA only — temporarily hidden from the Paywall UI per request
             while the paywall UI/UX is redesigned. The underlying
             DevSubscriptionOverrideContext logic (Settings > Developer) is
@@ -961,117 +1083,222 @@ export function PaywallScreen({
             onPress={() => setDevOverridePickerOpen(true)}
           />
         ) : null}
+        <PaywallHeader
+          onClose={handleClose}
+          disabled={busy}
+          closeAccessibilityLabel={closeAccessibilityLabel}
+        />
+      </SafeAreaView>
 
+      {/* This screen's own AJ — it is a root screen (App.tsx), outside the
+          onboarding funnel, so it owns one inline mascot of its own. */}
+      {!centerState ? (
+        <AjSheetScreenAssistant
+          sheetHeight={sheetHeight}
+          lines={ajLines()}
+          msPerChar={AJ_TYPING_MS_PER_CHAR.paywall}
+          mood={ajMood}
+          look={AJ_PAYWALL_LOOK}
+          reduceMotion={reduceMotion}
+          minSize={64}
+          maxSize={104}
+          topInset={insets.top}
+        />
+      ) : null}
+
+      <KeyboardAvoidingView
+        style={{ flex: 1, justifyContent: 'flex-end' }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
         {centerState ? (
           <View style={{ flex: 1 }}>
-            <PaywallHeader
-              onClose={handleClose}
-              onRestore={handleRestore}
-              isRestoring={isRestoring}
-              disabled={busy}
-              closeAccessibilityLabel={closeAccessibilityLabel}
-            />
             <CenteredState
               kind={centerState}
               message={offeringsError}
               onRetry={loadOfferings}
+              reduceMotion={reduceMotion}
             />
             <View style={{ paddingHorizontal: 22, paddingBottom: 16 }}>
               <ActionNotices purchaseState={purchaseState} restoreState={restoreState} />
-              <LegalLinks onOpen={setLegalDocument} />
+              <LegalLinks onOpen={setLegalDocument} onRestore={handleRestore} isRestoring={isRestoring} disabled={busy} />
             </View>
           </View>
         ) : (
-          <ScrollView
-            ref={contentScrollRef}
-            contentContainerStyle={{
-              paddingHorizontal: 22,
-              paddingTop: 6,
-              paddingBottom: 22,
-              flexGrow: 1,
-            }}
-            onLayout={() => {
-              if (promoInputFocusedRef.current) revealPromoInput();
-            }}
-            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
+          <AqSheet
+            delay={reduceMotion ? 0 : AJ_SHEET_SCREEN.sheetRiseAtMs}
+            reduceMotion={reduceMotion}
+            onSheetLayout={setSheetHeight}
+            style={{ paddingBottom: Math.max(34, insets.bottom + 16) }}
           >
-            <PaywallHeroVisual
-              onClose={handleClose}
-              onRestore={handleRestore}
-              isRestoring={isRestoring}
-              disabled={busy}
-              closeAccessibilityLabel={closeAccessibilityLabel}
-              trialTitle={trialHeroTitle}
-              heroImage={heroImage}
-            />
+            <ScrollView
+              ref={contentScrollRef}
+              onLayout={() => {
+                if (promoInputFocusedRef.current) revealPromoInput();
+              }}
+              keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+            >
+              {/* Headline block: trial phrase + promise, subtitle 6pt under it. */}
+              <View style={{ marginBottom: 18 }}>
+                <PaywallHeadline
+                  accent={headlineAccent}
+                  tail={headlineTail}
+                  accentColor={theme.colors.primaryEmphasis}
+                />
 
-            {!trialHighlight ? (
+                <Text
+                  style={{
+                    marginTop: 6,
+                    textAlign: 'center',
+                    fontFamily: theme.fonts.ui,
+                    fontSize: 13.5,
+                    lineHeight: 19,
+                    color: theme.colors.textMuted,
+                  }}
+                >
+                  {trialEligibilityChecking
+                    ? t('paywall.trial.checking')
+                    : entryContext?.origin === 'planCompleted'
+                      ? t('paywall.plans.subtitlePlanCompleted')
+                      : t('paywall.sheet.subtitle')}
+                </Text>
+              </View>
+
+              {useSegmentedSelector ? (
+                <AqSegmented
+                  role="radio"
+                  accessibilityLabel={t('paywall.plans.selectorPrompt')}
+                  selectedId={selectedPackage?.identifier ?? packages[0].identifier}
+                  onSelect={(identifier) => setSelectedId(identifier)}
+                  badgeVariant="chip"
+                  trackRadius={14}
+                  thumbRadius={10}
+                  options={packages.map((pkg) => ({
+                    id: pkg.identifier,
+                    label: packageTitle(pkg),
+                    // The design's "-X%" seal on the longer period. The
+                    // percentage is fixed copy, not derived from the store
+                    // prices — the plan prices are fixed, by instruction.
+                    badge: pkg.packageType === 'ANNUAL'
+                      ? t('paywall.plans.annualDiscountBadge')
+                      : null,
+                  }))}
+                />
+              ) : (
+                <View style={{ gap: 8 }}>
+                  {packages.map((pkg) => {
+                    const presentation = introPresentations[pkg.product.identifier] ?? null;
+                    const trialDuration =
+                      presentation?.kind === 'free_trial'
+                        ? marketingTrialDuration(presentation.terms.duration)
+                        : null;
+                    const title =
+                      Platform.OS === 'ios' &&
+                      trialDuration?.unit === 'day' &&
+                      trialDuration.count === 7
+                        ? t('paywall.plans.trialTitle', { plan: packageTitle(pkg) })
+                        : packageTitle(pkg);
+                    const offerLine =
+                      Platform.OS === 'ios'
+                        ? presentation?.kind === 'free_trial'
+                          ? t('paywall.trial.afterTrial')
+                          : packagePeriodLabel(pkg)
+                        : Platform.OS === 'android' && resolveAndroidTrialSignal(pkg) === 'possible'
+                          ? t('paywall.trial.afterTrial')
+                          : packagePeriodLabel(pkg);
+                    const bestValue = pkg.packageType === 'ANNUAL';
+                    const valueLine =
+                      bestValue && pkg.product.pricePerMonthString
+                        ? t('paywall.plans.annualValueLine', {
+                            price: pkg.product.pricePerMonthString,
+                          })
+                        : null;
+                    return (
+                      <PackageCard
+                        key={pkg.identifier}
+                        pkg={pkg}
+                        title={title}
+                        selected={pkg.identifier === selectedPackage?.identifier}
+                        disabled={busy}
+                        offerLine={offerLine}
+                        bestValue={bestValue}
+                        valueLine={valueLine}
+                        onSelect={() => setSelectedId(pkg.identifier)}
+                      />
+                    );
+                  })}
+                </View>
+              )}
+
+              <PaywallPrice
+                afterTrialLabel={presentedTrialDuration ? t('paywall.sheet.afterTrialLabel') : null}
+                price={headlinePrice}
+                period={headlinePricePeriod}
+                supporting={supportingPrice}
+                savings={supportingSavings}
+              />
+
+              {/* The design's reassurance card, with the design's own copy.
+                  Fixed by instruction: these terms do not vary with the
+                  store's answer, so the card is not gated on one. */}
+              <AssuranceCard
+                lead={t('paywall.sheet.assuranceLead')}
+                text={t('paywall.sheet.assuranceBody')}
+              />
+
+              <ActionNotices purchaseState={purchaseState} restoreState={restoreState} />
+
+              <AqPrimaryButton
+                glow
+                label={purchaseLabel}
+                supportLabel={
+                  zeroCostTodayString
+                    ? t('paywall.sheet.startTrialToday', { price: zeroCostTodayString })
+                    : presentedTrialDuration
+                      ? t('paywall.sheet.fixedZeroToday')
+                      : null
+                }
+                onPress={handlePurchase}
+                accessibilityHint={t('paywall.legal.renewalDisclosure')}
+                disabled={
+                  busy ||
+                  !effectiveRoute ||
+                  effectiveRoute.kind === 'blocked' ||
+                  (effectiveRoute.kind === 'ios_promo_package' &&
+                    selectedIntroReadiness.status !== 'ready')
+                }
+                style={{ marginTop: 14, opacity: isPurchasing ? 0.6 : undefined }}
+              />
+
               <Text
                 style={{
                   marginTop: 10,
-                  fontFamily: theme.fonts.uiMed,
-                  fontSize: 12.5,
-                  lineHeight: 17,
-                  color: theme.colors.textMuted,
+                  fontFamily: theme.fonts.ui,
+                  fontSize: 12,
+                  lineHeight: 17.5,
+                  color: theme.colors.textSubtleStrong,
+                  textAlign: 'center',
                 }}
               >
-                {trialEligibilityChecking
-                  ? t('paywall.trial.checking')
-                  : entryContext?.origin === 'planCompleted'
-                    ? t('paywall.plans.subtitlePlanCompleted')
-                    : t('paywall.plans.subtitleDefault')}
+                {t('paywall.legal.renewalDisclosure')}
               </Text>
-            ) : null}
+              {trialHighlight?.kind === 'android_possible' ? (
+                <Text
+                  style={{
+                    marginTop: 8,
+                    fontFamily: theme.fonts.ui,
+                    fontSize: 12,
+                    lineHeight: 17.5,
+                    color: theme.colors.textSubtleStrong,
+                    textAlign: 'center',
+                  }}
+                >
+                  {t('paywall.legal.androidTrialDisclosure')}
+                </Text>
+              ) : null}
 
-            <View style={{ gap: 8, marginTop: 8 }}>
-              {packages.map((pkg) => {
-                const presentation = introPresentations[pkg.product.identifier] ?? null;
-                const trialDuration =
-                  presentation?.kind === 'free_trial'
-                    ? marketingTrialDuration(presentation.terms.duration)
-                    : null;
-                const title =
-                  Platform.OS === 'ios' &&
-                  trialDuration?.unit === 'day' &&
-                  trialDuration.count === 7
-                    ? t('paywall.plans.trialTitle', { plan: packageTitle(pkg) })
-                    : packageTitle(pkg);
-                const offerLine =
-                  Platform.OS === 'ios'
-                    ? presentation?.kind === 'free_trial'
-                      ? t('paywall.trial.afterTrial')
-                      : packagePeriodLabel(pkg)
-                    : Platform.OS === 'android' && resolveAndroidTrialSignal(pkg) === 'possible'
-                      ? t('paywall.trial.afterTrial')
-                      : packagePeriodLabel(pkg);
-                const bestValue = pkg.packageType === 'ANNUAL';
-                const valueLine =
-                  bestValue && pkg.product.pricePerMonthString
-                    ? t('paywall.plans.annualValueLine', {
-                        price: pkg.product.pricePerMonthString,
-                      })
-                    : null;
-                return (
-                  <PackageCard
-                    key={pkg.identifier}
-                    pkg={pkg}
-                    title={title}
-                    selected={pkg.identifier === selectedPackage?.identifier}
-                    disabled={busy}
-                    offerLine={offerLine}
-                    bestValue={bestValue}
-                    valueLine={valueLine}
-                    onSelect={() => setSelectedId(pkg.identifier)}
-                  />
-                );
-              })}
-            </View>
-
-            <ActionNotices purchaseState={purchaseState} restoreState={restoreState} />
-
-            <View style={{ marginTop: 'auto', paddingTop: 14 }}>
               {PROMO_CODE_SUPPORTED_PLATFORM && (
                 <PromoCodeCard
                   value={promoInput}
@@ -1096,64 +1323,18 @@ export function PaywallScreen({
                   disabled={busy}
                 />
               )}
-              <CtaButton
-                style={PROMO_CODE_SUPPORTED_PLATFORM ? { marginTop: 16 } : undefined}
-                onPress={handlePurchase}
-                accessibilityState={{
-                  disabled:
-                    busy ||
-                    !effectiveRoute ||
-                    effectiveRoute.kind === 'blocked' ||
-                    (effectiveRoute.kind === 'ios_promo_package' &&
-                      selectedIntroReadiness.status !== 'ready'),
-                  busy: isPurchasing,
-                }}
-                disabled={
-                  busy ||
-                  !effectiveRoute ||
-                  effectiveRoute.kind === 'blocked' ||
-                  (effectiveRoute.kind === 'ios_promo_package' &&
-                    selectedIntroReadiness.status !== 'ready')
-                }
-              >
-                {isPurchasing ? (
-                  <ActivityIndicator color={theme.colors.primaryForeground} />
-                ) : (
-                  <CtaText>{t('actions.continue')}</CtaText>
-                )}
-              </CtaButton>
-              <Text
-                style={{
-                  marginTop: 10,
-                  fontFamily: theme.fonts.ui,
-                  fontSize: 10.5,
-                  lineHeight: 15,
-                  color: theme.colors.textFaint,
-                  textAlign: 'center',
-                }}
-              >
-                {t('paywall.legal.renewalDisclosure')}
-              </Text>
-              {trialHighlight?.kind === 'android_possible' ? (
-                <Text
-                  style={{
-                    marginTop: 6,
-                    fontFamily: theme.fonts.ui,
-                    fontSize: 10.5,
-                    lineHeight: 15,
-                    color: theme.colors.textFaint,
-                    textAlign: 'center',
-                  }}
-                >
-                  {t('paywall.legal.androidTrialDisclosure')}
-                </Text>
-              ) : null}
-              <LegalLinks onOpen={setLegalDocument} />
-            </View>
-          </ScrollView>
+
+              <LegalLinks
+                onOpen={setLegalDocument}
+                onRestore={handleRestore}
+                isRestoring={isRestoring}
+                disabled={busy}
+              />
+            </ScrollView>
+          </AqSheet>
         )}
-        </KeyboardAvoidingView>
-      </SafeAreaView>
+      </KeyboardAvoidingView>
+
       {devOverrideAllowed && !HIDE_DEV_OVERRIDE_ROW ? (
         <DevSubscriptionOverridePickerSheet
           visible={devOverridePickerOpen}
@@ -1166,7 +1347,274 @@ export function PaywallScreen({
         />
       ) : null}
       <LegalDocumentModal document={legalDocument} onClose={() => setLegalDocument(null)} />
-    </ScreenBg>
+    </View>
+  );
+}
+
+/** Where AJ looks on the Paywall: slightly down, toward the sheet. */
+const AJ_PAYWALL_LOOK = [0, 1.6] as const;
+
+/**
+ * The sheet headline, in the design's two-part form: the trial phrase in the
+ * accent (with the accent's own glow behind it), the promise after it in
+ * white, as one sentence for assistive tech.
+ *
+ * `accent` is null wherever the trial phrase cannot be stated on its own —
+ * Android's hedged sentence, or no trial at all. Then the whole line is the
+ * reviewed title and `TrialHeroTitle` picks the localized "free" word out of
+ * it, exactly the treatment the hero title used.
+ */
+function PaywallHeadline({
+  accent,
+  tail,
+  accentColor,
+}: {
+  accent: string | null;
+  tail: string;
+  accentColor: string;
+}) {
+  const { theme } = useTheme();
+  return (
+    <Text
+      style={{
+        textAlign: 'center',
+        fontFamily: theme.fonts.uiBold,
+        fontSize: 32,
+        // The design's `line-height: 1.06` is a CSS value; CSS lets a glyph
+        // overflow its line box and React Native clips it instead. 1.15 is
+        // the tightest ratio that still clears Archivo's ascenders at this
+        // weight and size.
+        lineHeight: 37,
+        letterSpacing: -1,
+        color: theme.colors.textPrimary,
+      }}
+    >
+      {accent ? (
+        <>
+          <Text
+            style={{
+              color: accentColor,
+              // The design's text glow. iOS only — Android's Text has no
+              // shadow of its own and the `AjBot` glow trick does not apply
+              // to a glyph run; the accent colour carries it there.
+              ...(Platform.OS === 'ios'
+                ? {
+                    textShadowColor: theme.colors.primaryGlowSoft,
+                    textShadowOffset: { width: 0, height: 0 },
+                    textShadowRadius: 22,
+                  }
+                : null),
+            }}
+          >
+            {accent}
+          </Text>
+          {'\n'}
+          {tail}
+        </>
+      ) : (
+        <TrialHeroTitle title={tail} accentColor={accentColor} />
+      )}
+    </Text>
+  );
+}
+
+/**
+ * The design's reassurance card: hairline border, a filled accent check, a
+ * bolded lead clause and the rest of the sentence after it.
+ */
+function AssuranceCard({ lead, text }: { lead: string; text: string }) {
+  const { theme } = useTheme();
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        marginTop: 16,
+        paddingVertical: 12,
+        paddingHorizontal: 14,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+      }}
+    >
+      <View
+        style={{
+          width: 20,
+          height: 20,
+          borderRadius: 10,
+          backgroundColor: theme.colors.primary,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Icon name="check" size={12} color={theme.colors.primaryForeground} />
+      </View>
+      <Text
+        style={{
+          flex: 1,
+          fontFamily: theme.fonts.ui,
+          fontSize: 13.5,
+          lineHeight: 19,
+          color: theme.colors.textEmphasis,
+        }}
+      >
+        <Text style={{ fontFamily: theme.fonts.uiSemi, color: theme.colors.textPrimary }}>
+          {lead}
+        </Text>
+        {' '}
+        {text}
+      </Text>
+    </View>
+  );
+}
+
+/**
+ * The price block. Every string here comes from the store: the equivalent
+ * monthly price when RevenueCat supplies `pricePerMonthString`, otherwise the
+ * package's own `priceString`. No value is recomputed — the only thing this
+ * does to a price is typeset it, and only when `splitStorePrice` can prove
+ * the pieces are the price itself.
+ */
+function PaywallPrice({
+  afterTrialLabel,
+  price,
+  period,
+  supporting,
+  savings,
+}: {
+  afterTrialLabel: string | null;
+  price: string | null;
+  period: string | null;
+  supporting: string | null;
+  /** The design's accented savings figure, appended to `supporting`. */
+  savings: string | null;
+}) {
+  const { theme } = useTheme();
+  if (!price) return null;
+  const parts = splitStorePrice(price);
+  return (
+    <View style={{ alignItems: 'center', marginTop: 16 }}>
+      {afterTrialLabel ? (
+        <Text
+          style={{
+            marginBottom: 4,
+            fontFamily: theme.fonts.mono,
+            fontSize: 9.5,
+            letterSpacing: 1.6,
+            color: theme.colors.textLabelFaint,
+          }}
+        >
+          {afterTrialLabel}
+        </Text>
+      ) : null}
+
+      {parts ? (
+        // One accessible string for assistive tech; the typesetting below is
+        // decoration over the same value.
+        <View
+          accessible
+          accessibilityLabel={period ? `${price} ${period}` : price}
+          style={{ flexDirection: 'row', alignItems: 'flex-start' }}
+        >
+          {parts.prefix ? (
+            <Text
+              style={{
+                marginTop: 7,
+                marginRight: 4,
+                fontFamily: theme.fonts.uiSemi,
+                fontSize: 16,
+                color: theme.colors.textSpeechSoft,
+              }}
+            >
+              {parts.prefix.trim()}
+            </Text>
+          ) : null}
+          <Text
+            style={{
+              fontFamily: theme.fonts.uiBold,
+              fontSize: 50,
+              lineHeight: 52,
+              letterSpacing: -2,
+              color: theme.colors.textPrimary,
+              fontVariant: ['tabular-nums'],
+            }}
+          >
+            {parts.whole}
+          </Text>
+          <View style={{ marginTop: 8, marginLeft: 4, alignItems: 'flex-start' }}>
+            <Text
+              style={{
+                fontFamily: theme.fonts.uiBold,
+                fontSize: 19,
+                letterSpacing: -0.5,
+                color: theme.colors.textPrimary,
+                fontVariant: ['tabular-nums'],
+              }}
+            >
+              {`${parts.separator}${parts.fraction}${parts.suffix}`}
+            </Text>
+            {period ? (
+              <Text
+                style={{ fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textMuted }}
+              >
+                {period}
+              </Text>
+            ) : null}
+          </View>
+        </View>
+      ) : (
+        <>
+          <Text
+            style={{
+              fontFamily: theme.fonts.uiBold,
+              fontSize: 50,
+              lineHeight: 60,
+              letterSpacing: -2,
+              color: theme.colors.textPrimary,
+              fontVariant: ['tabular-nums'],
+            }}
+          >
+            {price}
+          </Text>
+          {period ? (
+            <Text
+              style={{ fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textMuted }}
+            >
+              {period}
+            </Text>
+          ) : null}
+        </>
+      )}
+
+      {supporting ? (
+        <Text
+          style={{
+            marginTop: 8,
+            textAlign: 'center',
+            fontFamily: theme.fonts.ui,
+            fontSize: 13.5,
+            lineHeight: 19,
+            color: theme.colors.textMuted,
+          }}
+        >
+          {supporting}
+          {savings ? (
+            <>
+              {' '}
+              <Text
+                style={{
+                  fontFamily: theme.fonts.uiSemi,
+                  color: theme.colors.primaryEmphasis,
+                }}
+              >
+                {savings}
+              </Text>
+            </>
+          ) : null}
+        </Text>
+      ) : null}
+    </View>
   );
 }
 
@@ -1230,179 +1678,48 @@ function DevSubscriptionOverrideRow({
   );
 }
 
+/**
+ * The Paywall's only chrome: a close affordance.
+ *
+ * The overlay variant is gone with the photo hero it was built for — there is
+ * no longer anything dark behind this control to contrast against, so it
+ * reads directly on the screen background. Restore moved down to the link row
+ * (`LegalLinks`), where the approved design groups it with terms and privacy.
+ *
+ * The button is visible from the first frame. The prototype reveals it after
+ * two seconds; on the root Paywall this control is the logout path, and
+ * hiding the only way out of a screen — even briefly — is a trap rather than
+ * a flourish. Recorded as a deliberate difference.
+ */
 function PaywallHeader({
   onClose,
-  onRestore,
-  isRestoring,
   disabled,
   closeAccessibilityLabel,
-  overlay = false,
 }: {
   onClose: () => void;
-  onRestore: () => void;
-  isRestoring: boolean;
   disabled: boolean;
   closeAccessibilityLabel: string;
-  overlay?: boolean;
 }) {
   const { theme } = useTheme();
-  const { t } = useTranslation('common');
   return (
-    <View
-      style={{
-        paddingHorizontal: 22,
-        paddingTop: 12,
-        paddingBottom: 8,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 12,
-        ...(overlay
-          ? { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 3 }
-          : null),
-      }}
-    >
+    <View style={{ paddingHorizontal: 16, paddingTop: 12, alignItems: 'flex-end' }}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={closeAccessibilityLabel}
         onPress={onClose}
         disabled={disabled}
+        hitSlop={10}
         style={{
-          width: 42,
-          height: 42,
-          borderRadius: 21,
-          backgroundColor: overlay ? 'rgba(0,0,0,0.38)' : theme.colors.cardBackgroundElevated,
-          borderWidth: 1,
-          borderColor: overlay ? 'rgba(255,255,255,0.18)' : theme.colors.divider,
+          width: 36,
+          height: 36,
+          borderRadius: 18,
           alignItems: 'center',
           justifyContent: 'center',
-          opacity: disabled ? 0.4 : 1,
+          opacity: disabled ? 0.3 : 0.55,
         }}
       >
-        <Icon name="x" size={18} color={overlay ? '#FFFFFF' : theme.colors.textPrimary} />
+        <Icon name="x" size={16} color={theme.colors.textPrimary} />
       </Pressable>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={t('paywall.header.restoreAccessibilityLabel')}
-        onPress={onRestore}
-        disabled={disabled}
-        hitSlop={8}
-        style={{
-          paddingVertical: 8,
-          paddingHorizontal: overlay ? 12 : 4,
-          borderRadius: 18,
-          backgroundColor: overlay ? 'rgba(0,0,0,0.38)' : 'transparent',
-          opacity: disabled && !isRestoring ? 0.4 : 1,
-        }}
-      >
-        {isRestoring ? (
-          <ActivityIndicator size="small" color={overlay ? '#FFFFFF' : theme.colors.textMuted} />
-        ) : (
-          <Text
-            style={{
-              fontFamily: theme.fonts.uiSemi,
-              fontSize: 13,
-              color: overlay ? '#FFFFFF' : theme.colors.textMuted,
-            }}
-          >
-            {t('paywall.header.restore')}
-          </Text>
-        )}
-      </Pressable>
-    </View>
-  );
-}
-
-/**
- * Static, edge-to-edge hero image whose lower gradient merges the photography
- * into the Paywall surface rather than ending on a hard seam.
- */
-function PaywallHeroVisual({
-  onClose,
-  onRestore,
-  isRestoring,
-  disabled,
-  closeAccessibilityLabel,
-  trialTitle,
-  heroImage,
-}: {
-  onClose: () => void;
-  onRestore: () => void;
-  isRestoring: boolean;
-  disabled: boolean;
-  closeAccessibilityLabel: string;
-  trialTitle: string | null;
-  heroImage: ReturnType<typeof resolvePaywallHeroImage>;
-}) {
-  const { theme } = useTheme();
-  const { t } = useTranslation('common');
-  const { width, height } = useWindowDimensions();
-  const heroHeight = Math.min(310, Math.max(240, height * 0.32));
-
-  return (
-    <View
-      style={{
-        width,
-        height: heroHeight,
-        marginHorizontal: -22,
-        marginTop: -6,
-        overflow: 'hidden',
-        backgroundColor: theme.colors.background,
-      }}
-    >
-      <View
-        accessible
-        accessibilityRole="image"
-        accessibilityLabel={t('paywall.hero.imageAccessibilityLabel')}
-        pointerEvents="none"
-        style={{ flex: 1 }}
-      >
-        <Image
-          source={heroImage}
-          resizeMode="cover"
-          accessible={false}
-          style={{ width: '100%', height: '100%' }}
-        />
-      </View>
-      <LinearGradient
-        pointerEvents="none"
-        colors={[
-          'rgba(0,0,0,0.42)',
-          'rgba(0,0,0,0.04)',
-          'rgba(0,0,0,0.62)',
-          'rgba(0,0,0,0.84)',
-          theme.colors.background,
-        ]}
-        locations={[0, 0.28, 0.58, 0.82, 1]}
-        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-      />
-      <PaywallHeader
-        onClose={onClose}
-        onRestore={onRestore}
-        isRestoring={isRestoring}
-        disabled={disabled}
-        closeAccessibilityLabel={closeAccessibilityLabel}
-        overlay
-      />
-      <View
-        pointerEvents="none"
-        style={{ position: 'absolute', left: 22, right: 22, bottom: 44 }}
-      >
-        <MonoLabel color="#FFFFFF" size={9.5}>
-          {t('paywall.hero.eyebrow')}
-        </MonoLabel>
-        <Display size={30} color="#FFFFFF" style={{ marginTop: 4, maxWidth: 310 }}>
-          {t('paywall.hero.title')}
-        </Display>
-        {trialTitle ? (
-          <Display size={18} color="#FFFFFF" style={{ marginTop: 5, opacity: 0.9 }}>
-            <TrialHeroTitle
-              title={trialTitle}
-              accentColor={theme.colors.primaryEmphasis}
-            />
-          </Display>
-        ) : null}
-      </View>
     </View>
   );
 }
@@ -1658,12 +1975,45 @@ function PromoCodeCard({
       ? t('paywall.promo.blockedGeneric')
       : null;
 
+  // The invalid/locked/failed code states the design marks on the field
+  // itself, rather than only in the message below it.
+  const inputInvalid =
+    promoState.phase === 'unavailable' ||
+    promoState.phase === 'locked' ||
+    promoState.phase === 'error';
+
   return (
-    <View style={{ marginTop: 12 }}>
-      <MonoLabel color={theme.colors.textMuted} size={9.5}>
-        {t('paywall.promo.label')}
-      </MonoLabel>
-      <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
+    // The design drops the mono caption above the field — the placeholder
+    // already names it — so the section keeps that same reviewed string as
+    // its accessible name instead.
+    <View
+      accessibilityLabel={t('paywall.promo.label')}
+      style={{ marginTop: 10 }}
+    >
+      {applied ? (
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            marginBottom: 10,
+          }}
+        >
+          <Icon name="check" size={12} color={theme.colors.primaryEmphasis} />
+          <Text
+            style={{
+              fontFamily: theme.fonts.uiSemi,
+              fontSize: 13,
+              color: theme.colors.primaryEmphasis,
+            }}
+          >
+            {t('paywall.promo.appliedCode', { code: applied.code })}
+          </Text>
+        </View>
+      ) : null}
+
+      <View style={{ flexDirection: 'row', gap: 8 }}>
         <TextInput
           value={value}
           onChangeText={onChangeValue}
@@ -1678,13 +2028,16 @@ function PromoCodeCard({
           style={{
             flex: 1,
             height: 42,
-            borderRadius: 11,
+            borderRadius: 12,
             borderWidth: 1,
-            borderColor: theme.colors.cardBorder,
-            backgroundColor: theme.colors.cardBackground,
-            paddingHorizontal: 12,
-            fontFamily: theme.fonts.uiMed,
-            fontSize: 13,
+            borderColor: inputInvalid
+              ? theme.colors.feedbackErrorBorderSubtle
+              : theme.colors.inputBorder,
+            backgroundColor: theme.colors.inputBackground,
+            paddingHorizontal: 14,
+            fontFamily: theme.fonts.uiSemi,
+            fontSize: 14.5,
+            letterSpacing: 1,
             color: theme.colors.inputText,
           }}
         />
@@ -1696,19 +2049,18 @@ function PromoCodeCard({
           style={{
             paddingHorizontal: 16,
             height: 42,
-            borderRadius: 11,
+            borderRadius: 12,
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: theme.colors.controlBackground,
             borderWidth: 1,
-            borderColor: theme.colors.divider,
+            borderColor: theme.colors.fieldBorderStrong,
             opacity: disabled || validating || !value.trim() ? 0.5 : 1,
           }}
         >
           {validating ? (
             <ActivityIndicator color={theme.colors.textPrimary} />
           ) : (
-            <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 13, color: theme.colors.textPrimary }}>
+            <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 14, color: theme.colors.textPrimary }}>
               {t('paywall.promo.applyButton')}
             </Text>
           )}
@@ -1819,10 +2171,12 @@ function CenteredState({
   kind,
   message,
   onRetry,
+  reduceMotion,
 }: {
   kind: CenteredStateKind;
   message?: string | null;
   onRetry?: () => void;
+  reduceMotion: boolean;
 }) {
   const { theme } = useTheme();
   const { t } = useTranslation('common');
@@ -1856,26 +2210,17 @@ function CenteredState({
 
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
-      <LinearGradient
-        colors={theme.gradients.accentState}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={{
-          width: 72,
-          height: 72,
-          borderRadius: 20,
-          alignItems: 'center',
-          justifyContent: 'center',
-          borderWidth: 1,
-          borderColor: theme.colors.primaryBorderMuted,
-        }}
-      >
-        {kind === 'loading' ? (
-          <ActivityIndicator color={theme.colors.primaryEmphasis} />
-        ) : (
-          <Icon name={kind === 'offline' ? 'alert-triangle' : 'info'} size={28} color={theme.colors.primaryEmphasis} />
-        )}
-      </LinearGradient>
+      {/* AJ stands in for the icon tile here, the same way he stands in for
+          the photo hero on the ready screen — one inline mascot, concerned
+          while the store is being reached, at rest once it has answered. */}
+      <AjBot
+        size={96}
+        mood={kind === 'loading' ? 'think' : 'idle'}
+        reduceMotion={reduceMotion}
+      />
+      {kind === 'loading' ? (
+        <ActivityIndicator color={theme.colors.primaryEmphasis} style={{ marginTop: 12 }} />
+      ) : null}
       <Display size={22} style={{ marginTop: 20, textAlign: 'center' }}>
         {content.title}
       </Display>
@@ -1892,43 +2237,68 @@ function CenteredState({
         {content.body}
       </Text>
       {content.retry && onRetry && (
-        <Pressable
-          onPress={onRetry}
-          style={{
-            marginTop: 22,
-            paddingHorizontal: 22,
-            paddingVertical: 12,
-            borderRadius: 12,
-            backgroundColor: theme.colors.cardBackgroundElevated,
-            borderWidth: 1,
-            borderColor: theme.colors.divider,
-          }}
-        >
-          <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 13, color: theme.colors.textPrimary }}>
-            {t('actions.retry')}
-          </Text>
-        </Pressable>
+        <AqSecondaryButton label={t('actions.retry')} onPress={onRetry} style={{ marginTop: 22 }} />
       )}
     </View>
   );
 }
 
-function LegalLinks({ onOpen }: { onOpen: (document: LegalDocumentKind) => void }) {
+/**
+ * The quiet link row at the foot of the sheet: restore, terms, privacy.
+ *
+ * Restore lives here rather than in the header, which is where the previous
+ * redesign put it — the approved design groups it with the other two
+ * secondary actions. It is the SAME `handleRestore`, the same i18n copy and
+ * the same accessibility label; only its position in the tree changed.
+ */
+function LegalLinks({
+  onOpen,
+  onRestore,
+  isRestoring,
+  disabled,
+}: {
+  onOpen: (document: LegalDocumentKind) => void;
+  onRestore: () => void;
+  isRestoring: boolean;
+  disabled: boolean;
+}) {
   const { theme } = useTheme();
   const { t } = useTranslation('settings');
+  const { t: tCommon } = useTranslation('common');
   const linkStyle = {
     fontFamily: theme.fonts.uiMed,
-    fontSize: 12,
-    color: theme.colors.textMuted,
-    textDecorationLine: 'underline' as const,
+    fontSize: 12.5,
+    color: theme.colors.textSubtleStrong,
   };
   return (
-    <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 20, marginTop: 10 }}>
-      <Pressable onPress={() => onOpen('privacy')}>
-        <Text style={linkStyle}>{t('items.privacyPolicy')}</Text>
+    <View
+      style={{
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 18,
+        marginTop: 10,
+      }}
+    >
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={tCommon('paywall.header.restoreAccessibilityLabel')}
+        onPress={onRestore}
+        disabled={disabled}
+        hitSlop={8}
+        style={{ opacity: disabled && !isRestoring ? 0.4 : 1 }}
+      >
+        {isRestoring ? (
+          <ActivityIndicator size="small" color={theme.colors.textMuted} />
+        ) : (
+          <Text style={linkStyle}>{tCommon('paywall.header.restore')}</Text>
+        )}
       </Pressable>
-      <Pressable onPress={() => onOpen('terms')}>
+      <Pressable onPress={() => onOpen('terms')} accessibilityRole="button">
         <Text style={linkStyle}>{t('items.termsOfUse')}</Text>
+      </Pressable>
+      <Pressable onPress={() => onOpen('privacy')} accessibilityRole="button">
+        <Text style={linkStyle}>{t('items.privacyPolicy')}</Text>
       </Pressable>
     </View>
   );

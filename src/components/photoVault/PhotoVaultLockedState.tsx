@@ -1,11 +1,10 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Linking, Pressable, StyleSheet, View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { AccessibilityInfo, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurTargetView, BlurView } from 'expo-blur';
 import Animated, {
   interpolateColor,
   runOnJS,
-  useAnimatedProps,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
@@ -24,13 +23,29 @@ import { usePhotoVault } from '../../state/PhotoVaultContext';
 import { PhotoVaultGallerySkeleton } from './PhotoVaultGallerySkeleton';
 
 /**
- * What the user sees before the vault is open.
+ * The brief transition shown while the gallery is opening.
  *
- * Looks like the gallery itself — the caller renders the same header/footer
- * around this — with its content replaced by `PhotoVaultGallerySkeleton` (no
- * real photo data) and heavily blurred. The only control is a centered lock.
- * It never names a specific mechanism ("Face ID"), because the same build
- * runs on devices that will prompt for a fingerprint or screen lock instead.
+ * The gallery opens directly — there is no biometric prompt, passcode or
+ * unlock screen — so this is a LOADING state, not a gate: it looks like the
+ * gallery itself (the caller renders the same header/footer around this) with
+ * its content replaced by `PhotoVaultGallerySkeleton` (no real photo data)
+ * and heavily blurred, and the whole layer simply fades out once the session
+ * opens. No lock control is offered, because there is nothing for the user to
+ * unlock.
+ *
+ * The reveal fades this layer's OPACITY and holds the blur at full strength
+ * for all of it — never the other way around. Animating the blur's intensity
+ * down to zero instead would spend the whole transition making the skeleton
+ * progressively legible, ending on several frames of a sharp grid of
+ * placeholder tiles (or of cached, already-degraded previews) sitting under
+ * the real header, which reads as the gallery rendering wrong rather than as
+ * a screen opening.
+ *
+ * A retry control appears ONLY if opening the session fails for a genuine
+ * technical reason (temporary files that could not be cleared, the native
+ * app-switcher guard refusing to install, the app backgrounding mid-open).
+ * Those are rare and recoverable, and without this the screen would have no
+ * way forward.
  *
  * `BlurTargetView` + `blurTarget` + `blurMethod` are required for a REAL blur
  * on Android (SDK 56's `expo-blur`): without them Android only renders a flat
@@ -49,40 +64,23 @@ import { PhotoVaultGallerySkeleton } from './PhotoVaultGallerySkeleton';
 interface Props {
   status: PhotoVaultStatus;
   issue: PhotoVaultIssue | null;
+  /** Retries opening the session after a technical failure. */
   onUnlock: () => void;
-  /** Fires once the success animation finishes, so the caller can mount the real gallery. */
+  /** Fires once the reveal finishes, so the caller can mount the real gallery. */
   onRevealComplete: () => void;
 }
 
-/** Issues that mean the device has nothing secure to authenticate with. */
-const NOT_CONFIGURED: PhotoVaultIssue[] = [
-  'vaultAuthNotConfigured',
-  'vaultAuthNotEnrolled',
-];
-
-const LOCK_SIZE = 68;
+const RETRY_SIZE = 68;
 const BLUR_INTENSITY = 28;
+/**
+ * How long this layer takes to clear once the session is open.
+ *
+ * Short on purpose: opening the vault no longer waits on an OS prompt, so
+ * this is the only thing standing between the tap and the gallery.
+ */
+const REVEAL_DURATION = 180;
 
-const AnimatedBlurView = Animated.createAnimatedComponent(BlurView);
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-
-function useAuthErrorMessage(issue: PhotoVaultIssue | null): string | null {
-  const { t } = useTranslation('home');
-
-  switch (issue) {
-    case 'vaultAuthCancelled':
-      return t('progress.photos.authError.cancelled');
-    case 'vaultAuthLockedOut':
-      return t('progress.photos.authError.lockedOut');
-    case 'vaultAuthUnavailable':
-      return t('progress.photos.authError.unavailable');
-    case 'vaultAuthFailed':
-    case 'vaultUnlockFailed':
-      return t('progress.photos.authError.failed');
-    default:
-      return null;
-  }
-}
 
 export function PhotoVaultLockedState({
   status,
@@ -94,68 +92,55 @@ export function PhotoVaultLockedState({
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const { hasPhotoVaultContent, hasPhotoVaultContentReady } = usePhotoVault();
-  const authenticating = status === 'authenticating';
-  const notConfigured = issue !== null && NOT_CONFIGURED.includes(issue);
-  const errorMessage = useAuthErrorMessage(issue);
-  const [iconOpen, setIconOpen] = useState(false);
+  /**
+   * One message for every failure the caller still reports: each is a
+   * technical problem the user can only respond to by retrying, and naming
+   * the internal cause would say nothing useful. Authentication-specific
+   * copy (locked out, not enrolled, no passcode set) became unreachable when
+   * the gallery stopped requiring an OS authentication step.
+   */
+  const errorMessage = t('progress.photos.authError.failed');
   const blurTargetRef = useRef<View | null>(null);
   /**
    * The vault is genuinely empty — never inferred from the locked-preview
    * cache being empty, which also happens for an account with real photos
    * that this device just has not backfilled yet. Reuses the same one-bit
-   * signal the rest of the locked flow already trusts for this distinction.
+   * signal the rest of the flow already trusts for this distinction.
    */
   const trulyEmpty = hasPhotoVaultContentReady && !hasPhotoVaultContent;
+  /** A failure the user can act on, rather than a session still opening. */
+  const showRetry = status === 'locked' && issue !== null;
 
-  const blurIntensity = useSharedValue(BLUR_INTENSITY);
+  const revealOpacity = useSharedValue(1);
   const shakeX = useSharedValue(0);
   const dangerFlash = useSharedValue(0);
-  const successFlash = useSharedValue(0);
 
-  const blurProps = useAnimatedProps(() => ({ intensity: blurIntensity.value }));
+  const revealStyle = useAnimatedStyle(() => ({ opacity: revealOpacity.value }));
 
-  const buttonStyle = useAnimatedStyle(() => {
-    const backgroundColor =
-      successFlash.value > 0
+  const retryStyle = useAnimatedStyle(() => ({
+    backgroundColor:
+      dangerFlash.value > 0
         ? interpolateColor(
-            successFlash.value,
+            dangerFlash.value,
             [0, 1],
-            [theme.colors.surfaceElevated, theme.colors.success],
+            [theme.colors.surfaceElevated, theme.colors.danger],
           )
-        : dangerFlash.value > 0
-          ? interpolateColor(
-              dangerFlash.value,
-              [0, 1],
-              [theme.colors.surfaceElevated, theme.colors.danger],
-            )
-          : theme.colors.surfaceElevated;
-
-    const borderColor =
-      successFlash.value > 0
+        : theme.colors.surfaceElevated,
+    borderColor:
+      dangerFlash.value > 0
         ? interpolateColor(
-            successFlash.value,
+            dangerFlash.value,
             [0, 1],
-            [theme.colors.primaryEmphasis, theme.colors.success],
+            [theme.colors.primaryEmphasis, theme.colors.danger],
           )
-        : dangerFlash.value > 0
-          ? interpolateColor(
-              dangerFlash.value,
-              [0, 1],
-              [theme.colors.primaryEmphasis, theme.colors.danger],
-            )
-          : theme.colors.primaryEmphasis;
+        : theme.colors.primaryEmphasis,
+    transform: [{ translateX: shakeX.value }],
+  }));
 
-    return {
-      backgroundColor,
-      borderColor,
-      transform: [{ translateX: shakeX.value }],
-    };
-  });
-
-  // A real auth failure or cancellation: shake, flash red, tell a screen
-  // reader — without reintroducing any visible error text.
+  // A real failure: shake, flash red, tell a screen reader — without
+  // rendering any visible error text.
   useEffect(() => {
-    if (status !== 'locked' || !issue || notConfigured) return;
+    if (status !== 'locked' || !issue) return;
 
     shakeX.value = withSequence(
       withTiming(-8, { duration: 45 }),
@@ -168,100 +153,74 @@ export function PhotoVaultLockedState({
       withTiming(1, { duration: 120 }),
       withDelay(450, withTiming(0, { duration: 250 })),
     );
-    if (errorMessage) AccessibilityInfo.announceForAccessibility(errorMessage);
-    // Deliberately excludes `errorMessage`/`notConfigured`/the shared values:
-    // this must re-run only when a NEW issue arrives while locked, not when
-    // the translated message reference changes.
+    AccessibilityInfo.announceForAccessibility(errorMessage);
+    // Deliberately excludes `errorMessage`/the shared values: this must re-run
+    // only when a NEW issue arrives, not when the translated message reference
+    // changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [issue, status]);
 
-  // Success: the lock flashes green, its icon swaps, the blur fades out, and
+  // The session is open: fade this layer out — blurred the whole way — and
   // only then does the caller get to mount the real gallery.
   useEffect(() => {
     if (status !== 'unlocked') return;
 
-    successFlash.value = withTiming(1, { duration: 150 });
-    setIconOpen(true);
-    blurIntensity.value = withDelay(
-      200,
-      withTiming(0, { duration: 400 }, (finished) => {
-        if (finished) runOnJS(onRevealComplete)();
-      }),
-    );
+    revealOpacity.value = withTiming(0, { duration: REVEAL_DURATION }, (finished) => {
+      if (finished) runOnJS(onRevealComplete)();
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
-  // A background lock mid-transition must snap the visual back to locked
-  // immediately — the skeleton has no real data either way, but the lock
-  // must never be left looking open while the vault is not.
+  // A background lock mid-transition must snap the visual back immediately —
+  // the skeleton has no real data either way, but this layer must never be
+  // left faded out while the session is closed.
   useEffect(() => {
     if (status === 'unlocked') return;
-    blurIntensity.value = BLUR_INTENSITY;
-    successFlash.value = 0;
-    setIconOpen(false);
-  }, [status, blurIntensity, successFlash]);
-
-  const handlePress = useCallback(() => {
-    if (notConfigured) {
-      void Linking.openSettings();
-      return;
-    }
-    onUnlock();
-  }, [notConfigured, onUnlock]);
-
-  const accessibilityLabel = notConfigured
-    ? t('progress.photos.notConfigured.openSettings')
-    : t('progress.photos.a11y.unlock');
+    revealOpacity.value = 1;
+  }, [status, revealOpacity]);
 
   return (
-    <View style={{ flex: 1 }} accessibilityLabel={t('progress.photos.locked.title')}>
+    <Animated.View
+      style={[{ flex: 1 }, revealStyle]}
+      accessibilityLabel={t('progress.photos.locked.title')}
+    >
       <BlurTargetView ref={blurTargetRef} style={{ flex: 1 }}>
         <PhotoVaultGallerySkeleton />
       </BlurTargetView>
 
-      <AnimatedBlurView
+      <BlurView
         blurTarget={blurTargetRef}
         blurMethod="dimezisBlurViewSdk31Plus"
-        animatedProps={blurProps}
+        intensity={BLUR_INTENSITY}
         tint={theme.mode === 'light' ? 'light' : 'dark'}
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
 
-      <View style={styles.center} pointerEvents="box-none">
-        <AnimatedPressable
-          onPress={handlePress}
-          disabled={authenticating}
-          accessibilityRole="button"
-          accessibilityLabel={accessibilityLabel}
-          accessibilityState={{ disabled: authenticating, busy: authenticating }}
-          hitSlop={spacing[3]}
-          style={[
-            {
-              width: LOCK_SIZE,
-              height: LOCK_SIZE,
-              borderRadius: radii.pill,
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderWidth: 1.5,
-              opacity: authenticating ? theme.opacity.disabled : 1,
-            },
-            buttonStyle,
-          ]}
-        >
-          <Icon
-            name={iconOpen ? 'lock-open' : 'lock'}
-            size={26}
-            color={theme.colors.textPrimary}
-            stroke={1.8}
-          />
-          {notConfigured ? (
-            <View style={styles.badge}>
-              <Icon name="alert-triangle" size={12} color={theme.colors.warning} />
-            </View>
-          ) : null}
-        </AnimatedPressable>
-      </View>
+      {showRetry ? (
+        <View style={styles.center} pointerEvents="box-none">
+          <AnimatedPressable
+            onPress={onUnlock}
+            accessibilityRole="button"
+            accessibilityLabel={t('progress.photos.list.retry')}
+            testID="photo-vault-open-retry"
+            hitSlop={spacing[3]}
+            style={[
+              {
+                width: RETRY_SIZE,
+                height: RETRY_SIZE,
+                borderRadius: radii.pill,
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderWidth: 1.5,
+              },
+              retryStyle,
+            ]}
+          >
+            <Icon name="refresh" size={26} color={theme.colors.textPrimary} stroke={1.8} />
+          </AnimatedPressable>
+        </View>
+      ) : null}
 
       {trulyEmpty ? (
         <View
@@ -273,7 +232,7 @@ export function PhotoVaultLockedState({
           </Display>
         </View>
       ) : null}
-    </View>
+    </Animated.View>
   );
 }
 
@@ -282,17 +241,6 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  badge: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#1a1330',
   },
   emptyHint: {
     position: 'absolute',

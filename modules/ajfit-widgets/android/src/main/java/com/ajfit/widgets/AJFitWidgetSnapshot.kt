@@ -9,6 +9,10 @@ enum class AJFitDayStatus { COMPLETED, TODAY_COMPLETED, TODAY_PENDING, MISSED, U
 data class AJFitStreak(val scheduleMode: String, val unit: String, val current: Int, val complete: Boolean) {
   val displayValue get() = if (complete) "$current" else "$current+"
   val unitLabel get() = when (unit) {
+    // Chama 2.0: consecutive DAYS with a valid activity (a workout OR a
+    // confirmed food entry). Falling through to "TREINO/TREINOS" would
+    // mislabel a day earned only by logging food.
+    "days" -> if (current == 1) "DIA" else "DIAS"
     "weeks" -> if (current == 1) "SEMANA" else "SEMANAS"
     else -> if (current == 1) "TREINO" else "TREINOS"
   }

@@ -18,6 +18,39 @@ import { EVOLUTION_DEBUG_PRESETS, type EvolutionDebugPreset } from '../../home/e
  * by the real `evolution` hook), so its content can legitimately disagree
  * with the mocked card. That's an accepted limitation of a visual-only tool.
  */
+/** The eight tier states, straight from the single source of truth. */
+const STREAK_FLAME_PREVIEWS: readonly { days: number; label: string }[] = [
+  { days: 0, label: 'Apagada' },
+  { days: 1, label: 'Azul (Faísca)' },
+  { days: 3, label: 'Amarela (Chama)' },
+  { days: 10, label: 'Laranja (Brasa)' },
+  { days: 30, label: 'Vermelha (Incêndio)' },
+  { days: 100, label: 'Ciano (Plasma)' },
+  { days: 250, label: 'Branca (Estelar)' },
+  { days: 500, label: 'Roxa (Lendária)' },
+];
+
+/** The six celebrated transitions — mirrors `STREAK_MILESTONES`. */
+const STREAK_EVOLVE_PREVIEWS: readonly { milestone: number; label: string }[] = [
+  { milestone: 3, label: 'Azul → Amarela' },
+  { milestone: 10, label: 'Amarela → Laranja' },
+  { milestone: 30, label: 'Laranja → Vermelha' },
+  { milestone: 100, label: 'Vermelha → Ciano' },
+  { milestone: 250, label: 'Ciano → Branca' },
+  { milestone: 500, label: 'Branca → Roxa' },
+];
+
+/**
+ * Walks the Home flame through a break and a restart using ONLY the render
+ * override: active -> 0 (a full empty day) -> 1 (first new activity). Writes
+ * nothing anywhere; the real streak is untouched throughout.
+ */
+function runStreakBreakPreview(preview: (days: number | null) => void) {
+  preview(12);
+  setTimeout(() => preview(0), 1800);
+  setTimeout(() => preview(1), 3600);
+}
+
 export function EvolutionDebugPanel({
   visible,
   activePresetId,
@@ -25,6 +58,9 @@ export function EvolutionDebugPanel({
   canTriggerCelebration,
   onTriggerCelebration,
   onTriggerRingCelebration,
+  streakFlamePreviewDays,
+  onPreviewStreakFlame,
+  onTriggerStreakEvolve,
 }: {
   /** Caller-computed visibility (e.g. only on the Home tab) — kept as a prop
    * rather than a conditional mount from the caller so this never
@@ -38,6 +74,12 @@ export function EvolutionDebugPanel({
   onTriggerCelebration: (phase: 'celebrating' | 'reveal') => void;
   /** Plays only the Home cycle ring's "100%" celebration (waves/particles/✓) — when it finishes, chains into `onTriggerCelebration('celebrating')` for a full end-to-end preview. */
   onTriggerRingCelebration: () => void;
+  /** Day count currently forced onto the Home flame, or `null` for the real value. */
+  streakFlamePreviewDays: number | null;
+  /** Overrides the Home flame's day count (render-only — writes nothing). */
+  onPreviewStreakFlame: (days: number | null) => void;
+  /** Mounts the real transformation screen with synthetic data for a milestone. Never touches the real per-milestone claim, so it stays repeatable. */
+  onTriggerStreakEvolve: (milestone: number) => void;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -107,6 +149,44 @@ export function EvolutionDebugPanel({
                     onPress={() => { onSelect(preset); setOpen(false); }}
                   />
                 ))}
+
+                <Text style={{ fontSize: 11, letterSpacing: 1.5, color: 'rgba(255,255,255,0.35)', fontFamily: 'JetBrainsMono_400Regular', marginTop: 22, marginBottom: 4 }}>
+                  CHAMA DA SEQUÊNCIA — NÍVEIS
+                </Text>
+                <PresetRow
+                  label="Valor real (sair do preview)"
+                  active={streakFlamePreviewDays === null}
+                  onPress={() => { onPreviewStreakFlame(null); setOpen(false); }}
+                />
+                {STREAK_FLAME_PREVIEWS.map((preview) => (
+                  <PresetRow
+                    key={preview.days}
+                    label={`${preview.days} — ${preview.label}`}
+                    active={streakFlamePreviewDays === preview.days}
+                    onPress={() => { onPreviewStreakFlame(preview.days); setOpen(false); }}
+                  />
+                ))}
+
+                <Text style={{ fontSize: 11, letterSpacing: 1.5, color: 'rgba(255,255,255,0.35)', fontFamily: 'JetBrainsMono_400Regular', marginTop: 22, marginBottom: 4 }}>
+                  CHAMA DA SEQUÊNCIA — TRANSFORMAÇÕES
+                </Text>
+                {STREAK_EVOLVE_PREVIEWS.map((preview) => (
+                  <PresetRow
+                    key={preview.milestone}
+                    label={`${preview.label} (${preview.milestone - 1} → ${preview.milestone})`}
+                    active={false}
+                    onPress={() => { onTriggerStreakEvolve(preview.milestone); setOpen(false); }}
+                  />
+                ))}
+
+                <Text style={{ fontSize: 11, letterSpacing: 1.5, color: 'rgba(255,255,255,0.35)', fontFamily: 'JetBrainsMono_400Regular', marginTop: 22, marginBottom: 4 }}>
+                  CHAMA DA SEQUÊNCIA — QUEBRA
+                </Text>
+                <PresetRow
+                  label="Simular perda (ativa → 0 → nova atividade → 1)"
+                  active={false}
+                  onPress={() => { runStreakBreakPreview(onPreviewStreakFlame); setOpen(false); }}
+                />
 
                 <Text style={{ fontSize: 11, letterSpacing: 1.5, color: 'rgba(255,255,255,0.35)', fontFamily: 'JetBrainsMono_400Regular', marginTop: 22, marginBottom: 4 }}>
                   ANIMAÇÃO DO ANEL

@@ -67,8 +67,15 @@ describe('body-weight integration contract', () => {
   });
 
   it('converts imperial questionnaire input before updating domain state', () => {
+    // The ruler now offers a per-step KG/LB selector, so the conversion is
+    // keyed on the unit being displayed rather than on the app-wide
+    // preference directly. The guarantee is unchanged and still lives at the
+    // single emission choke point: what reaches `onChange` is canonical.
+    // `toCanonicalValue`'s own arithmetic is covered in
+    // `components/onboarding/__tests__/unitDisplay.test.ts`.
+    expect(quizSource).toContain('const raw = toCanonical(next);');
     expect(quizSource).toContain(
-      "isBodyWeight && resolvedUnits === 'imperial' ? lbToKg(next) : next",
+      'unit ? toCanonicalValue(next, unit, bounds) : Math.round(next)',
     );
   });
 

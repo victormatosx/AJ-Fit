@@ -43,7 +43,12 @@
   },
   "startError": {
     "title": "Não foi possível iniciar o treino",
-    "body": "Algo deu errado ao iniciar o treino. Verifique sua conexão e tente novamente."
+    "body": "Algo deu errado ao iniciar o treino. Verifique sua conexão e tente novamente.",
+    "alreadyFinishedBody": "Esta sessão já foi concluída nesta data. Escolha outra sessão ou tente novamente amanhã."
+  },
+  "dailyLimit": {
+    "title": "Treino de hoje concluído",
+    "body": "Você já concluiu seu treino de hoje. Volte amanhã para o próximo!"
   },
   "preparing": {
     "kicker": "Sessão segura",
@@ -73,7 +78,11 @@
     "discardConfirmBack": "Voltar",
     "discarding": "Descartando…",
     "discardError": "Não foi possível descartar. Tente novamente.",
-    "dismiss": "Entendi"
+    "dismiss": "Entendi",
+    "aj": {
+      "question": "Quer continuar de onde parou?",
+      "questionNoResume": "O que quer fazer com ele?"
+    }
   },
   "actions": {
     "viewExecution": "Ver execução",

@@ -6,7 +6,9 @@ import {
   buildFlexibleWeeklyTargets,
   countFulfilledFlexibleWeeklyTargets,
   countFulfilledPrescribedOpportunities,
+  countFulfilledWeeklyTrainedDays,
 } from '../progressionEngineV2/prescribedOpportunities';
+import { loadWorkoutPilotEnrollment } from './workoutPilotEnrollment';
 import { evaluateProgressionV2 } from '../progressionEngineV2/resolver';
 import { PROGRESSION_V2_CONFIG, resolveProgressionV2Config } from '../progressionEngineV2/config';
 import type { ProgressionDecision, ProgressionSnapshotV2 } from '../progressionEngineV2/types';
@@ -346,27 +348,41 @@ export async function evaluateProgressionV2ForUserFull(
     executionDates,
   });
   const activeTime = activeTrace.activeTime;
-  const flexibleTargets = scheduleMode === 'flexible'
+  // PILOT — enrolment decides which QUESTION adherence asks, never how
+  // generously it is answered (see `countFulfilledWeeklyTrainedDays`). A
+  // fixed-calendar account on the new model is scored on goal fulfilment by
+  // distinct trained days, exactly like the weekly frequency widget, because
+  // its calendar is a suggestion. Unreadable enrolment degrades to legacy.
+  const pilotEnrolled = await loadWorkoutPilotEnrollment(uid);
+  const weeklyTargets = scheduleMode === 'flexible' || pilotEnrolled
     ? buildFlexibleWeeklyTargets({
         countedActiveDates: activeTrace.countedDates,
         prescribedTrainingFrequency: prescribedSessions.prescribedTrainingFrequency,
       })
     : null;
-  const prescribedOpportunities = scheduleMode === 'fixed'
+  const prescribedOpportunities = scheduleMode === 'fixed' && !pilotEnrolled
     ? buildPrescribedOpportunities({
         programInstanceId: bundle.programInstance.programInstanceId,
         trainingDays,
         countedActiveDates: activeTrace.countedDates,
       })
     : [];
-  const validSessionCount = flexibleTargets
-    ? countFulfilledFlexibleWeeklyTargets({
-        programInstanceId: bundle.programInstance.programInstanceId,
-        executions,
-        scheduleEvents,
-        weeklyTargets: flexibleTargets,
-        prescribedSessions: prescribedSessions.sessions,
-      })
+  const validSessionCount = weeklyTargets
+    ? pilotEnrolled
+      ? countFulfilledWeeklyTrainedDays({
+          programInstanceId: bundle.programInstance.programInstanceId,
+          executions,
+          scheduleEvents,
+          weeklyTargets,
+          prescribedSessions: prescribedSessions.sessions,
+        })
+      : countFulfilledFlexibleWeeklyTargets({
+          programInstanceId: bundle.programInstance.programInstanceId,
+          executions,
+          scheduleEvents,
+          weeklyTargets,
+          prescribedSessions: prescribedSessions.sessions,
+        })
     : countFulfilledPrescribedOpportunities({
         programInstanceId: bundle.programInstance.programInstanceId,
         executions,
@@ -375,8 +391,8 @@ export async function evaluateProgressionV2ForUserFull(
         prescribedSessions: prescribedSessions.sessions,
         trainingDays,
       });
-  const expectedSessions = flexibleTargets
-    ? [...flexibleTargets.values()].reduce((sum, count) => sum + count, 0)
+  const expectedSessions = weeklyTargets
+    ? [...weeklyTargets.values()].reduce((sum, count) => sum + count, 0)
     : prescribedOpportunities.length;
   const adherence = computeAdherence(validSessionCount, expectedSessions);
 

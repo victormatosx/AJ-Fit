@@ -7,12 +7,26 @@ import {
   ensureScheduleConfigFromQuestionnaire,
   hasScheduledSessionCompletion,
   loadScheduleConfig,
+  loadScheduleSuggestionState,
   resolveMissedSession,
   resolveTodaysSchedule,
+  selectWorkoutSession,
 } from '../services/workoutSchedule';
+import { hasWorkoutDailyCompletion } from '../services/workoutExecutions';
+import { loadWorkoutPilotEnrollment } from '../services/workoutPilotEnrollment';
+import {
+  loadDecidedMissedNoticeIds,
+  rememberDecidedMissedNoticeId,
+} from '../services/missedSessionNoticeStorage';
+import {
+  detectMissedSessionNotice,
+  type MissedSessionNotice,
+} from './missedSessionNotice';
+import { resolveFreeSchedule } from './freeScheduleResolver';
 import { finalizeWorkoutSession } from '../services/finalizeWorkoutSession';
 import { listExecutionsForProgram, type PersistedWorkoutExecution } from '../services/workoutExecutions';
 import { normalizeWeekdays, trainingDaysValid } from '../lib/questionnaireSchema';
+import { addDaysLocal } from './calendar';
 import { localDateInTimezone } from './localDate';
 import { takeScheduleConfigBootstrapHandoff } from './scheduleConfigBootstrapHandoff';
 import type {
@@ -56,6 +70,23 @@ export function terminalExecutionForScheduleRecovery(
 export interface WorkoutScheduleController {
   resolution: ScheduleResolution;
   completedTodaySessionIndex: number | null;
+  /**
+   * `scheduleState.suggestionVersion` as of the last reload. Must be passed to
+   * `startOrResumeWorkoutExecution` as `startedFromSuggestionVersion`, so a
+   * finalize that lands after a newer selection leaves that newer intent
+   * standing (see `sessionSuggestion.ts`).
+   */
+  suggestionVersion: number;
+  /** True once today's single credited workout exists — the daily limit. */
+  workoutCreditedToday: boolean;
+  /**
+   * Persists an INTENTIONAL session choice and advances the suggestion past
+   * it (A→B, B→C, C→A). Never called from a render, a mount or a preview —
+   * only from an explicit user action. Resolves to the new suggestion, or
+   * `null` when the write failed, in which case the caller must reconcile
+   * from `reload()` rather than assume the local value.
+   */
+  selectSession: (targetSessionIndex: number) => Promise<number | null>;
   config: ScheduleConfig | null;
   loading: boolean;
   /** False for the render where a new program arrived before its schedule reload reset the old projection. */
@@ -63,6 +94,27 @@ export interface WorkoutScheduleController {
   /** Last refresh failure, separate from the last authoritative resolution. */
   refreshError: ScheduleRefreshError | null;
   reload: () => Promise<ScheduleResolution | null>;
+  /**
+   * True only for an account enrolled in the controlled pilot of the new
+   * training architecture. Screens read this to choose which experience to
+   * render; it grants nothing — the Rules and `finalizeWorkoutSession`
+   * independently re-read the same server-side fact. `false` whenever the
+   * flag is absent, unreadable, or not yet loaded.
+   */
+  pilotEnrolled: boolean;
+  /**
+   * A recommended day went by with no workout and the user has not answered
+   * about it yet. Presentation only: it blocks nothing, and `resolution` is
+   * already `SESSION_READY`. `null` for legacy accounts.
+   */
+  missedNotice: MissedSessionNotice | null;
+  /**
+   * Answers `missedNotice`. Resolves to the session index that is today's
+   * offer afterwards, or `null` when the write was refused.
+   */
+  decideMissedNotice: (decision: MissDecision) => Promise<number | null>;
+  /** Records the notice as answered without changing the rotation. */
+  dismissMissedNotice: () => void;
   /** Resolves only the exact missed occurrence captured when the modal opened. */
   resolveMiss: (
     decision: MissDecision,
@@ -110,6 +162,15 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
     refreshError: null,
   });
   const [config, setConfig] = useState<ScheduleConfig | null>(null);
+  const [suggestion, setSuggestion] = useState<{ version: number; creditedToday: boolean }>({
+    version: 0, creditedToday: false,
+  });
+  // Pilot enrolment as of the last successful reload. Starts `false` so the
+  // very first render — before any read has resolved — is the legacy
+  // experience, never the new one.
+  const [enrolled, setEnrolled] = useState(false);
+  const [missedNotice, setMissedNotice] = useState<MissedSessionNotice | null>(null);
+  const missResolutionInFlightRef = useRef<Promise<MissResolutionOutcome> | null>(null);
   const [completedToday, setCompletedToday] = useState<{
     scopeKey: string; localDate: string; sessionIndex: number | null;
   } | null>(null);
@@ -208,6 +269,16 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
       const timezone = loadedConfig?.timezone ?? deviceTimezone();
       const todayLocalDate = localDateInTimezone(new Date(), timezone);
       let completedTodaySessionIndex: number | null = null;
+      // Real terminal executions, by the day the effort happened. Collected
+      // from the list the recovery check below already fetches, so the
+      // missed-session notice costs no extra read. Stays empty when that
+      // block does not run, which is exactly when no notice is possible
+      // anyway (it requires configured training days).
+      const performedLocalDates = new Set<string>();
+      // The OPPORTUNITY each terminal execution consumed. Differs from the
+      // set above only for anticipated/deferred sessions — precisely the case
+      // where a day has no effort of its own yet was already trained.
+      const coveredScheduledLocalDates = new Set<string>();
 
       // Process-death recovery, case B: finishWorkoutExecution atomically
       // terminalizes the execution and clears the active mutex, so `current`
@@ -221,6 +292,14 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
           completedTodaySessionIndex = completedSessionIndexForLocalDate(
             executions, programInstanceId, todayLocalDate, sessionCount,
           );
+          for (const item of executions) {
+            if (item.status !== 'COMPLETED' && item.status !== 'PARTIALLY_COMPLETED') continue;
+            // Same provenance rule the rest of the app uses: the day of the
+            // EFFORT, falling back to the scheduled date for documents
+            // written before `performedLocalDate` existed.
+            performedLocalDates.add(item.performedLocalDate ?? item.scheduledLocalDate);
+            coveredScheduledLocalDates.add(item.scheduledLocalDate);
+          }
           if (candidate && !(await hasScheduledSessionCompletion({
             uid,
             programId,
@@ -250,23 +329,108 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
         }
       }
       recordPerfMark('today_schedule_recovery_checked');
-      const result = await resolveTodaysSchedule({
-        uid,
-        programId,
-        programInstanceId,
-        sessionCount,
-        scheduleMode: effectiveScheduleModeForThisLoad,
-        activatedAtLocalDate,
-        todayLocalDate,
-        // Already awaited above (`loadedConfig`) — same uid, same document,
-        // no write in between. Skips resolveTodaysSchedule's own otherwise-
-        // redundant `loadScheduleConfig` read.
-        storedConfig: effectiveConfig,
-      });
+      // CONTROLLED PILOT FORK. Enrolment is read server-side here, and the
+      // same document is re-read by the Rules and by `finalizeWorkoutSession`
+      // — so this branch chooses the EXPERIENCE only, and a wrong `true` grants
+      // nothing. The fail-safe direction is what matters: unreadable or absent
+      // means legacy, so no account is ever shown an affordance the backend
+      // would refuse.
+      const pilotEnrolled = await loadWorkoutPilotEnrollment(uid);
+      let result: ScheduleResolution;
+      let suggestionUpdate: { version: number; creditedToday: boolean } | null = null;
+      let noticeUpdate: MissedSessionNotice | null = null;
+      // Size of the device-local "already answered" set at detection time.
+      // Logged because an empty set is indistinguishable from "nothing was
+      // ever answered" in the notice's own output, and the two have opposite
+      // meanings when a notice the user already dismissed shows up again.
+      let decidedNoticeCount = 0;
+      if (pilotEnrolled) {
+        // NEW TRAINING MODEL — the calendar no longer decides what is
+        // available. `resolveTodaysSchedule` is bypassed along with everything
+        // it implied: the trainingDay walk, the rest-day block, the setup gate
+        // and the miss-detection WRITE it performed on a mere read. What
+        // replaces it is `resolveFreeSchedule` (pure, no I/O) over two facts:
+        // the stored suggestion, and whether today's single credited workout
+        // already exists.
+        const [suggestionState, workoutCreditedToday, decidedNoticeIds] = await Promise.all([
+          loadScheduleSuggestionState(uid, programId, programInstanceId ?? undefined),
+          hasWorkoutDailyCompletion(uid, todayLocalDate),
+          // Device-local "stop asking" set; see `missedSessionNoticeStorage`.
+          loadDecidedMissedNoticeIds(uid),
+        ]);
+        decidedNoticeCount = decidedNoticeIds.length;
+        const free = resolveFreeSchedule({
+          hasActiveProgram: true,
+          sessionCount,
+          state: suggestionState,
+          recommendedWeekdays: effectiveConfig?.trainingDays ?? [],
+          todayLocalDate,
+          workoutCreditedToday,
+        });
+        // Mapped onto the existing `ScheduleResolution` union so every current
+        // consumer keeps compiling and rendering unchanged. The mapping is the
+        // integration: `SESSION_READY` on ANY day (so no screen can block on
+        // the calendar), and `TODAY_COMPLETED` once the day is claimed — which
+        // is already the state the app renders as "treino de hoje concluído",
+        // including refusing to start another session. For an enrolled account
+        // `REST_DAY`, `ACTIVE_RECOVERY_DAY`, `SCHEDULE_SETUP_REQUIRED` and
+        // `MISSED_SESSION_DECISION_REQUIRED` are never produced.
+        result = free.status === 'PROGRAM_NOT_AVAILABLE'
+          ? notAvailable
+          : free.status === 'TODAY_COMPLETED'
+            ? {
+                status: 'TODAY_COMPLETED',
+                nextWorkoutDate: free.nextRecommendedLocalDate ?? addDaysLocal(todayLocalDate, 1),
+                nextSessionIndex: free.sessionIndex,
+              }
+            : { status: 'SESSION_READY', sessionIndex: free.sessionIndex };
+        suggestionUpdate = {
+          version: free.status === 'PROGRAM_NOT_AVAILABLE' ? 0 : free.suggestionVersion,
+          creditedToday: workoutCreditedToday,
+        };
+        // Detection only — it produces no status and gates nothing. The
+        // resolution above is already final and always lets the user train.
+        noticeUpdate = free.status === 'PROGRAM_NOT_AVAILABLE' ? null : detectMissedSessionNotice({
+          hasActiveProgram: true,
+          sessionCount,
+          programInstanceId,
+          recommendedWeekdays: effectiveConfig?.trainingDays ?? [],
+          lastPerformedLocalDate: suggestionState?.lastPerformedLocalDate ?? null,
+          performedLocalDates,
+          coveredScheduledLocalDates,
+          suggestedSessionIndex: free.sessionIndex,
+          todayLocalDate,
+          workoutCreditedToday,
+          decidedNoticeIds,
+        });
+      } else {
+        // LEGACY — unchanged from the published path, including the two reads
+        // the new branch replaces. `suggestionUpdate` stays null so the
+        // controller keeps `version: 0`, which is exactly what stops the client
+        // from sending `startedFromSuggestionVersion` on execution create.
+        result = await resolveTodaysSchedule({
+          uid,
+          programId,
+          programInstanceId,
+          sessionCount,
+          scheduleMode: effectiveScheduleModeForThisLoad,
+          activatedAtLocalDate,
+          todayLocalDate,
+          // Already awaited above (`loadedConfig`) — same uid, same document,
+          // no write in between. Skips resolveTodaysSchedule's own otherwise-
+          // redundant `loadScheduleConfig` read.
+          storedConfig: effectiveConfig,
+        });
+      }
       recordPerfMark('today_schedule_resolved');
       if (reloadId === reloadSequenceRef.current) {
         setConfig(effectiveConfig);
         setCompletedToday({ scopeKey: scheduleScopeKey!, localDate: todayLocalDate, sessionIndex: completedTodaySessionIndex });
+        setEnrolled(pilotEnrolled);
+        if (suggestionUpdate) setSuggestion(suggestionUpdate);
+        // Legacy accounts never get one: their notice is the published
+        // `MISSED_SESSION_DECISION_REQUIRED` resolution, untouched.
+        setMissedNotice(pilotEnrolled ? noticeUpdate : null);
       }
       setProjection((current) => applyScheduleReloadOutcome(current, reloadSequenceRef.current, {
         kind: 'success',
@@ -278,6 +442,13 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
         durationMs: Date.now() - reloadStartedAtMs,
         reloadId,
         applied: reloadId === reloadSequenceRef.current,
+        // Pilot observability. `noticeId` is `(instanceId, missedDate)` — no
+        // uid, no personal data — and is the only way to tell a legitimate
+        // new missed day from the same one being raised twice.
+        enrolled: pilotEnrolled,
+        missedNoticeId: noticeUpdate?.noticeId ?? null,
+        missedOccurrenceCount: noticeUpdate?.missedOccurrenceCount ?? 0,
+        decidedNoticeCount,
       });
       return reloadId === reloadSequenceRef.current ? result : null;
     } catch (error) {
@@ -339,11 +510,30 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
     return () => subscription.remove();
   }, [reloadAfterCompletion]);
 
-  const missResolutionInFlightRef = useRef<Promise<MissResolutionOutcome> | null>(null);
+  /**
+   * Missed-session resolution, pilot-gated.
+   *
+   * ENROLLED: retired. The new model has no missed-session concept — the
+   * resolver never reports `MISSED_SESSION_DECISION_REQUIRED`, so no screen
+   * can reach a state that needs resolving, and nothing may stand between the
+   * user and training. Returning `FAILED` without touching Firestore is
+   * deliberate: a stray caller must not write a `MISS_RESOLVED`/`SKIPPED`
+   * ledger entry under rules that no longer have a miss to resolve.
+   *
+   * NOT ENROLLED: the published behaviour, unchanged. A legacy account can
+   * still be shown the decision modal by `resolveTodaysSchedule`, and it must
+   * still be able to act on it — otherwise the pilot would strand every other
+   * user on an unresolvable screen. Historical events stay readable in both
+   * branches.
+   */
   const resolveMiss = useCallback((
     decision: MissDecision,
     expected: MissedSessionDecisionIdentity,
   ): Promise<MissResolutionOutcome> => {
+    if (enrolled) {
+      logWarn('workout_schedule', 'miss_resolution_retired', {});
+      return Promise.resolve({ status: 'FAILED', resolution: null });
+    }
     if (missResolutionInFlightRef.current) return missResolutionInFlightRef.current;
     if (effectiveScheduleMode === 'flexible' || !uid || !programId || sessionCount === 0) {
       return Promise.resolve({ status: 'FAILED', resolution: null });
@@ -375,7 +565,132 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
     };
     void operation.then(release, release);
     return operation;
-  }, [uid, programId, programInstanceId, sessionCount, effectiveScheduleMode, config, reload]);
+  }, [enrolled, uid, programId, programInstanceId, sessionCount, effectiveScheduleMode, config, reload]);
+
+  /**
+   * Persists an intentional session choice. Explicit user action only — never
+   * a render, a mount or a preview. Optimistically publishes the new
+   * suggestion so the card updates immediately, then reconciles from the
+   * authoritative reload; on failure it reverts by reloading rather than
+   * leaving a local value the server never accepted.
+   */
+  const selectSessionInFlightRef = useRef<Promise<number | null> | null>(null);
+  const selectSession = useCallback((targetSessionIndex: number): Promise<number | null> => {
+    if (selectSessionInFlightRef.current) return selectSessionInFlightRef.current;
+    // Pilot-gated. The Rules reject a suggestion write from a non-enrolled
+    // account, so attempting it would only produce a permission error; a
+    // legacy account repositions through the published path instead.
+    if (!enrolled) return Promise.resolve(null);
+    if (!uid || !programId || sessionCount <= 0 || !activatedAtLocalDate) return Promise.resolve(null);
+    const operation = (async (): Promise<number | null> => {
+      try {
+        const next = await selectWorkoutSession({
+          uid,
+          programId,
+          ...(programInstanceId ? { programInstanceId } : {}),
+          sessionCount,
+          targetSessionIndex,
+          activatedAtLocalDate,
+        });
+        setProjection((current) => applyScheduleReloadOutcome(current, reloadSequenceRef.current, {
+          kind: 'success',
+          reloadId: reloadSequenceRef.current,
+          resolution: suggestion.creditedToday
+            ? current.resolution
+            : { status: 'SESSION_READY', sessionIndex: next.suggestedSessionIndex },
+        }));
+        setSuggestion((current) => ({ ...current, version: next.version }));
+        return next.suggestedSessionIndex;
+      } catch (error) {
+        logWarn('workout_schedule', 'session_selection_failed', {
+          errorCode: errorCode(error),
+          errorClass: errorClass(error),
+        });
+        // Never leave the UI on a value the server did not accept.
+        await reload();
+        return null;
+      }
+    })();
+    selectSessionInFlightRef.current = operation;
+    const release = () => {
+      if (selectSessionInFlightRef.current === operation) selectSessionInFlightRef.current = null;
+    };
+    void operation.then(release, release);
+    return operation;
+  }, [enrolled, uid, programId, programInstanceId, sessionCount, activatedAtLocalDate, suggestion.creditedToday, reload]);
+
+  /**
+   * Answers the missed-session notice. Pilot only — a legacy account's notice
+   * is the published `MISSED_SESSION_DECISION_REQUIRED` flow via `resolveMiss`.
+   *
+   * Each answer SELECTS the session it is going to train, and selecting
+   * advances the suggestion immediately — whether or not the workout is then
+   * started, cancelled or abandoned. So the target differs per answer, and the
+   * suggestion always lands exactly one position past it:
+   *
+   *  - `CONTINUE_SEQUENCE` ("refazer hoje") selects the pending session (A):
+   *    trains A, suggestion becomes B.
+   *  - `FOLLOW_SCHEDULE` ("seguir o planejamento") selects the NEXT one (B),
+   *    which is what the user will train: trains B, suggestion becomes C. A is
+   *    skipped by simply never being selected.
+   *
+   * Selecting the pending session for BOTH answers was a defect: it left the
+   * suggestion on B while B was the session being trained, so cancelling or
+   * abandoning B offered B again — and the rotation only reached C at
+   * finalize, contradicting the immediate-advance rule.
+   *
+   * The caller must start the returned index EXPLICITLY: the pointer has
+   * already moved past it, so re-reading the resolution would start the
+   * session AFTER the one the user was shown.
+   *
+   * Finalizing cannot advance a second time: `completeSession` recomputes
+   * `suggestionAfter(sessionIndex)`, finds the pointer already there and
+   * reports `UNCHANGED` (see `sessionSuggestion.ts`). That holds for both
+   * answers — A→B and B→C alike.
+   *
+   * Either way the notice id is remembered locally so the same missed day is
+   * never raised twice, including when the user simply dismisses it.
+   */
+  const decideMissedNoticeInFlightRef = useRef<Promise<number | null> | null>(null);
+  const decideMissedNotice = useCallback((decision: MissDecision): Promise<number | null> => {
+    if (decideMissedNoticeInFlightRef.current) return decideMissedNoticeInFlightRef.current;
+    const notice = missedNotice;
+    if (!enrolled || !notice || !uid) return Promise.resolve(null);
+    const operation = (async (): Promise<number | null> => {
+      try {
+        // The session this answer will train — and therefore the one to select.
+        const target = decision === 'CONTINUE_SEQUENCE'
+          ? notice.pendingSessionIndex
+          : notice.skipToSessionIndex;
+        const next = await selectSession(target);
+        // A refused write must not be recorded as answered, or the user loses
+        // both the question and its effect.
+        if (next === null) return null;
+        await rememberDecidedMissedNoticeId(uid, notice.noticeId);
+        setMissedNotice(null);
+        return target;
+      } catch (error) {
+        logWarn('workout_schedule', 'missed_notice_decision_failed', {
+          errorCode: errorCode(error),
+          errorClass: errorClass(error),
+        });
+        return null;
+      }
+    })();
+    decideMissedNoticeInFlightRef.current = operation;
+    const release = () => {
+      if (decideMissedNoticeInFlightRef.current === operation) decideMissedNoticeInFlightRef.current = null;
+    };
+    void operation.then(release, release);
+    return operation;
+  }, [enrolled, uid, missedNotice, selectSession]);
+
+  /** Dismissal counts as answered: the same missed day must not be raised again. */
+  const dismissMissedNotice = useCallback((): void => {
+    if (!uid || !missedNotice) return;
+    void rememberDecidedMissedNoticeId(uid, missedNotice.noticeId);
+    setMissedNotice(null);
+  }, [uid, missedNotice]);
 
   return {
     resolution: projection.resolution,
@@ -389,5 +704,12 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
     refreshError: projection.refreshError,
     reload,
     resolveMiss,
+    suggestionVersion: suggestion.version,
+    workoutCreditedToday: suggestion.creditedToday,
+    selectSession,
+    pilotEnrolled: enrolled,
+    missedNotice,
+    decideMissedNotice,
+    dismissMissedNotice,
   };
 }

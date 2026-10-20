@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildHomeEvoTickerItems, type HomeEvoTickerTranslate } from '../homeEvoTickerItems';
 import type { EvolutionViewModel, ProgressingSummary } from '../../../workoutEvolution/types';
-import type { Streak } from '../../../home/streak';
+import type { DailyActivityStreak } from '../../../home/dailyActivityStreak';
 
 // Deterministic stand-in for react-i18next's `t` — echoes the key (plus
 // interpolated options) instead of resolving real copy, so assertions read
@@ -27,8 +27,10 @@ function summary(overrides: Partial<ProgressingSummary> = {}): ProgressingSummar
   };
 }
 
-const STREAK: Streak = { scheduleMode: 'fixed', unit: 'obligations', current: 5, complete: true };
-const WEEKLY_STREAK: Streak = { scheduleMode: 'flexible', unit: 'weeks', current: 3, complete: true };
+// The ticker's streak item is now the DAILY ACTIVITY streak (a workout OR a
+// food entry on a calendar day), which has a single unit — so the old
+// obligations/weeks split no longer applies to this surface.
+const STREAK: DailyActivityStreak = { current: 5, complete: true };
 
 describe('buildHomeEvoTickerItems — non-marquee view model kinds', () => {
   it('LOADING yields no items', () => {
@@ -58,10 +60,16 @@ describe('buildHomeEvoTickerItems — item presence, each gated on its own real 
     ]);
   });
 
-  it('uses the weeks value key (not the days one) for a flexible-schedule streak, never misstating its unit', () => {
+  it('always renders the streak in days — the daily streak has no second unit', () => {
     const vm: EvolutionViewModel = { kind: 'PROGRESSING', summary: summary() };
-    const items = buildHomeEvoTickerItems(vm, WEEKLY_STREAK, 10, t);
-    expect(items[0]).toEqual({ label: 'home:evoTicker.streakLabel', value: 'home:evoTicker.streakValueWeeks:{"count":3}' });
+    const items = buildHomeEvoTickerItems(vm, { current: 3, complete: true }, 10, t);
+    expect(items[0]).toEqual({ label: 'home:evoTicker.streakLabel', value: 'home:evoTicker.streakValue:{"count":3}' });
+  });
+
+  it('renders a lower-bound streak without pretending it is exact', () => {
+    const vm: EvolutionViewModel = { kind: 'PROGRESSING', summary: summary() };
+    const items = buildHomeEvoTickerItems(vm, { current: 520, complete: false }, 10, t);
+    expect(items[0]).toEqual({ label: 'home:evoTicker.streakLabel', value: 'home:evoTicker.streakValue:{"count":520}' });
   });
 
   it('omits the streak item when streak is null, never showing a fabricated 0', () => {

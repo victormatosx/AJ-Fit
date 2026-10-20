@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient as SvgLG, Line, Path, Stop } from 'react-native-svg';
 
 import { useTheme } from '../../theme';
@@ -37,17 +37,57 @@ export interface EvolutionAreaChartPoint {
   label: string;
 }
 
+/**
+ * Catmull-Rom through every point, emitted as cubic beziers.
+ *
+ * Only used by `variant="line"`. The curve passes exactly through each
+ * sample — it rounds the corners between them, it never reinterprets or
+ * smooths away a value.
+ */
+function smoothPath(coords: readonly { x: number; y: number }[]): string {
+  if (coords.length < 2) return '';
+  let d = `M ${coords[0]!.x.toFixed(2)} ${coords[0]!.y.toFixed(2)}`;
+  for (let i = 0; i < coords.length - 1; i += 1) {
+    const p0 = coords[i - 1] ?? coords[i]!;
+    const p1 = coords[i]!;
+    const p2 = coords[i + 1]!;
+    const p3 = coords[i + 2] ?? p2;
+    const c1x = p1.x + (p2.x - p0.x) / 6;
+    const c1y = p1.y + (p2.y - p0.y) / 6;
+    const c2x = p2.x - (p3.x - p1.x) / 6;
+    const c2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C ${c1x.toFixed(2)} ${c1y.toFixed(2)}, ${c2x.toFixed(2)} ${c2y.toFixed(2)}, ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`;
+  }
+  return d;
+}
+
 export function EvolutionAreaChart({
   points,
   accessibilityLabel,
   accessibilityHint,
   height = 150,
+  variant = 'area',
+  formatAxisValue,
 }: {
   /** Chronological order, oldest first. At least two entries to draw. */
   points: EvolutionAreaChartPoint[];
   accessibilityLabel: string;
   accessibilityHint: string;
   height?: number;
+  /**
+   * `'area'` (default) is the original gradient-filled accent chart — every
+   * pre-existing call site keeps it byte-for-byte. `'line'` is the Evolution
+   * "clean" treatment: a smoothed neutral stroke, dashed guides and an
+   * accent endpoint, with no fill. Visual only — selection, the tooltip and
+   * the accessibility contract are identical in both.
+   */
+  variant?: 'area' | 'line';
+  /**
+   * Labels the three guide lines on the right edge with their own value.
+   * `'line'` only; omitted means no axis labels at all (never a guessed
+   * format).
+   */
+  formatAxisValue?: (value: number) => string;
 }) {
   const { theme } = useTheme();
   const [width, setWidth] = useState(0);
@@ -76,10 +116,15 @@ export function EvolutionAreaChart({
   });
 
   const coords = values.map(point);
-  const line = coords
+  const polyline = coords
     .map((c, i) => `${i === 0 ? 'M' : 'L'} ${c.x.toFixed(2)} ${c.y.toFixed(2)}`)
     .join(' ');
-  const area = `${line} L ${VIEW_W - PAD_X} ${height} L ${PAD_X} ${height} Z`;
+  const isLine = variant === 'line';
+  const line = isLine ? smoothPath(coords) : polyline;
+  const area = `${polyline} L ${VIEW_W - PAD_X} ${height} L ${PAD_X} ${height} Z`;
+  // Top guide reads `max`, middle the midpoint, bottom `min` — the same three
+  // lines the chart already drew, now named.
+  const axisValues = [max, (max + min) / 2, min];
   const last = coords[coords.length - 1]!;
   const selected = selectedIndex == null ? null : points[selectedIndex] ?? null;
   const selectedCoord = selectedIndex == null ? null : coords[selectedIndex] ?? null;
@@ -182,19 +227,35 @@ export function EvolutionAreaChart({
             y2={PAD_TOP + (i * usableH) / 2}
             stroke={theme.chart.grid}
             strokeWidth={1}
+            strokeDasharray={isLine ? '2 4' : undefined}
           />
         ))}
 
-        <Path d={area} fill="url(#evolutionFill)" />
+        {isLine ? null : <Path d={area} fill="url(#evolutionFill)" />}
         <Path
           d={line}
-          stroke={theme.chart.primaryLine}
+          stroke={isLine ? theme.chart.endpoint : theme.chart.primaryLine}
+          strokeOpacity={isLine ? 0.88 : 1}
           strokeWidth={2}
           fill="none"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
-        <Circle cx={last.x} cy={last.y} r={4.5} fill={theme.chart.endpoint} />
+        {isLine ? (
+          <>
+            <Circle cx={last.x} cy={last.y} r={9} fill={theme.colors.primaryEmphasis} fillOpacity={0.18} />
+            <Circle
+              cx={last.x}
+              cy={last.y}
+              r={4.5}
+              fill={theme.colors.primaryEmphasis}
+              stroke={theme.chart.background}
+              strokeWidth={2}
+            />
+          </>
+        ) : (
+          <Circle cx={last.x} cy={last.y} r={4.5} fill={theme.chart.endpoint} />
+        )}
         {selectedCoord ? (
           <>
             <Line
@@ -218,6 +279,28 @@ export function EvolutionAreaChart({
         ) : null}
       </Svg>
       </Pressable>
+
+      {isLine && formatAxisValue ? (
+        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+          {axisValues.map((value, i) => (
+            <Text
+              key={i}
+              style={{
+                position: 'absolute',
+                right: 0,
+                // Centres the 10px label on its guide line.
+                top: PAD_TOP + (i * usableH) / 2 - 6,
+                fontFamily: theme.fonts.mono,
+                fontSize: 10,
+                letterSpacing: 0.6,
+                color: theme.chart.label,
+              }}
+            >
+              {formatAxisValue(value)}
+            </Text>
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 }

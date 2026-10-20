@@ -1,17 +1,28 @@
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
+import Svg, { Line } from 'react-native-svg';
 import { useTranslation } from 'react-i18next';
 
+import { BodyMuscleMap } from './BodyMuscleMap';
 import { EvolutionAreaChart } from './EvolutionAreaChart';
 import { EvolutionLockedPreview } from './EvolutionLockedPreview';
 import { buildDemoAssessments } from './demoAssessmentData';
-import { Display, MonoLabel, Slash } from '../ui/Display';
+import { Display, MonoLabel } from '../ui/Display';
 import { Icon } from '../ui/Icon';
-import { sizes, spacing } from '../../theme/tokens';
+import { opacity, radii, sizes, spacing } from '../../theme/tokens';
 import { useTheme } from '../../theme';
 import type { AssessmentDelta, AssessmentView } from '../../hooks/useAssessments';
 import type { HealthWeightSampleDoc } from '../../types/healthWeightSync';
 import type { SiteKey } from '../../lib/skinfoldCalculator';
+import type { MuscleId } from '../../types/exercise';
+import type { Sex } from '../../state/AppState';
 import { useUnits } from '../../state/UnitsContext';
 import { formatWeightFromKg, weightFromKg, weightUnit } from '../../units/weightConversions';
 
@@ -23,6 +34,10 @@ import { formatWeightFromKg, weightFromKg, weightUnit } from '../../units/weight
  * and never invents one. A metric the domain reports as `null` (an imported
  * assessment with no body-fat estimate, for example) is simply not rendered,
  * rather than shown as a fabricated zero.
+ *
+ * Visual language: hairline-separated sections, no cards and no surfaces.
+ * Each section is a `Head` (mono cap + optional meta) over rows divided by
+ * 1px rules — the same grammar the Cargas panel uses.
  */
 
 const GUTTER = sizes.screenGutter;
@@ -35,6 +50,39 @@ const MEASUREMENT_SITE_KEYS: readonly SiteKey[] = [
   'supra',
   'thigh',
 ];
+
+/**
+ * Which muscle the body map highlights for each skinfold site.
+ *
+ * A skinfold is a fat measurement taken *over* a muscle, so this is a
+ * location cue, never a claim about that muscle. `axilla` (mid-axillary
+ * line) and `supra` (supra-iliac crest) sit over no muscle the vendored
+ * anatomy addresses, so they highlight nothing and the map stays an outline
+ * — deliberately, rather than being mapped to the nearest lookalike.
+ */
+const SITE_MUSCLE: Readonly<Partial<Record<SiteKey, MuscleId>>> = {
+  chest: 'chest',
+  tricep: 'triceps',
+  subscap: 'upper_back',
+  abdom: 'abs',
+  thigh: 'quads',
+};
+
+/** Width of each silhouette in the measurements body map. */
+const MEASUREMENT_MAP_SIZE = 112;
+/** Same map in the empty state, where it is the section's only drawing. */
+const EMPTY_MEASUREMENT_MAP_SIZE = 130;
+/** Below this width the empty state steps its map down. */
+const NARROW_SCREEN = 360;
+const EMPTY_MEASUREMENT_MAP_SIZE_NARROW = 110;
+/** Travessão standing in for a figure that does not exist yet. */
+const NO_VALUE = '—';
+/** Unit every skinfold site is recorded and printed in. */
+const MEASUREMENT_UNIT = 'mm';
+/** Height of the empty weight chart's ghost grid. */
+const GHOST_CHART_HEIGHT = 120;
+/** Fractions of that height the three dashed rules sit at. */
+const GHOST_CHART_RULES = [0.08, 0.5, 0.92] as const;
 
 function formatMeasurement(value: number): string {
   return (Math.round(value * 10) / 10).toFixed(1).replace(/\.0$/, '');
@@ -68,69 +116,122 @@ interface Props {
   onRetry: () => void;
   /** Opens the full assessment area. Absent when the host cannot navigate. */
   onOpenAssessment?: () => void;
+  /**
+   * Resolved questionnaire sex for the measurements body map. `null` while
+   * it is still unresolved — the map is then dropped entirely rather than
+   * falling back to one anatomy.
+   */
+  sex: Sex | null;
 }
 
-function Rule() {
+/** Mono cap on the left, optional meta on the right. One per section. */
+function Head({ label, meta }: { label: string; meta?: string }) {
   const { theme } = useTheme();
   return (
     <View
       style={{
-        height: sizes.hairline,
-        backgroundColor: theme.colors.border,
-        marginHorizontal: GUTTER,
-        marginVertical: spacing[5],
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: spacing[4],
       }}
-    />
+    >
+      <MonoLabel size={10} style={{ letterSpacing: 1.6 }}>{label.toUpperCase()}</MonoLabel>
+      {meta ? (
+        <Text style={{ fontFamily: theme.fonts.ui, fontSize: 12.5, color: theme.colors.textMuted }}>
+          {meta}
+        </Text>
+      ) : null}
+    </View>
   );
 }
 
 /**
- * A signed change. Direction is shown with an arrow and the magnitude is
- * printed unsigned, always in the accent colour: whether losing or gaining is
- * "good" depends on a goal this screen does not know, so it is not coloured
- * as success or danger.
+ * A signed change. Direction is carried by the sign itself and the magnitude
+ * is always printed in the accent colour: whether losing or gaining is "good"
+ * depends on a goal this screen does not know, so it is not coloured as
+ * success or danger.
  */
-function Delta({ value, unit }: { value: number; unit?: string }) {
+function Delta({ value, unit, size = 12.5 }: { value: number; unit?: string; size?: number }) {
   const { theme } = useTheme();
   const { t } = useTranslation('home');
   if (value === 0) return null;
   const arrow = value > 0 ? '↑' : '↓';
   const magnitude = Math.abs(value).toFixed(1);
   return (
-    <Text style={{ fontFamily: theme.fonts.mono, fontSize: 11, color: theme.colors.primaryEmphasis }}>
+    <Text
+      style={{
+        fontFamily: theme.fonts.uiSemi,
+        fontSize: size,
+        color: theme.colors.primaryEmphasis,
+      }}
+    >
       {t('progress.body.delta', { direction: arrow, value: magnitude, unit: unit ?? '' }).trim()}
     </Text>
   );
 }
 
-function MetricRow({
+/**
+ * One column of the composition grid. Rendered only for a metric the
+ * assessment actually carries — a `null` never becomes a zero.
+ */
+function CompositionCell({
   label,
   value,
   unit,
   delta,
+  first,
+  valueAccessibilityLabel,
 }: {
   label: string;
   value: string;
   unit: string;
   delta?: number | null;
+  /** Columns after the first carry the vertical rule that separates them. */
+  first: boolean;
+  /** Spoken in place of the printed value — used for the empty state's dash. */
+  valueAccessibilityLabel?: string;
 }) {
   const { theme } = useTheme();
   return (
     <View
       style={{
-        flexDirection: 'row',
-        alignItems: 'baseline',
-        justifyContent: 'space-between',
-        paddingVertical: spacing[3],
-        paddingHorizontal: GUTTER,
+        flex: 1,
+        minWidth: 0,
+        alignItems: 'center',
+        paddingHorizontal: spacing[1],
+        borderLeftWidth: first ? 0 : sizes.hairline,
+        borderLeftColor: theme.colors.border,
       }}
     >
-      <MonoLabel style={{ flex: 1 }}>{label}</MonoLabel>
-      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: spacing[2] }}>
-        <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 15, color: theme.colors.textPrimary }}>{value}</Text>
-        <MonoLabel size={9}>{unit}</MonoLabel>
-        {delta != null ? <Delta value={delta} /> : null}
+      <View
+        style={{ flexDirection: 'row', alignItems: 'baseline', gap: spacing[0.5] }}
+        accessible={valueAccessibilityLabel != null}
+        accessibilityLabel={valueAccessibilityLabel}
+      >
+        <Display size={20}>{value}</Display>
+        {unit ? (
+          <Text style={{ fontFamily: theme.fonts.ui, fontSize: 12, color: theme.colors.textMuted }}>
+            {unit}
+          </Text>
+        ) : null}
       </View>
+      <Text
+        numberOfLines={1}
+        style={{
+          marginTop: spacing[1.5],
+          fontFamily: theme.fonts.ui,
+          fontSize: 11.5,
+          color: theme.colors.textMuted,
+        }}
+      >
+        {label}
+      </Text>
+      {delta != null ? (
+        <View style={{ marginTop: spacing[0.5] }}>
+          <Delta value={delta} size={11} />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -167,36 +268,52 @@ function ImportedWeightsHistory({ samples }: { samples: HealthWeightSampleDoc[] 
   );
   if (samples.length === 0) return null;
   return (
-    <View>
-      <View style={{ paddingHorizontal: GUTTER, marginBottom: spacing[2] }}>
-        <Slash>{t('progress.body.imported.title').toUpperCase()}</Slash>
-        <Text style={[theme.typography.bodySmall, { color: theme.colors.textFaint, marginTop: spacing[2] }]}>
-          {t('progress.body.imported.description')}
-        </Text>
-      </View>
+    <View style={{ paddingHorizontal: GUTTER, marginTop: spacing[10] }}>
+      <Head label={t('progress.body.imported.title')} />
+      <Text
+        style={{
+          marginTop: -spacing[2],
+          marginBottom: spacing[3],
+          fontFamily: theme.fonts.ui,
+          fontSize: 12.5,
+          lineHeight: 18,
+          color: theme.colors.textFaint,
+        }}
+      >
+        {t('progress.body.imported.description')}
+      </Text>
       {samples.map((sample, index) => (
         <View
           key={sample.id}
           style={{
             minHeight: 52,
-            marginHorizontal: GUTTER,
-            paddingVertical: spacing[2.5],
+            paddingVertical: spacing[3],
             flexDirection: 'row',
             alignItems: 'center',
             borderTopWidth: index ? sizes.hairline : 0,
             borderTopColor: theme.colors.border,
           }}
         >
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 13, color: theme.colors.textPrimary }}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 14, color: theme.colors.textPrimary }}>
               {formatter.format(sample.measuredAt)}
             </Text>
-            <MonoLabel size={8} style={{ marginTop: spacing[1] }}>
+            <Text
+              style={{
+                marginTop: spacing[1],
+                fontFamily: theme.fonts.ui,
+                fontSize: 12,
+                color: theme.colors.textFaint,
+              }}
+            >
               {t(`progress.body.imported.source.${sample.platform}`)}
-            </MonoLabel>
+            </Text>
           </View>
-          <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 15, color: theme.colors.textPrimary }}>
-            {formatWeightFromKg(sample.weightKg, resolvedUnits)} {unit.toUpperCase()}
+          <Text style={{ fontFamily: theme.fonts.display, fontSize: 17, color: theme.colors.textPrimary }}>
+            {formatWeightFromKg(sample.weightKg, resolvedUnits)}{' '}
+            <Text style={{ fontFamily: theme.fonts.ui, fontSize: 12, color: theme.colors.textMuted }}>
+              {unit}
+            </Text>
           </Text>
         </View>
       ))}
@@ -204,14 +321,19 @@ function ImportedWeightsHistory({ samples }: { samples: HealthWeightSampleDoc[] 
   );
 }
 
-function BodyMeasurementsChart({ assessments }: { assessments: AssessmentView[] }) {
+function BodyMeasurementsChart({
+  assessments,
+  sex,
+}: {
+  assessments: AssessmentView[];
+  sex: Sex | null;
+}) {
   const { theme } = useTheme();
   const { t } = useTranslation('home');
   const [selected, setSelected] = useState<SiteKey>(
     () => MEASUREMENT_SITE_KEYS.find((key) =>
       assessments.some((entry) => entry.source === 'guided' && entry.folds[key] != null)) ?? 'chest',
   );
-  const [open, setOpen] = useState(false);
   const displayedUnit = 'mm';
 
   const dateFormatter = useMemo(
@@ -219,142 +341,183 @@ function BodyMeasurementsChart({ assessments }: { assessments: AssessmentView[] 
     [],
   );
 
-  const points = useMemo(
-    () =>
-      [...assessments]
-        .reverse()
-        .flatMap((entry) => {
-          const value = entry.source === 'guided' ? entry.folds[selected] : undefined;
-          return value == null
-            ? []
-            : [{
-                value,
-                date: entry.measuredAt.toDate(),
-              }];
-        }),
-    [assessments, selected],
-  );
+  // Oldest-first series for every site at once: the list on the right shows
+  // each site's own change, so it cannot be derived from the selected one.
+  const seriesBySite = useMemo(() => {
+    const chronological = [...assessments].reverse();
+    return Object.fromEntries(MEASUREMENT_SITE_KEYS.map((key) => [
+      key,
+      chronological.flatMap((entry) => {
+        const value = entry.source === 'guided' ? entry.folds[key] : undefined;
+        return value == null ? [] : [{ value, date: entry.measuredAt.toDate() }];
+      }),
+    ])) as Record<SiteKey, { value: number; date: Date }[]>;
+  }, [assessments]);
 
+  const points = seriesBySite[selected];
   const latestPoint = points[points.length - 1] ?? null;
+  const firstPoint = points[0] ?? null;
   const previousPoint = points[points.length - 2] ?? null;
   const delta = latestPoint && previousPoint ? latestPoint.value - previousPoint.value : null;
   const selectedLabel = t(`progress.body.measurements.options.${selected}`);
+  const selectedMuscle = SITE_MUSCLE[selected];
+
+  // "Desde" the first date any site was ever recorded — the window the list
+  // of per-site changes is read against.
+  const since = useMemo(() => {
+    const earliest = MEASUREMENT_SITE_KEYS
+      .map((key) => seriesBySite[key][0]?.date)
+      .filter((date): date is Date => date != null)
+      .sort((a, b) => a.getTime() - b.getTime())[0];
+    return earliest ? dateFormatter.format(earliest) : null;
+  }, [dateFormatter, seriesBySite]);
 
   return (
-    <View style={{ paddingHorizontal: GUTTER }}>
-      <Slash style={{ marginBottom: spacing[3] }}>
-        {t('progress.body.measurements.title').toUpperCase()}
-      </Slash>
+    <View style={{ paddingHorizontal: GUTTER, marginTop: spacing[10] }}>
+      <Head
+        label={t('progress.body.measurements.title')}
+        meta={since ? t('progress.body.measurements.since', { date: since }) : undefined}
+      />
 
-      <View style={{ position: 'relative' }}>
-        <Pressable
-          onPress={() => setOpen((value) => !value)}
-          accessibilityRole="button"
-          accessibilityLabel={t('progress.body.measurements.accessibility.select')}
-          accessibilityState={{ expanded: open }}
-          style={{
-            minHeight: 48,
-            paddingHorizontal: spacing[4],
-            borderRadius: 12,
-            borderWidth: 1,
-            borderColor: open ? theme.colors.primaryBorderMuted : theme.colors.borderStrong,
-            backgroundColor: theme.colors.surfaceElevated,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
-          <View>
-            <MonoLabel size={8}>{t('progress.body.measurements.selectLabel').toUpperCase()}</MonoLabel>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[2.5] }}>
+        {sex ? (
+          <View
+            accessible
+            accessibilityLabel={`${t('progress.body.measurements.title')}: ${selectedLabel}`}
+            style={{
+              // The vendored silhouettes carry a wide empty margin; the
+              // negative gap and side margins crop it so the pair reads as
+              // one drawing instead of two padded boxes.
+              marginLeft: -22,
+              marginRight: -14,
+            }}
+          >
+            <BodyMuscleMap
+              sex={sex}
+              primaryMuscles={selectedMuscle ? [selectedMuscle] : []}
+              showSecondary={false}
+              size={MEASUREMENT_MAP_SIZE}
+              gap={-MEASUREMENT_MAP_SIZE * 0.42}
+              activeColor={theme.colors.primary}
+              baseColor="transparent"
+              outlineColor={theme.colors.textEmphasis}
+            />
+          </View>
+        ) : null}
+
+        <View style={{ flex: 1, minWidth: 0 }}>
+          {MEASUREMENT_SITE_KEYS.map((key, index) => {
+            const series = seriesBySite[key];
+            const siteFirst = series[0] ?? null;
+            const siteLatest = series[series.length - 1] ?? null;
+            const siteDelta = siteFirst && siteLatest && series.length >= 2
+              ? siteLatest.value - siteFirst.value
+              : null;
+            const isSelected = selected === key;
+            return (
+              <Pressable
+                key={key}
+                onPress={() => setSelected(key)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isSelected }}
+                accessibilityLabel={t('progress.body.measurements.accessibility.option', {
+                  measurement: t(`progress.body.measurements.options.${key}`),
+                })}
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: spacing[2],
+                  paddingVertical: spacing[3],
+                  borderTopWidth: index ? sizes.hairline : 0,
+                  borderTopColor: theme.colors.border,
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    flexShrink: 1,
+                    fontFamily: theme.fonts.uiSemi,
+                    fontSize: 14.5,
+                    color: isSelected ? theme.colors.textPrimary : theme.colors.textMuted,
+                  }}
+                >
+                  {t(`progress.body.measurements.options.${key}`)}
+                </Text>
+                <Text
+                  style={{
+                    flexShrink: 0,
+                    fontFamily: theme.fonts.uiSemi,
+                    fontSize: 12.5,
+                    color: isSelected ? theme.colors.primaryEmphasis : theme.colors.textFaint,
+                  }}
+                >
+                  {siteDelta == null
+                    ? '—'
+                    : `${siteDelta > 0 ? '+' : '−'}${formatMeasurement(Math.abs(siteDelta))} ${displayedUnit}`}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
+      {latestPoint ? (
+        <>
+          <View
+            style={{
+              marginTop: spacing[5.5],
+              flexDirection: 'row',
+              alignItems: 'baseline',
+              justifyContent: 'space-between',
+              gap: spacing[2],
+            }}
+          >
             <Text
+              numberOfLines={1}
               style={{
-                marginTop: spacing[1],
-                fontFamily: theme.fonts.uiSemi,
-                fontSize: 14,
+                flexShrink: 1,
+                fontFamily: theme.fonts.uiBold,
+                fontSize: 16,
                 color: theme.colors.textPrimary,
               }}
             >
               {selectedLabel}
             </Text>
-          </View>
-          <View style={{ transform: [{ rotate: open ? '180deg' : '0deg' }] }}>
-            <Icon name="chevron-down" size={17} color={theme.colors.primaryEmphasis} />
-          </View>
-        </Pressable>
-
-        {open ? (
-          <View
-            style={{
-              marginTop: spacing[2],
-              borderRadius: 12,
-              overflow: 'hidden',
-              borderWidth: 1,
-              borderColor: theme.colors.borderStrong,
-              backgroundColor: theme.colors.floatingSurface,
-            }}
-          >
-            {MEASUREMENT_SITE_KEYS.map((key, index) => {
-              const isSelected = selected === key;
-              return (
-                <Pressable
-                  key={key}
-                  onPress={() => {
-                    setSelected(key);
-                    setOpen(false);
-                  }}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: isSelected }}
-                  accessibilityLabel={t('progress.body.measurements.accessibility.option', {
-                    measurement: t(`progress.body.measurements.options.${key}`),
-                  })}
-                  style={{
-                    minHeight: 44,
-                    paddingHorizontal: spacing[4],
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    borderTopWidth: index ? sizes.hairline : 0,
-                    borderTopColor: theme.colors.sheetDivider,
-                    backgroundColor: isSelected ? theme.colors.choiceSelectedBackground : 'transparent',
-                  }}
-                >
-                  <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 13, color: theme.colors.textPrimary }}>
-                    {t(`progress.body.measurements.options.${key}`)}
-                  </Text>
-                  {isSelected ? <Icon name="check" size={14} color={theme.colors.primaryEmphasis} /> : null}
-                </Pressable>
-              );
-            })}
-          </View>
-        ) : null}
-      </View>
-
-      {latestPoint ? (
-        <>
-          <View style={{ marginTop: spacing[5], flexDirection: 'row', alignItems: 'baseline', gap: spacing[2] }}>
-            <Display size={42}>
-              {formatMeasurement(latestPoint.value)}
-            </Display>
-            <MonoLabel size={11}>{displayedUnit.toUpperCase()}</MonoLabel>
-            {delta != null ? <Delta value={delta} unit={displayedUnit} /> : null}
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: spacing[1.5] }}>
+              {firstPoint && points.length >= 2 ? (
+                <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textMuted }}>
+                  {formatMeasurement(firstPoint.value)} →
+                </Text>
+              ) : null}
+              <Display size={22}>{formatMeasurement(latestPoint.value)}</Display>
+              <Text style={{ fontFamily: theme.fonts.ui, fontSize: 12, color: theme.colors.textMuted }}>
+                {displayedUnit}
+              </Text>
+              {delta != null ? <Delta value={delta} unit={displayedUnit} size={12} /> : null}
+            </View>
           </View>
 
           {points.length >= 2 ? (
             <>
-              <View style={{ marginTop: spacing[4] }}>
+              <View style={{ marginTop: spacing[4.5] }}>
                 <EvolutionAreaChart
+                  variant="line"
+                  height={110}
                   points={points.map((point) => ({
                     value: point.value,
                     displayValue: `${formatMeasurement(point.value)} ${displayedUnit.toUpperCase()}`,
                     label: dateFormatter.format(point.date),
                   }))}
+                  formatAxisValue={formatMeasurement}
                   accessibilityLabel={`${t('progress.body.measurements.title')}: ${selectedLabel}`}
                   accessibilityHint={t('progress.chartInteractionHint')}
                 />
               </View>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing[2] }}>
-                <MonoLabel size={9}>{dateFormatter.format(points[0]!.date)}</MonoLabel>
-                <MonoLabel size={9}>{dateFormatter.format(latestPoint.date)}</MonoLabel>
+                <AxisDate>{dateFormatter.format(points[0]!.date)}</AxisDate>
+                <AxisDate>{dateFormatter.format(latestPoint.date)}</AxisDate>
               </View>
             </>
           ) : (
@@ -387,6 +550,276 @@ function BodyMeasurementsChart({ assessments }: { assessments: AssessmentView[] 
   );
 }
 
+/** Full-width primary action closing an empty state. */
+function EmptyCta({ label, onPress }: { label: string; onPress: () => void }) {
+  const { theme } = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={({ pressed }) => ({
+        paddingVertical: 17,
+        borderRadius: radii.md,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: theme.colors.primary,
+        opacity: pressed ? opacity.pressed : 1,
+      })}
+    >
+      <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 16, color: theme.colors.primaryForeground }}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+/**
+ * The weight chart's placeholder: three dashed rules and the note that says
+ * when a curve becomes possible.
+ *
+ * Drawn with `react-native-svg` rather than dashed borders, which Android
+ * renders inconsistently when only one edge is dashed. The note sits on an
+ * opaque background chip so it reads as cutting the middle rule, and the
+ * whole block is announced as that one sentence — there is no data here to
+ * describe.
+ */
+function GhostChart({ note }: { note: string }) {
+  const { theme } = useTheme();
+  return (
+    <View accessible accessibilityLabel={note} style={{ height: GHOST_CHART_HEIGHT }}>
+      <Svg width="100%" height={GHOST_CHART_HEIGHT}>
+        {GHOST_CHART_RULES.map((fraction) => (
+          <Line
+            key={fraction}
+            x1="0"
+            x2="100%"
+            y1={GHOST_CHART_HEIGHT * fraction}
+            y2={GHOST_CHART_HEIGHT * fraction}
+            stroke={theme.colors.divider}
+            strokeWidth={sizes.hairline}
+            strokeDasharray="4 4"
+          />
+        ))}
+      </Svg>
+      <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
+        <Text
+          style={{
+            paddingHorizontal: spacing[2.5],
+            backgroundColor: theme.colors.background,
+            fontFamily: theme.fonts.ui,
+            fontSize: 12.5,
+            color: theme.colors.textFaint,
+          }}
+        >
+          {note}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+/**
+ * Corpo with no assessment and no imported weight yet.
+ *
+ * Mirrors the real panel section by section — hero weight, weight chart,
+ * composition grid, measurements — with every figure left as a dash. The
+ * measurement rows name the exact skinfold sites `BodyMeasurementsChart`
+ * will chart, so nothing here promises a metric the assessment does not
+ * actually collect.
+ */
+function BodyEmptyState({
+  sex,
+  onOpenAssessment,
+}: {
+  sex: Sex | null;
+  onOpenAssessment?: () => void;
+}) {
+  const { theme } = useTheme();
+  const { t } = useTranslation('home');
+  const { resolvedUnits } = useUnits();
+  const { width } = useWindowDimensions();
+  const unit = weightUnit(resolvedUnits);
+  const noRecord = t('progress.noRecord');
+  const mapSize = width < NARROW_SCREEN
+    ? EMPTY_MEASUREMENT_MAP_SIZE_NARROW
+    : EMPTY_MEASUREMENT_MAP_SIZE;
+
+  return (
+    <View style={{ paddingHorizontal: GUTTER }}>
+      <View style={{ marginTop: spacing[8], alignItems: 'center' }}>
+        <MonoLabel size={10} style={{ letterSpacing: 1.6 }}>
+          {t('progress.body.currentWeight').toUpperCase()}
+        </MonoLabel>
+        <View
+          accessible
+          accessibilityLabel={noRecord}
+          style={{ marginTop: spacing[2.5], flexDirection: 'row', alignItems: 'baseline' }}
+        >
+          <Display size={56} color={theme.colors.emptyIcon}>{NO_VALUE}</Display>
+          <Text
+            style={{
+              marginLeft: spacing[1.5],
+              fontFamily: theme.fonts.ui,
+              fontSize: 15,
+              color: theme.colors.textFaint,
+            }}
+          >
+            {unit}
+          </Text>
+        </View>
+        <Text
+          style={{
+            marginTop: spacing[4.5],
+            fontFamily: theme.fonts.uiBold,
+            fontSize: 22,
+            lineHeight: 27.5,
+            textAlign: 'center',
+            color: theme.colors.textPrimary,
+          }}
+        >
+          {t('progress.body.empty.headline')}
+        </Text>
+        <Text
+          style={{
+            marginTop: spacing[2.5],
+            fontFamily: theme.fonts.ui,
+            fontSize: 14,
+            lineHeight: 21.7,
+            textAlign: 'center',
+            color: theme.colors.textMuted,
+          }}
+        >
+          {t('progress.body.empty.body')}
+        </Text>
+      </View>
+
+      {onOpenAssessment ? (
+        <View style={{ marginTop: 26 }}>
+          <EmptyCta label={t('progress.body.empty.action')} onPress={onOpenAssessment} />
+        </View>
+      ) : null}
+
+      <View style={{ marginTop: spacing[10] }}>
+        <Head label={t('progress.body.empty.weightSection')} />
+        <GhostChart note={t('progress.body.empty.chartNote')} />
+      </View>
+
+      <View
+        accessibilityLabel={t('progress.body.composition')}
+        style={{
+          marginTop: spacing[8],
+          paddingVertical: spacing[3.5],
+          flexDirection: 'row',
+          borderTopWidth: sizes.hairline,
+          borderBottomWidth: sizes.hairline,
+          borderColor: theme.colors.border,
+        }}
+      >
+        {([
+          ['bodyFat', t('progress.body.metrics.bodyFat')],
+          ['leanMass', t('progress.body.metrics.leanMass')],
+          ['bmi', t('progress.body.metrics.bmi')],
+        ] as const).map(([key, label], index) => (
+          <CompositionCell
+            key={key}
+            label={label}
+            value={NO_VALUE}
+            unit=""
+            first={index === 0}
+            valueAccessibilityLabel={noRecord}
+          />
+        ))}
+      </View>
+
+      <View style={{ marginTop: spacing[10] }}>
+        <Head
+          label={t('progress.body.measurements.title')}
+          meta={t('progress.body.empty.noRecords')}
+        />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[2.5] }}>
+          {sex ? (
+            <View
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+              style={{
+                // The vendored silhouettes carry a wide empty margin; the
+                // negative gap and side margins crop it so the pair reads as
+                // one drawing instead of two padded boxes.
+                marginLeft: -26,
+                marginRight: -18,
+                minHeight: 200,
+                justifyContent: 'center',
+                opacity: 0.8,
+              }}
+            >
+              <BodyMuscleMap
+                sex={sex}
+                primaryMuscles={[]}
+                showSecondary={false}
+                size={mapSize}
+                gap={-mapSize * 0.42}
+                activeColor={theme.colors.primary}
+                baseColor="transparent"
+                outlineColor={theme.colors.textEmphasis}
+              />
+            </View>
+          ) : null}
+
+          <View style={{ flex: 1, minWidth: 0 }}>
+            {MEASUREMENT_SITE_KEYS.map((key, index) => (
+              <View
+                key={key}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'baseline',
+                  gap: spacing[2],
+                  paddingVertical: spacing[3],
+                  borderTopWidth: index ? sizes.hairline : 0,
+                  borderTopColor: theme.colors.border,
+                }}
+              >
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    flex: 1,
+                    fontFamily: theme.fonts.uiSemi,
+                    fontSize: 14.5,
+                    color: theme.colors.textMuted,
+                  }}
+                >
+                  {t(`progress.body.measurements.options.${key}`)}
+                </Text>
+                <Text
+                  accessibilityLabel={noRecord}
+                  style={{
+                    flexShrink: 0,
+                    fontFamily: theme.fonts.ui,
+                    fontSize: 12.5,
+                    color: theme.colors.textFaint,
+                  }}
+                >
+                  {`${NO_VALUE} ${MEASUREMENT_UNIT}`}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+/** Small date caption under a chart's left/right edge. */
+function AxisDate({ children }: { children: React.ReactNode }) {
+  const { theme } = useTheme();
+  return (
+    <Text style={{ fontFamily: theme.fonts.ui, fontSize: 11.5, color: theme.colors.textFaint }}>
+      {children}
+    </Text>
+  );
+}
+
 export function BodyEvolutionView({
   assessments,
   loading,
@@ -398,6 +831,7 @@ export function BodyEvolutionView({
   importedWeightsError,
   onRetry,
   onOpenAssessment,
+  sex,
 }: Props) {
   const { theme } = useTheme();
   const { t } = useTranslation('home');
@@ -550,58 +984,86 @@ export function BodyEvolutionView({
   const weightSection = (
     <View>
       {/* Hero: one number carries the screen. */}
-      <View style={{ paddingHorizontal: GUTTER }}>
-        <Slash style={{ marginBottom: spacing[3] }}>
+      <View style={{ paddingHorizontal: GUTTER, marginTop: spacing[8], alignItems: 'center' }}>
+        <MonoLabel size={10} style={{ letterSpacing: 1.6, marginBottom: spacing[2.5] }}>
           {t('progress.body.currentWeight').toUpperCase()}
-        </Slash>
-        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: spacing[2] }}>
-          <Display size={54}>{formatWeightFromKg(latestWeight.weightKg, resolvedUnits)}</Display>
-          <MonoLabel size={12}>{unit.toUpperCase()}</MonoLabel>
-          {combinedWeightDelta != null ? (
-            <View style={{ marginLeft: spacing[1] }}>
-              <Delta value={weightFromKg(combinedWeightDelta, resolvedUnits)} />
-            </View>
-          ) : null}
-        </View>
-        <MonoLabel size={9} style={{ marginTop: spacing[1.5] }}>
-          {t('progress.body.measuredAt', { date: measuredAt })}
         </MonoLabel>
-        <MonoLabel size={8} style={{ marginTop: spacing[1] }}>
+        <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+          <Display size={56}>{formatWeightFromKg(latestWeight.weightKg, resolvedUnits)}</Display>
+          <Text
+            style={{
+              marginLeft: spacing[1.5],
+              fontFamily: theme.fonts.ui,
+              fontSize: 15,
+              color: theme.colors.textMuted,
+            }}
+          >
+            {unit}
+          </Text>
+        </View>
+
+        <Text
+          style={{
+            marginTop: spacing[2],
+            textAlign: 'center',
+            fontFamily: theme.fonts.ui,
+            fontSize: 13,
+            color: theme.colors.textMuted,
+          }}
+        >
+          {combinedWeightDelta != null && bounds ? (
+            <>
+              <Text style={{ fontFamily: theme.fonts.uiSemi, color: theme.colors.primaryEmphasis }}>
+                {`${combinedWeightDelta > 0 ? '+' : '−'}${Math.abs(weightFromKg(combinedWeightDelta, resolvedUnits)).toFixed(1)} ${unit}`}
+              </Text>
+              {` ${t('progress.body.sinceMeasured', { from: bounds.from, measured: measuredAt })}`}
+            </>
+          ) : (
+            t('progress.body.measuredAt', { date: measuredAt })
+          )}
+        </Text>
+        <Text
+          style={{
+            marginTop: spacing[1],
+            fontFamily: theme.fonts.ui,
+            fontSize: 12,
+            color: theme.colors.textFaint,
+          }}
+        >
           {latestWeight.source === 'assessment'
             ? t('progress.body.weightSource.assessment')
             : t(`progress.body.imported.source.${latestWeight.source}`)}
-        </MonoLabel>
+        </Text>
       </View>
 
       {/* Chart, or an honest note when a single point cannot draw a curve. */}
-      <View style={{ marginTop: spacing[6] }}>
+      <View style={{ marginTop: spacing[6], paddingHorizontal: GUTTER }}>
         {weightPoints.length >= 2 ? (
           <>
-            <View style={{ paddingHorizontal: GUTTER }}>
-              <EvolutionAreaChart
-                points={weightPoints}
-                accessibilityLabel={t('progress.body.currentWeight')}
-                accessibilityHint={t('progress.chartInteractionHint')}
-              />
-            </View>
+            <EvolutionAreaChart
+              variant="line"
+              height={160}
+              points={weightPoints}
+              formatAxisValue={(value) => value.toFixed(1)}
+              accessibilityLabel={t('progress.body.currentWeight')}
+              accessibilityHint={t('progress.chartInteractionHint')}
+            />
             {bounds ? (
               <View
                 style={{
                   flexDirection: 'row',
                   justifyContent: 'space-between',
-                  paddingHorizontal: GUTTER,
                   marginTop: spacing[2],
                 }}
               >
-                <MonoLabel size={9}>{bounds.from}</MonoLabel>
-                <MonoLabel size={9}>{bounds.to}</MonoLabel>
+                <AxisDate>{bounds.from}</AxisDate>
+                <AxisDate>{bounds.to}</AxisDate>
               </View>
             ) : null}
           </>
         ) : (
           <Text
             style={{
-              paddingHorizontal: GUTTER,
               fontFamily: theme.fonts.ui,
               fontSize: 12.5,
               color: theme.colors.textFaint,
@@ -614,91 +1076,95 @@ export function BodyEvolutionView({
     </View>
   );
 
+  // Only the metrics this assessment actually carries. `null` is absence,
+  // never zero — an imported assessment with no body-fat estimate simply
+  // contributes no column.
+  const compositionCells = compositionLatest ? [
+    compositionLatest.bodyFat != null ? {
+      key: 'bodyFat',
+      label: t('progress.body.metrics.bodyFat'),
+      value: compositionLatest.bodyFat.toFixed(1),
+      unit: '%',
+      delta: compositionEvolution?.bodyFatDelta ?? null,
+    } : null,
+    compositionLatest.leanMass != null ? {
+      key: 'leanMass',
+      label: t('progress.body.metrics.leanMass'),
+      value: formatWeightFromKg(compositionLatest.leanMass, resolvedUnits),
+      unit,
+      delta: compositionEvolution?.leanMassDelta != null
+        ? weightFromKg(compositionEvolution.leanMassDelta, resolvedUnits)
+        : null,
+    } : null,
+    compositionLatest.fatMass != null ? {
+      key: 'fatMass',
+      label: t('progress.body.metrics.fatMass'),
+      value: formatWeightFromKg(compositionLatest.fatMass, resolvedUnits),
+      unit,
+      delta: compositionEvolution?.fatMassDelta != null
+        ? weightFromKg(compositionEvolution.fatMassDelta, resolvedUnits)
+        : null,
+    } : null,
+    compositionLatest.bmi != null ? {
+      key: 'bmi',
+      label: t('progress.body.metrics.bmi'),
+      value: compositionLatest.bmi.toFixed(1),
+      unit: '',
+      delta: null,
+    } : null,
+  ].flatMap((cell) => (cell ? [cell] : [])) : [];
+
   const compositionSection = compositionLatest ? (
     <View>
-      <View style={{ paddingHorizontal: GUTTER, marginBottom: spacing[1] }}>
-        <Slash>{t('progress.body.composition').toUpperCase()}</Slash>
-      </View>
-
-      {compositionLatest.bodyFat != null ? (
-        <MetricRow
-          label={t('progress.body.metrics.bodyFat')}
-          value={compositionLatest.bodyFat.toFixed(1)}
-          unit="%"
-          delta={compositionEvolution?.bodyFatDelta ?? null}
-        />
-      ) : null}
-      {compositionLatest.leanMass != null ? (
-        <MetricRow
-          label={t('progress.body.metrics.leanMass')}
-          value={formatWeightFromKg(compositionLatest.leanMass, resolvedUnits)}
-          unit={unit}
-          delta={
-            compositionEvolution?.leanMassDelta != null
-              ? weightFromKg(compositionEvolution.leanMassDelta, resolvedUnits)
-              : null
-          }
-        />
-      ) : null}
-      {compositionLatest.fatMass != null ? (
-        <MetricRow
-          label={t('progress.body.metrics.fatMass')}
-          value={formatWeightFromKg(compositionLatest.fatMass, resolvedUnits)}
-          unit={unit}
-          delta={
-            compositionEvolution?.fatMassDelta != null
-              ? weightFromKg(compositionEvolution.fatMassDelta, resolvedUnits)
-              : null
-          }
-        />
-      ) : null}
-      {compositionLatest.bmi != null ? (
-        <MetricRow
-          label={t('progress.body.metrics.bmi')}
-          value={compositionLatest.bmi.toFixed(1)}
-          unit=""
-        />
+      {compositionCells.length > 0 ? (
+        <View
+          accessibilityLabel={t('progress.body.composition')}
+          style={{
+            marginTop: spacing[9],
+            marginHorizontal: GUTTER,
+            paddingVertical: spacing[3.5],
+            flexDirection: 'row',
+            borderTopWidth: sizes.hairline,
+            borderBottomWidth: sizes.hairline,
+            borderColor: theme.colors.border,
+          }}
+        >
+          {compositionCells.map((cell, index) => (
+            <CompositionCell
+              key={cell.key}
+              label={cell.label}
+              value={cell.value}
+              unit={cell.unit}
+              delta={cell.delta}
+              first={index === 0}
+            />
+          ))}
+        </View>
       ) : null}
 
-      <Rule />
-      <BodyMeasurementsChart assessments={compositionAssessments} />
+      <BodyMeasurementsChart assessments={compositionAssessments} sex={sex} />
     </View>
   ) : null;
 
   // `hasAnyRealWeight` false implies `hasRealAssessment` false too (see the
   // comment above both flags), so when the weight section has no real data,
-  // neither does composition: the whole panel is one full-screen locked
-  // preview, exactly as before imported health weight existed.
+  // neither does composition: the whole panel becomes the empty state, which
+  // prints the shape of every section with a dash where each figure lands.
+  // Same condition as before — only what it renders changed.
   if (!hasAnyRealWeight) {
-    return (
-      <EvolutionLockedPreview
-        title={t('progress.body.empty.title')}
-        description={t('progress.body.empty.description')}
-        ctaLabel={onOpenAssessment ? t('progress.body.empty.cta') : undefined}
-        onPress={onOpenAssessment}
-      >
-        <View>
-          {weightSection}
-          <Rule />
-          <ImportedWeightsHistory samples={importedWeights} />
-          {compositionSection}
-        </View>
-      </EvolutionLockedPreview>
-    );
+    return <BodyEmptyState sex={sex} onOpenAssessment={onOpenAssessment} />;
   }
 
   return (
     <View>
       {weightSection}
 
-      <Rule />
-
       {importedWeightsError ? (
         <Text
           accessibilityRole="alert"
           style={{
             paddingHorizontal: GUTTER,
-            marginBottom: spacing[4],
+            marginTop: spacing[5],
             fontFamily: theme.fonts.ui,
             fontSize: 12.5,
             color: theme.colors.textFaint,
@@ -708,7 +1174,6 @@ export function BodyEvolutionView({
         </Text>
       ) : null}
       <ImportedWeightsHistory samples={importedWeights} />
-      {importedWeights.length > 0 ? <Rule /> : null}
 
       {/* Composition still has no real data (e.g. health weight is synced
           but no assessment was ever done): lock just this sub-section,
@@ -728,26 +1193,45 @@ export function BodyEvolutionView({
       )}
 
       {onOpenAssessment && hasRealAssessment ? (
-        <>
-          <Rule />
+        <View style={{ paddingHorizontal: GUTTER, marginTop: spacing[10] }}>
           <Pressable
             onPress={onOpenAssessment}
             accessibilityRole="button"
             accessibilityLabel={t('progress.body.openAssessment')}
-            style={{
+            style={({ pressed }) => ({
               flexDirection: 'row',
               alignItems: 'center',
-              justifyContent: 'space-between',
-              marginHorizontal: GUTTER,
-              paddingVertical: spacing[3.5],
-            }}
+              justifyContent: 'center',
+              gap: spacing[2],
+              paddingVertical: spacing[4],
+              borderRadius: radii.md,
+              borderWidth: sizes.hairline,
+              borderColor: theme.colors.borderStrong,
+              backgroundColor: theme.colors.surfacePressed,
+              opacity: pressed ? 0.78 : 1,
+            })}
           >
-            <MonoLabel color={theme.colors.textPrimary}>
-              {t('progress.body.openAssessment').toUpperCase()}
-            </MonoLabel>
-            <Icon name="chevron-right" size={16} color={theme.colors.primaryEmphasis} />
+            <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 14.5, color: theme.colors.textPrimary }}>
+              {t('progress.body.openAssessment')}
+            </Text>
+            <Icon name="chevron-right" size={16} color={theme.colors.textMuted} />
           </Pressable>
-        </>
+          {latest ? (
+            <Text
+              style={{
+                marginTop: spacing[3],
+                textAlign: 'center',
+                fontFamily: theme.fonts.ui,
+                fontSize: 12,
+                color: theme.colors.textFaint,
+              }}
+            >
+              {t('progress.body.lastAssessment', {
+                date: dateFormatter.format(latest.measuredAt.toDate()),
+              })}
+            </Text>
+          ) : null}
+        </View>
       ) : null}
     </View>
   );

@@ -117,7 +117,8 @@
     }
   },
   "analyzing": {
-    "compiling": "Montando seu\nPlano",
+    "compiling": "Compilando",
+    "completed": "Concluído",
     "titleLine1": "Montando",
     "titleLine2": "seu plano",
     "steps": {
@@ -127,8 +128,19 @@
       "periodization": "Periodizando suas semanas",
       "plan": "Montando seu plano premium"
     },
+    "speech": {
+      "profile": "Começando pelo seu perfil físico.",
+      "volume": "Ajustando volume e intensidade ao seu nível.",
+      "exercises": "Escolhendo os seus exercícios.",
+      "periodization": "Organizando a progressão das suas semanas.",
+      "plan": "Finalizando o seu plano.",
+      "done": "Pronto. Seu plano está montado."
+    },
     "accessibility": {
-      "progress": "Montagem do plano: {{progress}} por cento"
+      "progress": "Montagem do plano: {{progress}} por cento",
+      "stepDone": "{{label}}, concluído",
+      "stepActive": "{{label}}, em andamento",
+      "stepPending": "{{label}}, pendente"
     },
     "titleWithNameLine1": "Estamos estruturando",
     "titleWithNameLine2": "sua jornada, {{name}}.",

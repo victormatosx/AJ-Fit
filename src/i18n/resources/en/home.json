@@ -4,7 +4,6 @@
   },
   "evoTicker": {
     "streakLabel": "STREAK",
-    "streakValue": "{{count}} DAYS",
     "streakValueWeeks": "{{count}} WEEKS",
     "activeDaysLabel": "ACTIVE DAYS",
     "activeDaysValue": "{{count}}/{{required}}",
@@ -15,7 +14,9 @@
     "levelLabel": "LEVEL",
     "levelValue": "{{level}}",
     "sessions30dLabel": "WORKOUTS",
-    "sessions30dValue": "{{count}} IN THE LAST 30 DAYS"
+    "sessions30dValue": "{{count}} IN THE LAST 30 DAYS",
+    "streakValue_one": "{{count}} DAY",
+    "streakValue_other": "{{count}} DAYS"
   },
   "evoRing": {
     "ofCycle": "OF CYCLE",
@@ -24,12 +25,13 @@
     "unlocked": "Evolution unlocked",
     "cycleComplete": "Cycle complete",
     "streakLabel": "STREAK",
-    "streakUnit": "days",
     "streakUnitWeeks": "weeks",
     "adherenceLabel": "ADHERENCE",
     "adherenceBelowThreshold": ", below target",
     "towardAdvanced": "TOWARD ADVANCED",
-    "towardAdvancedUnit": "/ {{count}} cycles"
+    "towardAdvancedUnit": "/ {{count}} cycles",
+    "streakUnit_one": "day",
+    "streakUnit_other": "days"
   },
   "support": {
     "iconLabel": "My support cases",
@@ -114,6 +116,10 @@
       "title": "Workout completed",
       "body": "You've already completed today's workout."
     },
+    "completedTodayFree": {
+      "title": "Workout completed",
+      "body": "Today's workout is done. Come back tomorrow for the next one!"
+    },
     "nextWorkout": {
       "label": "Next workout",
       "value": "{{weekday}} · {{session}}"
@@ -141,6 +147,23 @@
       "followSchedule": {
         "title": "Follow schedule",
         "subtitle": "Skip the pending workout and do today's instead"
+      },
+      "aj": {
+        "question": "Want to do that workout today?",
+        "continueSequence": "Yes, do it today",
+        "followSchedule": "No, follow the schedule",
+        "resolvedContinueSequence": "Done. Workout {{letter}} is now today's, and the sequence continues from there.",
+        "resolvedFollowSchedule": "Done. We're following the schedule: today is workout {{letter}}.",
+        "startSession": "Start workout {{letter}}",
+        "later": "Later"
+      }
+    },
+    "cyclePaused": {
+      "aj": {
+        "context": "You missed a few workouts, so your cycle is paused.",
+        "question": "Want to train today to pick it back up?",
+        "start": "Yes, train today",
+        "later": "Not now"
       }
     }
   },
@@ -178,8 +201,13 @@
   },
   "progress": {
     "header": {
-      "eyebrow": "Your progress",
       "title": "Evolution"
+    },
+    "ticker": {
+      "weightSince": "Weight",
+      "lastAssessment": "Last assessment",
+      "records90d": "Records (90d)",
+      "assessmentsLogged": "Assessments"
     },
     "tabs": {
       "body": "Body",
@@ -187,10 +215,13 @@
       "photos": "Photos"
     },
     "chartInteractionHint": "Tap the chart to see the value and date for each entry.",
+    "noRecord": "no record",
     "body": {
       "currentWeight": "Current weight",
       "composition": "Composition",
       "measuredAt": "Measured on {{date}}",
+      "sinceMeasured": "since {{from}} · measured on {{measured}}",
+      "lastAssessment": "Last assessment on {{date}}",
       "delta": "{{direction}} {{value}} {{unit}}",
       "singleEntry": "Log another weight to see your evolution curve.",
       "loading": "Loading your evolution…",
@@ -219,6 +250,7 @@
       "measurements": {
         "title": "Measurements",
         "selectLabel": "Skinfold",
+        "since": "since {{date}}",
         "singleEntry": "Record this skinfold in another assessment to see the evolution curve.",
         "empty": "No {{measurement}} record was found in your assessments.",
         "options": {
@@ -238,13 +270,46 @@
       "empty": {
         "title": "Unlock your body evolution",
         "description": "Complete your first physical assessment to track your changes over time.",
-        "cta": "Take assessment"
+        "cta": "Take assessment",
+        "headline": "Log your first assessment",
+        "body": "Weight, measurements and body composition. Every new assessment shows you how much has changed.",
+        "action": "Log assessment",
+        "weightSection": "Weight",
+        "chartNote": "The chart appears from your 2nd assessment on",
+        "noRecords": "no records"
       }
     },
     "loads": {
       "eyebrow": "Loads",
       "loading": "Loading loads",
       "records90Title": "Records in the last 90 days",
+      "records90Meta": "{{count}} in 90 days",
+      "sessionsCount_one": "{{count}} workout",
+      "sessionsCount_other": "{{count}} workouts",
+      "ago": {
+        "today": "today",
+        "days_one": "{{count}} day ago",
+        "days_other": "{{count}} days ago",
+        "weeks_one": "{{count}} week ago",
+        "weeks_other": "{{count}} weeks ago",
+        "months_one": "{{count}} month ago",
+        "months_other": "{{count}} months ago"
+      },
+      "filters": {
+        "mostTrained": "Most trained",
+        "heaviest": "Heaviest",
+        "recent": "Recent",
+        "accessibility": "Sort exercises by {{filter}}"
+      },
+      "muscleGroups": {
+        "title": "By muscle group",
+        "hint": "tap to see it on the body",
+        "topEyebrow": "Biggest gain · {{days}} days",
+        "eyebrow": "Strength · {{days}} days",
+        "caption": "of load · best mark {{exercise}} {{load}}",
+        "accessibilitySelect": "Show {{muscle}} on the body map",
+        "accessibilityMap": "Strength map. Highlighted group: {{muscle}}"
+      },
       "recordsCount_one": "record broken",
       "recordsCount_other": "records broken",
       "topRecords": "Top records",
@@ -291,9 +356,20 @@
         "chart": "{{exercise}} evolution chart. Current load: {{value}} {{unit}}"
       },
       "empty": {
-        "title": "Your evolution starts here",
-        "description": "Log your exercise loads to track your strength and personal records.",
-        "cta": "Start workout"
+        "title": "Your map starts with your first workout",
+        "description": "Log your loads during the workout and the map shows which muscles are getting stronger.",
+        "cta": "Start workout",
+        "eyebrow": "Strength map",
+        "howItWorks": "How it works",
+        "steps": {
+          "1": "Start a workout from your routine",
+          "2": "Log the load and reps of every set",
+          "3": "Repeat an exercise and your progress shows up here"
+        },
+        "noRecords": "no records",
+        "accessibility": {
+          "step": "Step {{number}}: {{text}}"
+        }
       },
       "error": {
         "title": "We couldn't load your weights",
@@ -508,8 +584,8 @@
         "TODAY_COMPLETED": "Today's workout completed",
         "TODAY_PENDING": "Today's workout pending",
         "MISSED": "Workout not completed",
-      "UPCOMING": "Scheduled workout",
-      "FULFILLED_EARLY": "Workout completed early",
+        "UPCOMING": "Scheduled workout",
+        "FULFILLED_EARLY": "Workout completed early",
         "ACTIVE_RECOVERY": "Active recovery",
         "REST": "Rest day",
         "BEFORE_PROGRAM": "Before the program started"
@@ -517,6 +593,10 @@
     },
     "frequency": {
       "title": "Your frequency",
+      "weekly": {
+        "label": "This week’s frequency",
+        "summary": "{{trained}} of {{goal}} days trained"
+      },
       "summaryCurrent": "{{count}} workouts in the last 30 days",
       "cachedSummary": "Saved history · updating",
       "refreshingSummary": "Updating history",
@@ -555,5 +635,47 @@
     "body": "AJ Fit does not show a calendar until completed workout history can support it.",
     "note": "No sample data is displayed",
     "back": "Back"
+  },
+  "streak": {
+    "evolve": {
+      "label": "STREAK",
+      "daysInRow": "days in a row without missing",
+      "title": "Your flame turned {{color}}",
+      "next": "Keep it up. At {{count}} days it turns {{color}}.",
+      "max": "You reached the highest level. Now it is about keeping the streak.",
+      "before": "Before",
+      "now": "Now",
+      "nextMilestone": "Next milestone",
+      "nextDays": "{{count}} days",
+      "none": "—",
+      "continue": "Continue"
+    },
+    "color": {
+      "spark": "blue",
+      "flame": "yellow",
+      "ember": "orange",
+      "blaze": "red",
+      "legendary": "purple",
+      "plasma": "cyan",
+      "stellar": "white"
+    },
+    "colorCap": {
+      "spark": "Blue",
+      "flame": "Yellow",
+      "ember": "Orange",
+      "blaze": "Red",
+      "legendary": "Purple",
+      "plasma": "Cyan",
+      "stellar": "White"
+    },
+    "tier": {
+      "spark": "Spark",
+      "flame": "Flame",
+      "ember": "Ember",
+      "blaze": "Inferno",
+      "legendary": "Legendary",
+      "plasma": "Plasma",
+      "stellar": "Stellar"
+    }
   }
 }

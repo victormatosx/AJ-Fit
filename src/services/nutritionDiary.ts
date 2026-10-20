@@ -1,4 +1,5 @@
 import { sendDiaryCommand, usesTransactionalDiary } from './nutritionDiaryProtocol';
+import { emitNutritionActivityRegistered } from '../nutrition/streakActivitySignal';
 import {
   collection, doc, documentId, endAt, getDoc, getDocs, onSnapshot, orderBy, query, runTransaction, serverTimestamp, startAt, Timestamp,
   type Unsubscribe,
@@ -323,9 +324,19 @@ export async function addDiaryFood(
   uid: string, localDate: string, slot: NutritionMealSlot, source: NutritionLoggedFoodSource, foodId: string, grams: number,
 ): Promise<void> {
   if (source === 'plan_snapshot') throw new Error('DIARY_SNAPSHOT_REQUIRES_REFERENCE');
-  if (await usesTransactionalDiary(uid)) return sendDiaryCommand(uid, { action: 'add', localDate, timezone: deviceTimeZone(), slot, source, foodId, quantity: grams });
+  if (await usesTransactionalDiary(uid)) {
+    await sendDiaryCommand(uid, { action: 'add', localDate, timezone: deviceTimeZone(), slot, source, foodId, quantity: grams });
+    // Strictly after the write resolved, on BOTH paths: tells the daily
+    // activity streak that a new inclusion happened, so the flame refreshes
+    // without waiting for a foreground. Carries no state and never throws
+    // into this path (see `streakActivitySignal`) — the authoritative fact is
+    // always re-read from `streakNutritionDays`, never incremented locally.
+    emitNutritionActivityRegistered();
+    return;
+  }
   const item = await buildLoggedItem(uid, source, foodId, grams);
   await replaceMealItemsOnMeal(uid, localDate, slot, (oldItems) => [...oldItems, item]);
+  emitNutritionActivityRegistered();
 }
 
 export async function updateDiaryEntryGrams(

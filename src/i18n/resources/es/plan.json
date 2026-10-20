@@ -1,4 +1,51 @@
 {
+  "kicker": "TU PLAN",
+  "tabs": {
+    "workout": "Entrenamiento",
+    "diet": "Dieta",
+    "accessibility": "Paneles del plan"
+  },
+  "workoutPanel": {
+    "subtitle": "{{goal}} · {{level}}",
+    "frequencyBadge": "{{count}}x/SEM",
+    "statsFrequency_one": "{{count}}x por semana",
+    "statsFrequency_other": "{{count}}x por semana",
+    "statsDuration": "{{minutes}} min por sesión",
+    "flexibleSlot": "{{index}}º",
+    "lockedRow": "Sesión {{index}}",
+    "lockedFooter": "Ejercicios, series y cargas se liberan con la suscripción"
+  },
+  "dietPanel": {
+    "title": "Dieta AJ",
+    "subtitle": "{{category}}",
+    "subtitleWithPace": "{{category}} · ritmo {{pace}}",
+    "meals_one": "{{count}} comida al día",
+    "meals_other": "{{count}} comidas al día",
+    "withoutAllergens": "Sin {{allergens}}",
+    "allergenCount_one": "{{count}} alérgeno",
+    "allergenCount_other": "{{count}} alérgenos",
+    "protein": "Proteína",
+    "carbs": "Carbohidratos",
+    "fat": "Grasas",
+    "gramsSuffix": "g",
+    "kcalPerDay": "{{kcal}} kcal al día",
+    "mealKcal": "{{kcal}} kcal",
+    "lockedFooter": "Menú, cantidades y sustituciones se liberan con la suscripción"
+  },
+  "aj": {
+    "intro": "Listo, {{name}}. Este es el plan que armé para ti.",
+    "introNoName": "Listo. Este es el plan que armé para ti.",
+    "strategy": "Tu plan se enfoca en {{goal}}, en nivel {{level}}.",
+    "volume_one": "{{count}} sesión por semana, {{minutes}} minutos.",
+    "volume_other": "{{count}} sesiones por semana, {{minutes}} minutos cada una.",
+    "volumeFlexible_one": "Entrenamiento libre: {{count}} sesión por semana de {{minutes}} minutos.",
+    "volumeFlexible_other": "Entrenamiento libre: {{count}} sesiones por semana de {{minutes}} minutos.",
+    "diet_one": "En la dieta: {{category}}, en {{count}} comida al día.",
+    "diet_other": "En la dieta: {{category}}, en {{count}} comidas al día.",
+    "dietWithMacros_one": "En la dieta: {{category}}, en {{count}} comida al día, {{kcal}} kcal y {{protein}} g de proteína.",
+    "dietWithMacros_other": "En la dieta: {{category}}, en {{count}} comidas al día, {{kcal}} kcal y {{protein}} g de proteína.",
+    "closing": "Entrenamiento y menú ya están listos. Se liberan cuando te suscribas."
+  },
   "header": {
     "eyebrow": "Tu primera fase",
     "titleWithName": "{{name}}, tu primera fase está lista.",

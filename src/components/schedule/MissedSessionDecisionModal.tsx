@@ -1,38 +1,60 @@
-import { ActivityIndicator, Modal, Pressable, Text, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
-import { darkTheme } from '../../theme';
-import { HudCorners } from '../ui/Card';
-import { Display, Slash } from '../ui/Display';
-import { OutlineNumber } from '../ui/OutlineNumber';
-import { Icon } from '../ui/Icon';
+import { AjMoment, type AjMomentOption } from '../aj/AjMoment';
 import type { MissDecision } from '../../scheduleEngine';
 
 /**
  * UI for MISSED_SESSION_DECISION_REQUIRED (docs/workout-lifecycle/
  * 03_SCHEDULE_ENGINE.md §Sessão perdida). Only ever opened on demand, from
- * the same "iniciar treino" flow as `StartWorkoutConfirmation` — reuses that
- * exact poster shell (Dark gradient, HudCorners, OutlineNumber, Slash
- * kicker/Display title, notched-corner card) instead of a generic dialog, so
- * the two read as one continuous flow. No technical detail (session index,
- * cursor, event ledger) is shown to the user, and the copy is deliberately
- * neutral — a missed workout isn't a failure to call out.
+ * the same "iniciar treino" flow as `StartWorkoutConfirmation` — never
+ * automatically from the Schedule Engine resolution alone.
  *
- * There is no explicit "not now" button — CONTINUE_SEQUENCE/FOLLOW_SCHEDULE
- * are the only two domain decisions this modal offers — but tapping outside
- * the card (the backdrop) dismisses it, same as StartWorkoutConfirmation,
- * while a resolution isn't in flight. Dismissing just returns to
- * `startWorkoutFlow: 'idle'`: it does not skip/resolve the pending miss —
- * `pendingMissDecision` stays exactly as it was, and the next "Iniciar
- * treino" tap reopens this same modal.
+ * Presentation only, and ONE continuous AJ conversation with two beats:
+ *
+ * 1. **Ask.** The two answers ARE the two domain decisions, unchanged:
+ *      "sim, refazer" -> onChoose('CONTINUE_SEQUENCE')  (do the missed
+ *                        session first — `missedDecision.continueSequence`)
+ *      "não, seguir"  -> onChoose('FOLLOW_SCHEDULE')    (skip it and train
+ *                        today's — `missedDecision.followSchedule`)
+ *    Each answer keeps the existing subtitle as its description, so the
+ *    exact consequence of each decision is still spelled out verbatim.
+ *
+ * 2. **Confirm.** Once `resolved` arrives — i.e. the caller's `onChoose`
+ *    committed and the Schedule Engine published a `SESSION_READY` — AJ
+ *    states what changed and offers to start the session that is now
+ *    today's. This beat never re-decides anything: by the time it shows,
+ *    the decision is already durable. Its CTA hands over to
+ *    `StartWorkoutConfirmation`, exactly the step this flow reached
+ *    automatically before the beat existed, and "Depois" returns to idle —
+ *    the same place a dismissal has always landed, with the decision left
+ *    resolved.
+ *
+ * Both beats are deliberately the SAME `AjMoment` (a `step` change, so AJ
+ * nods and retypes), never two overlays: handing over between two native
+ * `Modal`s means presenting one while the other is still dismissing, which
+ * iOS drops — the second screen simply never appears.
+ *
+ * The missed session's name/focus is not spoken in beat 1: the modal is only
+ * handed the decision identity (indices and dates), never the prescription.
+ * In beat 2 the letter comes from the engine's own `SESSION_READY
+ * .sessionIndex`, with the same A/B/C convention Home and Treino already use
+ * for a session's position in the prescribed rotation — never recomputed.
+ *
+ * There is still no explicit "not now" button in beat 1 — CONTINUE_SEQUENCE/
+ * FOLLOW_SCHEDULE are the only two domain decisions offered — but tapping
+ * the backdrop (or the close button) dismisses it while a resolution isn't
+ * in flight, same as before. Dismissing beat 1 does not skip/resolve the
+ * pending miss: `pendingMissDecision` stays exactly as it was, and the next
+ * "Iniciar treino" tap reopens this same modal.
  */
 export function MissedSessionDecisionModal({
   visible,
   pending,
   refreshing,
   error,
+  resolved = null,
   onChoose,
   onCancel,
+  onStartResolved,
 }: {
   visible: boolean;
   /** Decision currently being resolved, or null when idle. Both options are disabled while this is set — a second tap must never fire a second resolution. */
@@ -41,222 +63,84 @@ export function MissedSessionDecisionModal({
   refreshing: boolean;
   /** True when the last attempt failed — the modal stays open and both options remain retryable. */
   error: boolean;
+  /**
+   * The committed outcome. Non-null only after a decision durably resolved
+   * to a ready session; switches AJ from asking to confirming. Never a
+   * second chance to decide.
+   */
+  resolved?: { decision: MissDecision; sessionIndex: number } | null;
   onChoose: (decision: MissDecision) => void;
-  /** Dismisses the modal (backdrop tap only) — never called while `pending` is set. */
+  /** Dismisses the modal (backdrop/close tap, or "Depois") — never called while `pending` is set. */
   onCancel: () => void;
+  /** Continues from the confirmation beat into the existing start-workout confirmation. */
+  onStartResolved?: () => void;
 }) {
-  // Product invariant: shares StartWorkoutConfirmation's Dark poster artwork
-  // — this is a continuation of the same "iniciar treino" flow, not a
-  // separate surface.
-  const theme = darkTheme;
   const { t } = useTranslation('home');
   const busy = pending !== null || refreshing;
+  const letter = resolved ? String.fromCharCode(65 + resolved.sessionIndex) : null;
+
+  const decisionOptions: AjMomentOption[] = [
+    {
+      key: 'CONTINUE_SEQUENCE',
+      label: t('schedule.missedDecision.aj.continueSequence'),
+      description: t('schedule.missedDecision.continueSequence.subtitle'),
+      onPress: () => onChoose('CONTINUE_SEQUENCE'),
+      loading: pending === 'CONTINUE_SEQUENCE',
+      disabled: busy,
+      primary: true,
+    },
+    {
+      key: 'FOLLOW_SCHEDULE',
+      label: t('schedule.missedDecision.aj.followSchedule'),
+      description: t('schedule.missedDecision.followSchedule.subtitle'),
+      onPress: () => onChoose('FOLLOW_SCHEDULE'),
+      loading: pending === 'FOLLOW_SCHEDULE',
+      disabled: busy,
+    },
+  ];
+
+  const resolvedOptions: AjMomentOption[] = [
+    {
+      key: 'start',
+      label: t('schedule.missedDecision.aj.startSession', { letter }),
+      onPress: () => onStartResolved?.(),
+      variant: 'cta',
+      primary: true,
+      // Hands over to StartWorkoutConfirmation, which is itself a native
+      // Modal — this overlay must be gone before that one presents.
+      closesMoment: true,
+    },
+    {
+      key: 'later',
+      label: t('schedule.missedDecision.aj.later'),
+      onPress: onCancel,
+      variant: 'link',
+      closesMoment: true,
+    },
+  ];
+
   return (
-    <Modal
+    <AjMoment
       visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={busy ? undefined : onCancel}
-      statusBarTranslucent
-    >
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={t('todayCard.confirm.accessibilityClose', {
-          defaultValue: t('todayCard.confirm.dismiss'),
-        })}
-        onPress={busy ? undefined : onCancel}
-        style={{
-          flex: 1,
-          backgroundColor: theme.colors.overlayStrong,
-          justifyContent: 'center',
-          paddingHorizontal: 34,
-        }}
-      >
-        <Pressable
-          accessibilityRole="none"
-          onPress={(event) => event.stopPropagation()}
-          style={{
-            width: '100%',
-            maxWidth: 340,
-            alignSelf: 'center',
-            borderRadius: 16,
-            borderBottomRightRadius: 0,
-            overflow: 'hidden',
-            borderWidth: 1,
-            borderColor: theme.colors.primaryBorderQuiet,
-            backgroundColor: theme.colors.background,
-            shadowColor: theme.colors.primary,
-            shadowOpacity: 0.18,
-            shadowRadius: 20,
-            shadowOffset: { width: 0, height: 10 },
-            elevation: 10,
-          }}
-        >
-          <LinearGradient
-            colors={theme.gradients.poster}
-            locations={[0, 0.45, 1]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={{ padding: 18 }}
-          >
-            <HudCorners color={theme.colors.hudCorner} />
-            <OutlineNumber
-              size={118}
-              color={theme.colors.decorativeOutline}
-              style={{
-                position: 'absolute',
-                top: -28,
-                right: -8,
-                opacity: 0.28,
-              }}
-            >
-              !
-            </OutlineNumber>
-
-            <Slash
-              accentColor={theme.colors.primaryEmphasis}
-              textColor={theme.colors.textFaint}
-            >
-              {t('schedule.missedDecision.kicker').toUpperCase()}
-            </Slash>
-            <Display size={26} color={theme.colors.textPrimary} style={{ marginTop: 9 }}>
-              {t('schedule.missedDecision.title').toUpperCase()}
-            </Display>
-            <Text
-              style={{
-                color: theme.colors.textSecondaryStrong,
-                fontFamily: theme.fonts.ui,
-                fontSize: 13,
-                lineHeight: 19,
-                marginTop: 8,
-              }}
-            >
-              {t('schedule.missedDecision.body')}
-            </Text>
-
-            {error && (
-              <View
-                style={{
-                  marginTop: 14,
-                  padding: 10,
-                  borderRadius: 10,
-                  borderWidth: 1,
-                  borderColor: theme.colors.warning,
-                  backgroundColor: theme.colors.surfaceMuted,
-                }}
-              >
-                <Text
-                  style={{
-                    color: theme.colors.warning,
-                    fontFamily: theme.fonts.uiSemi,
-                    fontSize: 12,
-                    lineHeight: 17,
-                  }}
-                >
-                  {t('schedule.missedDecision.error')}
-                </Text>
-              </View>
-            )}
-
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ disabled: busy }}
-              disabled={busy}
-              onPress={() => onChoose('CONTINUE_SEQUENCE')}
-              style={{
-                marginTop: 18,
-                paddingVertical: 12,
-                paddingHorizontal: 14,
-                borderRadius: 10,
-                borderBottomRightRadius: 0,
-                backgroundColor: theme.colors.inverseSurface,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 10,
-                opacity: busy && pending !== 'CONTINUE_SEQUENCE' ? 0.5 : 1,
-              }}
-            >
-              {pending === 'CONTINUE_SEQUENCE' ? (
-                <ActivityIndicator color={theme.colors.inverseForeground} />
-              ) : (
-                <Icon name="arrow-right" size={12} color={theme.colors.inverseForeground} />
-              )}
-              <View style={{ flex: 1 }}>
-                <Text
-                  style={{
-                    color: theme.colors.inverseForeground,
-                    fontFamily: theme.fonts.display,
-                    fontSize: 14,
-                    letterSpacing: 1.2,
-                    textTransform: 'uppercase',
-                  }}
-                >
-                  {t('schedule.missedDecision.continueSequence.title')}
-                </Text>
-                <Text
-                  style={{
-                    fontFamily: theme.fonts.ui,
-                    fontSize: 12,
-                    color: theme.colors.inverseForeground,
-                    opacity: 0.8,
-                    marginTop: 2,
-                  }}
-                >
-                  {t('schedule.missedDecision.continueSequence.subtitle')}
-                </Text>
-              </View>
-            </Pressable>
-
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ disabled: busy }}
-              disabled={busy}
-              onPress={() => onChoose('FOLLOW_SCHEDULE')}
-              style={{
-                marginTop: 10,
-                paddingVertical: 12,
-                paddingHorizontal: 14,
-                borderRadius: 10,
-                borderBottomRightRadius: 0,
-                backgroundColor: theme.colors.controlBackground,
-                borderWidth: 1,
-                borderColor: theme.colors.controlBorder,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 10,
-                opacity: busy && pending !== 'FOLLOW_SCHEDULE' ? 0.5 : 1,
-              }}
-            >
-              {pending === 'FOLLOW_SCHEDULE' ? (
-                <ActivityIndicator color={theme.colors.textPrimary} />
-              ) : (
-                <Icon name="calendar" size={12} color={theme.colors.textPrimary} />
-              )}
-              <View style={{ flex: 1 }}>
-                <Text
-                  style={{
-                    fontFamily: theme.fonts.uiSemi,
-                    fontSize: 14,
-                    color: theme.colors.textPrimary,
-                  }}
-                >
-                  {t('schedule.missedDecision.followSchedule.title')}
-                </Text>
-                <Text
-                  style={{
-                    fontFamily: theme.fonts.ui,
-                    fontSize: 12,
-                    color: theme.colors.textMuted,
-                    marginTop: 2,
-                  }}
-                >
-                  {t('schedule.missedDecision.followSchedule.subtitle')}
-                </Text>
-              </View>
-            </Pressable>
-          </LinearGradient>
-        </Pressable>
-      </Pressable>
-    </Modal>
+      step={letter ? 'resolved' : 'decision'}
+      // The confirmation beat reports an outcome rather than asking
+      // anything, so its line stays a statement and its actions carry no
+      // radio indicator.
+      statement={letter !== null}
+      lines={letter
+        ? [resolved?.decision === 'FOLLOW_SCHEDULE'
+            ? t('schedule.missedDecision.aj.resolvedFollowSchedule', { letter })
+            : t('schedule.missedDecision.aj.resolvedContinueSequence', { letter })]
+        : [t('schedule.missedDecision.title'), t('schedule.missedDecision.aj.question')]}
+      options={letter ? resolvedOptions : decisionOptions}
+      error={!letter && error ? t('schedule.missedDecision.error') : null}
+      mood={letter ? 'happy' : 'idle'}
+      dismissible
+      onDismiss={onCancel}
+      busy={busy}
+      closeAccessibilityLabel={t('todayCard.confirm.accessibilityClose', {
+        defaultValue: t('todayCard.confirm.dismiss'),
+      })}
+    />
   );
 }

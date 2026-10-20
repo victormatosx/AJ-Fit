@@ -18,18 +18,40 @@ describe('Analyzing screen i18n', () => {
     }
   });
 
+  it('ships one spoken line per step plus the completion line, in every language', () => {
+    for (const resource of [ptBR, en, es]) {
+      expect(resource.analyzing.completed).toBeTruthy();
+      for (const key of Object.keys(resource.analyzing.steps)) {
+        expect(resource.analyzing.speech[key as keyof typeof resource.analyzing.speech]).toBeTruthy();
+      }
+      expect(resource.analyzing.speech.done).toBeTruthy();
+      for (const state of ['stepDone', 'stepActive', 'stepPending'] as const) {
+        expect(resource.analyzing.accessibility[state]).toContain('{{label}}');
+      }
+    }
+  });
+
   it('uses onboarding translation keys without former visible hardcodes', () => {
     for (const key of [
       'analyzing.compiling',
+      'analyzing.completed',
       'analyzing.titleLine1',
       'analyzing.titleLine2',
-      'analyzing.steps.profile',
-      'analyzing.steps.volume',
-      'analyzing.steps.exercises',
-      'analyzing.steps.periodization',
-      'analyzing.steps.plan',
+      // Step labels and the line AJ says about each one are both addressed
+      // through `STEP_KEYS`, so the literal prefixes are what the screen holds.
+      'analyzing.steps.',
+      'analyzing.speech.',
+      'analyzing.speech.done',
       'analyzing.accessibility.progress',
+      'analyzing.accessibility.stepDone',
+      'analyzing.accessibility.stepActive',
+      'analyzing.accessibility.stepPending',
+      'analyzing.error.reviewAnswers',
     ]) expect(screen).toContain(key);
+
+    for (const key of ['profile', 'volume', 'exercises', 'periodization', 'plan']) {
+      expect(screen).toContain(`'${key}'`);
+    }
 
     for (const hardcode of [
       'Lendo seu perfil físico',
@@ -46,9 +68,21 @@ describe('Analyzing screen i18n', () => {
     expect(screen).toContain('return p + 1');
     expect(screen).toContain('}, 52)');
     expect(screen).toContain('setTimeout(onDone, 700)');
-    expect(screen).toContain('<CircularProgressRing');
-    expect(screen).toContain('pulseGlow');
     expect(screen).toContain('duration: 900');
     expect(screen).toContain('useNativeDriver: true');
+  });
+
+  it('presents the ring with AJ inside it and keeps the answer-review escape hatch', () => {
+    expect(screen).toContain('<AnalysisAjRing');
+    // The celebration occupies the 700ms that already existed; completion is
+    // never declared on the timer alone.
+    expect(screen).toContain("const completed = progress >= 100 && computeStatus === 'success'");
+    expect(screen).toContain('onPress={onReviewAnswers}');
+    expect(screen).toContain('accessibilityLiveRegion="polite"');
+    // No fabricated per-step readouts: the prototype's invented values stay
+    // out of what is rendered (the comment explaining why they're absent is
+    // allowed to name them).
+    const code = screen.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    expect(code).not.toMatch(/IMC|kcal|exercícios/);
   });
 });

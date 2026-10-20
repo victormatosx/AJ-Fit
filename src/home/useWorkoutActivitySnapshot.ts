@@ -11,6 +11,7 @@ import { localDateInTimezone } from '../scheduleEngine/localDate';
 import { listCompletedWorkoutActivityDatesInRange } from '../services/workoutExecutions';
 import { mondayOfWeek } from './calendarWeek';
 import { buildWeekOverview, type WeekOverviewViewModel } from './weekOverview';
+import { computeWeeklyFrequency, type WeeklyFrequency } from './weeklyFrequency';
 import type { InitialSectionStatus } from './homeInitialReadiness';
 
 export interface WorkoutActivitySnapshot {
@@ -18,6 +19,16 @@ export interface WorkoutActivitySnapshot {
   loading: boolean;
   initialStatus: InitialSectionStatus;
   week: WeekOverviewViewModel | null;
+  /**
+   * "Frequência desta semana" — distinct days with a credited workout over the
+   * weekly goal. Computed from the SAME `performedDates` this hook already
+   * fetches, so it costs no extra read.
+   *
+   * Deliberately NOT the 30-day heatmap (`useFrequencyWindow`, a different
+   * window with its own semantics) and deliberately NOT the streak (which also
+   * counts food-only days). `null` until the first read resolves.
+   */
+  weeklyFrequency: WeeklyFrequency | null;
   reload: () => Promise<void>;
 }
 
@@ -107,5 +118,15 @@ export function useWorkoutActivitySnapshot(input: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [completedDates, fulfilledScheduledDates, today, trainingDaysKey, activeRecoveryDaysKey, input.activatedAtLocalDate, input.scheduleMode, input.prescribedTrainingFrequency]);
 
-  return { loading, initialStatus, week, reload };
+  const weeklyFrequency = useMemo(() => {
+    if (!completedDates || !today) return null;
+    return computeWeeklyFrequency({
+      todayLocalDate: today,
+      goal: input.prescribedTrainingFrequency,
+      performedLocalDates: completedDates,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [completedDates, today, input.prescribedTrainingFrequency]);
+
+  return { loading, initialStatus, week, weeklyFrequency, reload };
 }

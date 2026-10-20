@@ -1047,7 +1047,12 @@ describe.skipIf(!enabled)('Workout Execution & History — real Firestore Emulat
 
     const state = await getDoc(doc(mocks.db as never, 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleState', PROGRAM_INSTANCE_ID));
     expect(state.data()?.nextSessionIndex).toBe(1); // advanced exactly once, not twice
-  });
+    // Budget, not behaviour. Two overlapping finalize calls contend on the
+    // same documents by design and retry under that contention: ~5.7s in
+    // isolation, which only exceeds the 5s default when the rest of the file
+    // is competing for the same emulator. The assertions above — including
+    // the one that guards against a double advance — are untouched.
+  }, 30_000);
 
   describe('SESSION_INDEX_OUT_OF_SEQUENCE regression — first completion, no ScheduleState yet', () => {
     // Real production data (docs — QA account KVBSbHQ8RPMqVBrsyTicjkXgP6l2):
@@ -1893,6 +1898,180 @@ describe('P0-C §13 — mixed old-protocol/new-protocol device scenarios (compat
     // state, exactly like the known production incident fixture above.
     const state = await getDoc(doc(mocks.db as never, 'users', UID, 'workoutExecutionState', 'current'));
     expect(state.exists()).toBe(false);
+  });
+
+  /**
+   * PRODUCTION INCIDENT, 2026-10-19 — `SESSION_ALREADY_FINISHED` on a
+   * legitimate start.
+   *
+   * The pilot account had `exec_{instance}_0_2026-10-19` already terminal:
+   * `scheduledLocalDate` 2026-10-19 but `performedLocalDate` 2026-10-18 — an
+   * old-model session finished AHEAD of its scheduled day. On 2026-10-19 free
+   * selection offered session A, the client derived the very same base id from
+   * TODAY, found that terminal document, and refused the start. Nothing had
+   * been trained that day, so a previous day's workout was blocking a
+   * legitimate one.
+   */
+  describe('free selection must not inherit a legacy anticipated occurrence', () => {
+    const INSTANCE = PROGRAM_INSTANCE_ID;
+    const TODAY = '2026-10-19';
+    const YESTERDAY = '2026-10-18';
+    const pilotProgram = () => program({ programInstanceId: INSTANCE, scheduleMode: 'fixed' } as never);
+
+    beforeEach(async () => {
+      // The V2 branch of the execution-create rule reads `programInstances`
+      // and `workoutLifecycleState/current`; without them the create is
+      // denied for reasons unrelated to this scenario.
+      await seedV2Lifecycle({
+        trainingDays: ['MON', 'TUE'], activatedAtLocalDate: '2026-10-01',
+        sessionCount: 2, program: pilotProgram(),
+      });
+    });
+    const baseId = `exec_${INSTANCE}_0_${TODAY}`;
+
+    /** The exact production document: scheduled today, performed yesterday. */
+    async function seedAnticipatedTerminal(status = 'PARTIALLY_COMPLETED', performedLocalDate = YESTERDAY) {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, 'users', UID, 'workoutExecutions', baseId), {
+          programId: 'wpg_test1',
+          programInstanceId: INSTANCE,
+          sessionIndex: 0,
+          occurrence: 1,
+          scheduledLocalDate: TODAY,
+          performedLocalDate,
+          status,
+          sessionName: 'A',
+          exercises: [],
+          cardio: null,
+          startedAt: Timestamp.now(),
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+      });
+    }
+
+    async function enrollPilot() {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'workoutPilotEnrollment', UID), { enabled: true });
+      });
+    }
+
+    it('ENROLLED: starts today on a fresh occurrence instead of refusing', async () => {
+      await seedAnticipatedTerminal();
+      await enrollPilot();
+      const started = await startOrResumeWorkoutExecution({
+        uid: UID, program: pilotProgram(), sessionIndex: 0,
+        scheduledLocalDate: TODAY, performedLocalDate: TODAY,
+      });
+      expect(started.status).toBe('IN_PROGRESS');
+      expect(started.occurrence).toBe(2);
+      expect(started.executionId).toBe(`${baseId}_o2`);
+      expect(started.performedLocalDate).toBe(TODAY);
+    });
+
+    it('ENROLLED: the legacy document is left byte-for-byte intact', async () => {
+      await seedAnticipatedTerminal();
+      await enrollPilot();
+      await startOrResumeWorkoutExecution({
+        uid: UID, program: pilotProgram(), sessionIndex: 0,
+        scheduledLocalDate: TODAY, performedLocalDate: TODAY,
+      });
+      const legacy = await loadWorkoutExecution(UID, baseId);
+      expect(legacy?.status).toBe('PARTIALLY_COMPLETED');
+      expect(legacy?.performedLocalDate).toBe(YESTERDAY);
+      expect(legacy?.occurrence).toBe(1);
+    });
+
+    it('NOT ENROLLED: still refuses, exactly as published', async () => {
+      await seedAnticipatedTerminal();
+      await expect(startOrResumeWorkoutExecution({
+        uid: UID, program: pilotProgram(), sessionIndex: 0,
+        scheduledLocalDate: TODAY, performedLocalDate: TODAY,
+      })).rejects.toThrow('SESSION_ALREADY_FINISHED');
+    });
+
+    it('`enabled: false` is not enrolment', async () => {
+      await seedAnticipatedTerminal();
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'workoutPilotEnrollment', UID), { enabled: false });
+      });
+      await expect(startOrResumeWorkoutExecution({
+        uid: UID, program: pilotProgram(), sessionIndex: 0,
+        scheduledLocalDate: TODAY, performedLocalDate: TODAY,
+      })).rejects.toThrow('SESSION_ALREADY_FINISHED');
+    });
+
+    it('ENROLLED: a terminal execution performed TODAY still blocks — one workout per day', async () => {
+      // The fix must not become a way to train twice. Same id slot, but the
+      // effort really was spent today, so the day is claimed.
+      await seedAnticipatedTerminal('COMPLETED', TODAY);
+      await enrollPilot();
+      await expect(startOrResumeWorkoutExecution({
+        uid: UID, program: pilotProgram(), sessionIndex: 0,
+        scheduledLocalDate: TODAY, performedLocalDate: TODAY,
+      })).rejects.toThrow('WORKOUT_DAILY_LIMIT_REACHED');
+    });
+
+    it('ENROLLED: a legacy document with no performedLocalDate counts as same-day effort', async () => {
+      // Absent field is read as equal to `scheduledLocalDate` (today here),
+      // so it must block rather than hand out a second workout.
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'users', UID, 'workoutExecutions', baseId), {
+          programId: 'wpg_test1', programInstanceId: INSTANCE, sessionIndex: 0, occurrence: 1,
+          scheduledLocalDate: TODAY, status: 'COMPLETED', sessionName: 'A', exercises: [], cardio: null,
+          startedAt: Timestamp.now(), createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
+        });
+      });
+      await enrollPilot();
+      await expect(startOrResumeWorkoutExecution({
+        uid: UID, program: pilotProgram(), sessionIndex: 0,
+        scheduledLocalDate: TODAY, performedLocalDate: TODAY,
+      })).rejects.toThrow('WORKOUT_DAILY_LIMIT_REACHED');
+    });
+
+    it('ENROLLED: the daily marker still short-circuits before any allocation', async () => {
+      await seedAnticipatedTerminal();
+      await enrollPilot();
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'users', UID, 'workoutDailyCompletions', TODAY), {
+          localDate: TODAY, executionId: 'whatever', programInstanceId: INSTANCE, sessionIndex: 1,
+        });
+      });
+      await expect(startOrResumeWorkoutExecution({
+        uid: UID, program: pilotProgram(), sessionIndex: 0,
+        scheduledLocalDate: TODAY, performedLocalDate: TODAY,
+      })).rejects.toThrow('WORKOUT_DAILY_LIMIT_REACHED');
+      // No occurrence was handed out.
+      const second = await loadWorkoutExecution(UID, `${baseId}_o2`);
+      expect(second).toBeNull();
+    });
+
+    it('ENROLLED: two concurrent starts converge on ONE occurrence', async () => {
+      await seedAnticipatedTerminal();
+      await enrollPilot();
+      const call = () => startOrResumeWorkoutExecution({
+        uid: UID, program: pilotProgram(), sessionIndex: 0,
+        scheduledLocalDate: TODAY, performedLocalDate: TODAY,
+      });
+      const [a, b] = await Promise.all([call(), call()]);
+      expect(a.executionId).toBe(b.executionId);
+      const third = await loadWorkoutExecution(UID, `${baseId}_o3`);
+      expect(third).toBeNull();
+    });
+
+    it('ENROLLED: an unrelated session on the same day is untouched by this path', async () => {
+      // Session B has no terminal document at today's id, so it takes the
+      // ordinary occurrence-1 route.
+      await seedAnticipatedTerminal();
+      await enrollPilot();
+      const started = await startOrResumeWorkoutExecution({
+        uid: UID, program: pilotProgram(), sessionIndex: 1,
+        scheduledLocalDate: TODAY, performedLocalDate: TODAY,
+      });
+      expect(started.executionId).toBe(`exec_${INSTANCE}_1_${TODAY}`);
+      expect(started.occurrence).toBe(1);
+    });
   });
   });
 });

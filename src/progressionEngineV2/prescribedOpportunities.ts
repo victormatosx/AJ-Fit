@@ -11,6 +11,13 @@ interface OpportunityExecution {
   programInstanceId?: string;
   sessionIndex: number;
   scheduledLocalDate: string;
+  /**
+   * The day the effort actually happened. Differs from `scheduledLocalDate`
+   * only for anticipated/deferred legacy sessions; under the new training
+   * model the two are always the same day. Optional so legacy documents
+   * written before the field existed still load.
+   */
+  performedLocalDate?: string;
   status: 'IN_PROGRESS' | 'COMPLETED' | 'PARTIALLY_COMPLETED' | 'ABANDONED';
   exercises: readonly {
     exerciseIndex?: number;
@@ -166,4 +173,95 @@ export function buildPrescribedOpportunities(input: {
       scheduledLocalDate,
       programInstanceId: input.programInstanceId,
     }));
+}
+
+/**
+ * Adherence accounting for accounts on the NEW training model.
+ *
+ * ## Why this exists
+ *
+ * The `fixed` accounting above asks "did you train on the days we named?".
+ * It builds its denominator from the recommended weekdays and discards any
+ * execution that lands outside them. That question is coherent for an account
+ * whose calendar is an obligation — and incoherent for one whose calendar is
+ * explicitly a suggestion. Under the new model a user may train any day, and
+ * the app tells them so; scoring them against weekday identity afterwards
+ * penalises exactly the freedom the model grants. Concretely: recommended
+ * MON/WED/FRI, trained TUE/THU/SAT, weekly frequency 100%, adherence 0%.
+ *
+ * So for these accounts adherence asks the same question the weekly frequency
+ * widget asks — "did you train as often as you meant to?" — and answers it
+ * with the same unit: DISTINCT LOCAL DAYS TRAINED, per week, against the
+ * prescribed frequency.
+ *
+ * ## The rule
+ *
+ *     meta(semana)     = min(frequência prescrita, dias ativos na semana)
+ *     cumprido(semana) = min(meta(semana), dias distintos treinados na semana)
+ *     ratio            = Σ cumprido / Σ meta
+ *
+ * The per-week cap on active days is what keeps a partial week honest: the
+ * week a program starts mid-Thursday expects at most the days it actually
+ * had, and the week still in progress expects at most the days elapsed. Weeks
+ * are Monday-anchored local weeks, the same anchor the frequency widget uses.
+ * Capping `cumprido` at the target is what stops a seventh workout from
+ * paying for a week the user skipped.
+ *
+ * ## What still gates a day
+ *
+ * Every integrity guard of the `fixed`/`flexible` counters is preserved — this
+ * function changes WHICH DAYS COUNT, never WHAT COUNTS AS TRAINING:
+ *
+ *  - the execution must belong to the active ProgramInstance;
+ *  - a matching `COMPLETED` schedule-ledger event must exist, so an execution
+ *    written by a modified client can never move adherence on its own;
+ *  - `isValidProgressionSessionAgainstPrescription` must accept it, which is
+ *    what admits `PARTIALLY_COMPLETED` only above the minimum set threshold
+ *    and rejects `IN_PROGRESS`/`ABANDONED`.
+ *
+ * ## Days, not sessions
+ *
+ * The unit is the day: two qualifying sessions in one local day are one day,
+ * which is why the per-week accumulator is a Set of DAYS and not of
+ * `(date, sessionIndex)` keys. The day used is the day the effort happened
+ * (`performedLocalDate`), falling back to `scheduledLocalDate` for documents
+ * written before that field existed. The ledger lookup still uses the
+ * scheduled key, because that is the key the ledger itself is written with.
+ */
+export function countFulfilledWeeklyTrainedDays(input: {
+  programInstanceId: string;
+  executions: readonly OpportunityExecution[];
+  scheduleEvents: readonly OpportunityEvent[];
+  prescribedSessions: readonly PrescribedSessionShape[];
+  weeklyTargets: ReadonlyMap<LocalDate, number>;
+}): number {
+  const completedLedger = new Set(input.scheduleEvents
+    .filter((event) => event.type === 'COMPLETED' && event.programInstanceId === input.programInstanceId)
+    .map((event) => opportunityKey(event.sessionIndex, event.scheduledDate)));
+  const trainedDaysByWeek = new Map<LocalDate, Set<LocalDate>>();
+  for (const execution of input.executions) {
+    const prescribedSession = input.prescribedSessions[execution.sessionIndex];
+    if (!prescribedSession) continue;
+    if (!completedLedger.has(opportunityKey(execution.sessionIndex, execution.scheduledLocalDate))) continue;
+    if (!isValidProgressionSessionAgainstPrescription({
+      execution,
+      prescribedSession,
+      expectedProgramInstanceId: input.programInstanceId,
+      expectedSessionIndex: execution.sessionIndex,
+    })) continue;
+    const trainedDay = execution.performedLocalDate ?? execution.scheduledLocalDate;
+    const week = mondayOf(trainedDay);
+    // A day outside the counted window has no target to pay into. Dropping it
+    // here (rather than letting it create a week) is what keeps effort from
+    // before the program — or during a paused stretch — out of the ratio.
+    if (!input.weeklyTargets.has(week)) continue;
+    const days = trainedDaysByWeek.get(week) ?? new Set<LocalDate>();
+    days.add(trainedDay);
+    trainedDaysByWeek.set(week, days);
+  }
+  let total = 0;
+  for (const [week, target] of input.weeklyTargets) {
+    total += Math.min(target, trainedDaysByWeek.get(week)?.size ?? 0);
+  }
+  return total;
 }

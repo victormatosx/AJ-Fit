@@ -28,7 +28,7 @@ describe('ProgressScreen — evolution histories follow activation, not just mou
   const CODE = code('src/screens/ProgressScreen.tsx');
 
   it('re-fetches assessments, imported weights and real workout loads whenever the persistent Progress tab becomes active', () => {
-    expect(CODE).toContain("import { useScreenFocusEffect } from '../state/ScreenActivity'");
+    expect(CODE).toMatch(/import \{[^}]*useScreenFocusEffect[^}]*\} from '\.\.\/state\/ScreenActivity'/);
     expect(CODE).toMatch(/useScreenFocusEffect\(\(\) => \{\s*void refreshAssessments\(\);\s*void refreshImportedWeights\(\);\s*void refreshLoads\(\);/);
   });
 });
@@ -151,11 +151,24 @@ describe('SubscriptionCenterScreen — offerings refresh follows activation, not
   });
 });
 
-describe('ProgressPhotosScreen — NOT migrated (real security blocker, docs/23 §6)', () => {
+describe('ProgressPhotosScreen — the vault lock moved to deactivation (docs/23 §6.1)', () => {
   const CODE = code('src/screens/ProgressPhotosScreen.tsx');
+  const OWNER = code('src/screens/ProgressScreen.tsx');
 
-  it('still locks the vault on unmount — this is exactly why it was not persisted', () => {
-    expect(CODE).toMatch(/useEffect\(\(\) => \(\) => lock\(\), \[lock\]\)/);
+  it('no longer locks the vault from this panel at all', () => {
+    // §6.1 named the exact shape this change had to take: move `lock()` out
+    // of this panel's unmount and onto deactivation of the screen that owns
+    // it. Keeping both would reintroduce the re-lock on every tab switch.
+    expect(CODE).not.toMatch(/useEffect\(\(\) => \(\) => lock\(\), \[lock\]\)/);
+    expect(CODE).not.toMatch(/^\s*lock,$/m);
+  });
+
+  it('hands that responsibility to Evolution, bound to activation and nothing weaker', () => {
+    // `useScreenFocusEffect`'s cleanup is deactivation OR unmount — never
+    // "mounted but hidden", which is the state this tab spends most of its
+    // life in.
+    expect(OWNER).toContain('useScreenFocusEffect(() => () => lockVault());');
+    expect(OWNER).toContain("} = usePhotoVault();");
   });
 });
 
