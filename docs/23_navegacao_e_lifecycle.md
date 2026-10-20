@@ -217,17 +217,38 @@ Leitura completa do arquivo nesta rodada encontrou:
 useEffect(() => () => lock(), [lock]);
 ```
 
-Esse efeito **tranca o cofre de fotos criptografado** (`PhotoVaultContext`)
+Esse efeito **trancava o cofre de fotos criptografado** (`PhotoVaultContext`)
 no unmount — revoga a sessão de descriptografia e libera a proteção contra
 captura de tela. Isso é infraestrutura de segurança deliberada (ver
 `docs/20_backend_functions_photo_vault.md`/`docs/21_photo_vault_pre_launch.md`
 e o teste estrutural `src/state/__tests__/photoVaultContextStructure.test.ts`,
-que já trava a regra "nunca destrava automaticamente"). Tornar essa tela
-persistente exigiria mover esse `lock()` para `onInactive` — uma mudança de
-lifecycle de segurança real, não uma migração de UI, e por isso **não foi
-feita nesta rodada**. Fica marcada como bloqueio concreto, não como
-pendência de auditoria — precisa de uma revisão de segurança dedicada antes
-de qualquer tentativa futura.
+que já trava a regra "nunca destrava automaticamente").
+
+**Status atual: a mudança descrita abaixo foi feita.** O `lock()` saiu do
+unmount do painel e virou o cleanup de um `useScreenFocusEffect` em
+`ProgressScreen` — ou seja, `onInactive` da tela Evolução, exatamente a
+forma que esta seção prescrevia. Motivo: com o unlock preso ao mount do
+painel, toda troca de aba (Corpo/Cargas → Fotos) reabria o cofre e
+recarregava a galeria do zero, e a aba caía na transição de abertura em vez
+de na galeria.
+
+Contrato novo, em uma frase: **a sessão do cofre vive enquanto Evolução for
+a tela ATIVA, nunca enquanto ela estiver apenas montada.** Consequências a
+manter em mente em qualquer revisão futura:
+
+* a aba Progress continua montada atrás de Home/Treino — por isso o vínculo
+  é com ativação (`useScreenFocusEffect`), não com mount;
+* a sessão fica aberta também em Corpo/Cargas, não só em Fotos, e com ela a
+  proteção nativa contra captura de tela;
+* background do app continua trancando (`PhotoVaultContext`), e o retorno ao
+  foreground reabre pelo efeito de abertura em `ProgressScreen`;
+* a galeria não é mais descartada ao trocar de aba, então `loadGallery()`
+  revalida por trás das fotos já visíveis em vez de voltar a `loading`.
+
+Travado por `src/screens/__tests__/migratedScreensLifecycle.test.ts` e
+`src/screens/__tests__/photoVaultUiStructure.test.ts`. Continua valendo a
+regra original: o `PhotoVaultContext` nunca destrava sozinho — quem abre a
+sessão é sempre uma tela, deliberadamente.
 
 ### Auditoria — telas migradas nesta rodada
 
