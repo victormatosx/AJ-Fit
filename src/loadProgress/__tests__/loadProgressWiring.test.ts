@@ -27,7 +27,7 @@ describe('real load-progress wiring', () => {
   });
 
   it('offers the requested search, record list and four time ranges', () => {
-    expect(loadsView).toContain('recordsLast90Days.slice(0, 3)');
+    expect(loadsView).toContain('displayRecords.slice(0, 3)');
     expect(loadsView).toContain('progress.loads.seeAllRecords');
     expect(loadsView).toContain('<TextInput');
 

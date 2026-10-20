@@ -20,6 +20,12 @@ describe('Progress truthfulness and retired consistency preview', () => {
       expect(Object.values(resource.progress.body.empty).every(Boolean)).toBe(true);
       expect(Object.values(resource.progress.loads.empty).every(Boolean)).toBe(true);
       expect(resource.progress.body.measuredAt).toContain('{{date}}');
+
+      // The header no longer has a separate static eyebrow line — it now
+      // shows today's date, same as Treino/Dieta/Home — and gained its own
+      // ticker copy instead.
+      expect((resource.progress.header as { eyebrow?: string }).eyebrow).toBeUndefined();
+      expect(Object.values(resource.progress.ticker).every(Boolean)).toBe(true);
     }
   });
 
@@ -98,7 +104,9 @@ describe('Progress truthfulness and retired consistency preview', () => {
     // `ProgressPhotosScreen` locks the vault on unmount. Rendering it beside
     // the other panels instead of instead of them would leave the vault open.
     expect(progress).toContain("view === 'photos' ? (");
-    expect(progress).toContain('<ProgressPhotosScreen pageHeader={pageHeader} />');
+    // Photos shares the exact same blue pill selector as Corpo/Cargas —
+    // no separate header implementation for it anymore.
+    expect(progress).toContain('<ProgressPhotosScreen pageHeader={panelHeader} />');
   });
 
 });
