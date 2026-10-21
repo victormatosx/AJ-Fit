@@ -2940,15 +2940,12 @@ service cloud.firestore {
               && (request.resource.data.get('cardio', null) == resource.data.get('cardio', null)
               || (resource.data.status == 'ABANDONED' && request.resource.data.status == 'IN_PROGRESS'
                   && request.resource.data.get('cardio', null) == null))
-          // Etapa 5A/6C P0: the policy a session was created under is fixed
-          // for its whole life — record/skip/finish/abandon can never change
-          // it. The ONE exception mirrors `startedAt`/`cardio` above: a
-          // restart-after-abandon is a new attempt, so it legitimately
-          // re-stamps whatever the CURRENT policy is at restart time (same
-          // `base` object path as `create`) — never a free-form value, still
-          // constrained to the two real literals by `workoutExecutionCommonValid`.
-              && (request.resource.data.get('substitutionPolicySnapshot', null) == resource.data.get('substitutionPolicySnapshot', null)
-              || (resource.data.status == 'ABANDONED' && request.resource.data.status == 'IN_PROGRESS'))
+          // Campo APOSENTADO pela remoção do sistema musculoesquelético: não
+          // pode ser criado, alterado nem reintroduzido por um reinício após
+          // abandono. Execuções antigas que já o carregam seguem editáveis,
+          // desde que o valor não mude. A exceção de re-carimbo que valia
+          // enquanto a política V3 estava ativa foi retirada junto com ela.
+              && request.resource.data.get('substitutionPolicySnapshot', null) == resource.data.get('substitutionPolicySnapshot', null)
               && request.resource.data.createdAt == resource.data.createdAt
               && request.resource.data.updatedAt == request.time
               && (
