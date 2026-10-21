@@ -7,10 +7,10 @@ export const macroProfile: NutritionProfile = {
   dietaryPattern: 'omnivore', preferredFoodIds: [], usualFoodIds: [], excludedFoodIds: [],
   supplements: [], pregnant: false, breastfeeding: false, varietyPreference: 'indifferent', updatedAt: null,
 };
-export const macroDaily = { kcal: 1000, proteinG: 50, carbsG: 100, fatG: 40, fiberG: 14 };
+export const macroDaily = { kcal: 1000, proteinG: 50, carbsG: 110, fatG: 40, fiberG: 14 };
 export const macroEngine: NutritionEngineOutput = {
   eligible: true, blockers: [], energy: { rmrKcal: 900, tdeeKcal: 1100, targetKcal: 1000, safetyClampApplied: false },
-  macros: { proteinG: 50, carbsG: 100, fatG: 40, fiberG: 14 },
+  macros: { proteinG: 50, carbsG: 110, fatG: 40, fiberG: 14 },
   mealTargets: distributeMeals(macroProfile.mealSlots, macroDaily), calculationTrace: {},
   versions: { nutritionEngineVersion: '1.0.0', energyRulesVersion: '1.0.0', macroRulesVersion: '1.0.0',
     mealDistributionVersion: '1.0.0', questionnaireVersion: 1, foodCatalogVersion: 'unused' },
@@ -18,7 +18,7 @@ export const macroEngine: NutritionEngineOutput = {
 export function macroFood(scale = 1): RawAiFoodItem {
   return { name: 'Alimento sintético', ingredients: [{ name: 'Ingrediente sintético', origin: 'plant' }],
     quantity: 100, unit: 'g', preparationNote: '', allergens: [],
-    estimatedNutrition: { kcal: 500 * scale, proteinG: 25 * scale, carbsG: 50 * scale,
+    estimatedNutrition: { kcal: 500 * scale, proteinG: 25 * scale, carbsG: 55 * scale,
       fatG: 20 * scale, fiberG: 7 * scale } };
 }
 export function macroPlan(): ParsedAiMealPlanOutput {
