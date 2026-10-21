@@ -1,30 +1,18 @@
-import { createHash } from 'node:crypto';
 
 import type { Firestore } from 'firebase-admin/firestore';
 import { HttpsError } from 'firebase-functions/v2/https';
 
 import { EXERCISES_SEED } from './prescriptionEngine/data/exercisesSeedData';
-import { canonicalizeLimitationProfiles, LIMITATION_DATASET_ACTIVE_DOCUMENT, LIMITATION_DATASET_STATE_COLLECTION, type LimitationDatasetIdentity } from './prescriptionEngine/workoutPrescription/limitationDataset';
-import type { LimitationCatalogExercise } from './prescriptionEngine/workoutPrescription/limitationResolver';
+import type { CatalogExercise } from './prescriptionEngine/workoutPrescription/exerciseCatalog';
 import { fromWorkoutTemplateDocument, WORKOUT_TEMPLATE_DOCUMENT_VERSION, type WorkoutTemplateDocument } from './prescriptionEngine/workoutPrescription/templateDocument';
 import { PRESCRIPTION_VERSIONS, type CanonicalTemplate, type PrescriptionGenerationContext, type QuestionnaireAnswers, type TemplateId } from './prescriptionEngine/workoutPrescription/types';
 import { selectTemplate } from './prescriptionEngine/workoutPrescription/selection';
-
-/**
- * Backend mirror of the client's `isExerciseCatalogDocument`/`exerciseCatalogErrors`
- * (`src/services/exerciseCatalogValidity.ts`) — same validation: every id
- * required by `EXERCISES_SEED` must exist in the remote catalog; additional
- * valid Firestore exercises are allowed and never invalidate it. Never
- * pinned to an exact global document count — that broke the moment the
- * local catalog grew (v1.27 Fase 2 closure added 7 exercises, 116 -> 123;
- * a fixed count would break again on the next addition).
- */
 
 function plainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function isExerciseCatalogDocument(value: unknown, id: string): value is LimitationCatalogExercise {
+function isExerciseCatalogDocument(value: unknown, id: string): value is CatalogExercise {
   if (!plainObject(value)) return false;
   const target = value.target;
   const movement = value.movement;
@@ -39,7 +27,7 @@ function isExerciseCatalogDocument(value: unknown, id: string): value is Limitat
     && plainObject(substitution) && Array.isArray(substitution.similarExerciseIds);
 }
 
-export async function loadExerciseCatalog(firestore: Firestore): Promise<LimitationCatalogExercise[]> {
+export async function loadExerciseCatalog(firestore: Firestore): Promise<CatalogExercise[]> {
   const snapshot = await firestore.collection('exercises').get();
   const exercises = snapshot.docs.map((document) => {
     const data = { ...document.data(), id: document.id };
@@ -55,28 +43,6 @@ export async function loadExerciseCatalog(firestore: Firestore): Promise<Limitat
     }
   }
   return exercises;
-}
-
-export async function loadLimitationDatasetIdentity(
-  firestore: Firestore,
-  exercises: readonly LimitationCatalogExercise[],
-): Promise<LimitationDatasetIdentity> {
-  const snapshot = await firestore.collection(LIMITATION_DATASET_STATE_COLLECTION).doc(LIMITATION_DATASET_ACTIVE_DOCUMENT).get();
-  const data = snapshot.data();
-  if (!snapshot.exists || typeof data?.datasetVersion !== 'string' || typeof data?.limitationDatasetHash !== 'string'
-    || !/^[a-f0-9]{64}$/.test(data.limitationDatasetHash)) {
-    throw new HttpsError('failed-precondition', 'authoritative_limitation_dataset_identity_missing');
-  }
-  const profiles = exercises
-    .filter((exercise) => exercise.limitationProfile != null)
-    .map((exercise) => ({ exerciseId: exercise.id, limitationProfile: exercise.limitationProfile }));
-  const computedHash = createHash('sha256')
-    .update(canonicalizeLimitationProfiles(profiles, exercises))
-    .digest('hex');
-  if (computedHash !== data.limitationDatasetHash) {
-    throw new HttpsError('failed-precondition', 'authoritative_limitation_dataset_hash_mismatch');
-  }
-  return { version: data.datasetVersion, hash: data.limitationDatasetHash, source: 'firestore' };
 }
 
 function isTemplateDocument(value: unknown, id: TemplateId): value is WorkoutTemplateDocument {
@@ -118,12 +84,6 @@ export interface PrescriptionGenerationInputs {
   templateMetadata: Pick<AuthoritativeTemplate, 'version' | 'sourceVersion' | 'contentHash'>;
 }
 
-/**
- * Everything `generateWorkoutPrescription` (the synced engine) needs to independently
- * compute the canonical plan for `answers`, read from the same authoritative Firestore
- * collections the client reads (`exercises`, `workoutTemplates`, `limitationDatasetState`) —
- * never from anything the client submitted in the request.
- */
 export async function buildPrescriptionGenerationContext(
   firestore: Firestore,
   answers: QuestionnaireAnswers,
@@ -139,9 +99,8 @@ export async function buildPrescriptionGenerationContext(
   if (!authoritativeTemplate) {
     throw new HttpsError('failed-precondition', `authoritative_template_not_found:${selection.decision.templateId}`);
   }
-  const limitationDataset = await loadLimitationDatasetIdentity(firestore, exerciseCatalog);
   return {
-    context: { template: authoritativeTemplate.template, exerciseCatalog, limitationDataset },
+    context: { template: authoritativeTemplate.template, exerciseCatalog },
     templateMetadata: authoritativeTemplate,
   };
 }

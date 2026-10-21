@@ -1,3 +1,4 @@
+import { approveReview } from './reviewFixture';
 import { randomUUID } from 'node:crypto';
 import { Timestamp, type DocumentReference } from 'firebase-admin/firestore';
 import type { CallableRequest } from 'firebase-functions/v2/https';
@@ -151,7 +152,7 @@ describe.skipIf(!enabled)('Nutrition complete journey (Firestore Emulator)', () 
         usage: { inputTokens: 140, outputTokens: 30, cachedInputTokens: 20 },
         latencyMs: 12,
       });
-    expect(await processNutritionGenerationJob(seed.uid, first.generationId, { generatePlan }, db)).toBe(true);
+    expect(await processNutritionGenerationJob(seed.uid, first.generationId, { reviewPlan: approveReview, generatePlan }, db)).toBe(true);
     await observer.reached;
     observer.stop();
     expect(observer.observed).toEqual(expect.arrayContaining(['queued', 'running', 'validating', 'completed']));
@@ -175,7 +176,7 @@ describe.skipIf(!enabled)('Nutrition complete journey (Firestore Emulator)', () 
 
     await db.collection('nutritionRateLimits').doc(seed.uid).update({ lastRequestedAt: Timestamp.fromMillis(0) });
     const second = await requestNutritionPlanGenerationHandler(callable(seed.uid, { requestId: 'journey-request-0002' }), db);
-    expect(await processNutritionGenerationJob(seed.uid, second.generationId, {
+    expect(await processNutritionGenerationJob(seed.uid, second.generationId, { reviewPlan: approveReview,
       generatePlan: async () => ({
         output: validPlanOutput(seed),
         model: 'gpt-6-luna',
@@ -198,7 +199,7 @@ describe.skipIf(!enabled)('Nutrition complete journey (Firestore Emulator)', () 
         output: validAlternativeOutput(seed), model: 'gpt-6-luna',
         usage: { inputTokens: 50, outputTokens: 12, cachedInputTokens: 5 }, latencyMs: 4,
       });
-    const alternativeProvider: NutritionAiProvider = { generatePlan: vi.fn(), generateMealAlternative };
+    const alternativeProvider: NutritionAiProvider = { reviewPlan: approveReview, generatePlan: vi.fn(), generateMealAlternative };
     const planMealsBeforeAlternative = (await planBRef.get()).get('meals');
     const alternativeRequest = callable(seed.uid, {
       requestId: alternativeRequestId,
@@ -214,9 +215,10 @@ describe.skipIf(!enabled)('Nutrition complete journey (Firestore Emulator)', () 
     expect((await planBRef.get()).get('meals')).toEqual(planMealsBeforeAlternative);
 
     const operations = await db.collection('nutritionAiOperations').where('ownerUid', '==', seed.uid).get();
-    expect(operations.size).toBe(5);
+    expect(operations.size).toBe(9);
+    expect(operations.docs.filter(d => d.get('agentRole') === 'reviewer')).toHaveLength(3);
     expect(new Set(operations.docs.map((item) => item.get('operation')))).toEqual(new Set(['full_plan', 'meal_alternative']));
-    for (const operation of operations.docs) {
+    for (const operation of operations.docs.filter(d => d.get('agentRole'))) {
       const data = operation.data();
       expect(data).toMatchObject({ provider: 'openai' });
       expect(data.attempts).toBeGreaterThan(0);
@@ -311,7 +313,7 @@ describe.skipIf(!enabled)('Nutrition complete journey (Firestore Emulator)', () 
     const job = await requestNutritionPlanGenerationHandler(callable(seed.uid, { requestId: randomUUID() }), db);
     const generatePlan = vi.fn().mockResolvedValue({ output: validPlanOutput(seed), model: 'fake',
       usage: { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0 }, latencyMs: 1 });
-    expect(await processNutritionGenerationJob(seed.uid, job.generationId, { generatePlan }, db)).toBe(true);
+    expect(await processNutritionGenerationJob(seed.uid, job.generationId, { reviewPlan: approveReview, generatePlan }, db)).toBe(true);
     expect((await seed.user.collection('nutritionPlans').doc(job.generationId).get()).get('status')).toBe('active');
     expect(generatePlan.mock.calls[0][0].profile).not.toHaveProperty('pregnant');
     expect(generatePlan.mock.calls[0][0].profile).not.toHaveProperty('breastfeeding');
@@ -334,7 +336,7 @@ describe.skipIf(!enabled)('Nutrition complete journey (Firestore Emulator)', () 
     expect((await seed.user.collection('nutritionGenerationJobs').get()).empty).toBe(true);
   });
 
-  it('uses fallback only for retryable validation failures and persists no plan after exhaustion or safety refusal', async () => {
+  it('keeps every retry on the cheap model, reviews successes, and preserves deterministic permanent blocks', async () => {
     const fallbackSeed = await seedEligibleUser(`nutrition-fallback-${randomUUID()}`);
     const fallbackJob = await requestNutritionPlanGenerationHandler(
       callable(fallbackSeed.uid, { requestId: 'fallback-request-0001' }), db,
@@ -342,11 +344,11 @@ describe.skipIf(!enabled)('Nutrition complete journey (Firestore Emulator)', () 
     const fallbackProvider = vi.fn()
       .mockResolvedValueOnce({ output: { meals: [] }, model: 'gpt-6-luna', usage: { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0 }, latencyMs: 1 })
       .mockResolvedValueOnce({ output: { meals: [] }, model: 'gpt-6-luna', usage: { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0 }, latencyMs: 1 })
-      .mockResolvedValueOnce({ output: validPlanOutput(fallbackSeed), model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0 }, latencyMs: 1 });
-    expect(await processNutritionGenerationJob(fallbackSeed.uid, fallbackJob.generationId, { generatePlan: fallbackProvider }, db)).toBe(true);
-    expect(fallbackProvider.mock.calls.map(([request]) => request.fallback)).toEqual([false, false, true]);
+      .mockResolvedValueOnce({ output: validPlanOutput(fallbackSeed), model: 'gpt-6-luna', usage: { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0 }, latencyMs: 1 });
+    expect(await processNutritionGenerationJob(fallbackSeed.uid, fallbackJob.generationId, { reviewPlan: approveReview, generatePlan: fallbackProvider }, db)).toBe(true);
+    expect(fallbackProvider.mock.calls.map(([request]) => request.fallback)).toEqual([false, false, false]);
     expect((await fallbackSeed.user.collection('nutritionPlans').doc(fallbackJob.generationId).get())
-      .get('generationMetadata.fallbackUsed')).toBe(true);
+      .get('generationMetadata.fallbackUsed')).toBe(false);
 
     const exhaustedSeed = await seedEligibleUser(`nutrition-exhausted-${randomUUID()}`);
     const exhaustedJob = await requestNutritionPlanGenerationHandler(
@@ -356,23 +358,47 @@ describe.skipIf(!enabled)('Nutrition complete journey (Firestore Emulator)', () 
       output: { meals: [] }, model: 'gpt-6-luna',
       usage: { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0 }, latencyMs: 1,
     });
-    expect(await processNutritionGenerationJob(exhaustedSeed.uid, exhaustedJob.generationId, { generatePlan: invalidProvider }, db)).toBe(false);
+    expect(await processNutritionGenerationJob(exhaustedSeed.uid, exhaustedJob.generationId, { reviewPlan: approveReview, generatePlan: invalidProvider }, db)).toBe(false);
     expect(invalidProvider).toHaveBeenCalledTimes(3);
     expect((await exhaustedSeed.user.collection('nutritionGenerationJobs').doc(exhaustedJob.generationId).get()).get('status')).toBe('failed');
     expect((await exhaustedSeed.user.collection('nutritionPlans').doc(exhaustedJob.generationId).get()).exists).toBe(false);
 
+    // An opaque upstream model refusal (`AI_PROVIDER_REFUSAL`, from `ai/
+    // provider.ts`'s Responses API refusal detection) has no known relation
+    // to any specific condition and can be a one-off classification quirk
+    // — unlike `AI_SAFETY_VALIDATION_FAILED` (a deterministic rule of ours,
+    // covered by the `unspecified_allergen` case below), it IS
+    // retryable, so it consumes every attempt before the job is exhausted.
+    const refusalSeed = await seedEligibleUser(`nutrition-refusal-${randomUUID()}`);
+    const refusalJob = await requestNutritionPlanGenerationHandler(
+      callable(refusalSeed.uid, { requestId: 'refusal-request-0001' }), db,
+    );
+    const refusalProvider = vi.fn().mockRejectedValue(
+      new NutritionAiProviderError('AI_PROVIDER_REFUSAL', true),
+    );
+    expect(await processNutritionGenerationJob(refusalSeed.uid, refusalJob.generationId, { reviewPlan: approveReview, generatePlan: refusalProvider }, db)).toBe(false);
+    expect(refusalProvider).toHaveBeenCalledTimes(3);
+    expect(refusalProvider.mock.calls.every(([request]) => request.fallback === false)).toBe(true);
+    expect((await refusalSeed.user.collection('nutritionGenerationJobs').doc(refusalJob.generationId).get())
+      .get('errorCode')).toBe('AI_RETRY_EXHAUSTED');
+    expect((await refusalSeed.user.collection('nutritionGenerationJobs').doc(refusalJob.generationId).get()).get('lastFailureCode')).toBe('AI_PROVIDER_REFUSAL');
+    expect((await refusalSeed.user.collection('nutritionPlans').doc(refusalJob.generationId).get()).exists).toBe(false);
+
+    // A genuine deterministic safety block (unspecified allergen) keeps `AI_SAFETY_VALIDATION_FAILED`,
+    // fires before any AI call, and is never retryable.
     const safetySeed = await seedEligibleUser(`nutrition-safety-${randomUUID()}`);
+    await safetySeed.user.collection('nutritionProfile').doc('current').update({ excludedAllergens: ['other'] });
     const safetyJob = await requestNutritionPlanGenerationHandler(
       callable(safetySeed.uid, { requestId: 'safety-request-0001' }), db,
     );
-    const safetyProvider = vi.fn().mockRejectedValue(
-      new NutritionAiProviderError('AI_SAFETY_VALIDATION_FAILED', false),
-    );
-    expect(await processNutritionGenerationJob(safetySeed.uid, safetyJob.generationId, { generatePlan: safetyProvider }, db)).toBe(false);
-    expect(safetyProvider).toHaveBeenCalledTimes(1);
-    expect(safetyProvider.mock.calls[0]?.[0].fallback).toBe(false);
+    const safetyProvider = vi.fn().mockResolvedValue({
+      output: { meals: [] }, model: 'gpt-6-luna',
+      usage: { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0 }, latencyMs: 1,
+    });
+    expect(await processNutritionGenerationJob(safetySeed.uid, safetyJob.generationId, { reviewPlan: approveReview, generatePlan: safetyProvider }, db)).toBe(false);
+    expect(safetyProvider).not.toHaveBeenCalled();
     expect((await safetySeed.user.collection('nutritionGenerationJobs').doc(safetyJob.generationId).get())
-      .get('errorCode')).toBe('AI_SAFETY_VALIDATION_FAILED');
+      .get('errorCode')).toBe('AI_DETERMINISTIC_SAFETY_BLOCKED');
     expect((await safetySeed.user.collection('nutritionPlans').doc(safetyJob.generationId).get()).exists).toBe(false);
   }, 30_000);
 });

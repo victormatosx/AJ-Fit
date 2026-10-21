@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest';
-import { defaultQuiz, type Quiz } from '../../state/AppState';
+import { describe,expect,it } from 'vitest';
+import { defaultQuiz,type Quiz } from '../../state/AppState';
 import {
   cleanApplicableAnswers,
-  normalizeWeekdays,
   normalizeLoadedQuiz,
+  normalizeWeekdays,
   questionnaireValidationErrors,
   trainingDaysValid,
   updateQuizAnswer,

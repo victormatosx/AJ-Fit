@@ -17,7 +17,7 @@ const SOURCES = new Set<PrescriptionInputSnapshotSource>([
 ]);
 
 const INPUT_KEYS: readonly (keyof EffectivePrescriptionInputs)[] = [
-  'sex', 'goal', 'level', 'limits', 'duration', 'days', 'scheduleMode', 'trainingDays',
+  'sex', 'goal', 'level', 'duration', 'days', 'scheduleMode', 'trainingDays',
   'place', 'equipment', 'style', 'muscleFocus',
   'specialConditions', 'pregnancyScreening', 'postpartumScreening',
   'functionalScreening', 'lipedemaScreening', 'dizzinessScreening',
@@ -63,7 +63,6 @@ export function effectivePrescriptionInputsFromAnswers(
     sex: answers.sex,
     goal: answers.goal,
     level: questionnaireLevelForCurrentLevel(currentTrainingLevel),
-    limits: [...answers.limits],
     duration: answers.duration,
     days: answers.days,
     scheduleMode: answers.scheduleMode ?? 'fixed',
@@ -72,7 +71,7 @@ export function effectivePrescriptionInputsFromAnswers(
     equipment: [...answers.equipment],
     style: [...answers.style],
     muscleFocus: [...answers.muscleFocus],
-    specialConditions: [...answers.specialConditions],
+    specialConditions: answers.specialConditions.filter(value => value !== ('musculoskeletal_limitation' as string)),
     pregnancyScreening: cloneNullableRecord(answers.pregnancyScreening),
     postpartumScreening: cloneNullableRecord(answers.postpartumScreening),
     functionalScreening: cloneNullableRecord(answers.functionalScreening),
@@ -108,12 +107,16 @@ export function questionnaireAnswersFromPrescriptionInputs(inputs: EffectivePres
     ...defaultQuiz,
     ...legacyInputs,
     scheduleMode: inputs.scheduleMode ?? 'fixed',
-    limits: [...inputs.limits],
     trainingDays: inputs.trainingDays ? [...inputs.trainingDays] : null,
     equipment: [...inputs.equipment],
     style: [...inputs.style],
     muscleFocus: [...inputs.muscleFocus],
-    specialConditions: [...inputs.specialConditions],
+    // `musculoskeletal_limitation` is purely informational onboarding-UI
+    // state (never part of `EffectivePrescriptionInputs` in practice —
+    // `effectivePrescriptionInputsFromAnswers` above already filters it
+    // out) — this is a defensive backstop against resurrecting it from a
+    // malformed/legacy snapshot shape into live prescription-continuity state.
+    specialConditions: inputs.specialConditions.filter(value => value !== ('musculoskeletal_limitation' as string)),
     pregnancyScreening: cloneNullableRecord(inputs.pregnancyScreening),
     postpartumScreening: cloneNullableRecord(inputs.postpartumScreening),
     functionalScreening: cloneNullableRecord(inputs.functionalScreening),
@@ -126,7 +129,7 @@ export function questionnaireAnswersFromPrescriptionInputs(inputs: EffectivePres
 
 export function isPrescriptionInputSnapshot(value: unknown): value is PrescriptionInputSnapshot {
   if (!isRecord(value) || !isRecord(value.inputs)) return false;
-  const keys = Object.keys(value.inputs).sort();
+  const keys = Object.keys(value.inputs).filter(key => key !== 'limits').sort();
   const currentKeys = [...INPUT_KEYS];
   const withoutScheduleMode = currentKeys.filter((key) => key !== 'scheduleMode');
   const withLegacyPrimaryPlace = [...currentKeys, 'primaryPlace'];
@@ -137,7 +140,6 @@ export function isPrescriptionInputSnapshot(value: unknown): value is Prescripti
   return typeof value.snapshotId === 'string' && value.snapshotId.startsWith('pis_')
     && value.schemaVersion === PRESCRIPTION_INPUT_SNAPSHOT_SCHEMA_VERSION
     && SOURCES.has(value.source as PrescriptionInputSnapshotSource)
-    && Array.isArray(value.inputs.limits)
     && Array.isArray(value.inputs.equipment)
     && Array.isArray(value.inputs.style)
     && Array.isArray(value.inputs.muscleFocus)

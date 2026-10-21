@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe,expect,it } from 'vitest';
 import { completeAnswers } from '../../workoutPrescription/__tests__/fixtures';
 import {
   buildPrescriptionInputSnapshot,
@@ -7,25 +7,6 @@ import {
 } from '../prescriptionInputs';
 
 describe('PrescriptionInputSnapshot', () => {
-  it('is deterministic and detached from later mutation of the source answers', () => {
-    const answers = completeAnswers({
-      level: 'beginner', limits: ['knee'],
-      specialConditions: ['musculoskeletal_limitation'],
-    });
-    const first = buildPrescriptionInputSnapshot({
-      answers, currentTrainingLevel: 'ADVANCED', source: 'PROGRAM_ADAPTATION',
-    });
-    const second = buildPrescriptionInputSnapshot({
-      answers: structuredClone(answers), currentTrainingLevel: 'ADVANCED', source: 'PROGRAM_ADAPTATION',
-    });
-    expect(second).toEqual(first);
-    expect(first.inputs.level).toBe('advanced');
-
-    answers.limits.push('elbow');
-    answers.specialConditions.length = 0;
-    expect(first.inputs.limits).toEqual(['knee']);
-    expect(first.inputs.specialConditions).toEqual(['musculoskeletal_limitation']);
-  });
 
   it('changes identity when source or effective inputs change', () => {
     const answers = completeAnswers();

@@ -1,42 +1,23 @@
 import { EXERCISES_SEED } from '../data/exercisesSeedData';
-import type { MovementPattern, MuscleId } from '../types/exercise';
-import { equipmentContextFor, isExerciseExecutable } from './equipment';
+import type { MovementPattern,MuscleId } from '../types/exercise';
+import { equipmentContextFor,isExerciseExecutable } from './equipment';
+import type { CatalogExercise,ExerciseCatalog } from './exerciseCatalog';
 import { goalFamilyFor } from './input';
-import {
-  evaluateDirectLimitationCandidate,
-  resolveExerciseLimitationsFromCandidates,
-  type LimitationCatalog,
-  type LimitationCatalogExercise,
-} from './limitationResolver';
-import { adaptationStage, beginnerAdjustedSets, durationKeepFactor, isBeginnerExperience, keepCount } from './personalization';
+import { adaptationStage,beginnerAdjustedSets,durationKeepFactor,isBeginnerExperience,keepCount } from './personalization';
 import { prescribeRestSeconds } from './restPrescription';
 import { isCardioDominantSessionType } from './sessionTypes';
 import type {
-  CompositionDecision,
   CanonicalTemplate,
+  CompositionDecision,
   ExerciseSubstitutionTrace,
-  FinalWorkoutExercise,
   FinalCardioFinisher,
+  FinalWorkoutExercise,
   FinalWorkoutSession,
   QuestionnaireAnswers,
   SafetyDecision,
   TemplateEnvironment,
-  WorkoutExerciseOmissionReason,
-  WorkoutExerciseOmissionTrace,
 } from './types';
-import type { LimitationDecisionTrace } from './limitationResolver';
-import type { LimitationRegionId } from '../types/exercise';
 
-/**
- * Legacy v2.0/T001-T090 composition — beginner volume reduction, duration-
- * driven exercise/set cuts, goal-derived rest via `restPrescription.ts`,
- * equipment substitution, muscle-priority reorder/add, and the P0-P7
- * modifier/conflict pipeline (`modifiers.ts`/`conflicts.ts`) all live here
- * and stay exactly as-is: `engine.ts` still calls `composeTemplate` for the
- * active runtime. The v1.27 pipeline uses `compositionV127.ts`
- * (`composeTemplateV127`) instead, which does not import this module and
- * runs none of the above. Do not add v1.27 call sites to this file.
- */
 const exerciseById = new Map(EXERCISES_SEED.map((exercise) => [exercise.id, exercise]));
 export const MINIMUM_EXECUTABLE_EXERCISES = 1;
 
@@ -92,19 +73,17 @@ function composeCardioFinisher(
 }
 
 export type CompositionResult =
-  | { status: 'COMPOSED'; sessions: FinalWorkoutSession[]; substitutions: ExerciseSubstitutionTrace[]; limitationDecisions: LimitationDecisionTrace[]; exerciseOmissions: WorkoutExerciseOmissionTrace[]; decisions: CompositionDecision[] }
-  | { status: 'INVALID_CONFIGURATION' | 'MISSING_EXERCISE' | 'NO_EXECUTABLE_SESSION'; reasonCodes: string[]; substitutions: ExerciseSubstitutionTrace[]; limitationDecisions: LimitationDecisionTrace[]; exerciseOmissions: WorkoutExerciseOmissionTrace[]; decisions: CompositionDecision[] };
+  | { status: 'COMPOSED'; sessions: FinalWorkoutSession[]; substitutions: ExerciseSubstitutionTrace[]; decisions: CompositionDecision[] }
+  | { status: 'INVALID_CONFIGURATION' | 'MISSING_EXERCISE' | 'NO_EXECUTABLE_SESSION'; reasonCodes: string[]; substitutions: ExerciseSubstitutionTrace[]; decisions: CompositionDecision[] };
 
 function compatibleSubstitute(
-  source: LimitationCatalogExercise,
-  catalog: LimitationCatalog,
-  executable: (exercise: LimitationCatalogExercise) => boolean,
-  limitationRegions: LimitationRegionId[],
-  visitedExerciseIds: ReadonlySet<string>,
-): LimitationCatalogExercise | undefined {
+  source: CatalogExercise,
+  catalog: ExerciseCatalog,
+  executable: (exercise: CatalogExercise) => boolean,
+): CatalogExercise | undefined {
   return source.substitution.similarExerciseIds
     .map((id) => catalog.get(id))
-    .find((candidate): candidate is LimitationCatalogExercise => Boolean(
+    .find((candidate): candidate is CatalogExercise => Boolean(
       candidate
       && candidate.status === 'active'
       && candidate.availability.workoutGeneration
@@ -112,17 +91,6 @@ function compatibleSubstitute(
       && candidate.movement.pattern === source.movement.pattern
       && candidate.target.primaryMuscle === source.target.primaryMuscle
       && executable(candidate)
-      && (
-        limitationRegions.length === 0
-        || evaluateDirectLimitationCandidate({
-          source,
-          candidateId: candidate.id,
-          regions: limitationRegions,
-          catalog,
-          isExecutable: executable,
-          visitedExerciseIds,
-        }).accepted
-      ),
     ));
 }
 
@@ -200,56 +168,28 @@ export function composeTemplate(
     adaptationWeek?: number;
     safety: SafetyDecision;
     environment?: TemplateEnvironment;
-    limitationRegions?: LimitationRegionId[];
-    exerciseCatalog?: readonly LimitationCatalogExercise[];
+    exerciseCatalog?: readonly CatalogExercise[];
   },
 ): CompositionResult {
   const substitutions: ExerciseSubstitutionTrace[] = [];
-  const limitationDecisions: LimitationDecisionTrace[] = [];
-  const exerciseOmissions: WorkoutExerciseOmissionTrace[] = [];
   const decisions: CompositionDecision[] = [];
   const missing: string[] = [];
   const unresolved: string[] = [];
   const environment = options.environment ?? template.profile.environment;
   const equipment = equipmentContextFor(answers, environment);
   const applyInventory = environment === 'home';
-  const catalog = new Map<string, LimitationCatalogExercise>(
+  const catalog = new Map<string, CatalogExercise>(
     (options.exerciseCatalog ?? EXERCISES_SEED).map((exercise) => [exercise.id, exercise]),
   );
-  const limitationRegions = options.limitationRegions ?? [];
-  const executable = (exercise: LimitationCatalogExercise) => isExerciseExecutable(exercise, equipment);
+  const executable = (exercise: CatalogExercise) => isExerciseExecutable(exercise, equipment);
   const priorities = answers.muscleFocus.filter((value) => value !== 'none').slice(0, 2);
   const beginner = isBeginnerExperience(answers);
   const stage = adaptationStage(options.adaptationWeek);
   const beginnerActive = beginner && stage < 3;
   const goalFamily = goalFamilyFor(answers.goal);
 
-  function omissionReason(input: {
-    sourceId: string;
-    excludedExerciseIds: ReadonlySet<string>;
-    candidatesEvaluated: Array<{ reasonCodes: string[] }>;
-  }): WorkoutExerciseOmissionReason {
-    if (input.excludedExerciseIds.size > 0) {
-      const withoutCollisionConstraint = resolveExerciseLimitationsFromCandidates({
-        exerciseId: input.sourceId,
-        regions: limitationRegions,
-        catalog,
-        isExecutable: executable,
-      });
-      if (withoutCollisionConstraint.status === 'RESOLVED') return 'COLLISION_NO_ALTERNATIVE';
-    }
-    if (input.candidatesEvaluated.some((candidate) =>
-      candidate.reasonCodes.includes('LIMITATION_CANDIDATE_EQUIPMENT_UNAVAILABLE'))) {
-      return 'NO_ENVIRONMENT_CANDIDATE';
-    }
-    if (limitationRegions.length > 1) return 'MULTI_LIMITATION_NO_INTERSECTION';
-    return 'NO_SAFE_SUBSTITUTION';
-  }
-
   const sessions = template.sessions.map((session, sessionIndex): FinalWorkoutSession => {
     const slots: ResolvedSlot[] = [];
-    const usedExerciseIds = new Set<string>();
-    let omittedInSession = false;
     for (const [originalIndex, item] of session.exercises.entries()) {
       const source = catalog.get(item.exercise_id);
       if (!source) {
@@ -272,52 +212,11 @@ export function composeTemplate(
         continue;
       }
       let selected = source;
-      const visitedExerciseIds = new Set<string>([source.id]);
-      if (limitationRegions.length) {
-        const limitation = resolveExerciseLimitationsFromCandidates({
-          exerciseId: source.id,
-          regions: limitationRegions,
-          catalog,
-          isExecutable: executable,
-          excludedExerciseIds: usedExerciseIds,
-        });
-        if (limitation.status === 'FAILED') {
-          if (limitation.failureKind === 'INVALID_CONFIGURATION') {
-            unresolved.push(...limitation.reasonCodes.map((code) => `${code}:${source.id}`));
-          } else {
-            const reason = omissionReason({
-              sourceId: source.id,
-              excludedExerciseIds: usedExerciseIds,
-              candidatesEvaluated: limitation.candidatesEvaluated,
-            });
-            omittedInSession = true;
-            exerciseOmissions.push({
-              event: 'workout_exercise_omitted',
-              sessionIndex,
-              sourceExerciseId: source.id,
-              reason,
-            });
-            decisions.push({
-              reasonCode: 'OMIT_UNSAFE_EXERCISE',
-              sessionIndex,
-              exerciseId: source.id,
-              omissionReason: reason,
-            });
-          }
-          continue;
-        } else {
-          selected = limitation.exercise;
-          visitedExerciseIds.add(selected.id);
-          limitationDecisions.push({ sessionIndex, ...limitation.trace });
-        }
-      }
       if (applyInventory && !executable(selected)) {
         const replacement = compatibleSubstitute(
           selected,
           catalog,
           executable,
-          limitationRegions,
-          visitedExerciseIds,
         );
         if (!replacement) {
           unresolved.push(`NO_SAFE_EQUIPMENT_SUBSTITUTE:${source.id}`);
@@ -340,7 +239,6 @@ export function composeTemplate(
           exerciseId: selected.id, beforeSets: item.sets, afterSets: adjustedSets,
         });
       }
-      usedExerciseIds.add(selected.id);
       slots.push({
         originalIndex,
         primaryMuscle: selected.target.primaryMuscle,
@@ -482,7 +380,7 @@ export function composeTemplate(
         });
         continue;
       }
-      if (slot.exercise.sets == null || omittedInSession) continue;
+      if (slot.exercise.sets == null) continue;
       const beforeSets = slot.exercise.sets;
       slots[candidate.slotIndex] = {
         ...slot,
@@ -512,10 +410,10 @@ export function composeTemplate(
   });
 
   if (missing.length) {
-    return { status: 'MISSING_EXERCISE', reasonCodes: [...new Set(missing)].sort(), substitutions, limitationDecisions, exerciseOmissions, decisions };
+    return { status: 'MISSING_EXERCISE', reasonCodes: missing.map(id => `MISSING_EXERCISE:${id}`), substitutions, decisions };
   }
   if (unresolved.length) {
-    return { status: 'INVALID_CONFIGURATION', reasonCodes: [...new Set(unresolved)].sort(), substitutions, limitationDecisions, exerciseOmissions, decisions };
+    return { status: 'INVALID_CONFIGURATION', reasonCodes: unresolved, substitutions, decisions };
   }
   const emptySessionIndexes = sessions
     .map((session, index) => ({ session, index }))
@@ -526,12 +424,10 @@ export function composeTemplate(
       status: 'NO_EXECUTABLE_SESSION',
       reasonCodes: emptySessionIndexes.map((index) => `NO_EXECUTABLE_SESSION:${index}`),
       substitutions,
-      limitationDecisions,
-      exerciseOmissions,
       decisions,
     };
   }
-  return { status: 'COMPOSED', sessions, substitutions, limitationDecisions, exerciseOmissions, decisions };
+  return { status: 'COMPOSED', sessions, substitutions, decisions };
 }
 
 export function exerciseExists(exerciseId: string): boolean {

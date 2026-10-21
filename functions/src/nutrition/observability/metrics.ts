@@ -7,7 +7,8 @@ export interface AiOperationFact {
   inputTokens: number | null;
   outputTokens: number | null;
   estimatedCostUsd: number | null;
-  resultStatus: 'validated' | 'failed';
+  agentRole?: 'creator' | 'reviewer';
+  resultStatus: 'validated' | 'failed' | 'created' | 'pending' | 'approved';
   failureCode: string | null;
 }
 
@@ -37,7 +38,8 @@ export function buildAiOperationMetrics(facts: readonly AiOperationFact[]): AiOp
   }
   const requests = [...byRequest.values()];
   const successful = requests.filter((items) => items.some((item) => item.resultStatus === 'validated'));
-  const retried = requests.filter((items) => items.length > 1);
+  const retried = requests.filter(items => items.some(item => item.attemptNumber > 1)
+    || items.filter(item => item.agentRole === 'reviewer').length > 1);
   const fallback = requests.filter((items) => items.some((item) => item.fallbackUsed));
   const failuresByCode: Record<string, number> = {};
   for (const fact of facts) {
@@ -77,4 +79,9 @@ export function buildAiMetricsByOperation(facts: readonly AiOperationFact[]) {
     full_plan: buildAiOperationMetrics(facts.filter((item) => item.operation === 'full_plan')),
     meal_alternative: buildAiOperationMetrics(facts.filter((item) => item.operation === 'meal_alternative')),
   };
+}
+
+export function buildAiMetricsByRole(facts: readonly AiOperationFact[]) {
+  return { creator: buildAiOperationMetrics(facts.filter(f => f.agentRole === 'creator')),
+    reviewer: buildAiOperationMetrics(facts.filter(f => f.agentRole === 'reviewer')) };
 }

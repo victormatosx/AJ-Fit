@@ -10,25 +10,21 @@
  * Skipped by default — only runs when `SCHEDULE_CONFIG_RECONCILIATION_INTEGRATION=1`
  * is set (see the `test:integration:scheduleConfigReconciliation` npm script).
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { collection, doc, getDoc, getDocs, setDoc, Timestamp } from 'firebase/firestore';
+import { Timestamp,collection,doc,getDoc,getDocs,setDoc } from 'firebase/firestore';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { afterAll,beforeAll,beforeEach,describe,expect,it,vi } from 'vitest';
 
 import { buildSeedDocuments } from '../../../scripts/seedWorkoutTemplates';
-import { completeAnswers } from '../../workoutPrescription/__tests__/fixtures';
-import { legacyTrainingDays } from '../../workoutPrescription/weeklySchedule';
 import { toPersistedAnswers } from '../../lib/questionnaireAnswers';
 import { resolveWorkoutSchedule } from '../../scheduleEngine/resolver';
 import type { Weekday } from '../../state/AppState';
-import {
-  CANONICAL_LIMITATION_DATASET_HASH,
-  CANONICAL_LIMITATION_DATASET_VERSION,
-} from '../../workoutPrescription/limitationDataset';
+import { completeAnswers } from '../../workoutPrescription/__tests__/fixtures';
+import { legacyTrainingDays } from '../../workoutPrescription/weeklySchedule';
 
 const PROJECT_ID = 'ajfit-rules-test';
 const UID = 'carol';
@@ -47,6 +43,7 @@ vi.mock('../../lib/firebase', () => ({
   },
 }));
 
+import { startOrResumeWorkoutExecution } from '../workoutExecutions';
 import { generateAndPersistWorkoutProgram } from '../workoutPrograms';
 import {
   ensureScheduleConfigFromQuestionnaire,
@@ -54,9 +51,8 @@ import {
   resolveTodaysSchedule,
   saveScheduleConfig,
 } from '../workoutSchedule';
-import { startOrResumeWorkoutExecution } from '../workoutExecutions';
+import { installWorkoutLifecycleAuthorityFixture,resetWorkoutLifecycleAuthorityFixture } from './workoutLifecycleAuthorityFixture';
 import { enableWorkoutLifecycleRollout } from './workoutLifecycleRolloutFixture';
-import { installWorkoutLifecycleAuthorityFixture, resetWorkoutLifecycleAuthorityFixture } from './workoutLifecycleAuthorityFixture';
 
 const T003_SEED = buildSeedDocuments().find((t) => t.id === 'T003');
 if (!T003_SEED) throw new Error('T003 fixture missing — cannot run scheduleConfig reconciliation integration tests');
@@ -76,10 +72,6 @@ async function seedUserQuestionnaireAndTemplate() {
       metadata: { role: 'user', createdAt: Timestamp.now(), updatedAt: Timestamp.now(), commercialGateResolvedAt: Timestamp.now() },
     });
     await setDoc(doc(rawDb, 'workoutTemplates', 'T003'), T003_SEED);
-    await setDoc(doc(rawDb, 'limitationDatasetState', 'active'), {
-      datasetVersion: CANONICAL_LIMITATION_DATASET_VERSION,
-      limitationDatasetHash: CANONICAL_LIMITATION_DATASET_HASH,
-    });
     await setDoc(doc(rawDb, 'users', UID, 'questionnaires', QUESTIONNAIRE_ID), {
       answers: toPersistedAnswers(VALID_ANSWERS),
       version: 1,

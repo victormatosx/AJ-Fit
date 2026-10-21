@@ -1,13 +1,12 @@
-import { catalogInvariantErrors, getTemplateById, TEMPLATE_LIBRARY_VERSION } from './catalog';
+import { normalizeWeekdays } from '../lib/questionnaireSchema';
+import { TEMPLATE_LIBRARY_VERSION,catalogInvariantErrors,getTemplateById } from './catalog';
 import { composeTemplate } from './composition';
 import { resolveConflicts } from './conflicts';
-import { prescriptionInputErrors, sanitizeAnswersForEngine } from './input';
+import { prescriptionInputErrors,sanitizeAnswersForEngine } from './input';
 import { resolveModifiers } from './modifiers';
+import { adaptationStage,isBeginnerExperience } from './personalization';
 import { evaluateSafety } from './safety';
 import { selectTemplate } from './selection';
-import { adaptationStage, isBeginnerExperience } from './personalization';
-import { LIMITATION_RESOLVER_VERSION, mapQuestionnaireLimitations } from './limitationResolver';
-import { localLimitationDatasetIdentity } from './limitationDataset';
 import {
   PRESCRIPTION_VERSIONS,
   type FinalWorkoutPlan,
@@ -16,7 +15,6 @@ import {
   type QuestionnaireAnswers,
 } from './types';
 import { validateFinalWorkout } from './validation';
-import { normalizeWeekdays } from '../lib/questionnaireSchema';
 import { buildWorkoutWeek } from './weeklySchedule';
 
 function stableHash(value: string): string {
@@ -57,11 +55,6 @@ export function generateWorkoutPrescription(
     return { status: 'REQUIRES_CLEARANCE', reasonCodes: safety.reasons, safety };
   }
 
-  const limitationMapping = mapQuestionnaireLimitations(answers);
-  if (limitationMapping.status === 'UNMAPPED') {
-    return { status: 'INVALID_CONFIGURATION', reasonCodes: limitationMapping.reasonCodes, safety };
-  }
-
   const selection = selectTemplate(answers);
   if (selection.status === 'MISSING_TEMPLATE') {
     return { status: 'MISSING_TEMPLATE', reasonCodes: selection.reasonCodes, safety };
@@ -87,7 +80,6 @@ export function generateWorkoutPrescription(
     adaptationWeek: planAdaptationStage,
     safety,
     environment: selection.decision.environment,
-    limitationRegions: limitationMapping.regions,
     exerciseCatalog: context.exerciseCatalog,
   });
   const partialTrace = {
@@ -101,9 +93,6 @@ export function generateWorkoutPrescription(
       .map((modifier) => modifier.id),
     conflicts,
     substitutions: composition.substitutions,
-    limitationResolverVersion: LIMITATION_RESOLVER_VERSION,
-    limitationDecisions: composition.limitationDecisions,
-    exerciseOmissions: composition.exerciseOmissions,
     compositionDecisions: composition.decisions,
   };
   if (composition.status !== 'COMPOSED') {
@@ -131,7 +120,6 @@ export function generateWorkoutPrescription(
     };
   }
 
-  const limitationDataset = context.limitationDataset ?? localLimitationDatasetIdentity();
   const scheduleMode = answers.scheduleMode === 'flexible' ? 'flexible' : 'fixed';
   const normalizedAvailableWeekdays = normalizeWeekdays(answers.trainingDays ?? []);
   const availability = {
@@ -154,13 +142,8 @@ export function generateWorkoutPrescription(
     weeklySchedule,
     modifiers: modifiers.map((modifier) => modifier.id),
     substitutions: composition.substitutions,
-    limitationDecisions: composition.limitationDecisions,
     compositionDecisions: composition.decisions,
     adaptationStage: planAdaptationStage,
-    limitationDataset: {
-      version: limitationDataset.version,
-      hash: limitationDataset.hash,
-    },
     versions: PRESCRIPTION_VERSIONS,
   });
   const plan: FinalWorkoutPlan = {
@@ -177,8 +160,6 @@ export function generateWorkoutPrescription(
     goalFamily: selection.decision.goalFamily,
     split: template.split,
     adaptationStage: planAdaptationStage,
-    limitationDatasetVersion: limitationDataset.version,
-    limitationDatasetHash: limitationDataset.hash,
     sessions: composition.sessions,
     versions: PRESCRIPTION_VERSIONS,
     trace,

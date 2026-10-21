@@ -315,35 +315,7 @@ service cloud.firestore {
              || data.workoutLifecycleQaAccelerated is bool);
     }
 
-    function workoutProgramLimitationValid(questionnaire, data) {
-      let conditions = questionnaire.data.answers.get('specialConditions', []);
-      let limits = questionnaire.data.answers.get('limits', []);
-      return conditions is list
-        && limits is list
-        && (
-          (
-            !conditions.hasAny(['musculoskeletal_limitation'])
-            && !limits.hasAny([
-                 'knee', 'hip', 'back', 'shoulder', 'elbow', 'wrist', 'ankle_foot', 'other'
-               ])
-          )
-          || (
-            conditions.hasAny(['musculoskeletal_limitation'])
-            && limits.size() >= 1
-            && limits.toSet().hasOnly([
-                 'knee', 'hip', 'back', 'shoulder', 'elbow', 'wrist', 'ankle_foot'
-               ])
-            // '1.0.0' (v2.0/v1.3) and '2.0.0' (v1.27 — Fase 12) are the only
-            // limitation-resolver versions any real engine emits; each is
-            // tied to its own template library elsewhere in this function.
-            && data.versions.limitationResolver in ['1.0.0', '2.0.0']
-            && data.trace.limitationResolverVersion == 1
-            && data.trace.limitationDecisions is list
-            && data.trace.limitationDecisions.size() >= data.sessions.size()
-            && data.trace.limitationDecisions.size() <= 100
-          )
-        );
-    }
+
 
     // Fase 12 — v1.27's T001-T102 canonical library is bundled/local only
     // (`src/workoutPrescription/canonicalCatalog.ts`) and deliberately never
@@ -487,7 +459,7 @@ service cloud.firestore {
              'questionnaireVersion', 'status', 'source', 'requestedDays',
              'prescribedStructuredDays', 'population', 'environment',
              'goalFamily', 'split', 'adaptationStage', 'sessions', 'versions',
-             'trace', 'limitationDatasetVersion', 'limitationDatasetHash',
+             'trace',
              'prescribedTrainingFrequency', 'scheduleMode', 'availability', 'weeklySchedule',
              'createdAt', 'activatedAt', 'updatedAt'
            ])
@@ -505,7 +477,6 @@ service cloud.firestore {
         && data.questionnaireId is string
         && data.questionnaireVersion is int && data.questionnaireVersion >= 1
         && questionnaire.data.version == data.questionnaireVersion
-        && workoutProgramLimitationValid(questionnaire, data)
         && data.status in ['active', 'superseded']
         && data.source in ['onboarding', 'manual_regeneration', 'automatic_progression', 'automatic_reconciliation', 'evolution_activation', 'program_adaptation']
         && data.requestedDays is int && data.requestedDays >= 2 && data.requestedDays <= 7
@@ -539,24 +510,7 @@ service cloud.firestore {
             || (data.adaptationStage is int && data.adaptationStage >= 1 && data.adaptationStage <= 3));
     }
 
-    // New program snapshots are cryptographically tied to the exact active
-    // clinical dataset. Legacy snapshots remain readable/updateable so an
-    // activation transaction can supersede them without rewriting history.
-    function workoutProgramLimitationDatasetValid(data) {
-      let active = get(/databases/$(database)/documents/limitationDatasetState/active);
-      return (
-          !data.keys().hasAny(['limitationDatasetVersion', 'limitationDatasetHash'])
-        ) || (
-          data.keys().hasAll(['limitationDatasetVersion', 'limitationDatasetHash'])
-          && data.limitationDatasetVersion is string
-          && data.limitationDatasetVersion.size() >= 1
-          && data.limitationDatasetVersion.size() <= 120
-          && data.limitationDatasetHash is string
-          && data.limitationDatasetHash.matches('^[a-f0-9]{64}$')
-          && active.data.datasetVersion == data.limitationDatasetVersion
-          && active.data.limitationDatasetHash == data.limitationDatasetHash
-        );
-    }
+
 
     // Phase 10E (P3, docs/workout-lifecycle/v2/architecture/
     // 26_FINAL_INDEPENDENT_ADVERSARIAL_AUDIT_2.md §51): `exercises.size()`
@@ -1686,6 +1640,8 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly(
                ['answers', 'version', 'createdAt'])
           && request.resource.data.answers is map
+          && !request.resource.data.answers.keys().hasAny(['limits', 'limitationImpact'])
+          && !request.resource.data.answers.get('specialConditions', []).hasAny(['musculoskeletal_limitation'])
           && request.resource.data.version is int
           && request.resource.data.version >= 1
           && request.resource.data.createdAt is timestamp;
@@ -1739,7 +1695,6 @@ service cloud.firestore {
           // Transitional rollout compatibility: the already-published app
           // may omit both fields; the new app always sends both, and any
           // supplied identity is required to equal the active dataset.
-          && workoutProgramLimitationDatasetValid(request.resource.data)
           && request.resource.data.status == 'active'
           && request.resource.data.createdAt == request.time
           && request.resource.data.activatedAt == request.time
@@ -2127,6 +2082,20 @@ service cloud.firestore {
       // Workout Lifecycle V2 authoritative current state. The original
       // questionnaire is immutable and never becomes the mutable level
       // source of truth.
+      // Rules de transição (2026-10-20): `limits`/`primaryPlace` eram
+      // obrigatórios no contrato publicado anteriormente. O cliente novo
+      // parou de emiti-los (remoção da lógica musculoesquelética
+      // automática — docs/removal-physical-limitations/REPORT.md) sem
+      // que o backend tivesse sido ajustado, rejeitando
+      // `AUTOMATIC_RECONCILIATION`/`PROGRAM_ADAPTATION` gravados pelo
+      // cliente. Ambos os campos passam a ser OPCIONAIS: continuam
+      // aceitos (clientes antigos ainda distribuídos que os emitem não
+      // quebram) mas não são mais exigidos, e nenhuma regra neste
+      // arquivo lê seus valores para decisão de autoridade/segurança —
+      // isso nunca existiu aqui e não foi reintroduzido. `limits`, quando
+      // presente, mantém a mesma checagem de forma (`is list`) do
+      // contrato publicado anterior; `primaryPlace` nunca teve checagem
+      // de tipo própria nesse contrato e continua sem ela aqui.
       function prescriptionInputSnapshotValid(snapshot) {
         return snapshot is map
           && snapshot.keys().hasAll(['snapshotId', 'schemaVersion', 'source', 'inputs'])
@@ -2138,8 +2107,8 @@ service cloud.firestore {
                'LEVEL_PROMOTION', 'CYCLE_EVOLUTION', 'MOTIVATIONAL_RENEWAL']
           && snapshot.inputs is map
           && snapshot.inputs.keys().hasAll([
-               'sex', 'goal', 'level', 'limits', 'duration', 'days',
-               'trainingDays', 'place', 'primaryPlace', 'equipment', 'style',
+               'sex', 'goal', 'level', 'duration', 'days',
+               'trainingDays', 'place', 'equipment', 'style',
                'muscleFocus', 'specialConditions', 'pregnancyScreening',
                'postpartumScreening', 'functionalScreening',
                'lipedemaScreening', 'dizzinessScreening',
@@ -2152,7 +2121,7 @@ service cloud.firestore {
                'lipedemaScreening', 'dizzinessScreening',
                'postSurgicalScreening', 'medicalRestrictionScreening'])
           && snapshot.inputs.level in ['beginner', 'intermediate', 'advanced']
-          && snapshot.inputs.limits is list
+          && (!snapshot.inputs.keys().hasAny(['limits']) || snapshot.inputs.limits is list)
           && snapshot.inputs.equipment is list
           && snapshot.inputs.style is list
           && snapshot.inputs.muscleFocus is list
@@ -2266,13 +2235,13 @@ service cloud.firestore {
           && plan.keys().hasAll([
                'planId', 'templateId', 'requestedDays', 'prescribedStructuredDays',
                'population', 'environment', 'goalFamily', 'split',
-               'limitationDatasetVersion', 'limitationDatasetHash', 'sessions',
+               'sessions',
                'versions', 'trace'])
           && plan.keys().hasOnly([
                'planId', 'templateId', 'requestedDays', 'prescribedStructuredDays',
                'prescribedTrainingFrequency', 'scheduleMode', 'availability', 'weeklySchedule',
                'population', 'environment', 'goalFamily', 'split', 'adaptationStage',
-               'limitationDatasetVersion', 'limitationDatasetHash', 'sessions',
+               'sessions',
                'versions', 'trace'])
           && plan.planId == data.targetPrescriptionIdentity
           && plan.templateId == data.targetTemplateId
@@ -2280,9 +2249,7 @@ service cloud.firestore {
           && plan.prescribedStructuredDays is int
           && plan.prescribedStructuredDays >= 1 && plan.prescribedStructuredDays <= 7
           && plan.sessions is list && plan.sessions.size() >= 1 && plan.sessions.size() <= 7
-          && plan.versions is map && plan.trace is map
-          && plan.limitationDatasetVersion is string
-          && plan.limitationDatasetHash is string && plan.limitationDatasetHash.size() == 64;
+          && plan.versions is map && plan.trace is map;
       }
 
       function lifecycleEventPayloadValid(data) {
@@ -2294,7 +2261,7 @@ service cloud.firestore {
           || (data.type == 'PROGRAM_ADAPTED'
             && payload.keys().hasOnly(['source', 'reason'])
             && payload.source == 'program_adaptation'
-            && payload.reason in ['AVAILABILITY', 'GOAL', 'ENVIRONMENT', 'LIMITATION', 'PREFERENCE'])
+            && payload.reason in ['AVAILABILITY', 'GOAL', 'ENVIRONMENT', 'PREFERENCE'])
           || (data.type in ['EVOLUTION_EARNED', 'MOTIVATIONAL_RENEWAL_OFFERED']
             && payload.keys().hasOnly([
                  'evolutionType', 'quality', 'fromLevel', 'toLevel',
@@ -2795,7 +2762,8 @@ service cloud.firestore {
         // hardening is on — see the hardening plan's rollout report for the
         // options considered and why none were applied yet without further
         // work.
-        allow create: if isOwner(userId)
+        allow create: if !request.resource.data.keys().hasAny(['substitutionPolicySnapshot'])
+          && isOwner(userId)
           && accountActive(userId)
           && workoutExecutionCommonValid(userId, request.resource.data)
           && executionExerciseSetsWithinBound(request.resource.data.exercises)
@@ -3342,115 +3310,18 @@ service cloud.firestore {
     // é dado sensível e é necessária para exibir/gerar treinos e permitir
     // substituição de exercícios.
     //
-    function limitationExerciseIdValid(value) {
-      return value is string
-        && value.size() >= 1
-        && value.size() <= 120
-        && value.matches('^[a-z0-9]+(-[a-z0-9]+)*$');
-    }
+
 
     // Firestore Rules não possui loops. O limite fechado de 10 mantém a
     // validação integral dos IDs, ordem e unicidade sem extrapolar o tamanho
     // razoável de uma lista de candidatos do protocolo V1.
-    function limitationExerciseIdListValid(ids, exerciseId) {
-      return ids is list
-        && ids.size() <= 10
-        && ids.toSet().size() == ids.size()
-        && (ids.size() < 1 || (limitationExerciseIdValid(ids[0]) && ids[0] != exerciseId))
-        && (ids.size() < 2 || (limitationExerciseIdValid(ids[1]) && ids[1] != exerciseId))
-        && (ids.size() < 3 || (limitationExerciseIdValid(ids[2]) && ids[2] != exerciseId))
-        && (ids.size() < 4 || (limitationExerciseIdValid(ids[3]) && ids[3] != exerciseId))
-        && (ids.size() < 5 || (limitationExerciseIdValid(ids[4]) && ids[4] != exerciseId))
-        && (ids.size() < 6 || (limitationExerciseIdValid(ids[5]) && ids[5] != exerciseId))
-        && (ids.size() < 7 || (limitationExerciseIdValid(ids[6]) && ids[6] != exerciseId))
-        && (ids.size() < 8 || (limitationExerciseIdValid(ids[7]) && ids[7] != exerciseId))
-        && (ids.size() < 9 || (limitationExerciseIdValid(ids[8]) && ids[8] != exerciseId))
-        && (ids.size() < 10 || (limitationExerciseIdValid(ids[9]) && ids[9] != exerciseId));
-    }
 
-    function limitationRuleValid(rule, exerciseId) {
-      return rule is map
-        && (
-          (
-            rule.keys().hasOnly(['status'])
-            && rule.status in ['compatible', 'not_applicable']
-          )
-          || (
-            rule.keys().hasAll(['status', 'adaptation'])
-            && rule.keys().hasOnly(['status', 'adaptation'])
-            && rule.status == 'adapt'
-            && rule.adaptation is map
-            && rule.adaptation.keys().hasAll(['kind', 'exerciseId'])
-            && rule.adaptation.keys().hasOnly(['kind', 'exerciseId'])
-            && rule.adaptation.kind == 'exercise_variant'
-            && limitationExerciseIdValid(rule.adaptation.exerciseId)
-            && rule.adaptation.exerciseId != exerciseId
-          )
-          || (
-            rule.keys().hasAll(['status', 'substituteExerciseIds', 'candidateStatus'])
-            && rule.keys().hasOnly(['status', 'substituteExerciseIds', 'candidateStatus'])
-            && rule.status == 'avoid'
-            && limitationExerciseIdListValid(rule.substituteExerciseIds, exerciseId)
-            && (
-              (rule.substituteExerciseIds.size() == 0
-                && rule.candidateStatus == 'missing_exercise_candidate')
-              || (rule.substituteExerciseIds.size() > 0
-                && rule.candidateStatus == 'ready')
-            )
-          )
-        );
-    }
 
-    function limitationRegionsValid(regions, exerciseId) {
-      return regions is map
-        && regions.keys().hasAll([
-             'knee', 'hip', 'back', 'shoulder', 'elbow', 'wrist', 'ankle_foot'
-           ])
-        && regions.keys().hasOnly([
-             'knee', 'hip', 'back', 'shoulder', 'elbow', 'wrist', 'ankle_foot'
-           ])
-        && limitationRuleValid(regions.knee, exerciseId)
-        && limitationRuleValid(regions.hip, exerciseId)
-        && limitationRuleValid(regions.back, exerciseId)
-        && limitationRuleValid(regions.shoulder, exerciseId)
-        && limitationRuleValid(regions.elbow, exerciseId)
-        && limitationRuleValid(regions.wrist, exerciseId)
-        && limitationRuleValid(regions.ankle_foot, exerciseId);
-    }
 
-    function limitationProfileValid(profile, exerciseId) {
-      return profile is map
-        && profile.schemaVersion == 1
-        && profile.protocolVersion == 'musculoskeletal-v1'
-        && profile.reviewStatus == 'approved'
-        && limitationRegionsValid(profile.regions, exerciseId)
-        && (
-          (
-            profile.keys().hasAll([
-              'schemaVersion', 'protocolVersion', 'reviewStatus', 'reviewBasis', 'regions'
-            ])
-            && profile.keys().hasOnly([
-              'schemaVersion', 'protocolVersion', 'reviewStatus', 'reviewBasis', 'regions'
-            ])
-            && profile.reviewBasis == 'product_policy'
-          )
-          || (
-            profile.keys().hasAll([
-              'schemaVersion', 'protocolVersion', 'reviewStatus', 'reviewBasis',
-              'regions', 'reviewedAt', 'reviewedBy'
-            ])
-            && profile.keys().hasOnly([
-              'schemaVersion', 'protocolVersion', 'reviewStatus', 'reviewBasis',
-              'regions', 'reviewedAt', 'reviewedBy'
-            ])
-            && profile.reviewBasis == 'professional_review'
-            && profile.reviewedAt is timestamp
-            && profile.reviewedBy is string
-            && profile.reviewedBy.size() >= 1
-            && profile.reviewedBy.size() <= 200
-          )
-        );
-    }
+
+
+
+
 
     // `exerciseWriteValid` valida identidade (id/slug == id do documento) e
     // os poucos enums baratos de checar (status/difficulty). Não duplica o
@@ -3475,8 +3346,8 @@ service cloud.firestore {
         && d.name.keys().hasAll(['ptBR', 'en', 'es'])
         && d.metadata is map
         && d.metadata.updatedAt == request.time
-        && (!('limitationProfile' in d)
-            || limitationProfileValid(d.limitationProfile, exerciseId));
+        && !d.keys().hasAny(['limitationProfile'])
+        && !d.substitution.keys().hasAny(['limitationVariantIds']);
     }
 
     match /exercises/{exerciseId} {
@@ -3493,8 +3364,6 @@ service cloud.firestore {
       // (createdAt novo != createdAt armazenado ⇒ rejeitado como update).
       allow update: if isAdmin()
         && exerciseWriteValid(exerciseId)
-        && (!('limitationProfile' in resource.data)
-            || ('limitationProfile' in request.resource.data))
         && request.resource.data.metadata.createdAt == resource.data.metadata.createdAt
         && request.resource.data.metadata.version == resource.data.metadata.version;
 
@@ -3503,24 +3372,7 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Published clinical dataset identity. Clients consume only the active
-    // pointer; immutable version snapshots and all writes remain server-only.
-    // Contains only a version string + content hash — no clinical/PII data —
-    // so it needs no stronger gate than `isSignedIn()`. Every workout program
-    // generation reads this (to stamp its dataset identity) regardless of
-    // whether the user has any limitations at all; gating it behind email
-    // verification blocked first-program generation for every signed-in,
-    // not-yet-verified account (`workoutPrograms.ts`'s `prepareWorkoutProgram`
-    // maps the resulting permission-denied into `INVALID_CONFIGURATION`).
-    match /limitationDatasetState/{stateId} {
-      allow read: if stateId == 'active' && isSignedIn();
-      allow write: if false;
-    }
 
-    // Fase 6 — ops-controlled rollout gate for NEW Workout Lifecycle V2
-    // migrations (architecture/12_PHASE_6_IMPLEMENTATION.md "Rollout").
-    // Admin-SDK-write-only, same pattern as limitationDatasetState above:
-    // the client can never edit its own rollout eligibility.
     match /workoutLifecycleRolloutConfig/{configId} {
       allow read: if configId == 'active' && isSignedIn();
       allow write: if false;
@@ -3562,9 +3414,6 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    match /limitationDatasetVersions/{datasetHash} {
-      allow read, write: if false;
-    }
 
     function workoutTemplateValid(templateId) {
       let data = request.resource.data;

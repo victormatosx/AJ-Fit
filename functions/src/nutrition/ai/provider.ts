@@ -4,7 +4,8 @@ import {
 } from '../shared/types/nutrition';
 import type { NutritionPromptFoodNames } from '../generation/foodNames';
 import { logInfo, logWarn } from '../../lib/logger';
-import { AI_SCHEMA_VERSION, NUTRITION_AI_MODELS } from './config';
+import { AI_SCHEMA_VERSION, NUTRITION_AI_MODELS, AI_STAGE_LIMITS } from './config';
+import { OPENAI_REVIEW_SCHEMA, REVIEW_SYSTEM_PROMPT, type NutritionReviewRequest } from './review';
 import {
   FULL_PLAN_SYSTEM_PROMPT, fullPlanContext, MEAL_ALTERNATIVE_SYSTEM_PROMPT, mealAlternativeContext,
   UNTRUSTED_DATA_SYSTEM_PROMPT, CATALOG_INTENT_INSTRUCTIONS,
@@ -32,6 +33,7 @@ export function nutritionAiProfile(profile: NutritionProfile): NutritionAiProfil
 }
 
 export interface FullPlanRequest {
+  physicalContext?: unknown;
   trace?: { generationId: string; attempt: number };
   profile: NutritionAiProfile;
   engine: NutritionEngineOutput;
@@ -43,6 +45,7 @@ export interface FullPlanRequest {
   timeoutMs?: number;
 }
 export interface MealAlternativeRequest {
+  physicalContext?: unknown;
   profile: NutritionAiProfile;
   target: MealNutritionTarget;
   avoidFoodNames: readonly string[];
@@ -56,13 +59,16 @@ export interface MealAlternativeRequest {
 export interface NutritionAiProvider {
   generatePlan(request: FullPlanRequest): Promise<AiResult>;
   generateMealAlternative?(request: MealAlternativeRequest): Promise<AiResult>;
+  reviewPlan?(request: NutritionReviewRequest): Promise<AiResult>;
 }
 export class NutritionAiProviderError extends Error {
-  constructor(readonly code: 'AI_SCHEMA_INVALID' | 'AI_RATE_LIMIT' | 'AI_PROVIDER_ERROR' | 'AI_SAFETY_VALIDATION_FAILED',
+  constructor(readonly code: 'AI_SCHEMA_INVALID' | 'AI_RATE_LIMIT' | 'AI_PROVIDER_ERROR' | 'AI_PROVIDER_REFUSAL'
+    | 'AI_REVIEW_PROVIDER_REFUSAL' | 'AI_REVIEW_SCHEMA_INVALID' | 'AI_REVIEW_UNAVAILABLE'
+    | 'AI_REVIEW_TIMEOUT' | 'AI_REVIEW_RATE_LIMIT' | 'AI_COST_LIMIT_EXCEEDED',
     readonly retryable: boolean,
     /** Bounded refusal for internal audit consumers; never log free-form text,
      * since a model refusal can echo sensitive input. */
-    readonly refusalReason?: string) { super(code); }
+    readonly refusalReason?: string, readonly result?: AiResult) { super(code); }
 }
 
 // Free-form AI food item — no foodId, no catalog reference (diet-quality-v3,
@@ -148,14 +154,23 @@ export class OpenAiNutritionProvider implements NutritionAiProvider {
 
   private async callResponsesApi(
     model: string, developerPrompt: string, userContent: string, schemaName: string, schema: object,
-    trace: { generationId?: string; attempt?: number;
+    trace: { generationId?: string; attempt?: number; role?: 'creator' | 'reviewer';
       retryFeedbackPresent?: boolean; repairCandidatePresent?: boolean } = {},
     timeoutMs = OPENAI_REQUEST_TIMEOUT_MS,
   ): Promise<AiResult> {
     const started = Date.now();
+    const role = trace.role ?? 'creator';
+    const limits = AI_STAGE_LIMITS[role];
+    const input = [{ role: 'system', content: UNTRUSTED_DATA_SYSTEM_PROMPT },
+      { role: 'developer', content: developerPrompt }, { role: 'user', content: userContent }];
+    // Byte fallback is a conservative token upper bound for UTF-8 text, with
+    // 2k framing allowance. Count schema and prompts too; never truncate restrictions.
+    if (Buffer.byteLength(JSON.stringify({ input, schema }), 'utf8') + 2048 > limits.inputTokenUpperBound) {
+      throw new NutritionAiProviderError('AI_COST_LIMIT_EXCEEDED', false);
+    }
     logInfo('nutrition.generation', 'ai_request_started', { ...trace, model, stage: 'provider' });
     const response = await this.fetcher('https://api.openai.com/v1/responses', {
-      method: 'POST', signal: AbortSignal.timeout(Math.max(1, Math.min(OPENAI_REQUEST_TIMEOUT_MS, timeoutMs))),
+      method: 'POST', signal: AbortSignal.timeout(Math.max(1, Math.min(limits.timeoutMs, timeoutMs))),
       headers: { Authorization: `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' },
       /**
        * 16000 (sized for 6 meals x 3 options x 8 foods) was right for the
@@ -169,7 +184,7 @@ export class OpenAiNutritionProvider implements NutritionAiProvider {
        * without paying for the old cap; see the `incomplete_details` log
        * below if this ever needs raising again.
        */
-      body: JSON.stringify({ model, store: false, max_output_tokens: 8000,
+      body: JSON.stringify({ model, service_tier: 'default', truncation: 'disabled', store: false, max_output_tokens: limits.outputTokens,
         // Minimal reasoning: this is a bounded structured-output
         // composition task against a strict JSON schema, not an
         // open-ended reasoning task — a high effort budget would only add
@@ -178,8 +193,7 @@ export class OpenAiNutritionProvider implements NutritionAiProvider {
         // `system` carries ONLY the injection-boundary rule (a real safety
         // directive); the task-specific composition rules go in `developer`
         // — see UNTRUSTED_DATA_SYSTEM_PROMPT's comment in prompt.ts.
-        input: [{ role: 'system', content: UNTRUSTED_DATA_SYSTEM_PROMPT },
-          { role: 'developer', content: developerPrompt }, { role: 'user', content: userContent }],
+        input,
         text: { format: { type: 'json_schema', name: schemaName, strict: true, schema } },
       }),
     });
@@ -194,15 +208,33 @@ export class OpenAiNutritionProvider implements NutritionAiProvider {
     }
     logInfo('nutrition.generation', 'ai_http_completed', { ...trace, model,
       httpStatus: response.status, durationMs: Date.now() - started });
-    const payload = await response.json() as ResponsePayload;
+    let payload: ResponsePayload;
+    try {
+      const body: unknown = await response.json();
+      if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('invalid_payload');
+      payload = body as ResponsePayload;
+      if (!Array.isArray(payload.output) || payload.output.some(item => !item || typeof item !== 'object'
+        || item.content !== undefined && (!Array.isArray(item.content) || item.content.some(c => !c || typeof c !== 'object')))) throw new Error('invalid_output');
+    } catch { throw new NutritionAiProviderError('AI_SCHEMA_INVALID', true); }
+    const received: AiResult = { output: null, model: payload.model ?? model, latencyMs: Date.now() - started,
+      usage: { inputTokens: payload.usage?.input_tokens ?? null, outputTokens: payload.usage?.output_tokens ?? null,
+        cachedInputTokens: payload.usage?.input_tokens_details?.cached_tokens ?? null } };
     const contents = payload.output?.flatMap((item) => item.content ?? []) ?? [];
     const refusal = contents.find((item) => item.type === 'refusal' || typeof item.refusal === 'string');
     if (refusal) {
-      throw new NutritionAiProviderError('AI_SAFETY_VALIDATION_FAILED', false,
-        typeof refusal.refusal === 'string' ? refusal.refusal.slice(0, 200) : undefined);
+      // This is an opaque upstream model-side refusal, not a deterministic
+      // rule of ours — it carries no known relationship to any specific
+      // condition (pregnancy, allergens, etc.) and can be a one-off
+      // classification quirk, so it gets its own retryable code distinct
+      // from `AI_SAFETY_VALIDATION_FAILED` (reserved for OUR deterministic
+      // safety checks in attempts.ts/alternative.ts/domain.ts, which have a
+      // known, provable cause). Conflating the two previously caused the UI
+      // to show a specific, false diagnosis (see `generationStage.ts`).
+      throw new NutritionAiProviderError('AI_PROVIDER_REFUSAL', true,
+        typeof refusal.refusal === 'string' ? refusal.refusal.slice(0, 200) : undefined, received);
     }
     const content = contents.find((item) => item.type === 'output_text');
-    if (payload.status !== 'completed' || !content?.text) {
+    if (payload.status !== 'completed' || typeof content?.text !== 'string' || !content.text) {
       // Never logs prompt/response text — only the Responses API's own
       // status/reason, so a truncated-output incident (`incomplete_details.
       // reason === 'max_output_tokens'`) is distinguishable from a genuine
@@ -211,31 +243,52 @@ export class OpenAiNutritionProvider implements NutritionAiProvider {
       logWarn('nutrition.generation', 'ai_response_not_completed', {
         ...trace, model, status: payload.status ?? null, incompleteReason: payload.incomplete_details?.reason ?? null,
       });
-      throw new NutritionAiProviderError('AI_SCHEMA_INVALID', true);
+      throw new NutritionAiProviderError('AI_SCHEMA_INVALID', true, undefined, received);
     }
     let output: unknown;
     try { output = JSON.parse(content.text); }
-    catch { throw new NutritionAiProviderError('AI_SCHEMA_INVALID', true); }
+    catch { throw new NutritionAiProviderError('AI_SCHEMA_INVALID', true, undefined, received); }
     return { output, model: payload.model ?? model, latencyMs: Date.now() - started,
       usage: { inputTokens: payload.usage?.input_tokens ?? null, outputTokens: payload.usage?.output_tokens ?? null,
         cachedInputTokens: payload.usage?.input_tokens_details?.cached_tokens ?? null } };
   }
 
   async generatePlan(request: FullPlanRequest): Promise<AiResult> {
-    const model = request.fallback ? NUTRITION_AI_MODELS.fallback : NUTRITION_AI_MODELS.fullPlan;
+    const model = NUTRITION_AI_MODELS.fullPlan;
     let repairCandidatePresent = false;
     try { repairCandidatePresent = Boolean(JSON.parse(request.feedback ?? 'null')?.previousPlan); }
     catch { /* Older retries may contain only a technical error enum. */ }
     return this.callResponsesApi(model, request.catalogMode ? FULL_PLAN_SYSTEM_PROMPT + CATALOG_INTENT_INSTRUCTIONS : FULL_PLAN_SYSTEM_PROMPT,
-      fullPlanContext(request.profile, request.engine, request.goal, request.foodNames, request.feedback),
+      JSON.stringify({ ...JSON.parse(fullPlanContext(request.profile, request.engine, request.goal, request.foodNames, request.feedback, request.catalogMode)),
+        physicalContext: request.physicalContext ?? null, energy: request.engine.energy, dailyMacros: request.engine.macros }),
       `nutrition_plan_${AI_SCHEMA_VERSION.replaceAll('.', '_')}`, OPENAI_PLAN_SCHEMA,
       { ...request.trace, retryFeedbackPresent: Boolean(request.feedback), repairCandidatePresent }, request.timeoutMs);
   }
 
   async generateMealAlternative(request: MealAlternativeRequest): Promise<AiResult> {
-    const model = request.fallback ? NUTRITION_AI_MODELS.fallback : NUTRITION_AI_MODELS.mealAlternative;
+    const model = NUTRITION_AI_MODELS.mealAlternative;
     return this.callResponsesApi(model, request.catalogMode ? MEAL_ALTERNATIVE_SYSTEM_PROMPT + CATALOG_INTENT_INSTRUCTIONS : MEAL_ALTERNATIVE_SYSTEM_PROMPT,
-      mealAlternativeContext(request.profile, request.target, request.avoidFoodNames, request.goal, request.foodNames, request.feedback),
+      JSON.stringify({ ...JSON.parse(mealAlternativeContext(request.profile, request.target, request.avoidFoodNames,
+        request.goal, request.foodNames, request.feedback, request.catalogMode)), physicalContext: request.physicalContext ?? null }),
       `nutrition_meal_alternative_${AI_SCHEMA_VERSION.replaceAll('.', '_')}`, OPENAI_MEAL_ALTERNATIVE_SCHEMA, {}, request.timeoutMs);
+  }
+
+  async reviewPlan(request: NutritionReviewRequest): Promise<AiResult> {
+    const { timeoutMs, ...reviewContext } = request;
+    try {
+      return await this.callResponsesApi(NUTRITION_AI_MODELS.reviewer, REVIEW_SYSTEM_PROMPT,
+        JSON.stringify(reviewContext), 'nutrition_independent_review_v1', OPENAI_REVIEW_SCHEMA,
+        { role: 'reviewer' }, timeoutMs);
+    } catch (error) {
+      if (error instanceof NutritionAiProviderError) {
+        const code = error.code === 'AI_PROVIDER_REFUSAL' ? 'AI_REVIEW_PROVIDER_REFUSAL'
+          : error.code === 'AI_SCHEMA_INVALID' ? 'AI_REVIEW_SCHEMA_INVALID'
+          : error.code === 'AI_RATE_LIMIT' ? 'AI_REVIEW_RATE_LIMIT'
+          : error.code === 'AI_COST_LIMIT_EXCEEDED' ? error.code : 'AI_REVIEW_UNAVAILABLE';
+        throw new NutritionAiProviderError(code, error.retryable, undefined, error.result);
+      }
+      throw new NutritionAiProviderError(error instanceof Error && ['TimeoutError', 'AbortError'].includes(error.name)
+        ? 'AI_REVIEW_TIMEOUT' : 'AI_REVIEW_UNAVAILABLE', true);
+    }
   }
 }

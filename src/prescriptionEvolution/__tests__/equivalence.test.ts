@@ -1,22 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { describe,expect,it } from 'vitest';
 import { EXERCISES_SEED } from '../../data/exercisesSeedData';
+import { completeAnswers } from '../../workoutPrescription/__tests__/fixtures';
 import { equipmentContextFor } from '../../workoutPrescription/equipment';
-import type { LimitationCatalogExercise } from '../../workoutPrescription/limitationResolver';
-import { completeAnswers, realLimitationCatalogFixture } from '../../workoutPrescription/__tests__/fixtures';
-import {
-  candidatePoolFor,
-  evaluateEquivalenceCandidate,
-  isLimitationSafe,
-  purposePreserved,
-  rankCandidates,
-} from '../equivalence';
+import type { CatalogExercise } from '../../workoutPrescription/exerciseCatalog';
+import { candidatePoolFor,evaluateEquivalenceCandidate,purposePreserved,rankCandidates } from '../equivalence';
 
-const catalog = new Map<string, LimitationCatalogExercise>(EXERCISES_SEED.map((exercise) => [exercise.id, exercise]));
-const limitationCatalog = new Map<string, LimitationCatalogExercise>(
-  realLimitationCatalogFixture().map((exercise) => [exercise.id, exercise]),
-);
+const catalog = new Map<string, CatalogExercise>(EXERCISES_SEED.map((exercise) => [exercise.id, exercise]));
 
-function get(id: string): LimitationCatalogExercise {
+function get(id: string): CatalogExercise {
   const exercise = catalog.get(id);
   if (!exercise) throw new Error(`fixture exercise missing: ${id}`);
   return exercise;
@@ -41,28 +32,6 @@ describe('purposePreserved (same-muscle-only is never equivalence)', () => {
     const source = [...catalog.values()][0];
     const clone = { ...source, id: 'clone-of-source' };
     expect(purposePreserved(source, clone)).toBe(true);
-  });
-});
-
-describe('isLimitationSafe', () => {
-  it('is always safe when the user has no declared limitation regions', () => {
-    const anyExercise = get([...catalog.keys()][0]);
-    expect(isLimitationSafe(anyExercise, [])).toBe(true);
-  });
-
-  it('rejects a candidate with no approved limitationProfile once the user has declared a region', () => {
-    const withoutProfile = get([...catalog.keys()][0]);
-    expect(isLimitationSafe(withoutProfile, ['knee'])).toBe(false);
-  });
-
-  it('accepts a real exercise whose approved profile marks the declared region compatible', () => {
-    const compatible = [...limitationCatalog.values()].find((exercise) => {
-      const profile = exercise.limitationProfile as { regions?: Record<string, { status?: string }> } | undefined;
-      return profile?.regions?.knee?.status === 'compatible';
-    });
-    expect(compatible).toBeDefined();
-    if (!compatible) return;
-    expect(isLimitationSafe(compatible, ['knee'])).toBe(true);
   });
 });
 
@@ -91,9 +60,8 @@ describe('evaluateEquivalenceCandidate', () => {
     const pool = candidatePoolFor(source, catalog);
     if (pool.length === 0) return;
     const evaluation = evaluateEquivalenceCandidate({
-      source, candidateId: pool[0], catalog, regions: [], equipmentContext,
-      usedExerciseIds: new Set([pool[0]]), recentExerciseIds: new Set(),
-    });
+      source, candidateId: pool[0], catalog, equipmentContext,
+      usedExerciseIds: new Set([pool[0]]), recentExerciseIds: new Set(), });
     expect(evaluation.eligible).toBe(false);
     expect(evaluation.reasonCodes).toContain('DUPLICATE_IN_PLAN');
   });
@@ -105,9 +73,8 @@ describe('evaluateEquivalenceCandidate', () => {
     expect(barbellExercise).toBeDefined();
     if (!barbellExercise) return;
     const evaluation = evaluateEquivalenceCandidate({
-      source: barbellExercise, candidateId: barbellExercise.id, catalog, regions: [], equipmentContext: homeContext,
-      usedExerciseIds: new Set(), recentExerciseIds: new Set(),
-    });
+      source: barbellExercise, candidateId: barbellExercise.id, catalog, equipmentContext: homeContext,
+      usedExerciseIds: new Set(), recentExerciseIds: new Set(), });
     expect(evaluation.eligible).toBe(false);
     expect(evaluation.reasonCodes).toContain('EQUIPMENT_UNAVAILABLE');
   });
@@ -118,9 +85,8 @@ describe('evaluateEquivalenceCandidate', () => {
     if (!source) return;
     const candidateId = source.substitution.similarExerciseIds[0];
     const evaluation = evaluateEquivalenceCandidate({
-      source, candidateId, catalog, regions: [], equipmentContext,
-      usedExerciseIds: new Set(), recentExerciseIds: new Set(),
-    });
+      source, candidateId, catalog, equipmentContext,
+      usedExerciseIds: new Set(), recentExerciseIds: new Set(), });
     expect(evaluation.declaredSimilar).toBe(true);
   });
 
@@ -135,11 +101,10 @@ describe('evaluateEquivalenceCandidate', () => {
       source,
       candidateId: candidate.id,
       catalog,
-      regions: [],
       equipmentContext,
       usedExerciseIds: new Set(),
       recentExerciseIds: new Set(),
-    });
+      });
 
     expect(evaluation.eligible).toBe(false);
     expect(evaluation.reasonCodes).toContain('ROLE_MISMATCH');
@@ -152,7 +117,6 @@ describe('evaluateEquivalenceCandidate', () => {
       source,
       candidateId: candidate.id,
       catalog,
-      regions: [],
       equipmentContext,
       usedExerciseIds: new Set(),
       recentExerciseIds: new Set(),
@@ -176,9 +140,8 @@ describe('evaluateEquivalenceCandidate', () => {
         source,
         candidate: catalog.get(candidateId),
         evaluation: evaluateEquivalenceCandidate({
-          source, candidateId, catalog, regions: [], equipmentContext,
-          usedExerciseIds: new Set(), recentExerciseIds: new Set(),
-        }),
+          source, candidateId, catalog, equipmentContext,
+          usedExerciseIds: new Set(), recentExerciseIds: new Set(), }),
       }))).filter((item) => item.candidate && item.evaluation.eligible);
 
     expect(accepted.length).toBeGreaterThan(20);

@@ -50,11 +50,17 @@ const emptyMedicalRestrictionScreening = (): MedicalRestrictionScreening => ({ p
 export function cleanApplicableAnswers(input: Quiz): Quiz {
   let specialConditions = normalizeSpecialConditions(input.specialConditions);
   if (input.sex !== 'f') specialConditions = specialConditions.filter((value) => value !== 'pregnancy' && value !== 'postpartum');
+  // `limitationImpact` is a genuinely retired field (pre-dates, and is
+  // unrelated to, the restored `limits` question — see commit "refactor:
+  // remove limitationImpact step, activate adaptation by region alone")
+  // that must never be re-persisted even though it may still linger on an
+  // in-memory `Quiz` carried over from an old draft/document.
+  const { limitationImpact: _impact, ...activeInput } = input as Quiz & { limitationImpact?: unknown };
   const has = (condition: Quiz['specialConditions'][number]) => specialConditions.includes(condition);
   const postpartum = has('postpartum') ? (input.postpartumScreening ?? emptyPostpartumScreening()) : null;
   const functional = has('functional_limitation') ? (input.functionalScreening ?? emptyFunctionalScreening()) : null;
   return {
-    ...input,
+    ...activeInput,
     // Flexible schedules never persist fixed weekdays. For a fixed seven-day
     // schedule every weekday is implied; for 2-6, keep the subset picked so
     // far. Completion is enforced by the unified schedule screen and the
@@ -223,13 +229,18 @@ export function questionnaireValidationErrors(quiz: Quiz): QuestionnaireValidati
   const errors: QuestionnaireValidationCode[] = [];
   if (quiz.days == null || ![2, 3, 4, 5, 6, 7].includes(quiz.days)) errors.push('unsupported_days');
   if (quiz.muscleFocus.filter((value) => value !== 'none').length > 2) errors.push('too_many_muscle_priorities');
-  if ([quiz.equipment, quiz.limits, quiz.muscleFocus, quiz.specialConditions, quiz.pregnancyScreening?.warningSigns ?? [], quiz.postpartumScreening?.signs ?? [], quiz.functionalScreening?.situations ?? []].some(hasNoneConflict)) errors.push('exclusive_none_conflict');
+  // `quiz.limits` defaults defensively here (`?? []`) because
+  // `sanitizeAnswersForEngine` (src/workoutPrescription/input.ts) builds its
+  // `QuestionnaireAnswers`/`Quiz` object without `limits` at all — that
+  // field is onboarding-UI-only (purely informational physical-limitations
+  // step) and deliberately never reaches the prescription engine.
+  if ([quiz.equipment, quiz.limits ?? [], quiz.muscleFocus, quiz.specialConditions, quiz.pregnancyScreening?.warningSigns ?? [], quiz.postpartumScreening?.signs ?? [], quiz.functionalScreening?.situations ?? []].some(hasNoneConflict)) errors.push('exclusive_none_conflict');
   // No `equipment_required` gate: the questionnaire never asks for a home
   // equipment inventory (see onboarding/steps.ts), so `quiz.equipment` is
   // structurally always `[]` for every home/both user going forward —
   // requiring it here would make the questionnaire impossible to complete.
   if (quiz.specialConditions.includes('musculoskeletal_limitation')) {
-    if (quiz.limits.length === 0 || quiz.limits.includes('none')) errors.push('limitations_required');
+    if ((quiz.limits ?? []).length === 0 || quiz.limits?.includes('none')) errors.push('limitations_required');
   }
   if (quiz.specialConditions.includes('pregnancy')) {
     const value = quiz.pregnancyScreening;

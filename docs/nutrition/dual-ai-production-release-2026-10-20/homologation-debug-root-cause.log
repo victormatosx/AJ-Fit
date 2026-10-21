@@ -1,0 +1,23 @@
+i  emulators: Starting emulators: firestore
+i  firestore: Firestore Emulator logging to firestore-debug.log
+✔  firestore: Firestore Emulator was started in standard edition.
+✔  firestore: Firestore Emulator UI websocket is running on 9150.
+i  Running script: cd functions && npx vitest run src/nutrition/__tests__/realAiHomologation.manual.test.ts -t "Debug" --testTimeout=180000
+
+ RUN  v4.1.10 /Users/victor/CropSight-Solutions/AJ-Fit/functions
+
+[homologation-debug] attempt=1 role=creator code=AI_CONTENT_SAFETY_MISMATCH issue=undefined diagnostics=undefined
+[homologation-debug] attempt=2 role=creator code=AI_CONTENT_SAFETY_MISMATCH issue=undefined diagnostics=undefined
+[homologation-debug] attempt=3 role=creator code=AI_CONTENT_SAFETY_MISMATCH issue=undefined diagnostics=undefined
+[homologation-debug] final error: code=AI_RETRY_EXHAUSTED lastFailureCode=AI_CONTENT_SAFETY_MISMATCH
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 11 skipped (12)
+   Start at  23:00:34
+   Duration  92.30s (transform 141ms, setup 0ms, import 414ms, tests 91.82s, environment 0ms)
+
+✔  Script exited successfully (code 0)
+i  emulators: Shutting down emulators.
+i  firestore: Stopping Firestore Emulator
+i  hub: Stopping emulator hub
+i  logging: Stopping Logging Emulator

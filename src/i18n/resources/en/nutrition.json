@@ -243,6 +243,9 @@
       "excludedAllergens": {
         "title": "Do you have any allergy or dietary restriction?",
         "subtitle": "Select all that apply.",
+        "lactoseIntolerant": "Lactose intolerance",
+        "legacyMilkNotice": "You previously indicated a milk allergy. Milk allergy and lactose intolerance are different conditions — if yours is actually lactose intolerance, update your answer below.",
+        "legacyMilkAction": "I don't have a milk allergy",
         "options": {
           "milk": "Milk",
           "egg": "Egg",
@@ -319,9 +322,21 @@
       "title": "Feature unavailable",
       "body": "Diet generation is temporarily unavailable."
     },
+    "reviewNotApproved": {
+      "title": "We could not approve this diet",
+      "body": "The review found incompatibilities or insufficient information. No new diet was activated. Please try again later."
+    },
+    "reviewUnavailable": {
+      "title": "We could not finish the review",
+      "body": "Diet review is currently unavailable. No new diet was activated. Please try again later."
+    },
+    "attemptsExhausted": {
+      "title": "We could not complete your diet",
+      "body": "This generation finished without an approved plan. No new diet was activated. You can try again later."
+    },
     "safetyBlocked": {
       "title": "Generation unavailable",
-      "body": "During pregnancy or breastfeeding, we recommend professional guidance instead of automatic generation."
+      "body": "We couldn't safely generate an automatic diet for your profile data. Please contact support to continue."
     },
     "accountInactive": {
       "title": "Inactive account",

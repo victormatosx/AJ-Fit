@@ -1,0 +1,1725 @@
+{
+  "sourceCommit": "18c27fc98439c7722b979592494a0eb57cb92bf7",
+  "scope": "Local authoring only; zero operational additions, publications, remote writes or new video associations.",
+  "counts": {
+    "requested": 41,
+    "resistanceDrafts": 38,
+    "cardioDrafts": 3,
+    "reusedRequested": 0,
+    "ready": 0,
+    "pending": 41,
+    "newMedia": 0
+  },
+  "sourceVideoReview": {
+    "directory": "/Users/victor/CropSight-Solutions/AJ Fit Videos Exercicios",
+    "method": "Triagem por quadros das 58 gravações; inspeção adicional de sequências candidatas. Não é aprovação clínica nem certificação de licença.",
+    "files": [
+      {
+        "file": "IMG_3559.MOV",
+        "sha256": "2175dfb36fcdbe4823528101fe2d2ab4327df22c83171e6f4a2e7bf602df467b"
+      },
+      {
+        "file": "IMG_3560.MOV",
+        "sha256": "52fd4980644eaef209f56153d78aa2fe84ceaa9d3d0421f0d82f92da90c904a7"
+      },
+      {
+        "file": "IMG_3561.MOV",
+        "sha256": "f64835a498d80d6b5fedd6e33b0243714e961d6a1d0f1e117119c7dc23be8254"
+      },
+      {
+        "file": "IMG_3562.MOV",
+        "sha256": "25650a2c68d26bd958e66b7b0491bc14f26ca655b6a88aa32dea150eab9642c2"
+      },
+      {
+        "file": "IMG_3563.MOV",
+        "sha256": "a6d800b86598e23264043a03051bbbe9e26c2938151ae00da4d84bda1cd758c9"
+      },
+      {
+        "file": "IMG_3564.MOV",
+        "sha256": "07ab5de2ef6a704f1ae0476f8d048fbbeb7a5a08c579770da42c15fbf4c71dd2"
+      },
+      {
+        "file": "IMG_3565.MOV",
+        "sha256": "01e9b0169bb4d73e0001c4cab75a1ddacfad003254e47f62e59fe3f2ed7e9b6f"
+      },
+      {
+        "file": "IMG_3566.MOV",
+        "sha256": "8f105193063193f36d5fc7ed8bfaeee640305ad217ef563f42e6faae65ef816f"
+      },
+      {
+        "file": "IMG_3567.MOV",
+        "sha256": "4b189fa955f76ec4936627108200dc2f2509b7553b0eff7752d71ea8e2ac7694"
+      },
+      {
+        "file": "IMG_3568.MOV",
+        "sha256": "98ccb2789c0aaea67099c17f2fa9528bf18096217466db5ed35d0efe8368a6a5"
+      },
+      {
+        "file": "IMG_3569.MOV",
+        "sha256": "76d03cd57e0763107a39f9c7941913ef4126d7679e02d20692e29316aac87e01"
+      },
+      {
+        "file": "IMG_3570.MOV",
+        "sha256": "21a0a7ec648c8a584030b803ef790f5f75dc1717486ff3de03fd2da4b6092e35"
+      },
+      {
+        "file": "IMG_3571.MOV",
+        "sha256": "f77efd0f34c81ca5e834ce11bc079380c03aa9971dba491513f8f82f78e89027"
+      },
+      {
+        "file": "IMG_3572.MOV",
+        "sha256": "a3a96d5367653ee02905359a7ae0fe546589a72c408e5c8f4c6ccad9a6eb469f"
+      },
+      {
+        "file": "IMG_3573.MOV",
+        "sha256": "7f32297afb66398a9dca3b9516d412b304fb15ebe80186f5083c31371c71afc7"
+      },
+      {
+        "file": "IMG_3574.MOV",
+        "sha256": "15d2934d012fd98c0a8c33c2c497546dfdd0f1ecdce46311ccfba182d51f499d"
+      },
+      {
+        "file": "IMG_3575.MOV",
+        "sha256": "fe9c7cc36517b1e3e42f935f20f92048a6c46b91ce9381f0bf066182deefe2d9"
+      },
+      {
+        "file": "IMG_3576.MOV",
+        "sha256": "03242f4e56647fe726103f968af60e4f35e61cefa1622df64a21cb215f3dabf2"
+      },
+      {
+        "file": "IMG_3577.MOV",
+        "sha256": "a710a97655b92fa0fc57904d9d0d18fb3236e5b7bec3ba20c6359f9a84e15e88"
+      },
+      {
+        "file": "IMG_3578.MOV",
+        "sha256": "b5a84fde8bcebed708c910f24c56dcda0fd6b089b9cf39f29eacf08d21591b1c"
+      },
+      {
+        "file": "IMG_3579.MOV",
+        "sha256": "11f1c53e83d41d2df88808cd36dbaf517bbd6d7bf34a7480b180017f6b2f764f"
+      },
+      {
+        "file": "IMG_3580.MOV",
+        "sha256": "b47e465373a60dcb638aacdd4228c5e8499a098e67f1eedca83fae029c4fab6e"
+      },
+      {
+        "file": "IMG_3582.MOV",
+        "sha256": "86753c850e453f71816ea059cfae9cf5022f52441dfbc4a5f35e7335eb5b74d8"
+      },
+      {
+        "file": "IMG_3583.MOV",
+        "sha256": "65af4ae96d4aff4db95008e98f54514ddbda59d292a74bbf65605cbd388d7395"
+      },
+      {
+        "file": "IMG_3585.MOV",
+        "sha256": "5188e8c718a502f370ec05dc11576835ebce2f4f82defb7870565e226e3568d6"
+      },
+      {
+        "file": "IMG_3586.MOV",
+        "sha256": "d81dd0ced64d18ba2eee70ec8f3983284e43717cf4e94dc5b377801d4537c39e"
+      },
+      {
+        "file": "IMG_3587.MOV",
+        "sha256": "ad4b3398c61f3311d268e12095fb9b2ea2394d4ebe1e3d94b1cfac95a9a545f4"
+      },
+      {
+        "file": "IMG_3589.MOV",
+        "sha256": "01bf5fd7d579692361ab22398ace09ee235c5510d2a2cb8a4388b71724d321d4"
+      },
+      {
+        "file": "IMG_3590.MOV",
+        "sha256": "1afbc67802264c8d3455dc85691bbc650d7b662eb6664cfbe37a899a35d8d1c6"
+      },
+      {
+        "file": "IMG_3591.MOV",
+        "sha256": "5e07627f692014d4b4041d6e37bc7b6e4236d03d582aea4f261c92e29b04cc2f"
+      },
+      {
+        "file": "IMG_3592.MOV",
+        "sha256": "d633b4e7f5722c3ec0288ecde7455f295e3f07dc3b3cafc000fc40bb32dd686c"
+      },
+      {
+        "file": "IMG_3593.MOV",
+        "sha256": "cd8714fd1696d6f52561310cce6af6ad39d5b97da778be9d1c1991d9564e8043"
+      },
+      {
+        "file": "IMG_3594.MOV",
+        "sha256": "20d4b108a1a12c6880baebeb180e797ea713fdce221ebb114eeebe56082c6d35"
+      },
+      {
+        "file": "IMG_3595.MOV",
+        "sha256": "cb5daf814bd5f092ae131b16d28b9e6204a78ee3906830aa9e7ca6e7899676c0"
+      },
+      {
+        "file": "IMG_3596.MOV",
+        "sha256": "f8a09c89a440ef3ef0a2ac4545671191d407622345bf8dfeb9a917abd49730ce"
+      },
+      {
+        "file": "IMG_3597.MOV",
+        "sha256": "ac97682688b286b2091441e2d46474bf71cd753a2816bc043791941abadfac5b"
+      },
+      {
+        "file": "IMG_3598.MOV",
+        "sha256": "8d7f08b1e7dd84a4c47993dd00f2a3fa603132980c4aad65abffb3a6d744c4ab"
+      },
+      {
+        "file": "IMG_3599.MOV",
+        "sha256": "fc10ccdfe6fe5a080e622adc7ef7aace0f13c8efc4a94282d4836d73e876614b"
+      },
+      {
+        "file": "IMG_3600.MOV",
+        "sha256": "de60b1348cdb35db8189d096aed0747a77599711300e4cb67980863de7dec184"
+      },
+      {
+        "file": "IMG_3601.MOV",
+        "sha256": "13933a8a7d8e51f0dd953b3e3bdae2aa83d1fe9344c81b0f08b04ddc38bf84dd"
+      },
+      {
+        "file": "IMG_3602.MOV",
+        "sha256": "b0aac473ca71c2836a55efbc1a254806ee8086592f3c625cc1be9a3aa2b50d3f"
+      },
+      {
+        "file": "IMG_3603.MOV",
+        "sha256": "a3957c750c4b2a68f889d4b16d8242482b5d64932904b33ff61700d6fe716764"
+      },
+      {
+        "file": "IMG_3604.MOV",
+        "sha256": "8e7981b2576d9826d3ccbe5d24098efb0581776c6af9ee959ac54d9649dc2e7b"
+      },
+      {
+        "file": "IMG_3605.MOV",
+        "sha256": "eba618660188eacc9b3b4702dca2c171e4045d428868d8aa11a888b9e32ddb09"
+      },
+      {
+        "file": "IMG_3606.MOV",
+        "sha256": "cc746b61bf8d7cf91995138dea34ef692949434e5e025c00fd89f18ef807b237"
+      },
+      {
+        "file": "IMG_3607.MOV",
+        "sha256": "19e502832d5a9c55899bbde60e3e18599a00bb3e149081028515fcddc4324d6c"
+      },
+      {
+        "file": "IMG_3608.MOV",
+        "sha256": "f8a63fff5a326c27f7788bd522159d5608c5c8fe2c9a22db449d2d31ff18bb46"
+      },
+      {
+        "file": "IMG_3609.MOV",
+        "sha256": "4abe642fec7d5e4c153eb3556802b8ab56b48b3c1a0a54e80b92ee893f90dcc1"
+      },
+      {
+        "file": "IMG_3610.MOV",
+        "sha256": "6bc25d886f3705b229ef2721570dc3d299ea01bc5ddb91cd0fbac858ead28d6d"
+      },
+      {
+        "file": "IMG_3611.MOV",
+        "sha256": "d64aca0fc92270a9314e4e3665210fce3b098e5ee9183ae5193071036b2c47be"
+      },
+      {
+        "file": "IMG_3612.MOV",
+        "sha256": "e2a75d385af0576ea554fa536f3be57a47c112a03e132e43e988f3742cdb45c2"
+      },
+      {
+        "file": "IMG_3613.MOV",
+        "sha256": "2232006590607823aba53c4da3a75896c57675c46fba5849fc98aaf58edd0c6c"
+      },
+      {
+        "file": "IMG_3614.MOV",
+        "sha256": "d9462f3ebbc6846b52a17025b325d8ca641cac0f7aa63c4599e366910a28f07e"
+      },
+      {
+        "file": "IMG_3615.MOV",
+        "sha256": "c6a5d0ccc35c017c51d4138ff21474f097df21a69751e73684e6dbee7952cd14"
+      },
+      {
+        "file": "IMG_3617.MOV",
+        "sha256": "bd6790558619826073a45cd20c027c6b6de383b5906299e9cfd27c5680489ba6"
+      },
+      {
+        "file": "IMG_3618.MOV",
+        "sha256": "6c372942e74de7e0a11a5c0524d6d3adc821227567fc26230b28d52b6ae0dced"
+      },
+      {
+        "file": "IMG_3619.MOV",
+        "sha256": "28ab923b0c070eccc1591bdfa9b8143718c9f5381f0c60c26fbbc326070cb487"
+      },
+      {
+        "file": "IMG_3620.MOV",
+        "sha256": "c013991c38520ff8494383a4b675a90f31055866ca45ec59afb330611e50404a"
+      }
+    ],
+    "existingBundledAssets": [
+      "guided-workout.mp4",
+      "methodology-workout.mp4",
+      "supino-reto-maquina-deitado.mp4",
+      "supino-reto-maquina-em-pe.mp4",
+      "video-01.mp4",
+      "video-02.mp4",
+      "video-03.mp4"
+    ],
+    "acceptedForNewExercises": [],
+    "rejectedCandidates": [
+      {
+        "files": [
+          "IMG_3579.MOV",
+          "IMG_3580.MOV"
+        ],
+        "reason": "Supino inclinado em máquina articulada; não barra livre."
+      },
+      {
+        "files": [
+          "IMG_3563.MOV",
+          "IMG_3564.MOV"
+        ],
+        "reason": "Terra com flexão dos joelhos; não demonstração exata de stiff com barra."
+      },
+      {
+        "files": [
+          "IMG_3610.MOV",
+          "IMG_3611.MOV"
+        ],
+        "reason": "Rosca inclinada com halteres; não supino reto com halteres."
+      }
+    ],
+    "generatedAssetsRetained": 0
+  },
+  "identityReview": [
+    {
+      "id": "cable-hip-abduction",
+      "name": "Abdução de Quadril na Polia",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "closestExistingIds": [
+        "seated-hip-abductor-machine",
+        "supported-hip-abduction"
+      ],
+      "distinction": "Polia e tornozeleira em pé; não máquina sentada nem abdução livre com apoio.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "cable-hip-adduction",
+      "name": "Adução de Quadril na Polia",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "closestExistingIds": [
+        "seated-hip-adductor-machine"
+      ],
+      "distinction": "Adução unilateral em pé na polia; não máquina sentada bilateral.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "dumbbell-stationary-lunge",
+      "name": "Afundo com Halteres",
+      "kind": "resistance",
+      "environments": [
+        "gym",
+        "home"
+      ],
+      "prescriptionField": "reps",
+      "closestExistingIds": [
+        "stationary-lunge",
+        "walking-lunges",
+        "bulgarian-split-squat-dumbbell"
+      ],
+      "distinction": "Afundo estacionário com carga; não avanço em deslocamento nem pé traseiro elevado.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "dumbbell-sumo-squat",
+      "name": "Agachamento Sumô com Halter",
+      "kind": "resistance",
+      "environments": [
+        "gym",
+        "home"
+      ],
+      "prescriptionField": "reps",
+      "closestExistingIds": [
+        "sumo-deadlift-dumbbell",
+        "sumo-squat-machine"
+      ],
+      "distinction": "Agachamento livre com halter; não terra sumô nem execução guiada na máquina.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "pull-up",
+      "name": "Barra Fixa",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "closestExistingIds": [
+        "bar-lat-pulldown",
+        "lat-pulldown"
+      ],
+      "distinction": "Corpo suspenso em barra fixa, pegada pronada; não puxada de cabo sentado.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "wall-sit",
+      "name": "Cadeirinha na Parede",
+      "kind": "resistance",
+      "environments": [
+        "home"
+      ],
+      "prescriptionField": "duration",
+      "closestExistingIds": [
+        "bodyweight-squat",
+        "chair-squat"
+      ],
+      "distinction": "Isometria sustentada na parede, com prescrição por duração.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "reverse-pec-deck",
+      "name": "Crucifixo Inverso na Máquina",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "closestExistingIds": [
+        "pec-deck-machine-fly",
+        "cable-rear-delt-fly",
+        "dumbbell-rear-delt-fly"
+      ],
+      "distinction": "Peck deck invertido para deltoide posterior; não crucifixo de peito nem halteres/cabos.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "resistance-band-chest-fly",
+      "name": "Crucifixo com Elástico",
+      "kind": "resistance",
+      "environments": [
+        "home"
+      ],
+      "prescriptionField": "reps",
+      "closestExistingIds": [
+        "dumbbell-fly",
+        "cable-crossover-fly"
+      ],
+      "distinction": "Adução horizontal com elástico e ancoragem posterior; equipamento/resistência diferentes.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "arnold-dumbbell-press",
+      "name": "Desenvolvimento Arnold",
+      "kind": "resistance",
+      "environments": [
+        "gym",
+        "home"
+      ],
+      "prescriptionField": "reps",
+      "closestExistingIds": [
+        "dumbbell-shoulder-press"
+      ],
+      "distinction": "Rotação coordenada do antebraço e partida com palmas voltadas para o rosto; banco com encosto definido.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "smith-machine-shoulder-press",
+      "name": "Desenvolvimento no Smith",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "closestExistingIds": [
+        "machine-shoulder-press",
+        "dumbbell-shoulder-press"
+      ],
+      "distinction": "Barra guiada no Smith; não máquina de desenvolvimento articulada nem halteres livres.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "resistance-band-front-raise",
+      "name": "Elevação Frontal com Elástico",
+      "kind": "resistance",
+      "environments": [
+        "gym",
+        "home"
+      ],
+      "prescriptionField": "reps",
+      "closestExistingIds": [
+        "front-raise",
+        "resistance-band-lateral-raise"
+      ],
+      "distinction": "Flexão de ombro com elástico; não halteres nem abdução lateral.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "cable-front-raise",
+      "name": "Elevação Frontal na Polia",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "closestExistingIds": [
+        "front-raise",
+        "cable-lateral-raise"
+      ],
+      "distinction": "Flexão de ombro na polia baixa; não halteres nem elevação lateral.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "machine-hip-thrust",
+      "name": "Elevação Pélvica na Máquina",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "closestExistingIds": [
+        "hip-thrust",
+        "glute-bridge"
+      ],
+      "distinction": "Máquina de hip thrust com apoio e proteção próprios; não banco livre nem ponte no solo.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "dumbbell-shrug",
+      "name": "Encolhimento com Halteres",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "closestExistingIds": [
+        "cable-shrug"
+      ],
+      "distinction": "Encolhimento com halteres livres; não polia.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "smith-machine-shrug",
+      "name": "Encolhimento no Smith",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "closestExistingIds": [
+        "cable-shrug"
+      ],
+      "distinction": "Encolhimento com barra guiada no Smith; não polia.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "resistance-band-knee-extension",
+      "name": "Extensão de Joelho com Elástico",
+      "kind": "resistance",
+      "environments": [
+        "gym",
+        "home"
+      ],
+      "prescriptionField": "reps",
+      "closestExistingIds": [
+        "leg-extension-machine",
+        "resistance-band-standing-leg-curl"
+      ],
+      "distinction": "Extensão unilateral de joelho sentada com elástico; não máquina nem flexão de joelho.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "close-grip-push-up",
+      "name": "Flexão Fechada",
+      "kind": "resistance",
+      "environments": [
+        "gym",
+        "home"
+      ],
+      "prescriptionField": "reps",
+      "closestExistingIds": [
+        "push-up",
+        "bench-dips"
+      ],
+      "distinction": "Flexão com mãos próximas e ênfase em tríceps; não flexão convencional nem mergulho no banco.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "quadruped-hip-extension",
+      "name": "Glúteo Quatro Apoios",
+      "kind": "resistance",
+      "environments": [
+        "gym",
+        "home"
+      ],
+      "prescriptionField": "reps",
+      "closestExistingIds": [
+        "cable-glute-kickback",
+        "bird-dog",
+        "glute-bridge"
+      ],
+      "distinction": "Extensão unilateral em quatro apoios sem tornozeleira; não cabo, bird dog contralateral nem ponte.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "parallel-bar-dips",
+      "name": "Mergulho nas Paralelas",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "closestExistingIds": [
+        "bench-dips"
+      ],
+      "distinction": "Corpo suspenso entre barras paralelas; não mãos no banco com pés apoiados.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "standing-dumbbell-calf-raise",
+      "name": "Panturrilha em Pé com Halteres",
+      "kind": "resistance",
+      "environments": [
+        "home"
+      ],
+      "prescriptionField": "reps",
+      "closestExistingIds": [
+        "standing-calf-raise-machine",
+        "supported-calf-raise"
+      ],
+      "distinction": "Bilateral no chão com halteres; não máquina nem elevação livre sem carga.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "step-calf-raise",
+      "name": "Panturrilha no Degrau",
+      "kind": "resistance",
+      "environments": [
+        "home"
+      ],
+      "prescriptionField": "reps",
+      "closestExistingIds": [
+        "supported-calf-raise"
+      ],
+      "distinction": "Antepé na borda do degrau com amplitude abaixo do apoio; não elevação no chão.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "leg-press-calf-raise",
+      "name": "Panturrilha no Leg Press",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "closestExistingIds": [
+        "leg-press-45",
+        "standing-calf-raise-machine"
+      ],
+      "distinction": "Flexão plantar na plataforma do leg press; não extensão dos joelhos nem máquina de panturrilha em pé.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "side-plank",
+      "name": "Prancha Lateral",
+      "kind": "resistance",
+      "environments": [
+        "gym",
+        "home"
+      ],
+      "prescriptionField": "duration",
+      "closestExistingIds": [
+        "plank",
+        "pallof-press"
+      ],
+      "distinction": "Apoio lateral unilateral no antebraço, pernas estendidas; não prancha ventral nem press anti-rotação com elástico. A taxonomia atual não distingue anti-flexão lateral.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "dumbbell-pullover",
+      "name": "Pullover com Halter",
+      "kind": "resistance",
+      "environments": [
+        "gym",
+        "home"
+      ],
+      "prescriptionField": "reps",
+      "closestExistingIds": [
+        "resistance-band-pullover"
+      ],
+      "distinction": "Deitado longitudinalmente no banco com halter; não polia/elástico em pé.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "straight-arm-cable-pulldown",
+      "name": "Pullover na Polia",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "closestExistingIds": [
+        "lat-pulldown",
+        "resistance-band-pullover"
+      ],
+      "distinction": "Braços quase estendidos na polia alta; Pull Down existente flexiona os cotovelos em puxada vertical.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "dumbbell-upright-row",
+      "name": "Remada Alta com Halteres",
+      "kind": "resistance",
+      "environments": [
+        "home"
+      ],
+      "prescriptionField": "reps",
+      "closestExistingIds": [
+        "dumbbell-lateral-raise",
+        "supinated-cable-row"
+      ],
+      "distinction": "Remada alta com flexão dos cotovelos e halteres; não elevação lateral isolada nem remada horizontal supinada.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "bent-over-barbell-row",
+      "name": "Remada Curvada com Barra",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "closestExistingIds": [
+        "bent-over-dumbbell-row",
+        "bent-over-row-smith-machine"
+      ],
+      "distinction": "Remada curvada com barra livre pronada; não halteres nem Smith.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "resistance-band-biceps-curl",
+      "name": "Rosca Direta com Elástico",
+      "kind": "resistance",
+      "environments": [
+        "home"
+      ],
+      "prescriptionField": "reps",
+      "closestExistingIds": [
+        "resistance-band-hammer-curl",
+        "ez-bar-biceps-curl"
+      ],
+      "distinction": "Flexão do cotovelo com elástico e palmas para frente; não pegada neutra nem barra W.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "cable-rope-hammer-curl",
+      "name": "Rosca Martelo na Polia",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "closestExistingIds": [
+        "hammer-curl",
+        "cable-biceps-curl"
+      ],
+      "distinction": "Polia baixa com corda e pegada neutra; não halteres nem rosca supinada na polia.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "barbell-stiff-leg-deadlift",
+      "name": "Stiff com Barra",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "closestExistingIds": [
+        "conventional-deadlift",
+        "dumbbell-stiff-leg-deadlift",
+        "stiff-leg-deadlift-smith-machine"
+      ],
+      "distinction": "Stiff com barra livre e flexão de joelhos pequena/estável, iniciado em pé; não terra convencional, halteres ou Smith.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "superman",
+      "name": "Superman",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "closestExistingIds": [
+        "roman-chair-back-extension",
+        "bird-dog"
+      ],
+      "distinction": "Decúbito ventral no solo elevando braços e pernas; não banco romano nem quatro apoios.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "close-grip-barbell-bench-press",
+      "name": "Supino Fechado",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "closestExistingIds": [
+        "machine-flat-bench-press",
+        "bench-dips"
+      ],
+      "distinction": "Barra livre no banco reto com pegada fechada; não máquina nem mergulho.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "incline-barbell-bench-press",
+      "name": "Supino Inclinado com Barra",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "closestExistingIds": [
+        "incline-dumbbell-bench-press",
+        "iso-lateral-incline-chest-press-machine"
+      ],
+      "distinction": "Supino inclinado com barra livre; não halteres nem máquina articulada.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "barbell-flat-bench-press",
+      "name": "Supino Reto com Barra",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "closestExistingIds": [
+        "machine-flat-bench-press",
+        "decline-barbell-bench-press"
+      ],
+      "distinction": "Barra livre no banco reto; não máquina nem banco declinado.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "dumbbell-triceps-kickback",
+      "name": "Tríceps Coice com Halter",
+      "kind": "resistance",
+      "environments": [
+        "home"
+      ],
+      "prescriptionField": "reps",
+      "closestExistingIds": [
+        "dumbbell-overhead-triceps-extension",
+        "cable-triceps-pushdown"
+      ],
+      "distinction": "Extensão unilateral de cotovelo com tronco inclinado e braço junto ao corpo; não extensão acima da cabeça nem cabo.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "lying-dumbbell-triceps-extension",
+      "name": "Tríceps Testa com Halteres",
+      "kind": "resistance",
+      "environments": [
+        "home"
+      ],
+      "prescriptionField": "reps",
+      "closestExistingIds": [
+        "dumbbell-overhead-triceps-extension",
+        "cable-skull-crusher"
+      ],
+      "distinction": "Deitado no banco reto com dois halteres; não extensão acima da cabeça sentada nem polia.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "dumbbell-flat-bench-press",
+      "name": "Supino Reto com Halteres",
+      "kind": "resistance",
+      "environments": [
+        "gym",
+        "home"
+      ],
+      "prescriptionField": "reps",
+      "closestExistingIds": [
+        "incline-dumbbell-bench-press",
+        "machine-flat-bench-press"
+      ],
+      "distinction": "Banco reto com halteres, conforme definição do usuário; não floor press, banco inclinado ou máquina.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "single-leg-bench-hip-thrust",
+      "name": "Elevação Pélvica Unilateral",
+      "kind": "resistance",
+      "environments": [
+        "home"
+      ],
+      "prescriptionField": "reps",
+      "closestExistingIds": [
+        "hip-thrust",
+        "glute-bridge"
+      ],
+      "distinction": "Unilateral com parte superior das costas no banco, conforme definição do usuário; não bilateral nem ponte no solo.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "running-in-place",
+      "name": "Corrida Estacionária",
+      "kind": "cardio",
+      "environments": [
+        "home"
+      ],
+      "prescriptionField": "duration",
+      "closestExistingIds": [
+        "march-in-place",
+        "controlled-marching"
+      ],
+      "distinction": "Corrida com fase de voo, sem deslocamento; não marcha alternada.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "elliptical-trainer",
+      "name": "Elíptico",
+      "kind": "cardio",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "duration",
+      "closestExistingIds": [
+        "stationary-bike",
+        "cardio-continuo"
+      ],
+      "distinction": "Modalidade específica no elíptico; não bicicleta nem bloco genérico de cardio.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    },
+    {
+      "id": "jumping-jack",
+      "name": "Polichinelo",
+      "kind": "cardio",
+      "environments": [
+        "home"
+      ],
+      "prescriptionField": "duration",
+      "closestExistingIds": [
+        "march-in-place",
+        "gentle-direction-changes"
+      ],
+      "distinction": "Saltos abrindo/fechando pernas e elevando braços; não marcha nem mudanças leves de direção.",
+      "media": {
+        "status": "missing",
+        "origin": null,
+        "localPath": null,
+        "remoteUrl": null
+      },
+      "limitationRegions": {
+        "knee": "pending",
+        "hip": "pending",
+        "back": "pending",
+        "shoulder": "pending",
+        "elbow": "pending",
+        "wrist": "pending",
+        "ankle_foot": "pending"
+      },
+      "finalStatus": "PENDENTE"
+    }
+  ],
+  "validation": {
+    "targeted": {
+      "files": 8,
+      "passedTests": 54,
+      "failedTests": 0
+    },
+    "typecheck": "passed",
+    "eslint": "passed",
+    "fullSuite": {
+      "passedFiles": 612,
+      "failedFiles": 16,
+      "passedTests": 7862,
+      "failedTests": 44,
+      "skippedTests": 227
+    },
+    "baselineRerun": {
+      "files": 16,
+      "passedTests": 442,
+      "failedTests": 44,
+      "identicalFailures": true
+    },
+    "failures": [
+      {
+        "file": "src/lib/__tests__/iosRestActivityStructure.test.ts",
+        "test": "versioned Live Activity extension does not add storage sharing or push entitlements preemptively"
+      },
+      {
+        "file": "src/lib/__tests__/premiumEntitlementPrecedence.test.ts",
+        "test": "FASE 6 — entitlement wins over commercial status (access side) status=grace_period with an active entitlement: resolveSubscriptionCenterModel reports hasPremiumAccess=true"
+      },
+      {
+        "file": "src/lib/__tests__/workoutLogicIntact.test.ts",
+        "test": "WorkoutScreen source — 7B + 7C strings fully migrated (positive guard) raw literal \"REGISTRADO\" has been removed"
+      },
+      {
+        "file": "src/loadProgress/__tests__/loadProgressWiring.test.ts",
+        "test": "real load-progress wiring offers the requested search, record list and four time ranges"
+      },
+      {
+        "file": "src/loadProgress/__tests__/loadProgressWiring.test.ts",
+        "test": "real load-progress wiring publishes an invalidation only after the queued set write resolves"
+      },
+      {
+        "file": "src/scheduleEngine/__tests__/scheduleRefreshState.test.ts",
+        "test": "Schedule refresh authority gates resolution, config and loading publication against the latest reload id"
+      },
+      {
+        "file": "src/screens/__tests__/editProfileFixedLayout.test.ts",
+        "test": "EditProfileScreen fixed layout anchors the footer within the available height instead of pushing it below the viewport"
+      },
+      {
+        "file": "src/screens/__tests__/editProfileFixedLayout.test.ts",
+        "test": "EditProfileScreen fixed layout keeps the form and save action in a non-scrolling safe-area layout"
+      },
+      {
+        "file": "src/screens/__tests__/healthIntegrationScreenStructure.test.ts",
+        "test": "HealthIntegrationScreen — disconnect requires explicit confirmation never calls disconnect() directly from the disconnect row — it only opens a confirmation sheet"
+      },
+      {
+        "file": "src/screens/__tests__/healthIntegrationScreenStructure.test.ts",
+        "test": "HealthIntegrationScreen — platform isolation (no iOS copy on Android, no Android copy on iOS) never presents OS authorization as \"granted\" for iOS — permissionsRequested is treated as non-committal"
+      },
+      {
+        "file": "src/screens/__tests__/healthIntegrationScreenStructure.test.ts",
+        "test": "HealthIntegrationScreen — platform isolation (no iOS copy on Android, no Android copy on iOS) only shows the iOS \"cannot verify permission\" notice behind an explicit iOS check"
+      },
+      {
+        "file": "src/screens/__tests__/migratedScreensLifecycle.test.ts",
+        "test": "EditProfileScreen — draft resets explicitly per session, not via unmount imports useScreenFocusEffect and resets every draft field on activation"
+      },
+      {
+        "file": "src/screens/__tests__/paywallRedesignStructure.test.ts",
+        "test": "Paywall redesign — i18n coverage for new copy, no new hardcoded strings entryContext-driven plan intro stays copy-only and goes through i18n"
+      },
+      {
+        "file": "src/screens/__tests__/premiumCommercialContextFase6.test.ts",
+        "test": "FASE 6 — SubscriptionCenterScreen already correctly separates access from commercial presentation (audited, not rewritten) billing_issue/grace_period route to the real subscription management flow (manageSubscription), not an invented destination"
+      },
+      {
+        "file": "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+        "test": "WorkoutScreen rest overlay — button label and next-exercise indicator (B) the last set of an exercise (with another exercise left) switches the label and shows the next exercise"
+      },
+      {
+        "file": "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+        "test": "WorkoutScreen rest overlay — button label and next-exercise indicator derives nextExerciseAction only from the shared nextAction decision, never standalone"
+      },
+      {
+        "file": "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+        "test": "WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision (E) computes the next-exercise lookup exactly once, feeding both the Live Activity call site and the in-app one"
+      },
+      {
+        "file": "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+        "test": "WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision completeSet feeds the shared lookup into the Live Activity decision"
+      },
+      {
+        "file": "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+        "test": "WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision passes the decision down to RestOverlay as a single prop, not re-derived props"
+      },
+      {
+        "file": "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+        "test": "WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision restNextAction rebuilds the same decision from the authoritative, restorable rest record (not fresh component state)"
+      },
+      {
+        "file": "src/state/__tests__/restLiveActivityIntegrationStructure.test.ts",
+        "test": "RestSessionContext live transition wiring keeps completed cardio visible until the final workout CTA"
+      },
+      {
+        "file": "src/theme/__tests__/sharedComponentsTheme.test.ts",
+        "test": "Phase 4 acquisition and primary app coverage keeps the Phase 4 critical screens free of Dark color literals"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/canonicalV127SubstitutionMapUnification.test.ts",
+        "test": "v1.27 exercise_substitution_map — closed identity unifications (no allowlist) 1. no A/B/C candidate resolves, after canonicalization, to the canonical id of the entry it is listed under (global, zero exceptions)"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/canonicalV127SubstitutionMapUnification.test.ts",
+        "test": "v1.27 exercise_substitution_map — closed identity unifications (no allowlist) 2. no tier contains two candidates that canonicalize to the same runtime id (global, per key per tier)"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/canonicalV127SubstitutionMapUnification.test.ts",
+        "test": "v1.27 exercise_substitution_map — closed identity unifications (no allowlist) none of the unified-away ids/names appear as a map key, or as a candidate name/exercise_id, anywhere"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate ankle_foot composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate closes the complete individual 102x7 matrix (714/714)"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate elbow composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate elbow+wrist uses the safety intersection and composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate hip composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate hip+spine uses the safety intersection and composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate knee composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate knee+ankle_foot uses the safety intersection and composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate knee+hip uses the safety intersection and composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate knee+spine uses the safety intersection and composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate shoulder composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate shoulder+elbow uses the safety intersection and composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate shoulder+elbow+wrist uses the safety intersection and composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate shoulder+wrist uses the safety intersection and composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate spine composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate spine+hip uses the safety intersection and composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate spine+shoulder uses the safety intersection and composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate wrist composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/spineHomeClosureV127.test.ts",
+        "test": "v1.27 spine/Home closure — all-template audit runs all 102 templates with no remaining spine blocker"
+      }
+    ],
+    "nativePlayback": "not tested: no booted iOS simulator or connected Android device; no new exact demo available"
+  }
+}

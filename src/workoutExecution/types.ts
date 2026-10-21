@@ -237,6 +237,7 @@ export interface WorkoutExecution {
   executionSchemaVersion: number;
   /** P0-C protocol marker — see `WORKOUT_EXECUTION_MUTEX_PROTOCOL_VERSION`'s doc comment. Absent on every pre-P0-C write. */
   mutexProtocolVersion?: number;
+
   createdAt: unknown;
   updatedAt: unknown;
 }

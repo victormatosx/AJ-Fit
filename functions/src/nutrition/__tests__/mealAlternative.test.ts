@@ -1,3 +1,4 @@
+import { approveReview } from './reviewFixture';
 import { describe, expect, it, vi } from 'vitest';
 import type { MealNutritionTarget, NutritionProfile } from '../shared/types/nutrition';
 import { OpenAiNutritionProvider, OPENAI_MEAL_ALTERNATIVE_SCHEMA, type MealAlternativeRequest, type NutritionAiProvider } from '../ai/provider';
@@ -33,7 +34,7 @@ function fakeProvider(...outputs: unknown[]): NutritionAiProvider {
     if (next instanceof Error) throw next;
     return { output: next, model: 'fake', usage: { inputTokens: 10, outputTokens: 5, cachedInputTokens: 0 }, latencyMs: 1 };
   });
-  return { generatePlan: vi.fn(), generateMealAlternative };
+  return { reviewPlan: approveReview, generatePlan: vi.fn(), generateMealAlternative };
 }
 
 describe('meal alternative validator — free-form AI items, no catalog/foodId dependency', () => {
@@ -79,14 +80,14 @@ describe('generateValidatedMealAlternative', () => {
     expect(provider.generateMealAlternative).toHaveBeenCalledTimes(1);
   });
 
-  it('retries on invalid output and falls back on the last attempt for selected failures', async () => {
+  it('retries invalid output and reserves the fourth call for review without model escalation', async () => {
     const provider = fakeProvider({ recommendedOptionIndex: 0, options: [] }, { recommendedOptionIndex: 0, options: [] }, output());
     const result = await generateValidatedMealAlternative(provider, profile, 'lunch', target, [], 'lose_fat', noNames, undefined);
     expect(result.attempt).toBe(3);
-    expect(result.fallback).toBe(true);
+    expect(result.fallback).toBe(false);
   });
 
-  it('never exceeds 3 total calls and throws GenerationAttemptsExhausted', async () => {
+  it('never exceeds 3 creator calls and throws GenerationAttemptsExhausted', async () => {
     const provider = fakeProvider({ recommendedOptionIndex: 0, options: [] }, { recommendedOptionIndex: 0, options: [] }, { recommendedOptionIndex: 0, options: [] });
     await expect(generateValidatedMealAlternative(provider, profile, 'lunch', target, [], 'lose_fat', noNames, undefined))
       .rejects.toBeInstanceOf(GenerationAttemptsExhausted);
@@ -94,14 +95,18 @@ describe('generateValidatedMealAlternative', () => {
   });
 
   it('respects self-declared allergens exactly like the full-plan validator', async () => {
-    const unsafeOutput = { recommendedOptionIndex: 0, options: [
+    const unsafeOutput = () => ({ recommendedOptionIndex: 0, options: [
       { foods: [item('Camarão', 600, 30, 75, 15, 15, ['shellfish'])] },
       { foods: [item('Camarão', 600, 30, 75, 15, 15, ['shellfish'])] },
-    ] };
-    const provider = fakeProvider(unsafeOutput);
+    ] });
+    // AI_CONTENT_SAFETY_MISMATCH (2026-10-20 fix): retryable — the SAME
+    // unweakened allergen check reruns every attempt, so a persistently
+    // unsafe draft still never gets persisted, but it now consumes the
+    // full attempt budget instead of failing closed after one call.
+    const provider = fakeProvider(unsafeOutput(), unsafeOutput(), unsafeOutput());
     await expect(generateValidatedMealAlternative(provider, { ...profile, excludedAllergens: ['shellfish'] }, 'lunch', target,
-      [], 'lose_fat', noNames, undefined)).rejects.toMatchObject({ code: 'AI_SAFETY_VALIDATION_FAILED' });
-    expect(provider.generateMealAlternative).toHaveBeenCalledTimes(1);
+      [], 'lose_fat', noNames, undefined)).rejects.toMatchObject({ code: 'AI_RETRY_EXHAUSTED', lastFailureCode: 'AI_CONTENT_SAFETY_MISMATCH' });
+    expect(provider.generateMealAlternative).toHaveBeenCalledTimes(3);
   });
 });
 
@@ -118,7 +123,7 @@ describe('meal alternative provider schema', () => {
     expect(OPENAI_MEAL_ALTERNATIVE_SCHEMA.required).toEqual(['recommendedOptionIndex', 'options']);
   });
 
-  it('uses the cheaper mealAlternative model, and the fallback model only when requested', async () => {
+  it('uses only the cheaper mealAlternative model even if a legacy fallback flag is supplied', async () => {
     const calls: unknown[] = [];
     const fetcher = vi.fn().mockImplementation(async (_url: string, init: RequestInit) => {
       calls.push(JSON.parse(init.body as string).model);
@@ -130,24 +135,27 @@ describe('meal alternative provider schema', () => {
     const request: MealAlternativeRequest = { profile, target, avoidFoodNames: [], goal: 'lose_fat', foodNames: noNames };
     await provider.generateMealAlternative!(request);
     await provider.generateMealAlternative!({ ...request, fallback: true });
-    expect(calls[0]).not.toBe(calls[1]);
+    expect(calls).toEqual(['gpt-6-luna', 'gpt-6-luna']);
   });
 });
 
 describe('alternative dietary restrictions', () => {
   it.each(['vegetarian', 'vegan', 'pescatarian'] as const)('rejects terrestrial meat for %s in any alternative', async (dietaryPattern) => {
-    const provider = fakeProvider(output());
+    // AI_CONTENT_SAFETY_MISMATCH (2026-10-20 fix): retryable — same
+    // unweakened dietary-pattern check reruns every attempt.
+    const provider = fakeProvider(output(), output(), output());
     await expect(generateValidatedMealAlternative(provider, { ...profile, dietaryPattern }, 'lunch', target, [], 'health', noNames, undefined))
-      .rejects.toMatchObject({ code: 'AI_SAFETY_VALIDATION_FAILED' });
+      .rejects.toMatchObject({ code: 'AI_RETRY_EXHAUSTED', lastFailureCode: 'AI_CONTENT_SAFETY_MISMATCH' });
   });
   it('keeps exclusions and allergies above inclusion preferences and strips legacy flags', async () => {
-    const provider = fakeProvider(output(1, 'Arroz com feijão'));
+    const provider = fakeProvider(output(1, 'Arroz com feijão'), output(1, 'Arroz com feijão'), output(1, 'Arroz com feijão'));
     await expect(generateValidatedMealAlternative(provider, { ...profile, dietaryPattern: 'vegan' }, 'lunch', target, [], 'health',
-      { preferred: ['Feijão'], usual: [], excluded: ['Feijão'] }, undefined)).rejects.toMatchObject({ code: 'AI_SAFETY_VALIDATION_FAILED' });
+      { preferred: ['Feijão'], usual: [], excluded: ['Feijão'] }, undefined)).rejects.toMatchObject({ code: 'AI_RETRY_EXHAUSTED', lastFailureCode: 'AI_CONTENT_SAFETY_MISMATCH' });
     const request = vi.mocked(provider.generateMealAlternative!).mock.calls[0][0];
     expect(request.profile).not.toHaveProperty('pregnant');
     expect(request.profile).not.toHaveProperty('breastfeeding');
-    await expect(generateValidatedMealAlternative(fakeProvider(output(1, 'Tofu')), { ...profile, dietaryPattern: 'vegan', excludedAllergens: ['soy'] },
-      'lunch', target, [], 'health', noNames, undefined)).rejects.toMatchObject({ code: 'AI_SAFETY_VALIDATION_FAILED' });
+    await expect(generateValidatedMealAlternative(fakeProvider(output(1, 'Tofu'), output(1, 'Tofu'), output(1, 'Tofu')),
+      { ...profile, dietaryPattern: 'vegan', excludedAllergens: ['soy'] },
+      'lunch', target, [], 'health', noNames, undefined)).rejects.toMatchObject({ code: 'AI_RETRY_EXHAUSTED', lastFailureCode: 'AI_CONTENT_SAFETY_MISMATCH' });
   });
 });

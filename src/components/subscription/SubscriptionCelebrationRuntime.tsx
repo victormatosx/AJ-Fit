@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
@@ -9,25 +9,15 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 
-import { useSubscription } from '../../hooks/useSubscription';
 import { useReducedMotionPreference } from '../../lib/reducedMotion';
 import {
-  resolveSubscriptionCelebration,
   subscribeToSubscriptionPurchaseCelebrations,
-  subscribeToSubscriptionRestoreCelebrationBoundaries,
-  subscriptionCelebrationState,
   type SubscriptionCelebrationKind,
-  type SubscriptionCelebrationSnapshot,
 } from '../../lib/subscriptionCelebration';
 import { useAuth } from '../../state/AuthContext';
 import { useTheme } from '../../theme';
 import { Display, Slash } from '../ui/Display';
 import { Icon } from '../ui/Icon';
-
-type IdentityBaseline = {
-  uid: string;
-  snapshot: SubscriptionCelebrationSnapshot;
-};
 
 type Celebration = {
   id: number;
@@ -40,24 +30,23 @@ type CelebratedTransaction = {
 };
 
 /**
- * Observes the real RevenueCat snapshot, independently of the DEV override,
- * and presents one identity-scoped celebration only for an in-app purchase or
- * a real renewal transaction. Restore, bootstrap and ordinary refreshes stay
- * silent. The first resolved snapshot is only a baseline, never an event.
+ * Presents one identity-scoped celebration exclusively for a purchase the
+ * user just completed in-app (`performPurchase` → `emitSubscriptionPurchaseCelebration`).
+ * This is the ONLY trigger: auto-renewals delivered by the RevenueCat listener,
+ * restore, app startup/foreground syncs and any other passive `CustomerInfo`
+ * update never reach this component, so they can never show the animation.
  */
 export function SubscriptionCelebrationRuntime() {
   const { user } = useAuth();
-  const { realCustomerInfo } = useSubscription();
   const uid = user?.uid ?? null;
-  const baseline = useRef<IdentityBaseline | null>(null);
   const celebratedTransaction = useRef<CelebratedTransaction | null>(null);
-  const restoreSuppressedUid = useRef<string | null>(null);
   const nextId = useRef(0);
   const [celebration, setCelebration] = useState<Celebration | null>(null);
-  const snapshot = useMemo(
-    () => subscriptionCelebrationState(realCustomerInfo),
-    [realCustomerInfo],
-  );
+
+  useEffect(() => {
+    celebratedTransaction.current = null;
+    setCelebration(null);
+  }, [uid]);
 
   useEffect(() => {
     if (!uid) return;
@@ -78,66 +67,8 @@ export function SubscriptionCelebrationRuntime() {
       }
       setCelebration({ id: ++nextId.current, kind: event.kind });
     });
-    const unsubscribeRestore = subscribeToSubscriptionRestoreCelebrationBoundaries((event) => {
-      if (event.uid !== uid) return;
-      if (event.phase === 'started') {
-        restoreSuppressedUid.current = uid;
-        return;
-      }
-      if (event.latestPurchaseDate) {
-        celebratedTransaction.current = {
-          uid,
-          latestPurchaseDate: event.latestPurchaseDate,
-        };
-      }
-      restoreSuppressedUid.current = null;
-    });
-    return () => {
-      unsubscribePurchase();
-      unsubscribeRestore();
-    };
+    return unsubscribePurchase;
   }, [uid]);
-
-  useEffect(() => {
-    if (!uid || !snapshot) {
-      baseline.current = null;
-      celebratedTransaction.current = null;
-      restoreSuppressedUid.current = null;
-      setCelebration(null);
-      return;
-    }
-
-    const previous = baseline.current;
-    baseline.current = { uid, snapshot };
-    if (!previous || previous.uid !== uid) {
-      setCelebration(null);
-      return;
-    }
-
-    if (restoreSuppressedUid.current === uid) {
-      if (snapshot.latestPurchaseDate) {
-        celebratedTransaction.current = {
-          uid,
-          latestPurchaseDate: snapshot.latestPurchaseDate,
-        };
-      }
-      return;
-    }
-
-    const kind = resolveSubscriptionCelebration(previous.snapshot, snapshot);
-    if (!kind || !snapshot.latestPurchaseDate) return;
-    if (
-      celebratedTransaction.current?.uid === uid &&
-      celebratedTransaction.current.latestPurchaseDate === snapshot.latestPurchaseDate
-    ) {
-      return;
-    }
-    celebratedTransaction.current = {
-      uid,
-      latestPurchaseDate: snapshot.latestPurchaseDate,
-    };
-    setCelebration({ id: ++nextId.current, kind });
-  }, [snapshot, uid]);
 
   if (!celebration) return null;
 

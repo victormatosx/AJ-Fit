@@ -9,7 +9,7 @@
  * (so the fix costs nothing when the two representations already agree),
  * while still detecting a genuine content change in every field it reads.
  */
-import { describe, expect, it, vi } from 'vitest';
+import { describe,expect,it,vi } from 'vitest';
 
 vi.mock('../../lib/firebase', () => ({ db: undefined }));
 
@@ -29,8 +29,6 @@ function basePlan(overrides: Partial<PlanShape> = {}): PlanShape {
     environment: 'gym',
     goalFamily: 'gain_muscle',
     split: 'upper_lower',
-    limitationDatasetVersion: 'lim_v3',
-    limitationDatasetHash: 'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899',
     sessions: [],
     versions: {
       templateLibrary: '2.0.0', selectionEngine: '2.0.0', safetyRules: '1.0.0',
@@ -72,17 +70,6 @@ describe('contentIdentityFor is stable across withoutUndefined (item 9 — the e
     const idA = contentIdentityFor({ questionnaireId: 'q1', questionnaireVersion: 1, plan: a, template: TEMPLATE });
     const idB = contentIdentityFor({ questionnaireId: 'q1', questionnaireVersion: 1, plan: b, template: TEMPLATE });
     expect(idA).not.toBe(idB);
-  });
-
-  it('a genuine `limitationDatasetVersion`/`limitationDatasetHash` content change is still detected after withoutUndefined', () => {
-    const a = withoutUndefined(basePlan());
-    const b = withoutUndefined(basePlan({ limitationDatasetVersion: 'lim_v4' }));
-    const c = withoutUndefined(basePlan({ limitationDatasetHash: 'ffff9999eeee8888dddd7777cccc6666ffff9999eeee8888dddd7777cccc6666' }));
-    const idA = contentIdentityFor({ questionnaireId: 'q1', questionnaireVersion: 1, plan: a, template: TEMPLATE });
-    const idB = contentIdentityFor({ questionnaireId: 'q1', questionnaireVersion: 1, plan: b, template: TEMPLATE });
-    const idC = contentIdentityFor({ questionnaireId: 'q1', questionnaireVersion: 1, plan: c, template: TEMPLATE });
-    expect(idA).not.toBe(idB);
-    expect(idA).not.toBe(idC);
   });
 
   it('a genuine template metadata (version/contentHash) or questionnaireVersion change is still detected', () => {

@@ -16,17 +16,23 @@ export function generationStageKey(status: NutritionGenerationStatus): Generatio
 
 /** `09_safety/nutrition_safety_rules.md` / `error_states.md` §3 — never offer a retry CTA for these. */
 const NON_RETRYABLE_ERROR_CODES: readonly NutritionGenerationErrorCode[] = [
-  'AI_SAFETY_VALIDATION_FAILED', 'FEATURE_DISABLED', 'ACCOUNT_INACTIVE',
+  'AI_SAFETY_VALIDATION_FAILED', 'AI_DETERMINISTIC_SAFETY_BLOCKED', 'FEATURE_DISABLED', 'ACCOUNT_INACTIVE',
 ];
 
 export type GenerationFailureCopyKey =
-  | 'disabled' | 'safetyBlocked' | 'accountInactive' | 'catalogUnavailable' | 'genericError';
+  | 'disabled' | 'safetyBlocked' | 'accountInactive' | 'catalogUnavailable' | 'genericError'
+  | 'reviewNotApproved' | 'reviewUnavailable' | 'attemptsExhausted';
 
-/** Maps a failure code to one of a small, user-safe set of copy buckets. Never surfaces the raw code. */
+/** Unknown codes from a newer backend remain generic and retryable.
+ * No provider/reviewer refusal is interpreted as a clinical diagnosis.
+ * Permanent safety blocks (unspecified allergy or revoked evidence) remain separate. */
 export function generationFailureCopyKey(code: NutritionGenerationErrorCode | null | undefined): GenerationFailureCopyKey {
+  if (code === 'AI_EVIDENCE_INSUFFICIENT' || code === 'AI_REVIEW_REJECTED' || code === 'AI_REVIEW_INSUFFICIENT_INFORMATION') return 'reviewNotApproved';
+  if (code?.startsWith('AI_REVIEW_')) return 'reviewUnavailable';
+  if (code === 'AI_RETRY_EXHAUSTED' || code === 'AI_COST_LIMIT_EXCEEDED') return 'attemptsExhausted';
   if (code === 'AI_CATALOG_RESOLUTION_FAILED') return 'catalogUnavailable';
   if (code === 'FEATURE_DISABLED') return 'disabled';
-  if (code === 'AI_SAFETY_VALIDATION_FAILED') return 'safetyBlocked';
+  if (code === 'AI_SAFETY_VALIDATION_FAILED' || code === 'AI_DETERMINISTIC_SAFETY_BLOCKED') return 'safetyBlocked';
   if (code === 'ACCOUNT_INACTIVE') return 'accountInactive';
   return 'genericError';
 }

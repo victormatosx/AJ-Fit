@@ -1,18 +1,10 @@
 import { readFileSync } from 'node:fs';
 
-import { describe, expect, it } from 'vitest';
+import { describe,expect,it } from 'vitest';
 
 const source = readFileSync(new URL('../SupportCasesScreen.tsx', import.meta.url), 'utf8');
 
 describe('SupportCasesScreen presentation', () => {
-  it('replaces the old editorial labels with a localized conversation search field', () => {
-    expect(source).not.toContain('<Slash>');
-    expect(source).not.toContain('<Display');
-    expect(source).toContain("placeholder={t('cases.search')}");
-    expect(source).toContain('matchesSupportCaseSearch(item.subject, item.lastMessage, search, locale)');
-    expect(source).toContain('visibleCases.map(item =>');
-    expect(source).toContain("t('cases.noResults')");
-  });
 
   it('keeps the card list realtime through the existing case observer', () => {
     expect(source).toContain('observeOwnSupportCases(user.uid');

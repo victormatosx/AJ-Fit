@@ -85,12 +85,6 @@ async function main() {
 
   // 1. Validate the dataset before touching the network at all.
   console.log(`Exercícios no dataset: ${EXERCISES_SEED.length}`);
-  // Fase 12 — no longer pinned to a fixed count (same relaxation already
-  // applied to `limitationDatasetPublication.ts`/`limitationProfilesPhase3.ts`
-  // in bf6b4fc for the same reason): the v1.27 Fase 2 closure added 7 new
-  // resistance exercises (123 total today), and the catalog may grow again.
-  // `validateExerciseSeed` below already catches duplicate/dangling ids
-  // regardless of size — an exact-count pin added nothing beyond that.
   if (EXERCISES_SEED.length === 0) {
     console.error('ERRO: dataset de exercícios está vazio.');
     process.exit(1);

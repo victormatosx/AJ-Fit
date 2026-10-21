@@ -223,6 +223,15 @@ export function NutritionProfileQuestion({ step, draft, onChange, currentWeightK
     patch({ [key]: current.includes(value) ? current.filter((item) => item !== value) : [...current, value] } as Partial<ProfileDraft>);
   };
 
+  const hasLegacyMilkAllergy = (draft.excludedAllergens ?? []).includes('milk');
+  const toggleLactoseIntolerant = () => {
+    const current = draft.excludedSubstances ?? [];
+    patch({ excludedSubstances: current.includes('lactose') ? current.filter((item) => item !== 'lactose') : [...current, 'lactose'] });
+  };
+  const clearLegacyMilkAllergy = () => {
+    patch({ excludedAllergens: (draft.excludedAllergens ?? []).filter((item) => item !== 'milk') });
+  };
+
   const addFoodId = (target: Exclude<FoodPickerTarget, null>, pick: NutritionFoodPick) => {
     const current = (draft[target] as string[] | undefined) ?? [];
     setFoodNames((prev) => ({ ...prev, [pick.foodId]: pick.name }));
@@ -435,11 +444,29 @@ export function NutritionProfileQuestion({ step, draft, onChange, currentWeightK
         return (
           <>
             <StepTitle title={t('profile.questions.excludedAllergens.title')} subtitle={t('profile.questions.excludedAllergens.subtitle')} />
+            {hasLegacyMilkAllergy ? (
+              <View style={{ gap: 12, padding: 16, borderRadius: theme.radii.lg, backgroundColor: theme.colors.noticeBackground,
+                borderWidth: 1, borderColor: theme.colors.noticeBorder, marginBottom: 20 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+                  <Icon name="info" size={16} color={theme.colors.primaryEmphasis} />
+                  <Text style={{ flex: 1, fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textPrimary }}>
+                    {t('profile.questions.excludedAllergens.legacyMilkNotice')}
+                  </Text>
+                </View>
+                <Pressable accessibilityRole="button" onPress={clearLegacyMilkAllergy}>
+                  <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 13, color: theme.colors.primaryEmphasis }}>
+                    {t('profile.questions.excludedAllergens.legacyMilkAction')}
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-              {NUTRITION_FOOD_ALLERGENS.map((option) => (
+              {NUTRITION_FOOD_ALLERGENS.filter((option) => option !== 'milk').map((option) => (
                 <SelectableChip key={option} label={t(`profile.questions.excludedAllergens.options.${option}`)}
                   selected={(draft.excludedAllergens ?? []).includes(option)} onPress={() => toggleListValue('excludedAllergens', option)} />
               ))}
+              <SelectableChip label={t('profile.questions.excludedAllergens.lactoseIntolerant')}
+                selected={(draft.excludedSubstances ?? []).includes('lactose')} onPress={toggleLactoseIntolerant} />
             </View>
           </>
         );
@@ -513,8 +540,10 @@ function ReviewSection({ draft, currentWeightKg, saveError }: { draft: ProfileDr
       {row(t('profile.review.preferred'), String((draft.preferredFoodIds ?? []).length || none))}
       {(draft.usualFoodIds ?? []).length > 0 ? row(t('profile.review.usual'), String(draft.usualFoodIds!.length)) : null}
       {row(t('profile.review.excluded'), String((draft.excludedFoodIds ?? []).length || none))}
-      {row(t('profile.review.allergens'), (draft.excludedAllergens ?? []).length > 0
-        ? (draft.excludedAllergens ?? []).map((item) => t(`profile.questions.excludedAllergens.options.${item}`)).join(', ') : none)}
+      {row(t('profile.review.allergens'), [
+        ...(draft.excludedAllergens ?? []).map((item) => t(`profile.questions.excludedAllergens.options.${item}`)),
+        ...((draft.excludedSubstances ?? []).includes('lactose') ? [t('profile.questions.excludedAllergens.lactoseIntolerant')] : []),
+      ].join(', ') || none)}
       {row(t('profile.review.supplements'), (draft.supplements ?? []).length > 0
         ? (draft.supplements ?? []).map((item) => t(`profile.questions.supplements.options.${item}`)).join(', ') : none)}
       {draft.varietyPreference ? row(t('profile.review.variety'), t(`profile.questions.varietyPreference.options.${draft.varietyPreference}`)) : null}

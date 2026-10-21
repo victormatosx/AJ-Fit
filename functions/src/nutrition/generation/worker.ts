@@ -1,12 +1,13 @@
-import { assertCatalogBindingsCurrent } from '../catalogLinking/pipeline';
-import { catalogLinkingEnabled, CATALOG_PIPELINE_VERSION, CATALOG_PLAN_SCHEMA_VERSION } from '../catalogLinking/config';
+import { randomUUID } from 'node:crypto';
+import { assertReviewEvidenceCurrent } from './reviewEvidence';
+import { NutritionLeaseLost, reserveAiCall, operationId } from './callBudget';
 import { CatalogSearchSession, firestoreCatalogReader } from '../catalogLinking/search';
 import { Timestamp, type DocumentReference, type Firestore } from 'firebase-admin/firestore';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { db as defaultDb } from '../../lib/firebaseAdmin';
 import { logInfo, logWarn } from '../../lib/logger';
-import { OPENAI_API_KEY, PROMPT_VERSION, AI_SCHEMA_VERSION, NUTRITION_AI_MODELS, FOOD_CATALOG_VERSION_PLACEHOLDER } from '../ai/config';
+import { OPENAI_API_KEY, PROMPT_VERSION, AI_SCHEMA_VERSION, NUTRITION_AI_MODELS, FOOD_CATALOG_VERSION_PLACEHOLDER, MAX_AI_CALLS } from '../ai/config';
 import { OpenAiNutritionProvider, type NutritionAiProvider } from '../ai/provider';
 import { classifyAttemptError, generateValidatedPlan, GenerationAttemptsExhausted, type AttemptCode } from './attempts';
 import { loadGenerationContext } from './context';
@@ -20,7 +21,7 @@ import { logValidationDiagnostics } from './diagnostics';
 const LEASE_MS = 8 * 60 * 1000;
 const JOB_STATUS_ACTIVE = ['queued', 'running', 'validating'];
 type FinalCode = AttemptCode | 'FEATURE_DISABLED'
-  | 'INVALID_NUTRITION_CONTEXT' | 'ACCOUNT_INACTIVE' | 'AI_PROVIDER_ERROR';
+  | 'INVALID_NUTRITION_CONTEXT' | 'ACCOUNT_INACTIVE' | 'AI_PROVIDER_ERROR' | 'AI_DETERMINISTIC_SAFETY_BLOCKED';
 
 function errorCode(error: unknown): FinalCode {
   if (error instanceof GenerationAttemptsExhausted) return error.code;
@@ -28,9 +29,12 @@ function errorCode(error: unknown): FinalCode {
     'INVALID_NUTRITION_CONTEXT', 'ACCOUNT_INACTIVE', 'AI_PROVIDER_ERROR'].includes(error.message)) {
     return error.message === 'NUTRITION_GENERATION_DISABLED' ? 'FEATURE_DISABLED' : error.message as FinalCode;
   }
-  return classifyAttemptError(error);
+  const classified = classifyAttemptError(error);
+  // Old distributed clients map the historical code to pregnancy-specific copy.
+  // Keep that internal cause, but never emit it as a new user-facing diagnosis.
+  return classified === 'AI_SAFETY_VALIDATION_FAILED' ? 'AI_DETERMINISTIC_SAFETY_BLOCKED' : classified;
 }
-async function claim(db: Firestore, ref: DocumentReference, now: Timestamp): Promise<boolean> {
+async function claim(db: Firestore, ref: DocumentReference, now: Timestamp, leaseOwner: string): Promise<boolean> {
   return db.runTransaction(async (tx) => {
     const doc = await tx.get(ref);
     if (!doc.exists || !JOB_STATUS_ACTIVE.includes(doc.get('status'))) return false;
@@ -38,20 +42,20 @@ async function claim(db: Firestore, ref: DocumentReference, now: Timestamp): Pro
     if (doc.get('status') !== 'queued' && lease instanceof Timestamp && lease.toMillis() > now.toMillis()) return false;
     const lock = await tx.get(db.collection('accountDeletionLocks').doc(ref.parent.parent!.id));
     if (lock.exists) return false;
-    tx.update(ref, { status: 'running', startedAt: doc.get('startedAt') ?? now,
+    tx.update(ref, { status: 'running', leaseOwner, startedAt: doc.get('startedAt') ?? now,
       leaseUntil: Timestamp.fromMillis(now.toMillis() + LEASE_MS),
       nextAttemptAt: Timestamp.fromMillis(now.toMillis() + LEASE_MS), updatedAt: now });
     return true;
   });
 }
 
-async function fail(db: Firestore, ref: DocumentReference, code: FinalCode): Promise<void> {
+async function fail(db: Firestore, ref: DocumentReference, code: FinalCode, leaseOwner: string, lastFailureCode?: AttemptCode): Promise<void> {
   const uid = ref.parent.parent!.id;
   const rate = db.collection('nutritionRateLimits').doc(uid);
   await db.runTransaction(async (tx) => {
     const [job, limit] = await Promise.all([tx.get(ref), tx.get(rate)]);
-    if (!job.exists || job.get('status') === 'completed') return;
-    tx.update(ref, { status: 'failed', errorCode: code, completedAt: Timestamp.now(), leaseUntil: null,
+    if (!job.exists || job.get('status') === 'completed' || job.get('leaseOwner') !== leaseOwner) return;
+    tx.update(ref, { status: 'failed', errorCode: code, ...(lastFailureCode ? { lastFailureCode } : {}), completedAt: Timestamp.now(), leaseUntil: null,
       nextAttemptAt: null });
     if (limit.get('activeGenerationId') === ref.id) tx.update(rate, { activeGenerationId: null, updatedAt: Timestamp.now() });
   });
@@ -71,7 +75,13 @@ export async function processNutritionGenerationJob(
   let observedAttempt = 0;
   const user = db.collection('users').doc(uid);
   const ref = user.collection('nutritionGenerationJobs').doc(generationId);
-  if (!(await claim(db, ref, Timestamp.now()))) return false;
+  const leaseOwner = randomUUID();
+  if (!(await claim(db, ref, Timestamp.now(), leaseOwner))) return false;
+  const updateOwned = async (fields: FirebaseFirestore.UpdateData<FirebaseFirestore.DocumentData>) => db.runTransaction(async tx => {
+    const job = await tx.get(ref);
+    if (job.get('leaseOwner') !== leaseOwner || !JOB_STATUS_ACTIVE.includes(job.get('status'))) throw new NutritionLeaseLost();
+    tx.update(ref, fields);
+  });
   let stage = 'context';
   logInfo('nutrition.generation', 'job_started', { generationId, stage });
   try {
@@ -79,14 +89,12 @@ export async function processNutritionGenerationJob(
     const context = await loadGenerationContext(db, uid);
     const foodNames = await resolvePromptFoodNames(db, context.profile, uid);
     const claimedJob = await ref.get();
-    const catalogMode = claimedJob.get('generationMode') === 'catalog';
-    if (catalogMode && !catalogLinkingEnabled()) throw new Error('NUTRITION_GENERATION_DISABLED');
     const deadline = operationStartedAt + 430_000;
-    const catalogSession = catalogMode ? new CatalogSearchSession(firestoreCatalogReader(db), deadline) : undefined;
+    const catalogSession = new CatalogSearchSession(firestoreCatalogReader(db), deadline, 240, 80);
     const usedAttempts = claimedJob.get('aiAttemptCount');
     const startAttempt = typeof usedAttempts === 'number' && Number.isInteger(usedAttempts) ? usedAttempts + 1 : 1;
     const previousFailureCode = claimedJob.get('lastFailureCode');
-    const { validated, result, attempt, fallback } = await generateValidatedPlan(
+    const { validated, result, attempt, fallback, review } = await generateValidatedPlan(
       provider, context.profile, context.engine, context.physical.goal, foodNames,
       async (audit) => {
         observedAttempt = audit.attempt;
@@ -97,27 +105,24 @@ export async function processNutritionGenerationJob(
           validationScope: audit.validationIssue?.scope, slot: audit.validationIssue?.slot,
           nutrients: audit.validationIssue?.nutrients });
         await recordAiOperation(db, { ownerUid: uid, generationId, operation: 'full_plan',
-          defaultModel: audit.fallback ? NUTRITION_AI_MODELS.fallback : NUTRITION_AI_MODELS.fullPlan,
+          defaultModel: audit.role === 'reviewer' ? NUTRITION_AI_MODELS.reviewer : NUTRITION_AI_MODELS.fullPlan,
+          role: audit.role, callNumber: audit.callNumber, reviewStatus: audit.reviewStatus, issueCategories: audit.issueCategories,
           attempt: audit.attempt, result: audit.result, code: audit.code, fallback: audit.fallback, latencyMs: audit.latencyMs, ...(catalogSession ? { catalogMetrics: { ...catalogSession.metrics } } : {}) });
-        // Never log free-form model refusals: they can echo user input.
-        // `lastFailureCode` intentionally only tracks a NON-final attempt's
-        // failure (attempt < 3) — generateValidatedPlan reads it back as
-        // `previousFailureCode` purely to decide whether the LAST attempt
-        // should escalate to the fallback model (only for AI_SCHEMA_INVALID/
-        // AI_MACRO_VALIDATION_FAILED). It is NOT "the most recent failure" —
-        // that's `errorCode` on the job doc, written by `fail()` below from
-        // the exhausted GenerationAttemptsExhausted.code. A final (3rd)
-        // attempt's own code is deliberately excluded here since there's no
-        // subsequent attempt left for it to influence.
-        if (audit.code && audit.attempt < 3) await ref.update({ status: 'running', retryCount: audit.attempt - 1,
+        if (audit.code) await updateOwned({ status: 'running', retryCount: audit.attempt - 1,
           lastFailureCode: audit.code, updatedAt: Timestamp.now() });
       },
-      async (currentAttempt) => { stage = 'validation'; await ref.update({ status: 'validating', retryCount: currentAttempt - 1,
+      async (currentAttempt) => { stage = 'validation'; await updateOwned({ status: 'validating', retryCount: currentAttempt - 1,
         updatedAt: Timestamp.now() }); },
-      { startAttempt, generationId, ...(catalogSession ? { catalogSession, deadline } : {}), previousFailureCode: typeof previousFailureCode === 'string'
-        ? previousFailureCode as AttemptCode : undefined,
-      onBeforeAttempt: async (currentAttempt) => { stage = 'provider'; await ref.update({ aiAttemptCount: currentAttempt,
-        updatedAt: Timestamp.now() }); } },
+      { startAttempt, generationId, catalogSession, deadline,
+        physicalContext: { sex: context.physical.sex, ageYears: context.physical.ageYears,
+          heightCm: context.physical.heightCm, weightKg: context.physical.weightKg },
+        // Legacy partial jobs cannot prove their prior spend; fail closed instead of resetting budgets.
+        initialCallCount: claimedJob.get('aiCallCount') ?? (startAttempt > 1 ? MAX_AI_CALLS : 0),
+        previousFailureCode: typeof previousFailureCode === 'string' ? previousFailureCode as AttemptCode : undefined,
+        onBeforeCall: async (role, currentAttempt, callNumber) => {
+          stage = role;
+          await reserveAiCall(db, ref, uid, leaseOwner, generationId, 'full_plan', role, currentAttempt, callNumber);
+        } },
     );
         stage = 'persistence';
         logInfo('nutrition.generation', 'persistence_started', { generationId, stage });
@@ -130,12 +135,12 @@ export async function processNutritionGenerationJob(
             tx.get(user.collection('nutritionProfile').doc('current')),
           ]);
           if (!latestProfile.get('updatedAt')?.isEqual(context.profile.updatedAt)) throw new Error('STALE_GENERATION');
-          if (deletionLock.exists || rate.get('activeGenerationId') !== generationId
+          if (job.get('leaseOwner') !== leaseOwner || deletionLock.exists || rate.get('activeGenerationId') !== generationId
             || job.get('status') !== 'validating' || existingPlan.exists) throw new Error('STALE_GENERATION');
           const oldId = rate.get('activePlanId');
           const oldPlanRef = typeof oldId === 'string' ? user.collection('nutritionPlans').doc(oldId) : null;
           const oldPlan = oldPlanRef ? await tx.get(oldPlanRef) : null;
-          if (catalogSession) await assertCatalogBindingsCurrent(tx, db, validated.meals.flatMap(m => m.options), context.profile, foodNames, catalogSession);
+          await assertReviewEvidenceCurrent(tx, db, review.evidence);
           if (oldPlanRef && oldPlan?.exists && oldPlan.get('status') === 'active') {
             tx.update(oldPlanRef, { status: 'archived', archivedAt: now });
           }
@@ -144,18 +149,21 @@ export async function processNutritionGenerationJob(
               inherited: context.input.inherited, nutritionAnswers: context.profile, capturedAt: now },
             physicalSnapshot: context.physical,
             engineSnapshot: { output: { ...context.engine, versions: {
-              ...context.engine.versions, foodCatalogVersion: catalogMode ? CATALOG_PIPELINE_VERSION : FOOD_CATALOG_VERSION_PLACEHOLDER } }, ruleVersions: {
-              ...context.engine.versions, foodCatalogVersion: catalogMode ? CATALOG_PIPELINE_VERSION : FOOD_CATALOG_VERSION_PLACEHOLDER } },
+              ...context.engine.versions, foodCatalogVersion: FOOD_CATALOG_VERSION_PLACEHOLDER } }, ruleVersions: {
+              ...context.engine.versions, foodCatalogVersion: FOOD_CATALOG_VERSION_PLACEHOLDER } },
             meals: validated.meals, dailyTotals: validated.dailyTotals,
-            versions: { planSchemaVersion: catalogMode ? CATALOG_PLAN_SCHEMA_VERSION : '2.0.0', nutritionEngineVersion: context.engine.versions.nutritionEngineVersion,
-              questionnaireVersion: context.questionnaireVersion, foodCatalogVersion: catalogMode ? CATALOG_PIPELINE_VERSION : FOOD_CATALOG_VERSION_PLACEHOLDER,
-              aiGenerationSchemaVersion: AI_SCHEMA_VERSION, promptVersion: catalogMode ? `${PROMPT_VERSION}+catalog-intent-v1` : PROMPT_VERSION },
-            generationMetadata: { ...(catalogMode ? { mode: 'catalog' } : {}), provider: 'openai', model: result.model, attempts: attempt,
+            versions: { planSchemaVersion: '2.0.0', nutritionEngineVersion: context.engine.versions.nutritionEngineVersion,
+              questionnaireVersion: context.questionnaireVersion, foodCatalogVersion: FOOD_CATALOG_VERSION_PLACEHOLDER,
+              aiGenerationSchemaVersion: AI_SCHEMA_VERSION, promptVersion: PROMPT_VERSION },
+            generationMetadata: { review: { version: review.version, model: review.model,
+              candidateDigest: review.candidateDigest, calls: review.calls }, provider: 'openai', model: result.model, attempts: attempt,
               corrected: validated.corrected, fallbackUsed: fallback },
             createdAt: now, activatedAt: now, archivedAt: null });
           tx.update(ref, { status: 'completed', planId: generationId, completedAt: now,
             retryCount: attempt - 1, leaseUntil: null, nextAttemptAt: null });
           tx.update(rateRef, { activeGenerationId: null, activePlanId: generationId, updatedAt: now });
+          tx.update(db.collection('nutritionAiOperations').doc(operationId(generationId, 'reviewer', review.calls)),
+            { resultStatus: 'validated', activatedAt: now });
         });
         logInfo('nutrition.generation', 'job_completed', { generationId, stage: 'completed', attempts: attempt, fallback,
           durationMs: Date.now() - operationStartedAt });
@@ -168,6 +176,7 @@ export async function processNutritionGenerationJob(
   } catch (error) {
     logWarn('nutrition.generation', 'job_stage_failed', { generationId, stage,
       failureCode: errorCode(error), durationMs: Date.now() - operationStartedAt });
+    if (error instanceof NutritionLeaseLost) return false;
     const transientCode = typeof error === 'object' && error !== null && 'code' in error
       ? (error as { code: unknown }).code : null;
     if (typeof transientCode === 'number' && [4, 8, 10, 13, 14].includes(transientCode)) {
@@ -175,7 +184,8 @@ export async function processNutritionGenerationJob(
       return false; // lease expiry lets the scheduler resume the same job
     }
     const code = errorCode(error);
-    await fail(db, ref, code);
+    await fail(db, ref, code, leaseOwner, error instanceof GenerationAttemptsExhausted ? error.lastFailureCode
+      : code === 'AI_DETERMINISTIC_SAFETY_BLOCKED' ? 'AI_SAFETY_VALIDATION_FAILED' : undefined);
     await trackNutritionBackendEvent({ name: 'nutrition_generation_failed', properties: {
       durationBucket: durationBucket(Date.now() - operationStartedAt),
       retryCountBucket: countBucket(Math.max(0, observedAttempt - 1)),

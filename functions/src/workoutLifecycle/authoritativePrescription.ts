@@ -43,7 +43,10 @@ export async function generateAuthoritativePlan(
   if (version === 'v1.27') {
     const result = generateWorkoutPrescriptionRouted(answers, currentTrainingLevel, {}, 'v1.27');
     if (result.status !== 'SUCCESS') {
-      throw new HttpsError('failed-precondition', `authoritative_prescription_generation_failed:${result.status}`);
+      throw new HttpsError('failed-precondition', `authoritative_prescription_generation_failed:${result.status}`, {
+        reasonCodes: result.reasonCodes,
+        ...(result.trace ? { trace: result.trace } : {}),
+      });
     }
     // Same Admin-SDK-write-safe `undefined`-stripping `generateCanonicalPlan`
     // already applied to the v2 result — sealing writes this straight into

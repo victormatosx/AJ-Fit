@@ -407,7 +407,7 @@
   },
   "limits": {
     "title": "Onde você sente dor ou limitação?",
-    "sub": "Apenas colete o que afeta o treino hoje; isso não é um diagnóstico. Vamos adaptar os exercícios para as áreas selecionadas quando necessário.",
+    "sub": "Apenas colete o que afeta o treino hoje; isso não é um diagnóstico. Essa informação é apenas para seu acompanhamento pessoal.",
     "options": {
       "none": "Nenhuma",
       "knee": "Joelho",

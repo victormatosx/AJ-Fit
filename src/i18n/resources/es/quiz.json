@@ -407,7 +407,7 @@
   },
   "limits": {
     "title": "¿Dónde sientes dolor o alguna limitación?",
-    "sub": "Indica solo lo que afecta tu entrenamiento hoy; esto no es un diagnóstico. Adaptaremos los ejercicios para las áreas que selecciones cuando sea necesario.",
+    "sub": "Indica solo lo que afecta tu entrenamiento hoy; esto no es un diagnóstico. Esta información es solo para tu seguimiento personal.",
     "options": {
       "none": "Ninguna",
       "knee": "Rodilla",

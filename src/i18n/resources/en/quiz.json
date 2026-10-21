@@ -407,7 +407,7 @@
   },
   "limits": {
     "title": "Where do you feel pain or limitations?",
-    "sub": "Only report what affects training today; this is not a diagnosis. We'll adapt exercises for the areas you select when needed.",
+    "sub": "Only report what affects training today; this is not a diagnosis. This information is for your personal tracking only.",
     "options": {
       "none": "None",
       "knee": "Knee",

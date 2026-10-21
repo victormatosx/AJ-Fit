@@ -1,0 +1,415 @@
+{
+  "app-tests-final": {
+    "passed": 7600,
+    "failed": 22,
+    "skipped": 221,
+    "suiteErrors": [],
+    "failures": [
+      {
+        "file": "/Users/victor/CropSight-Solutions/AJ-Fit/src/loadProgress/__tests__/loadProgressWiring.test.ts",
+        "name": "real load-progress wiring publishes an invalidation only after the queued set write resolves",
+        "message": "AssertionError: expected 3783 to be less than -1\n    at /Users/victor/CropSight-Solutions/AJ-Fit/src/loadProgress/__tests__/loadProgressWiring.test.ts:24:75\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/Users/victor/CropSight-Solutions/AJ-Fit/src/loadProgress/__tests__/loadProgressWiring.test.ts",
+        "name": "real load-progress wiring offers the requested search, record list and four time ranges",
+        "message": "AssertionError: expected 'import React, { useEffect, useMemo, u…' to contain 'recordsLast90Days.slice(0, 3)'\n    at /Users/victor/CropSight-Solutions/AJ-Fit/src/loadProgress/__tests__/loadProgressWiring.test.ts:30:23\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/Users/victor/CropSight-Solutions/AJ-Fit/src/lib/__tests__/iosRestActivityStructure.test.ts",
+        "name": "versioned Live Activity extension does not add storage sharing or push entitlements preemptively",
+        "message": "AssertionError: expected 'const {\\n  createRunOncePlugin,\\n  wi…' not to contain 'com.apple.security.application-groups'\n    at /Users/victor/CropSight-Solutions/AJ-Fit/src/lib/__tests__/iosRestActivityStructure.test.ts:186:30\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/Users/victor/CropSight-Solutions/AJ-Fit/src/lib/__tests__/premiumEntitlementPrecedence.test.ts",
+        "name": "FASE 6 — entitlement wins over commercial status (access side) status=grace_period with an active entitlement: resolveSubscriptionCenterModel reports hasPremiumAccess=true",
+        "message": "AssertionError: expected 'billing_issue' to be 'grace_period' // Object.is equality\n    at /Users/victor/CropSight-Solutions/AJ-Fit/src/lib/__tests__/premiumEntitlementPrecedence.test.ts:217:28\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2025:60\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)"
+      },
+      {
+        "file": "/Users/victor/CropSight-Solutions/AJ-Fit/src/lib/__tests__/workoutLogicIntact.test.ts",
+        "name": "WorkoutScreen source — 7B + 7C strings fully migrated (positive guard) raw literal \"REGISTRADO\" has been removed",
+        "message": "AssertionError: expected 'import { useEffect, useMemo, useRef, …' not to contain 'REGISTRADO'\n    at /Users/victor/CropSight-Solutions/AJ-Fit/src/lib/__tests__/workoutLogicIntact.test.ts:232:31\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/Users/victor/CropSight-Solutions/AJ-Fit/src/scheduleEngine/__tests__/scheduleRefreshState.test.ts",
+        "name": "Schedule refresh authority gates resolution, config and loading publication against the latest reload id",
+        "message": "AssertionError: expected 'import { useCallback, useEffect, useM…' to contain 'if (reloadId === reloadSequenceRef.cu…'\n    at /Users/victor/CropSight-Solutions/AJ-Fit/src/scheduleEngine/__tests__/scheduleRefreshState.test.ts:79:18\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/Users/victor/CropSight-Solutions/AJ-Fit/src/screens/__tests__/editProfileFixedLayout.test.ts",
+        "name": "EditProfileScreen fixed layout keeps the form and save action in a non-scrolling safe-area layout",
+        "message": "AssertionError: expected 'import { useCallback, useEffect, useM…' not to contain 'ScrollView'\n    at /Users/victor/CropSight-Solutions/AJ-Fit/src/screens/__tests__/editProfileFixedLayout.test.ts:8:24\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/Users/victor/CropSight-Solutions/AJ-Fit/src/screens/__tests__/editProfileFixedLayout.test.ts",
+        "name": "EditProfileScreen fixed layout anchors the footer within the available height instead of pushing it below the viewport",
+        "message": "AssertionError: expected 'import { useCallback, useEffect, useM…' to contain 'footer: {\\n    flex: 1,\\n    minHeigh…'\n    at /Users/victor/CropSight-Solutions/AJ-Fit/src/screens/__tests__/editProfileFixedLayout.test.ts:18:20\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/Users/victor/CropSight-Solutions/AJ-Fit/src/screens/__tests__/healthIntegrationScreenStructure.test.ts",
+        "name": "HealthIntegrationScreen — platform isolation (no iOS copy on Android, no Android copy on iOS) only shows the iOS \"cannot verify permission\" notice behind an explicit iOS check",
+        "message": "AssertionError: expected -1 to be greater than -1\n    at /Users/victor/CropSight-Solutions/AJ-Fit/src/screens/__tests__/healthIntegrationScreenStructure.test.ts:73:25\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/Users/victor/CropSight-Solutions/AJ-Fit/src/screens/__tests__/healthIntegrationScreenStructure.test.ts",
+        "name": "HealthIntegrationScreen — platform isolation (no iOS copy on Android, no Android copy on iOS) never presents OS authorization as \"granted\" for iOS — permissionsRequested is treated as non-committal",
+        "message": "AssertionError: expected 'import { useEffect, useState } from \\…' to contain 'connected.iosPermissionNotice'\n    at /Users/victor/CropSight-Solutions/AJ-Fit/src/screens/__tests__/healthIntegrationScreenStructure.test.ts:82:27\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/Users/victor/CropSight-Solutions/AJ-Fit/src/screens/__tests__/healthIntegrationScreenStructure.test.ts",
+        "name": "HealthIntegrationScreen — disconnect requires explicit confirmation never calls disconnect() directly from the disconnect row — it only opens a confirmation sheet",
+        "message": "AssertionError: expected 'accessibilityLabel={t(\\'health:connec…' to contain 'setConfirmingDisconnect(true)'\n    at /Users/victor/CropSight-Solutions/AJ-Fit/src/screens/__tests__/healthIntegrationScreenStructure.test.ts:95:27\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/Users/victor/CropSight-Solutions/AJ-Fit/src/screens/__tests__/migratedScreensLifecycle.test.ts",
+        "name": "EditProfileScreen — draft resets explicitly per session, not via unmount imports useScreenFocusEffect and resets every draft field on activation",
+        "message": "AssertionError: expected 'useScreenFocusEffect(() => {\\n    set…' to contain 'setBirthDay(initialDate.day)'\n    at /Users/victor/CropSight-Solutions/AJ-Fit/src/screens/__tests__/migratedScreensLifecycle.test.ts:56:56\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/Users/victor/CropSight-Solutions/AJ-Fit/src/screens/__tests__/paywallRedesignStructure.test.ts",
+        "name": "Paywall redesign — i18n coverage for new copy, no new hardcoded strings entryContext-driven plan intro stays copy-only and goes through i18n",
+        "message": "AssertionError: expected 'import { useCallback, useEffect, useM…' to contain 't(\\'paywall.plans.selectorPrompt\\')'\n    at /Users/victor/CropSight-Solutions/AJ-Fit/src/screens/__tests__/paywallRedesignStructure.test.ts:370:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/Users/victor/CropSight-Solutions/AJ-Fit/src/screens/__tests__/premiumCommercialContextFase6.test.ts",
+        "name": "FASE 6 — SubscriptionCenterScreen already correctly separates access from commercial presentation (audited, not rewritten) billing_issue/grace_period route to the real subscription management flow (manageSubscription), not an invented destination",
+        "message": "AssertionError: expected 'import { useCallback, useMemo, useSta…' to contain 'managePayment'\n    at /Users/victor/CropSight-Solutions/AJ-Fit/src/screens/__tests__/premiumCommercialContextFase6.test.ts:85:18\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/Users/victor/CropSight-Solutions/AJ-Fit/src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+        "name": "WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision (E) computes the next-exercise lookup exactly once, feeding both the Live Activity call site and the in-app one",
+        "message": "AssertionError: expected +0 to be 1 // Object.is equality\n    at /Users/victor/CropSight-Solutions/AJ-Fit/src/screens/__tests__/restOverlayNextExerciseStructure.test.ts:21:29\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/Users/victor/CropSight-Solutions/AJ-Fit/src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+        "name": "WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision completeSet feeds the shared lookup into the Live Activity decision",
+        "message": "AssertionError: expected 'const completeSet = () => {\\n    cons…' to contain 'nextExerciseContext(setIdx, ex.sets.l…'\n    at /Users/victor/CropSight-Solutions/AJ-Fit/src/screens/__tests__/restOverlayNextExerciseStructure.test.ts:34:20\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/Users/victor/CropSight-Solutions/AJ-Fit/src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+        "name": "WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision restNextAction rebuilds the same decision from the authoritative, restorable rest record (not fresh component state)",
+        "message": "AssertionError: expected -1 to be greater than -1\n    at /Users/victor/CropSight-Solutions/AJ-Fit/src/screens/__tests__/restOverlayNextExerciseStructure.test.ts:44:23\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/Users/victor/CropSight-Solutions/AJ-Fit/src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+        "name": "WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision passes the decision down to RestOverlay as a single prop, not re-derived props",
+        "message": "AssertionError: expected 'import { useEffect, useMemo, useRef, …' to contain 'nextAction={restNextAction}'\n    at /Users/victor/CropSight-Solutions/AJ-Fit/src/screens/__tests__/restOverlayNextExerciseStructure.test.ts:53:20\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/Users/victor/CropSight-Solutions/AJ-Fit/src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+        "name": "WorkoutScreen rest overlay — button label and next-exercise indicator derives nextExerciseAction only from the shared nextAction decision, never standalone",
+        "message": "AssertionError: expected 'function RestOverlay({\\n  remainingSe…' to contain 'nextAction?.nextAction === REST_ACTIV…'\n    at /Users/victor/CropSight-Solutions/AJ-Fit/src/screens/__tests__/restOverlayNextExerciseStructure.test.ts:63:25\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/Users/victor/CropSight-Solutions/AJ-Fit/src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+        "name": "WorkoutScreen rest overlay — button label and next-exercise indicator (B) the last set of an exercise (with another exercise left) switches the label and shows the next exercise",
+        "message": "AssertionError: expected 'function RestOverlay({\\n  remainingSe…' to contain '{nextExerciseAction && ('\n    at /Users/victor/CropSight-Solutions/AJ-Fit/src/screens/__tests__/restOverlayNextExerciseStructure.test.ts:80:25\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/Users/victor/CropSight-Solutions/AJ-Fit/src/state/__tests__/restLiveActivityIntegrationStructure.test.ts",
+        "name": "RestSessionContext live transition wiring keeps completed cardio visible until the final workout CTA",
+        "message": "AssertionError: expected 'const runWorkoutCompletion = (\\n    r…' to contain 'if (!hasCardioFinisher) endWorkoutSes…'\n    at /Users/victor/CropSight-Solutions/AJ-Fit/src/state/__tests__/restLiveActivityIntegrationStructure.test.ts:170:29\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/Users/victor/CropSight-Solutions/AJ-Fit/src/theme/__tests__/sharedComponentsTheme.test.ts",
+        "name": "Phase 4 acquisition and primary app coverage keeps the Phase 4 critical screens free of Dark color literals",
+        "message": "AssertionError: expected 'import React, { useEffect, useRef, us…' not to match /#[0-9a-f]{3,8}|rgba?\\(/i\n    at /Users/victor/CropSight-Solutions/AJ-Fit/src/theme/__tests__/sharedComponentsTheme.test.ts:181:25\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      }
+    ]
+  },
+  "functions-tests-final": {
+    "passed": 2043,
+    "failed": 0,
+    "skipped": 402,
+    "suiteErrors": [],
+    "failures": []
+  },
+  "baseline-app": {
+    "passed": 419,
+    "failed": 22,
+    "skipped": 0,
+    "suiteErrors": [],
+    "failures": [
+      {
+        "file": "/private/tmp/ajfit-final-audit/baseline/src/loadProgress/__tests__/loadProgressWiring.test.ts",
+        "name": "real load-progress wiring publishes an invalidation only after the queued set write resolves",
+        "message": "AssertionError: expected 3783 to be less than -1\n    at /private/tmp/ajfit-final-audit/baseline/src/loadProgress/__tests__/loadProgressWiring.test.ts:24:75\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/private/tmp/ajfit-final-audit/baseline/src/loadProgress/__tests__/loadProgressWiring.test.ts",
+        "name": "real load-progress wiring offers the requested search, record list and four time ranges",
+        "message": "AssertionError: expected 'import React, { useEffect, useMemo, u…' to contain 'recordsLast90Days.slice(0, 3)'\n    at /private/tmp/ajfit-final-audit/baseline/src/loadProgress/__tests__/loadProgressWiring.test.ts:30:23\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/private/tmp/ajfit-final-audit/baseline/src/state/__tests__/restLiveActivityIntegrationStructure.test.ts",
+        "name": "RestSessionContext live transition wiring keeps completed cardio visible until the final workout CTA",
+        "message": "AssertionError: expected 'const runWorkoutCompletion = (\\n    r…' to contain 'if (!hasCardioFinisher) endWorkoutSes…'\n    at /private/tmp/ajfit-final-audit/baseline/src/state/__tests__/restLiveActivityIntegrationStructure.test.ts:170:29\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/private/tmp/ajfit-final-audit/baseline/src/scheduleEngine/__tests__/scheduleRefreshState.test.ts",
+        "name": "Schedule refresh authority gates resolution, config and loading publication against the latest reload id",
+        "message": "AssertionError: expected 'import { useCallback, useEffect, useM…' to contain 'if (reloadId === reloadSequenceRef.cu…'\n    at /private/tmp/ajfit-final-audit/baseline/src/scheduleEngine/__tests__/scheduleRefreshState.test.ts:79:18\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/private/tmp/ajfit-final-audit/baseline/src/lib/__tests__/iosRestActivityStructure.test.ts",
+        "name": "versioned Live Activity extension does not add storage sharing or push entitlements preemptively",
+        "message": "AssertionError: expected 'const {\\n  createRunOncePlugin,\\n  wi…' not to contain 'com.apple.security.application-groups'\n    at /private/tmp/ajfit-final-audit/baseline/src/lib/__tests__/iosRestActivityStructure.test.ts:186:30\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/private/tmp/ajfit-final-audit/baseline/src/lib/__tests__/premiumEntitlementPrecedence.test.ts",
+        "name": "FASE 6 — entitlement wins over commercial status (access side) status=grace_period with an active entitlement: resolveSubscriptionCenterModel reports hasPremiumAccess=true",
+        "message": "AssertionError: expected 'billing_issue' to be 'grace_period' // Object.is equality\n    at /private/tmp/ajfit-final-audit/baseline/src/lib/__tests__/premiumEntitlementPrecedence.test.ts:217:28\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2025:60\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)"
+      },
+      {
+        "file": "/private/tmp/ajfit-final-audit/baseline/src/lib/__tests__/workoutLogicIntact.test.ts",
+        "name": "WorkoutScreen source — 7B + 7C strings fully migrated (positive guard) raw literal \"REGISTRADO\" has been removed",
+        "message": "AssertionError: expected 'import { useEffect, useMemo, useRef, …' not to contain 'REGISTRADO'\n    at /private/tmp/ajfit-final-audit/baseline/src/lib/__tests__/workoutLogicIntact.test.ts:232:31\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/private/tmp/ajfit-final-audit/baseline/src/theme/__tests__/sharedComponentsTheme.test.ts",
+        "name": "Phase 4 acquisition and primary app coverage keeps the Phase 4 critical screens free of Dark color literals",
+        "message": "AssertionError: expected 'import React, { useEffect, useRef, us…' not to match /#[0-9a-f]{3,8}|rgba?\\(/i\n    at /private/tmp/ajfit-final-audit/baseline/src/theme/__tests__/sharedComponentsTheme.test.ts:181:25\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/private/tmp/ajfit-final-audit/baseline/src/screens/__tests__/editProfileFixedLayout.test.ts",
+        "name": "EditProfileScreen fixed layout keeps the form and save action in a non-scrolling safe-area layout",
+        "message": "AssertionError: expected 'import { useCallback, useEffect, useM…' not to contain 'ScrollView'\n    at /private/tmp/ajfit-final-audit/baseline/src/screens/__tests__/editProfileFixedLayout.test.ts:8:24\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/private/tmp/ajfit-final-audit/baseline/src/screens/__tests__/editProfileFixedLayout.test.ts",
+        "name": "EditProfileScreen fixed layout anchors the footer within the available height instead of pushing it below the viewport",
+        "message": "AssertionError: expected 'import { useCallback, useEffect, useM…' to contain 'footer: {\\n    flex: 1,\\n    minHeigh…'\n    at /private/tmp/ajfit-final-audit/baseline/src/screens/__tests__/editProfileFixedLayout.test.ts:18:20\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/private/tmp/ajfit-final-audit/baseline/src/screens/__tests__/healthIntegrationScreenStructure.test.ts",
+        "name": "HealthIntegrationScreen — platform isolation (no iOS copy on Android, no Android copy on iOS) only shows the iOS \"cannot verify permission\" notice behind an explicit iOS check",
+        "message": "AssertionError: expected -1 to be greater than -1\n    at /private/tmp/ajfit-final-audit/baseline/src/screens/__tests__/healthIntegrationScreenStructure.test.ts:73:25\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/private/tmp/ajfit-final-audit/baseline/src/screens/__tests__/healthIntegrationScreenStructure.test.ts",
+        "name": "HealthIntegrationScreen — platform isolation (no iOS copy on Android, no Android copy on iOS) never presents OS authorization as \"granted\" for iOS — permissionsRequested is treated as non-committal",
+        "message": "AssertionError: expected 'import { useEffect, useState } from \\…' to contain 'connected.iosPermissionNotice'\n    at /private/tmp/ajfit-final-audit/baseline/src/screens/__tests__/healthIntegrationScreenStructure.test.ts:82:27\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/private/tmp/ajfit-final-audit/baseline/src/screens/__tests__/healthIntegrationScreenStructure.test.ts",
+        "name": "HealthIntegrationScreen — disconnect requires explicit confirmation never calls disconnect() directly from the disconnect row — it only opens a confirmation sheet",
+        "message": "AssertionError: expected 'accessibilityLabel={t(\\'health:connec…' to contain 'setConfirmingDisconnect(true)'\n    at /private/tmp/ajfit-final-audit/baseline/src/screens/__tests__/healthIntegrationScreenStructure.test.ts:95:27\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/private/tmp/ajfit-final-audit/baseline/src/screens/__tests__/migratedScreensLifecycle.test.ts",
+        "name": "EditProfileScreen — draft resets explicitly per session, not via unmount imports useScreenFocusEffect and resets every draft field on activation",
+        "message": "AssertionError: expected 'useScreenFocusEffect(() => {\\n    set…' to contain 'setBirthDay(initialDate.day)'\n    at /private/tmp/ajfit-final-audit/baseline/src/screens/__tests__/migratedScreensLifecycle.test.ts:56:56\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/private/tmp/ajfit-final-audit/baseline/src/screens/__tests__/paywallRedesignStructure.test.ts",
+        "name": "Paywall redesign — i18n coverage for new copy, no new hardcoded strings entryContext-driven plan intro stays copy-only and goes through i18n",
+        "message": "AssertionError: expected 'import { useCallback, useEffect, useM…' to contain 't(\\'paywall.plans.selectorPrompt\\')'\n    at /private/tmp/ajfit-final-audit/baseline/src/screens/__tests__/paywallRedesignStructure.test.ts:370:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/private/tmp/ajfit-final-audit/baseline/src/screens/__tests__/premiumCommercialContextFase6.test.ts",
+        "name": "FASE 6 — SubscriptionCenterScreen already correctly separates access from commercial presentation (audited, not rewritten) billing_issue/grace_period route to the real subscription management flow (manageSubscription), not an invented destination",
+        "message": "AssertionError: expected 'import { useCallback, useMemo, useSta…' to contain 'managePayment'\n    at /private/tmp/ajfit-final-audit/baseline/src/screens/__tests__/premiumCommercialContextFase6.test.ts:85:18\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/private/tmp/ajfit-final-audit/baseline/src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+        "name": "WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision (E) computes the next-exercise lookup exactly once, feeding both the Live Activity call site and the in-app one",
+        "message": "AssertionError: expected +0 to be 1 // Object.is equality\n    at /private/tmp/ajfit-final-audit/baseline/src/screens/__tests__/restOverlayNextExerciseStructure.test.ts:21:29\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/private/tmp/ajfit-final-audit/baseline/src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+        "name": "WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision completeSet feeds the shared lookup into the Live Activity decision",
+        "message": "AssertionError: expected 'const completeSet = () => {\\n    cons…' to contain 'nextExerciseContext(setIdx, ex.sets.l…'\n    at /private/tmp/ajfit-final-audit/baseline/src/screens/__tests__/restOverlayNextExerciseStructure.test.ts:34:20\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/private/tmp/ajfit-final-audit/baseline/src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+        "name": "WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision restNextAction rebuilds the same decision from the authoritative, restorable rest record (not fresh component state)",
+        "message": "AssertionError: expected -1 to be greater than -1\n    at /private/tmp/ajfit-final-audit/baseline/src/screens/__tests__/restOverlayNextExerciseStructure.test.ts:44:23\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/private/tmp/ajfit-final-audit/baseline/src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+        "name": "WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision passes the decision down to RestOverlay as a single prop, not re-derived props",
+        "message": "AssertionError: expected 'import { useEffect, useMemo, useRef, …' to contain 'nextAction={restNextAction}'\n    at /private/tmp/ajfit-final-audit/baseline/src/screens/__tests__/restOverlayNextExerciseStructure.test.ts:53:20\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/private/tmp/ajfit-final-audit/baseline/src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+        "name": "WorkoutScreen rest overlay — button label and next-exercise indicator derives nextExerciseAction only from the shared nextAction decision, never standalone",
+        "message": "AssertionError: expected 'function RestOverlay({\\n  remainingSe…' to contain 'nextAction?.nextAction === REST_ACTIV…'\n    at /private/tmp/ajfit-final-audit/baseline/src/screens/__tests__/restOverlayNextExerciseStructure.test.ts:63:25\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      },
+      {
+        "file": "/private/tmp/ajfit-final-audit/baseline/src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+        "name": "WorkoutScreen rest overlay — button label and next-exercise indicator (B) the last set of an exercise (with another exercise left) switches the label and shows the next exercise",
+        "message": "AssertionError: expected 'function RestOverlay({\\n  remainingSe…' to contain '{nextExerciseAction && ('\n    at /private/tmp/ajfit-final-audit/baseline/src/screens/__tests__/restOverlayNextExerciseStructure.test.ts:80:25\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      }
+    ]
+  },
+  "focused-app": {
+    "passed": 117,
+    "failed": 0,
+    "skipped": 0,
+    "suiteErrors": [],
+    "failures": []
+  },
+  "focused-functions": {
+    "passed": 63,
+    "failed": 0,
+    "skipped": 0,
+    "suiteErrors": [],
+    "failures": []
+  },
+  "nutrition-emulator": {
+    "passed": 266,
+    "failed": 0,
+    "skipped": 1,
+    "suiteErrors": [],
+    "failures": []
+  },
+  "nutrition-emulator-final": {
+    "passed": 268,
+    "failed": 0,
+    "skipped": 1,
+    "failures": []
+  },
+  "nutrition-emulator-default-timeout": {
+    "passed": 267,
+    "failed": 1,
+    "skipped": 1,
+    "suiteErrors": [],
+    "failures": [
+      {
+        "file": "/Users/victor/CropSight-Solutions/AJ-Fit/functions/src/nutrition/__tests__/initialOnboarding.integration.test.ts",
+        "name": "first onboarding generation serializes concurrent devices and persists the first attempt even after terminal failure and another manual request",
+        "message": "Error: STACK_TRACE_ERROR\n    at task (file:///Users/victor/CropSight-Solutions/AJ-Fit/functions/node_modules/@vitest/runner/dist/chunk-artifact.js:1784:27)\n    at Object.<anonymous> (file:///Users/victor/CropSight-Solutions/AJ-Fit/functions/node_modules/@vitest/runner/dist/chunk-artifact.js:1817:16)\n    at Object.<anonymous> (file:///Users/victor/CropSight-Solutions/AJ-Fit/functions/node_modules/@vitest/runner/dist/chunk-artifact.js:1563:28)\n    at chain (file:///Users/victor/CropSight-Solutions/AJ-Fit/functions/node_modules/@vitest/runner/dist/chunk-artifact.js:599:14)\n    at /Users/victor/CropSight-Solutions/AJ-Fit/functions/src/nutrition/__tests__/initialOnboarding.integration.test.ts:60:3\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/functions/node_modules/@vitest/runner/dist/chunk-artifact.js:1889:40\n    at runWithSuite (file:///Users/victor/CropSight-Solutions/AJ-Fit/functions/node_modules/@vitest/runner/dist/chunk-artifact.js:2258:8)\n    at Object.collect (file:///Users/victor/CropSight-Solutions/AJ-Fit/functions/node_modules/@vitest/runner/dist/chunk-artifact.js:1889:10)\n    at Object.collect (file:///Users/victor/CropSight-Solutions/AJ-Fit/functions/node_modules/@vitest/runner/dist/chunk-artifact.js:1893:54)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+      }
+    ]
+  },
+  "workout-emulator": {
+    "passed": 147,
+    "failed": 4,
+    "skipped": 0,
+    "suiteErrors": [],
+    "failures": [
+      {
+        "file": "/Users/victor/CropSight-Solutions/AJ-Fit/functions/src/workoutLifecycle/__tests__/authorizeMutation.integration.test.ts",
+        "name": "Workout Lifecycle authority — real Firestore Emulator INITIALIZE seals the three-day conditioning plan with typed interval cycles",
+        "message": "AssertionError: expected undefined to match object { cycles: 8 }\n    at Proxy.<anonymous> (file:///Users/victor/CropSight-Solutions/AJ-Fit/functions/node_modules/@vitest/expect/dist/index.js:1283:10)\n    at Proxy.<anonymous> (file:///Users/victor/CropSight-Solutions/AJ-Fit/functions/node_modules/@vitest/expect/dist/index.js:1156:15)\n    at Proxy.methodWrapper (file:///Users/victor/CropSight-Solutions/AJ-Fit/functions/node_modules/chai/index.js:1700:25)\n    at /Users/victor/CropSight-Solutions/AJ-Fit/functions/src/workoutLifecycle/__tests__/authorizeMutation.integration.test.ts:463:26\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/functions/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+      },
+      {
+        "file": "/Users/victor/CropSight-Solutions/AJ-Fit/functions/src/workoutLifecycle/__tests__/authorizeMutation.integration.test.ts",
+        "name": "Workout Lifecycle authority — real Firestore Emulator persistLifecycleActivationV127 — Fase 16 backend-authoritative v1.27 ADAPT/ACTIVATE v2 ADAPT is completely unaffected — still returns a grant, never the persisted shape",
+        "message": "Error: adaptation_cannot_change_cycle_semantics\n    at validateRequest (/Users/victor/CropSight-Solutions/AJ-Fit/functions/src/workoutLifecycle/authorizeMutation.ts:1023:11)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at authorizeWorkoutLifecycleMutationHandler (/Users/victor/CropSight-Solutions/AJ-Fit/functions/src/workoutLifecycle/authorizeMutation.ts:1805:21)\n    at /Users/victor/CropSight-Solutions/AJ-Fit/functions/src/workoutLifecycle/__tests__/authorizeMutation.integration.test.ts:993:22\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/functions/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+      },
+      {
+        "file": "/Users/victor/CropSight-Solutions/AJ-Fit/functions/src/workoutLifecycle/__tests__/finalizeWorkoutSession.integration.test.ts",
+        "name": "finalizeWorkoutSession — real Firestore Emulator integration keeps explicit fixed calendar authority even when client-writable config claims flexible",
+        "message": "Error: promise resolved \"{ status: 'COMPLETED', …(4) }\" instead of rejecting\n    at _Assertion.__VITEST_REJECTS__ (file:///Users/victor/CropSight-Solutions/AJ-Fit/functions/node_modules/@vitest/expect/dist/index.js:1747:17)\n    at _Assertion.propertyGetter (file:///Users/victor/CropSight-Solutions/AJ-Fit/functions/node_modules/chai/index.js:1570:27)\n    at Reflect.get (<anonymous>)\n    at Object.proxyGetter [as get] (file:///Users/victor/CropSight-Solutions/AJ-Fit/functions/node_modules/chai/index.js:1659:22)\n    at /Users/victor/CropSight-Solutions/AJ-Fit/functions/src/workoutLifecycle/__tests__/finalizeWorkoutSession.integration.test.ts:406:29\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/functions/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+      },
+      {
+        "file": "/Users/victor/CropSight-Solutions/AJ-Fit/functions/src/workoutLifecycle/__tests__/finalizeWorkoutSession.integration.test.ts",
+        "name": "finalizeWorkoutSession — real Firestore Emulator integration treats a legacy program/instance without scheduleMode as fixed",
+        "message": "Error: promise resolved \"{ status: 'COMPLETED', …(4) }\" instead of rejecting\n    at _Assertion.__VITEST_REJECTS__ (file:///Users/victor/CropSight-Solutions/AJ-Fit/functions/node_modules/@vitest/expect/dist/index.js:1747:17)\n    at _Assertion.propertyGetter (file:///Users/victor/CropSight-Solutions/AJ-Fit/functions/node_modules/chai/index.js:1570:27)\n    at Reflect.get (<anonymous>)\n    at Object.proxyGetter [as get] (file:///Users/victor/CropSight-Solutions/AJ-Fit/functions/node_modules/chai/index.js:1659:22)\n    at /Users/victor/CropSight-Solutions/AJ-Fit/functions/src/workoutLifecycle/__tests__/finalizeWorkoutSession.integration.test.ts:422:29\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/functions/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+      }
+    ]
+  },
+  "rules-local": {
+    "passed": 554,
+    "failed": 0,
+    "skipped": 0,
+    "suiteErrors": [],
+    "failures": []
+  },
+  "client-nutrition-emulator": {
+    "passed": 2,
+    "failed": 1,
+    "skipped": 0,
+    "suiteErrors": [],
+    "failures": [
+      {
+        "file": "/Users/victor/CropSight-Solutions/AJ-Fit/src/services/__tests__/nutritionClientJourney.emulator.integration.test.ts",
+        "name": "Nutrition client journey (Firestore Emulator + Rules) persists profile, actual intake and favorites independently from the recommended plan",
+        "message": "FirebaseError: 7 PERMISSION_DENIED: \nevaluation error at L1436:38 for 'create' @ L1436, false for 'create' @ L3321, evaluation error at L1436:38 for 'update' @ L1436, false for 'update' @ L3321, evaluation error at L1401:28 for 'update' @ L1401, false for 'update' @ L3321, evaluation error at L1358:26 for 'update' @ L1358, false for 'update' @ L3321, false for 'update' @ L1436, false for 'update' @ L3321, false for 'update' @ L1401, false for 'update' @ L3321"
+      }
+    ]
+  },
+  "baseline-client-nutrition": {
+    "passed": 1,
+    "failed": 1,
+    "skipped": 0,
+    "suiteErrors": [],
+    "failures": [
+      {
+        "file": "/private/tmp/ajfit-final-audit/baseline/src/services/__tests__/nutritionClientJourney.emulator.integration.test.ts",
+        "name": "Nutrition client journey (Firestore Emulator + Rules) persists profile, actual intake and favorites independently from the recommended plan",
+        "message": "FirebaseError: 7 PERMISSION_DENIED: \nevaluation error at L1481:38 for 'create' @ L1481, false for 'create' @ L3483, evaluation error at L1481:38 for 'update' @ L1481, false for 'update' @ L3483, evaluation error at L1446:28 for 'update' @ L1446, false for 'update' @ L3483, evaluation error at L1403:26 for 'update' @ L1403, false for 'update' @ L3483, false for 'update' @ L1403, false for 'update' @ L3483, false for 'update' @ L1481, false for 'update' @ L3483, false for 'update' @ L1446, false for 'update' @ L3483"
+      }
+    ]
+  },
+  "onboarding-emulator": {
+    "passed": 7,
+    "failed": 4,
+    "skipped": 0,
+    "suiteErrors": [],
+    "failures": [
+      {
+        "file": "/Users/victor/CropSight-Solutions/AJ-Fit/src/services/__tests__/firstProgramGeneration.integration.test.ts",
+        "name": "First program generation — real device regression, real Firestore Emulator onboarding answers → persist → load → automatic reconciliation → SUCCESS, even before email verification",
+        "message": "AssertionError: expected 3 to be 4 // Object.is equality\n    at /Users/victor/CropSight-Solutions/AJ-Fit/src/services/__tests__/firstProgramGeneration.integration.test.ts:202:49\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+      },
+      {
+        "file": "/Users/victor/CropSight-Solutions/AJ-Fit/src/services/__tests__/firstProgramGeneration.integration.test.ts",
+        "name": "First program generation — real device regression, real Firestore Emulator 10C catalog race INITIALIZE A→B persists only backend canonical B and its identities",
+        "message": "AssertionError: expected 'wp_158e85e2' to be '' // Object.is equality\n    at /Users/victor/CropSight-Solutions/AJ-Fit/src/services/__tests__/firstProgramGeneration.integration.test.ts:294:35\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+      },
+      {
+        "file": "/Users/victor/CropSight-Solutions/AJ-Fit/src/services/__tests__/firstProgramGeneration.integration.test.ts",
+        "name": "First program generation — real device regression, real Firestore Emulator 10C INITIALIZE fails closed before persistence when canonical is missing",
+        "message": "Error: promise resolved \"{ status: 'SUCCESS', …(2) }\" instead of rejecting\n    at _Assertion.__VITEST_REJECTS__ (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/expect/dist/index.js:1747:17)\n    at _Assertion.propertyGetter (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/chai/index.js:1570:27)\n    at Reflect.get (<anonymous>)\n    at Object.proxyGetter [as get] (file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/chai/index.js:1659:22)\n    at /Users/victor/CropSight-Solutions/AJ-Fit/src/services/__tests__/firstProgramGeneration.integration.test.ts:322:10\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+      },
+      {
+        "file": "/Users/victor/CropSight-Solutions/AJ-Fit/src/services/__tests__/firstProgramGeneration.integration.test.ts",
+        "name": "First program generation — real device regression, real Firestore Emulator same scenario succeeds identically once the account IS email-verified (no regression for the happy path)",
+        "message": "AssertionError: expected 'T096' to be 'T003' // Object.is equality\n    at /Users/victor/CropSight-Solutions/AJ-Fit/src/services/__tests__/firstProgramGeneration.integration.test.ts:461:39\n    at file:///Users/victor/CropSight-Solutions/AJ-Fit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+      }
+    ]
+  },
+  "rules-production-nutrition": {
+    "passed": 20,
+    "failed": 0,
+    "skipped": 0,
+    "suiteErrors": [],
+    "failures": []
+  },
+  "rules-production-initial": {
+    "passed": 0,
+    "failed": 2,
+    "skipped": 17,
+    "suiteErrors": [],
+    "failures": [
+      {
+        "file": "/private/tmp/ajfit-final-audit/production-rules-test/firestore-tests/workoutLifecycle.rules.test.ts",
+        "name": "Workout Lifecycle V2 rules allows an owner to create the structurally linked baseline atomically and read it",
+        "message": "FirebaseError: 7 PERMISSION_DENIED: \nevaluation error at L2487:26 for 'create' @ L2487, false for 'create' @ L3666, evaluation error at L2538:26 for 'update' @ L2538, false for 'update' @ L3666, evaluation error at L2411:26 for 'create' @ L2411, false for 'create' @ L3666, evaluation error at L2446:26 for 'update' @ L2446, false for 'update' @ L3666, evaluation error at L2330:26 for 'create' @ L2330, false for 'create' @ L3666, evaluation error at L2368:26 for 'update' @ L2368, false for 'update' @ L3666, false for 'delete' @ L2733, false for 'delete' @ L3666, false for 'create' @ L2330, false for 'create' @ L3666, false for 'create' @ L2411, false for 'create' @ L3666, false for 'create' @ L2487, false for 'create' @ L3666"
+      },
+      {
+        "file": "/private/tmp/ajfit-final-audit/production-rules-test/firestore-tests/workoutLifecycle.rules.test.ts",
+        "name": "Workout Lifecycle V2 rules accepts the exact flexible ProgramInstance snapshot shape from production",
+        "message": "FirebaseError: 7 PERMISSION_DENIED: \nevaluation error at L2487:26 for 'create' @ L2487, false for 'create' @ L3666, evaluation error at L2538:26 for 'update' @ L2538, false for 'update' @ L3666, evaluation error at L2411:26 for 'create' @ L2411, false for 'create' @ L3666, evaluation error at L2446:26 for 'update' @ L2446, false for 'update' @ L3666, evaluation error at L2330:26 for 'create' @ L2330, false for 'create' @ L3666, evaluation error at L2368:26 for 'update' @ L2368, false for 'update' @ L3666, false for 'delete' @ L2733, false for 'delete' @ L3666, false for 'create' @ L2330, false for 'create' @ L3666, false for 'create' @ L2411, false for 'create' @ L3666, false for 'create' @ L2487, false for 'create' @ L3666"
+      }
+    ]
+  },
+  "rules-local-initial": {
+    "passed": 2,
+    "failed": 0,
+    "skipped": 17,
+    "suiteErrors": [],
+    "failures": []
+  },
+  "app-typecheck-final": {
+    "exitCode": 2
+  },
+  "functions-typecheck-final": {
+    "exitCode": 0
+  },
+  "functions-build-final": {
+    "exitCode": 0
+  }
+}

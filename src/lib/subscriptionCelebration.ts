@@ -46,35 +46,15 @@ export function subscriptionCelebrationState(
   };
 }
 
-function advanced(previous: string | null, next: string | null): boolean {
-  if (!previous || !next) return false;
-  const previousMs = Date.parse(previous);
-  const nextMs = Date.parse(next);
-  return Number.isFinite(previousMs) && Number.isFinite(nextMs) && nextMs > previousMs;
-}
-
 /**
- * Detects a real renewal observed outside the in-app purchase flow. A renewal
- * must advance the latest transaction date; entitlement activation or a new
- * expiration date alone can also happen during restore/revalidation and must
- * stay silent.
+ * Classifies only a purchase explicitly completed through the app. This is
+ * the ONLY function allowed to produce a celebratable kind: it is called
+ * exclusively right after `performPurchase` resolves a manual, in-app
+ * purchase/reactivation, never from a passive `CustomerInfo` sync (RevenueCat
+ * listener, restore, app startup, foreground refresh). That keeps automatic
+ * renewals and background revalidation from ever being mistaken for a
+ * celebratable event.
  */
-export function resolveSubscriptionCelebration(
-  previous: SubscriptionCelebrationSnapshot,
-  next: SubscriptionCelebrationSnapshot,
-): SubscriptionCelebrationKind | null {
-  if (
-    next.premiumActive &&
-    previous.hasPremiumHistory &&
-    advanced(previous.latestPurchaseDate, next.latestPurchaseDate)
-  ) {
-    return 'renewed';
-  }
-
-  return null;
-}
-
-/** Classifies only a purchase explicitly completed through the app. */
 export function classifyCompletedSubscriptionPurchase(
   previousCustomerInfo: CustomerInfo,
   nextCustomerInfo: CustomerInfo,

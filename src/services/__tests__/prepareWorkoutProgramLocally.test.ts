@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe,expect,it,vi } from 'vitest';
 
 // `workoutPrograms.ts` imports `db` from `../lib/firebase`, which throws at
 // module load without EXPO_PUBLIC_FIREBASE_* env vars. Mocked out exactly
@@ -10,17 +10,13 @@ vi.mock('../../lib/firebase', () => ({
   },
 }));
 
+import { startingLevelFromQuestionnaire } from '../../workoutLifecycle/domain';
+import { completeAnswers } from '../../workoutPrescription/__tests__/fixtures';
+import { generateWorkoutPrescriptionRouted } from '../../workoutPrescription/generatePrescription';
 import {
   prepareWorkoutProgramLocally,
   questionnaireFingerprint,
 } from '../workoutPrograms';
-import { generateWorkoutPrescriptionRouted } from '../../workoutPrescription/generatePrescription';
-import { completeAnswers } from '../../workoutPrescription/__tests__/fixtures';
-import { startingLevelFromQuestionnaire } from '../../workoutLifecycle/domain';
-import {
-  CANONICAL_LIMITATION_DATASET_HASH,
-  CANONICAL_LIMITATION_DATASET_VERSION,
-} from '../../workoutPrescription/limitationDataset';
 
 const VALID_ANSWERS = completeAnswers({ level: 'intermediate', days: 4, place: 'gym', sex: 'm', goal: 'gain_muscle' });
 
@@ -30,10 +26,7 @@ describe('prepareWorkoutProgramLocally — Phase 3, Part C (pre-auth compute, lo
     expect(result.status).toBe('SUCCESS');
     if (result.status !== 'SUCCESS') return;
     expect(result.plan.sessions.length).toBeGreaterThan(0);
-    expect(result.plan.limitationDatasetVersion).toBe(CANONICAL_LIMITATION_DATASET_VERSION);
-    expect(result.plan.limitationDatasetHash).toBe(CANONICAL_LIMITATION_DATASET_HASH);
-    expect(result.templateId).toMatch(/^T\d{3}$/);
-    expect(result.usedLocalLimitationCatalog).toBe(false); // no limitation declared
+    expect(result.templateId).toMatch(/^T\d{3}$/); // no limitation declared
   });
 
   it('(3) the same input always produces the same plan/templateId (deterministic, no randomness)', async () => {
@@ -62,42 +55,6 @@ describe('prepareWorkoutProgramLocally — Phase 3, Part C (pre-auth compute, lo
     // full structural equality proves every one of them matches.
     expect(prepared.plan.sessions).toEqual(directResult.plan.sessions);
     expect(prepared.plan.planId).toBe(directResult.plan.planId);
-  });
-
-  it('(8) a musculoskeletal limitation runs the REAL v1.27 musculoskeletal-limitation stage, never bypassed — identical outcome to calling the router directly', async () => {
-    const answers = completeAnswers({
-      level: 'intermediate', days: 4, place: 'gym', sex: 'm', goal: 'gain_muscle',
-      specialConditions: ['musculoskeletal_limitation'], limits: ['knee'],
-    });
-    const directResult = generateWorkoutPrescriptionRouted(answers, 'INTERMEDIATE', {}, 'v1.27');
-    const prepared = await prepareWorkoutProgramLocally(answers);
-    // Whatever the limitation stage decides (resolved or fail-closed) —
-    // `prepareWorkoutProgramLocally` must reach EXACTLY the same conclusion
-    // as calling the router directly, proving it never bypasses the real
-    // stage. `usedLocalLimitationCatalog` is asserted regardless of the
-    // outcome status.
-    expect(prepared.status).toBe(directResult.status);
-    if (prepared.status === 'SUCCESS' && directResult.status === 'SUCCESS') {
-      expect(prepared.usedLocalLimitationCatalog).toBe(true);
-      expect(prepared.plan.trace.limitationDecisions).toEqual(directResult.plan.trace.limitationDecisions);
-    } else {
-      // Fail-closed case (§Part J) — never silently generate a generic plan.
-      expect(prepared.status).not.toBe('SUCCESS');
-    }
-  });
-
-  it('(24) a musculoskeletal limitation with no selected region stays fail-closed — no generic workout generated', async () => {
-    const answers = completeAnswers({
-      specialConditions: ['musculoskeletal_limitation'],
-      limits: [],
-    });
-    const result = await prepareWorkoutProgramLocally(answers);
-    expect(result.status).toBe('NEEDS_QUESTIONNAIRE_UPDATE');
-  });
-
-  it('(25) a user with no limitation keeps working normally, catalog never loaded', async () => {
-    const result = await prepareWorkoutProgramLocally(VALID_ANSWERS);
-    expect(result.status).toBe('SUCCESS');
   });
 
   it('(23) a genuinely invalid questionnaire never produces a fake/generic plan', async () => {

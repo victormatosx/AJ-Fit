@@ -1,0 +1,1969 @@
+{
+  "schemaVersion": 1,
+  "referenceCommit": "18c27fc98439c7722b979592494a0eb57cb92bf7",
+  "policy": {
+    "exerciseActivation": false,
+    "clinicalProfilesUnchanged": true,
+    "paidCallsAllowed": false,
+    "externalUploadsAllowed": false,
+    "automaticApproval": false
+  },
+  "originalStyle": {
+    "setting": "Academia real; gravações com demonstradores humanos; câmera relativamente estática em ângulo oblíquo/lateral; sem locução exigida.",
+    "delivery": "MP4 H.264; slots independentes horizontal/vertical; autoplay/mute/loop no player atual; não há resolução fixa obrigatória.",
+    "existingHorizontal": {
+      "width": 832,
+      "height": 464,
+      "fps": 60,
+      "durationSeconds": 17.691667
+    },
+    "existingVertical": {
+      "width": 464,
+      "height": 832,
+      "fps": 60,
+      "durationSeconds": 15.24
+    },
+    "audio": "Os exemplos contêm AAC; o player silencia e usa mixWithOthers. Novos derivados removem fisicamente o áudio.",
+    "cache": "Hook mantém resultado por conjunto de IDs durante sua vida; sem cache persistente customizado ou useCaching explícito."
+  },
+  "selectedCompletionMethod": "Gravação própria padronizada em lote para cobertura e identidade visual completas. Derivados CC BY-SA funcionam como pilotos locais gratuitos, sujeitos à revisão de estilo, execução, loop e iPhone.",
+  "captureSpecification": {
+    "takesPerExercise": 2,
+    "totalNativeOrientationTakes": 82,
+    "reps": "2–3 repetições completas; isometrias de 6–10 s; cardio de 8–15 s",
+    "rawDuration": "12–20 s por tomada, incluindo margem antes/depois",
+    "recommendedRecording": "1080p ou 4K SDR, 30/60 fps; HDR desligado; tripé; atleta e equipamento integralmente visíveis",
+    "delivery": "Até 1280×720 ou 720×1280, sem upscale/crop, H.264 Main, yuv420p, MP4 faststart, sem faixas de áudio",
+    "framing": "Não derive retrato por crop de paisagem. Grave tomada vertical própria. Mantenha articulações, pegada, apoio e trajeto da carga visíveis.",
+    "loop": "Selecionar início/fim na mesma fase e mesma posição; não inverter repetição nem interpolar anatomia para disfarçar salto."
+  },
+  "costModel": {
+    "spentThisRun": 0,
+    "currency": "USD",
+    "openLicensePilotLicenseCost": 0,
+    "ownRecording": {
+      "estimateType": "Hipótese de planejamento, não cotação de fornecedor",
+      "hoursFor41Exercises": "6–10",
+      "exampleHourlyRateBRL": 100,
+      "exampleTotalBRL": [
+        600,
+        1000
+      ],
+      "excluded": "Academia, deslocamento, modelo/direito de imagem, impostos e eventuais refilmagens; se equipe própria já disponível, custo incremental de licença e processamento é zero."
+    },
+    "ai": {
+      "provider": "Runway API gen4_turbo",
+      "priceURL": "https://docs.dev.runwayml.com/guides/pricing/",
+      "usdPerCredit": 0.01,
+      "creditsPerSecond": 5,
+      "orientations": 2,
+      "secondsPerClip": 10,
+      "clips": 82,
+      "oneAttemptUSD": 41,
+      "threeAttemptsUSD": 123,
+      "excluded": "Imagens de referência, impostos, revisão humana, repetições além das três tentativas; nenhuma garantia de aprovação."
+    },
+    "muscleWiki": {
+      "priceURL": "https://api.musclewiki.com/pricing",
+      "testingUSDPerMonth": 10,
+      "growthUSDPerMonth": 39.99,
+      "localStorageCompatible": false
+    },
+    "quoteRequiredFor": [
+      "Biblioteca comercial com licença de exportação/re-hosting",
+      "Animador/modelador 3D",
+      "Gravação contratada/direito de imagem"
+    ],
+    "higgsfieldConnector": {
+      "model": "wan2_6",
+      "durationSeconds": 10,
+      "quality": "720p",
+      "aspectRatios": [
+        "16:9",
+        "9:16"
+      ],
+      "quoteOnly": true,
+      "creditsPerClip": 15,
+      "clipsFor41BothOrientations": 82,
+      "oneAttemptCredits": 1230,
+      "threeAttemptsCredits": 3690,
+      "generationCalls": 0,
+      "referenceUploads": 0,
+      "note": "Cotação real do conector sem mídias, prompt ou geração. Não demonstra prontidão das entradas ou fidelidade. Preço em reais/dólares depende da compra/conta; não converter créditos usando tabela de outra API."
+    }
+  },
+  "entries": [
+    {
+      "exercise": "Abdução de Quadril na Polia",
+      "id": "cable-hip-abduction",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "equipment": [
+        "cable"
+      ],
+      "executionReference": [
+        "Prenda a tornozeleira à polia baixa. Em pé de lado para a polia e com apoio estável, afaste a perna lateralmente sem inclinar o tronco e retorne com controle."
+      ],
+      "shotBrief": "Gravar Abdução de Quadril na Polia, preservando exatamente a execução indicada. Equipamento: cable. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Adução de Quadril na Polia",
+      "id": "cable-hip-adduction",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "equipment": [
+        "cable"
+      ],
+      "executionReference": [
+        "Prenda a tornozeleira à polia baixa. Com apoio estável e a perna mais próxima da polia afastada, aproxime-a da linha média sem girar o quadril e retorne devagar."
+      ],
+      "shotBrief": "Gravar Adução de Quadril na Polia, preservando exatamente a execução indicada. Equipamento: cable. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Afundo com Halteres",
+      "id": "dumbbell-stationary-lunge",
+      "kind": "resistance",
+      "environments": [
+        "gym",
+        "home"
+      ],
+      "prescriptionField": "reps",
+      "equipment": [
+        "dumbbell"
+      ],
+      "executionReference": [
+        "Segure os halteres ao lado do corpo em base afastada. Flexione os joelhos mantendo os pés fixos e o tronco estável; empurre o chão para retornar e depois troque a perna da frente."
+      ],
+      "shotBrief": "Gravar Afundo com Halteres, preservando exatamente a execução indicada. Equipamento: dumbbell. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [
+        {
+          "provider": "wger",
+          "videoId": 31,
+          "exerciseId": 205,
+          "sourceUrl": "https://wger.de/media/exercise-video/205/c167ac34-ddbc-4e1b-8edf-1192e9d00e22.MOV",
+          "author": "Goulart",
+          "licenseId": 2,
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+          "size": 49889363,
+          "status": "CANDIDATO — NÃO APROVADO"
+        },
+        {
+          "provider": "wger",
+          "videoId": 32,
+          "exerciseId": 205,
+          "sourceUrl": "https://wger.de/media/exercise-video/205/4cd5dc48-897f-4e0c-8c5a-639a4098ceb1.MOV",
+          "author": "Goulart",
+          "licenseId": 2,
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+          "size": 52460393,
+          "status": "CANDIDATO — NÃO APROVADO"
+        }
+      ],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Agachamento Sumô com Halter",
+      "id": "dumbbell-sumo-squat",
+      "kind": "resistance",
+      "environments": [
+        "gym",
+        "home"
+      ],
+      "prescriptionField": "reps",
+      "equipment": [
+        "dumbbell"
+      ],
+      "executionReference": [
+        "Em base ampla com pés levemente voltados para fora, segure um halter entre as pernas. Flexione joelhos e quadris em agachamento, acompanhando a direção dos pés, e retorne sem arredondar as costas."
+      ],
+      "shotBrief": "Gravar Agachamento Sumô com Halter, preservando exatamente a execução indicada. Equipamento: dumbbell. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Barra Fixa",
+      "id": "pull-up",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "equipment": [
+        "bodyweight"
+      ],
+      "executionReference": [
+        "Use uma barra fixa estável com pegada pronada. Partindo da suspensão, puxe o corpo sem balanço até aproximar o queixo da barra e desça de forma controlada."
+      ],
+      "shotBrief": "Gravar Barra Fixa, preservando exatamente a execução indicada. Equipamento: bodyweight. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [
+        {
+          "provider": "wger",
+          "videoId": 71,
+          "exerciseId": 475,
+          "sourceUrl": "https://wger.de/media/exercise-video/475/83067ffe-ccb9-4e22-8507-5131b211ce74.MOV",
+          "author": "Goulart",
+          "licenseId": 2,
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+          "size": 57098527,
+          "status": "CANDIDATO — NÃO APROVADO"
+        }
+      ],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Cadeirinha na Parede",
+      "id": "wall-sit",
+      "kind": "resistance",
+      "environments": [
+        "home"
+      ],
+      "prescriptionField": "duration",
+      "equipment": [
+        "bodyweight"
+      ],
+      "executionReference": [
+        "Apoie as costas na parede e avance os pés. Deslize até uma posição de agachamento sustentável, mantenha os joelhos alinhados aos pés e sustente pelo tempo prescrito antes de subir."
+      ],
+      "shotBrief": "Gravar Cadeirinha na Parede, preservando exatamente a execução indicada. Equipamento: bodyweight. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Crucifixo Inverso na Máquina",
+      "id": "reverse-pec-deck",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "equipment": [
+        "machine"
+      ],
+      "executionReference": [
+        "Ajuste o banco e sente-se voltado para o encosto, apoiando o peito. Com cotovelos levemente flexionados, abra os braços para trás sem elevar os ombros e retorne com controle."
+      ],
+      "shotBrief": "Gravar Crucifixo Inverso na Máquina, preservando exatamente a execução indicada. Equipamento: machine. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Crucifixo com Elástico",
+      "id": "resistance-band-chest-fly",
+      "kind": "resistance",
+      "environments": [
+        "home"
+      ],
+      "prescriptionField": "reps",
+      "equipment": [
+        "resistance_band"
+      ],
+      "executionReference": [
+        "Fixe o elástico atrás do corpo em um ponto estável na altura do peito. Com cotovelos levemente flexionados, aproxime as mãos à frente em arco e retorne sem perder o controle da tensão."
+      ],
+      "shotBrief": "Gravar Crucifixo com Elástico, preservando exatamente a execução indicada. Equipamento: resistance_band. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Desenvolvimento Arnold",
+      "id": "arnold-dumbbell-press",
+      "kind": "resistance",
+      "environments": [
+        "gym",
+        "home"
+      ],
+      "prescriptionField": "reps",
+      "equipment": [
+        "dumbbell",
+        "bench"
+      ],
+      "executionReference": [
+        "Sente-se em banco com encosto, com halteres à frente dos ombros e palmas voltadas para o rosto. Eleve os halteres girando gradualmente as palmas para a frente e retorne invertendo o movimento, sem arquear a lombar."
+      ],
+      "shotBrief": "Gravar Desenvolvimento Arnold, preservando exatamente a execução indicada. Equipamento: dumbbell, bench. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [
+        {
+          "provider": "wger",
+          "videoId": 12,
+          "exerciseId": 567,
+          "sourceUrl": "https://wger.de/media/exercise-video/567/64f33c19-1d96-4b7c-af17-6c6a4941c614.MOV",
+          "author": "Goulart",
+          "licenseId": 2,
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+          "size": 62860017,
+          "status": "CANDIDATO — NÃO APROVADO"
+        }
+      ],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Desenvolvimento no Smith",
+      "id": "smith-machine-shoulder-press",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "equipment": [
+        "smith_machine",
+        "bench"
+      ],
+      "executionReference": [
+        "Posicione um banco com encosto sob a barra do Smith e ajuste os limitadores. Sente-se, empurre a barra à frente da cabeça até estender os braços e desça até uma amplitude controlada, sem levar a barra atrás da nuca."
+      ],
+      "shotBrief": "Gravar Desenvolvimento no Smith, preservando exatamente a execução indicada. Equipamento: smith_machine, bench. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [
+        {
+          "provider": "wger",
+          "videoId": 11,
+          "exerciseId": 543,
+          "sourceUrl": "https://wger.de/media/exercise-video/543/dbfd396b-1aab-4a64-a50b-2c31ff0a2cf7.MOV",
+          "author": "Goulart",
+          "licenseId": 2,
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+          "size": 23511495,
+          "status": "CANDIDATO — NÃO APROVADO"
+        }
+      ],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Elevação Frontal com Elástico",
+      "id": "resistance-band-front-raise",
+      "kind": "resistance",
+      "environments": [
+        "gym",
+        "home"
+      ],
+      "prescriptionField": "reps",
+      "equipment": [
+        "resistance_band"
+      ],
+      "executionReference": [
+        "Prenda o elástico sob os pés de forma estável. Com cotovelos levemente flexionados, eleve as mãos à frente até aproximadamente a altura dos ombros e retorne sem balançar o tronco."
+      ],
+      "shotBrief": "Gravar Elevação Frontal com Elástico, preservando exatamente a execução indicada. Equipamento: resistance_band. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Elevação Frontal na Polia",
+      "id": "cable-front-raise",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "equipment": [
+        "cable"
+      ],
+      "executionReference": [
+        "Na polia baixa, segure a barra com o cabo passando entre as pernas e fique de costas para a torre. Eleve os braços à frente até a altura dos ombros e desça com controle, sem impulso do tronco."
+      ],
+      "shotBrief": "Gravar Elevação Frontal na Polia, preservando exatamente a execução indicada. Equipamento: cable. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Elevação Pélvica na Máquina",
+      "id": "machine-hip-thrust",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "equipment": [
+        "machine"
+      ],
+      "executionReference": [
+        "Ajuste a máquina de hip thrust e posicione a proteção sobre o quadril conforme o equipamento. Com pés firmes e costas apoiadas, estenda o quadril sem hiperestender a lombar e retorne com controle."
+      ],
+      "shotBrief": "Gravar Elevação Pélvica na Máquina, preservando exatamente a execução indicada. Equipamento: machine. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Encolhimento com Halteres",
+      "id": "dumbbell-shrug",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "equipment": [
+        "dumbbell"
+      ],
+      "executionReference": [
+        "Em pé com halteres ao lado do corpo, eleve os ombros em direção às orelhas sem girá-los ou flexionar os cotovelos. Desça devagar mantendo o pescoço neutro."
+      ],
+      "shotBrief": "Gravar Encolhimento com Halteres, preservando exatamente a execução indicada. Equipamento: dumbbell. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [
+        {
+          "provider": "wger",
+          "videoId": 69,
+          "exerciseId": 570,
+          "sourceUrl": "https://wger.de/media/exercise-video/570/bd1f14a3-9d2b-4ec0-b6b9-e82d739f7e60.MOV",
+          "author": "Goulart",
+          "licenseId": 2,
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+          "size": 31195824,
+          "status": "CANDIDATO — NÃO APROVADO"
+        }
+      ],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Encolhimento no Smith",
+      "id": "smith-machine-shrug",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "equipment": [
+        "smith_machine"
+      ],
+      "executionReference": [
+        "Ajuste a barra do Smith à altura das mãos e segure-a à frente das coxas. Eleve os ombros sem girá-los, mantenha os braços estendidos e retorne devagar."
+      ],
+      "shotBrief": "Gravar Encolhimento no Smith, preservando exatamente a execução indicada. Equipamento: smith_machine. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [
+        {
+          "provider": "wger",
+          "videoId": 68,
+          "exerciseId": 575,
+          "sourceUrl": "https://wger.de/media/exercise-video/575/a7d99f2b-86fc-433a-8ab1-83144c802296.MOV",
+          "author": "Goulart",
+          "licenseId": 2,
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+          "size": 35270778,
+          "status": "CANDIDATO — NÃO APROVADO"
+        }
+      ],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Extensão de Joelho com Elástico",
+      "id": "resistance-band-knee-extension",
+      "kind": "resistance",
+      "environments": [
+        "gym",
+        "home"
+      ],
+      "prescriptionField": "reps",
+      "equipment": [
+        "resistance_band",
+        "chair"
+      ],
+      "executionReference": [
+        "Sente-se em cadeira estável com elástico preso ao tornozelo e ancorado atrás. Estenda um joelho sem levantar a coxa do assento e retorne devagar; repita do outro lado."
+      ],
+      "shotBrief": "Gravar Extensão de Joelho com Elástico, preservando exatamente a execução indicada. Equipamento: resistance_band, chair. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Flexão Fechada",
+      "id": "close-grip-push-up",
+      "kind": "resistance",
+      "environments": [
+        "gym",
+        "home"
+      ],
+      "prescriptionField": "reps",
+      "equipment": [
+        "bodyweight"
+      ],
+      "executionReference": [
+        "Apoie as mãos próximas uma da outra sob o peito e mantenha o corpo alinhado. Flexione os cotovelos junto ao tronco para descer e empurre o chão para retornar sem deixar o quadril cair."
+      ],
+      "shotBrief": "Gravar Flexão Fechada, preservando exatamente a execução indicada. Equipamento: bodyweight. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Glúteo Quatro Apoios",
+      "id": "quadruped-hip-extension",
+      "kind": "resistance",
+      "environments": [
+        "gym",
+        "home"
+      ],
+      "prescriptionField": "reps",
+      "equipment": [
+        "bodyweight"
+      ],
+      "executionReference": [
+        "Em quatro apoios, mantenha um joelho flexionado e eleve essa coxa para trás sem girar a pelve ou arquear a lombar. Retorne e alterne o lado após a série; esta variante não usa tornozeleira."
+      ],
+      "shotBrief": "Gravar Glúteo Quatro Apoios, preservando exatamente a execução indicada. Equipamento: bodyweight. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Mergulho nas Paralelas",
+      "id": "parallel-bar-dips",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "equipment": [
+        "bodyweight"
+      ],
+      "executionReference": [
+        "Use barras paralelas estáveis e sustente o corpo com os braços estendidos. Flexione os cotovelos para descer em amplitude controlada, sem afundar os ombros, e empurre as barras para voltar."
+      ],
+      "shotBrief": "Gravar Mergulho nas Paralelas, preservando exatamente a execução indicada. Equipamento: bodyweight. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [
+        {
+          "provider": "wger",
+          "videoId": 64,
+          "exerciseId": 194,
+          "sourceUrl": "https://wger.de/media/exercise-video/194/d039ec90-474d-47a9-a3ad-bf0b00828c82.MP4",
+          "author": "Goulart",
+          "licenseId": 2,
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+          "size": 5424928,
+          "status": "CANDIDATO — NÃO APROVADO"
+        },
+        {
+          "provider": "wger",
+          "videoId": 65,
+          "exerciseId": 194,
+          "sourceUrl": "https://wger.de/media/exercise-video/194/7a6987aa-138d-41e4-8842-5c3e3d970bd9.MOV",
+          "author": "Goulart",
+          "licenseId": 2,
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+          "size": 8340144,
+          "status": "CANDIDATO — NÃO APROVADO"
+        },
+        {
+          "provider": "wger",
+          "videoId": 66,
+          "exerciseId": 194,
+          "sourceUrl": "https://wger.de/media/exercise-video/194/dd9a663f-d8ba-4621-823b-13788ccb66bc.MOV",
+          "author": "Goulart",
+          "licenseId": 2,
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+          "size": 4418928,
+          "status": "CANDIDATO — NÃO APROVADO"
+        }
+      ],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Panturrilha em Pé com Halteres",
+      "id": "standing-dumbbell-calf-raise",
+      "kind": "resistance",
+      "environments": [
+        "home"
+      ],
+      "prescriptionField": "reps",
+      "equipment": [
+        "dumbbell"
+      ],
+      "executionReference": [
+        "Em pé no chão com halteres ao lado do corpo, eleve os calcanhares mantendo os joelhos estáveis. Desça devagar sem balançar o tronco."
+      ],
+      "shotBrief": "Gravar Panturrilha em Pé com Halteres, preservando exatamente a execução indicada. Equipamento: dumbbell. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [
+        {
+          "provider": "wger",
+          "videoId": 14,
+          "exerciseId": 622,
+          "sourceUrl": "https://wger.de/media/exercise-video/622/35b7b625-77fd-4c09-8c57-3ad0f2f23175.MOV",
+          "author": "Goulart",
+          "licenseId": 2,
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+          "size": 30336315,
+          "status": "CANDIDATO — NÃO APROVADO"
+        },
+        {
+          "provider": "wger",
+          "videoId": 15,
+          "exerciseId": 622,
+          "sourceUrl": "https://wger.de/media/exercise-video/622/461171e5-2b16-407d-bf27-27aeef43f105.MOV",
+          "author": "Goulart",
+          "licenseId": 2,
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+          "size": 27311167,
+          "status": "CANDIDATO — NÃO APROVADO"
+        }
+      ],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Panturrilha no Degrau",
+      "id": "step-calf-raise",
+      "kind": "resistance",
+      "environments": [
+        "home"
+      ],
+      "prescriptionField": "reps",
+      "equipment": [
+        "step"
+      ],
+      "executionReference": [
+        "Apoie a parte da frente dos pés na borda de um degrau estável e use apoio para equilíbrio. Eleve os calcanhares e desça em amplitude confortável, sem saltar ou perder o apoio dos pés."
+      ],
+      "shotBrief": "Gravar Panturrilha no Degrau, preservando exatamente a execução indicada. Equipamento: step. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Panturrilha no Leg Press",
+      "id": "leg-press-calf-raise",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "equipment": [
+        "leg_press"
+      ],
+      "executionReference": [
+        "Ajuste o leg press e seus limitadores. Apoie o antepé de forma estável na plataforma, mantenha os joelhos levemente flexionados e mova apenas os tornozelos para elevar e baixar os calcanhares com controle."
+      ],
+      "shotBrief": "Gravar Panturrilha no Leg Press, preservando exatamente a execução indicada. Equipamento: leg_press. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Prancha Lateral",
+      "id": "side-plank",
+      "kind": "resistance",
+      "environments": [
+        "gym",
+        "home"
+      ],
+      "prescriptionField": "duration",
+      "equipment": [
+        "bodyweight"
+      ],
+      "executionReference": [
+        "De lado, apoie o antebraço com cotovelo sob o ombro e mantenha as pernas estendidas. Eleve o quadril para alinhar o corpo, sustente pelo tempo prescrito sem girar o tronco e repita do outro lado."
+      ],
+      "shotBrief": "Gravar Prancha Lateral, preservando exatamente a execução indicada. Equipamento: bodyweight. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Pullover com Halter",
+      "id": "dumbbell-pullover",
+      "kind": "resistance",
+      "environments": [
+        "gym",
+        "home"
+      ],
+      "prescriptionField": "reps",
+      "equipment": [
+        "dumbbell",
+        "bench"
+      ],
+      "executionReference": [
+        "Deite-se longitudinalmente no banco com pés apoiados e segure um halter acima do peito. Com cotovelos levemente flexionados, leve os braços para trás em amplitude controlada e retorne sem arquear a lombar."
+      ],
+      "shotBrief": "Gravar Pullover com Halter, preservando exatamente a execução indicada. Equipamento: dumbbell, bench. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Pullover na Polia",
+      "id": "straight-arm-cable-pulldown",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "equipment": [
+        "cable"
+      ],
+      "executionReference": [
+        "Na polia alta, segure a barra e recue para manter tensão. Com cotovelos levemente flexionados e estáveis, traga os braços em arco até as coxas e retorne sem transformar o movimento em uma remada."
+      ],
+      "shotBrief": "Gravar Pullover na Polia, preservando exatamente a execução indicada. Equipamento: cable. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Remada Alta com Halteres",
+      "id": "dumbbell-upright-row",
+      "kind": "resistance",
+      "environments": [
+        "home"
+      ],
+      "prescriptionField": "reps",
+      "equipment": [
+        "dumbbell"
+      ],
+      "executionReference": [
+        "Em pé com halteres à frente das coxas, eleve os cotovelos lateralmente levando os halteres próximos ao corpo. Pare em amplitude confortável, sem elevar os cotovelos acima dos ombros, e retorne devagar."
+      ],
+      "shotBrief": "Gravar Remada Alta com Halteres, preservando exatamente a execução indicada. Equipamento: dumbbell. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Remada Curvada com Barra",
+      "id": "bent-over-barbell-row",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "equipment": [
+        "barbell"
+      ],
+      "executionReference": [
+        "Segure a barra com pegada pronada, flexione levemente os joelhos e incline o tronco pelo quadril. Puxe a barra em direção ao abdômen sem levantar o tronco e estenda os braços com controle."
+      ],
+      "shotBrief": "Gravar Remada Curvada com Barra, preservando exatamente a execução indicada. Equipamento: barbell. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Rosca Direta com Elástico",
+      "id": "resistance-band-biceps-curl",
+      "kind": "resistance",
+      "environments": [
+        "home"
+      ],
+      "prescriptionField": "reps",
+      "equipment": [
+        "resistance_band"
+      ],
+      "executionReference": [
+        "Prenda o elástico sob os pés e segure-o com palmas voltadas para a frente. Flexione os cotovelos mantendo-os junto ao corpo e retorne devagar sem balançar o tronco."
+      ],
+      "shotBrief": "Gravar Rosca Direta com Elástico, preservando exatamente a execução indicada. Equipamento: resistance_band. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Rosca Martelo na Polia",
+      "id": "cable-rope-hammer-curl",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "equipment": [
+        "cable"
+      ],
+      "executionReference": [
+        "Na polia baixa com corda, mantenha as palmas voltadas uma para a outra. Flexione os cotovelos sem mover os braços junto ao tronco e retorne com controle."
+      ],
+      "shotBrief": "Gravar Rosca Martelo na Polia, preservando exatamente a execução indicada. Equipamento: cable. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [
+        {
+          "provider": "wger",
+          "videoId": 47,
+          "exerciseId": 275,
+          "sourceUrl": "https://wger.de/media/exercise-video/275/af1fff93-eb58-4ba7-97a4-b38ee67853b4.MOV",
+          "author": "Goulart",
+          "licenseId": 2,
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+          "size": 38048587,
+          "status": "CANDIDATO — NÃO APROVADO"
+        }
+      ],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Stiff com Barra",
+      "id": "barbell-stiff-leg-deadlift",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "equipment": [
+        "barbell"
+      ],
+      "executionReference": [
+        "Em pé com barra à frente das coxas, mantenha os joelhos levemente flexionados e estáveis. Leve o quadril para trás para descer a barra próxima às pernas e retorne pela extensão do quadril; não parta do chão como no terra convencional."
+      ],
+      "shotBrief": "Gravar Stiff com Barra, preservando exatamente a execução indicada. Equipamento: barbell. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [
+        {
+          "provider": "wger",
+          "videoId": 2,
+          "exerciseId": 507,
+          "sourceUrl": "https://wger.de/media/exercise-video/507/307e7276-a14d-4ea0-b579-f5b0dbc6f5af.MOV",
+          "author": "Goulart",
+          "licenseId": 2,
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+          "size": 38136083,
+          "status": "CANDIDATO — NÃO APROVADO"
+        },
+        {
+          "provider": "wger",
+          "videoId": 3,
+          "exerciseId": 507,
+          "sourceUrl": "https://wger.de/media/exercise-video/507/6b6054b5-9236-4a63-8392-6ea7a9010ca6.MOV",
+          "author": "Goulart",
+          "licenseId": 2,
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+          "size": 52134396,
+          "status": "CANDIDATO — NÃO APROVADO"
+        },
+        {
+          "provider": "wger",
+          "videoId": 4,
+          "exerciseId": 507,
+          "sourceUrl": "https://wger.de/media/exercise-video/507/e96295da-58b8-4b6f-921e-4cb1af3c6cfc.MOV",
+          "author": "Goulart",
+          "licenseId": 2,
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+          "size": 390563423,
+          "status": "CANDIDATO — NÃO APROVADO"
+        }
+      ],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Superman",
+      "id": "superman",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "equipment": [
+        "bodyweight"
+      ],
+      "executionReference": [
+        "Deite-se de barriga para baixo com braços à frente. Eleve discretamente braços e pernas mantendo o pescoço alinhado, sem impulso, e retorne ao chão com controle."
+      ],
+      "shotBrief": "Gravar Superman, preservando exatamente a execução indicada. Equipamento: bodyweight. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Supino Fechado",
+      "id": "close-grip-barbell-bench-press",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "equipment": [
+        "barbell",
+        "bench"
+      ],
+      "executionReference": [
+        "Deite-se no banco reto com pés firmes e segure a barra com pegada próxima à largura dos ombros. Desça em direção ao peito mantendo cotovelos próximos ao tronco e empurre para cima sem retirar o apoio das costas."
+      ],
+      "shotBrief": "Gravar Supino Fechado, preservando exatamente a execução indicada. Equipamento: barbell, bench. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Supino Inclinado com Barra",
+      "id": "incline-barbell-bench-press",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "equipment": [
+        "barbell",
+        "bench"
+      ],
+      "executionReference": [
+        "Ajuste o banco inclinado e deite-se com pés firmes. Segure a barra com pegada pronada, desça em direção à parte superior do peito e empurre para cima mantendo as costas apoiadas."
+      ],
+      "shotBrief": "Gravar Supino Inclinado com Barra, preservando exatamente a execução indicada. Equipamento: barbell, bench. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [
+        {
+          "provider": "wger",
+          "videoId": 16,
+          "exerciseId": 538,
+          "sourceUrl": "https://wger.de/media/exercise-video/538/4349a6f6-4cee-4c09-828b-c5e7fc2c1ff1.MOV",
+          "author": "Goulart",
+          "licenseId": 2,
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+          "size": 6205424,
+          "status": "CANDIDATO — NÃO APROVADO"
+        }
+      ],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Supino Reto com Barra",
+      "id": "barbell-flat-bench-press",
+      "kind": "resistance",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "reps",
+      "equipment": [
+        "barbell",
+        "bench"
+      ],
+      "executionReference": [
+        "Deite-se no banco reto com pés firmes e segure a barra com pegada pronada. Desça a barra em direção ao peito com controle e empurre para cima mantendo as costas apoiadas."
+      ],
+      "shotBrief": "Gravar Supino Reto com Barra, preservando exatamente a execução indicada. Equipamento: barbell, bench. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [
+        {
+          "provider": "wger",
+          "videoId": 21,
+          "exerciseId": 73,
+          "sourceUrl": "https://wger.de/media/exercise-video/73/2bdb390c-312c-4497-a722-5eed2c823e5a.MOV",
+          "author": "Goulart",
+          "licenseId": 2,
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+          "size": 1108545,
+          "status": "CANDIDATO — NÃO APROVADO"
+        },
+        {
+          "provider": "wger",
+          "videoId": 22,
+          "exerciseId": 73,
+          "sourceUrl": "https://wger.de/media/exercise-video/73/255b3509-e454-48a6-bf66-c7ca482be21a.MOV",
+          "author": "Goulart",
+          "licenseId": 2,
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+          "size": 1422312,
+          "status": "CANDIDATO — NÃO APROVADO"
+        },
+        {
+          "provider": "wger",
+          "videoId": 23,
+          "exerciseId": 73,
+          "sourceUrl": "https://wger.de/media/exercise-video/73/cfb72002-898f-443a-a124-a0bce8a2e6ad.MP4",
+          "author": "Goulart",
+          "licenseId": 2,
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+          "size": 7222857,
+          "status": "CANDIDATO — NÃO APROVADO"
+        }
+      ],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Tríceps Coice com Halter",
+      "id": "dumbbell-triceps-kickback",
+      "kind": "resistance",
+      "environments": [
+        "home"
+      ],
+      "prescriptionField": "reps",
+      "equipment": [
+        "dumbbell",
+        "bench"
+      ],
+      "executionReference": [
+        "Apoie uma mão no banco e incline o tronco, com o braço de trabalho junto ao corpo. Estenda o cotovelo para levar o halter para trás sem mover o ombro e retorne devagar."
+      ],
+      "shotBrief": "Gravar Tríceps Coice com Halter, preservando exatamente a execução indicada. Equipamento: dumbbell, bench. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [
+        {
+          "provider": "wger",
+          "videoId": 75,
+          "exerciseId": 655,
+          "sourceUrl": "https://wger.de/media/exercise-video/655/69e8c1e5-55b2-4da6-8166-092c24b16735.MOV",
+          "author": "Goulart",
+          "licenseId": 2,
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+          "size": 4541168,
+          "status": "CANDIDATO — NÃO APROVADO"
+        },
+        {
+          "provider": "wger",
+          "videoId": 76,
+          "exerciseId": 655,
+          "sourceUrl": "https://wger.de/media/exercise-video/655/2d88a05b-bde3-4026-bfbf-524c11068dc5.MOV",
+          "author": "Goulart",
+          "licenseId": 2,
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+          "size": 3407290,
+          "status": "CANDIDATO — NÃO APROVADO"
+        },
+        {
+          "provider": "wger",
+          "videoId": 77,
+          "exerciseId": 655,
+          "sourceUrl": "https://wger.de/media/exercise-video/655/f1354a78-539c-4f22-a78f-b1f43f920740.MOV",
+          "author": "Goulart",
+          "licenseId": 2,
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+          "size": 4183378,
+          "status": "CANDIDATO — NÃO APROVADO"
+        }
+      ],
+      "producedMedia": [
+        {
+          "file": "assets/videos/exercises-v3/dumbbell-triceps-kickback-horizontal.mp4",
+          "orientation": "horizontal",
+          "sha256": "77de8e283430830cc9d696f69b4b53f638ac8d158dd80caa72690c0ea2ad2268",
+          "status": "PRODUZIDO — AGUARDANDO REVISÃO"
+        }
+      ],
+      "qualityChecks": {
+        "initialPosition": "observed_in_sampled_frames",
+        "finalPosition": "observed_in_sampled_frames",
+        "trajectory": "observed_in_sampled_frames",
+        "rangeOfMotion": "pending_professional_review",
+        "equipmentAndGrip": "matches_sampled_frames",
+        "anatomy": "no_obvious_deformation_in_sampled_frames",
+        "continuity": "pending_full_clip_and_loop_review",
+        "instructionMatch": "partial_review_completed"
+      },
+      "productionStatus": "PRODUZIDO — AGUARDANDO REVISÃO",
+      "integrationStatus": "Horizontal associado ao ID no registry local; vertical pendente",
+      "observedVideoId": 76,
+      "visualInspectionNotes": "Um halter, apoio da outra mão no banco e extensão unilateral observados. Confirmar estabilidade do ombro e loop completo."
+    },
+    {
+      "exercise": "Tríceps Testa com Halteres",
+      "id": "lying-dumbbell-triceps-extension",
+      "kind": "resistance",
+      "environments": [
+        "home"
+      ],
+      "prescriptionField": "reps",
+      "equipment": [
+        "dumbbell",
+        "bench"
+      ],
+      "executionReference": [
+        "Deite-se no banco reto segurando os halteres acima dos ombros com palmas enfrentadas. Flexione os cotovelos levando os halteres ao lado da cabeça e estenda os braços sem abrir os cotovelos ou mover o tronco."
+      ],
+      "shotBrief": "Gravar Tríceps Testa com Halteres, preservando exatamente a execução indicada. Equipamento: dumbbell, bench. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [
+        {
+          "provider": "wger",
+          "videoId": 60,
+          "exerciseId": 245,
+          "sourceUrl": "https://wger.de/media/exercise-video/245/c253303e-9160-4f1f-b4fe-daf1e6c8661d.MOV",
+          "author": "Goulart",
+          "licenseId": 2,
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+          "size": 5813842,
+          "status": "CANDIDATO — NÃO APROVADO"
+        }
+      ],
+      "producedMedia": [
+        {
+          "file": "assets/videos/exercises-v3/lying-dumbbell-triceps-extension-horizontal.mp4",
+          "orientation": "horizontal",
+          "sha256": "989bbc8ee2adb2de40d864b34b11aebbf298bb302035ece3ff5748bf2797e489",
+          "status": "PRODUZIDO — AGUARDANDO REVISÃO"
+        }
+      ],
+      "qualityChecks": {
+        "initialPosition": "observed_in_sampled_frames",
+        "finalPosition": "observed_in_sampled_frames",
+        "trajectory": "observed_in_sampled_frames",
+        "rangeOfMotion": "pending_professional_review",
+        "equipmentAndGrip": "matches_sampled_frames",
+        "anatomy": "no_obvious_deformation_in_sampled_frames",
+        "continuity": "pending_full_clip_and_loop_review",
+        "instructionMatch": "partial_review_completed"
+      },
+      "productionStatus": "PRODUZIDO — AGUARDANDO REVISÃO",
+      "integrationStatus": "Horizontal associado ao ID no registry local; vertical pendente",
+      "observedVideoId": 60,
+      "visualInspectionNotes": "Extensão de cotovelos deitado, dois halteres e pegada neutra observados. Recorte termina antes da mudança de câmera; amplitude e costura do loop pendentes."
+    },
+    {
+      "exercise": "Supino Reto com Halteres",
+      "id": "dumbbell-flat-bench-press",
+      "kind": "resistance",
+      "environments": [
+        "gym",
+        "home"
+      ],
+      "prescriptionField": "reps",
+      "equipment": [
+        "dumbbell",
+        "bench"
+      ],
+      "executionReference": [
+        "Deite-se em banco reto com pés firmes e halteres ao lado do peito. Empurre os halteres para cima e desça com controle mantendo as costas apoiadas; esta execução é no banco, não no chão."
+      ],
+      "shotBrief": "Gravar Supino Reto com Halteres, preservando exatamente a execução indicada. Equipamento: dumbbell, bench. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [
+        {
+          "provider": "wger",
+          "videoId": 17,
+          "exerciseId": 75,
+          "sourceUrl": "https://wger.de/media/exercise-video/75/080c799b-8afd-4130-8d72-9cef0cd79f54.MOV",
+          "author": "Goulart",
+          "licenseId": 2,
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+          "size": 4543158,
+          "status": "CANDIDATO — NÃO APROVADO"
+        },
+        {
+          "provider": "wger",
+          "videoId": 18,
+          "exerciseId": 75,
+          "sourceUrl": "https://wger.de/media/exercise-video/75/a8263fe5-3015-41e3-9781-2d255adcea63.MOV",
+          "author": "Goulart",
+          "licenseId": 2,
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+          "size": 9894638,
+          "status": "CANDIDATO — NÃO APROVADO"
+        },
+        {
+          "provider": "wger",
+          "videoId": 19,
+          "exerciseId": 75,
+          "sourceUrl": "https://wger.de/media/exercise-video/75/9d803f97-0a48-4483-8f1c-ee5b19d6021e.MOV",
+          "author": "Goulart",
+          "licenseId": 2,
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+          "size": 9938046,
+          "status": "CANDIDATO — NÃO APROVADO"
+        },
+        {
+          "provider": "wger",
+          "videoId": 20,
+          "exerciseId": 75,
+          "sourceUrl": "https://wger.de/media/exercise-video/75/c9cbd391-1e22-4014-8794-04630c80665f.MOV",
+          "author": "Goulart",
+          "licenseId": 2,
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+          "size": 4576193,
+          "status": "CANDIDATO — NÃO APROVADO"
+        }
+      ],
+      "producedMedia": [
+        {
+          "file": "assets/videos/exercises-v3/dumbbell-flat-bench-press-horizontal.mp4",
+          "orientation": "horizontal",
+          "sha256": "2f5fc90b85b6dce9975278ca4684151fbe973b39b867cdcb3edd53af582fd96d",
+          "status": "PRODUZIDO — AGUARDANDO REVISÃO"
+        }
+      ],
+      "qualityChecks": {
+        "initialPosition": "observed_in_sampled_frames",
+        "finalPosition": "observed_in_sampled_frames",
+        "trajectory": "observed_in_sampled_frames",
+        "rangeOfMotion": "pending_professional_review",
+        "equipmentAndGrip": "matches_sampled_frames",
+        "anatomy": "no_obvious_deformation_in_sampled_frames",
+        "continuity": "pending_full_clip_and_loop_review",
+        "instructionMatch": "partial_review_completed"
+      },
+      "productionStatus": "PRODUZIDO — AGUARDANDO REVISÃO",
+      "integrationStatus": "Horizontal associado ao ID no registry local; vertical pendente",
+      "observedVideoId": 20,
+      "visualInspectionNotes": "Banco reto e dois halteres observados. Selecionada tomada contínua sem corte de câmera; apoio dos pés e loop completo ainda exigem revisão."
+    },
+    {
+      "exercise": "Elevação Pélvica Unilateral",
+      "id": "single-leg-bench-hip-thrust",
+      "kind": "resistance",
+      "environments": [
+        "home"
+      ],
+      "prescriptionField": "reps",
+      "equipment": [
+        "bodyweight",
+        "bench"
+      ],
+      "executionReference": [
+        "Apoie a parte superior das costas em banco estável, mantenha um pé no chão e a outra perna elevada. Estenda o quadril sem girar a pelve ou hiperestender a lombar, desça com controle e repita do outro lado."
+      ],
+      "shotBrief": "Gravar Elevação Pélvica Unilateral, preservando exatamente a execução indicada. Equipamento: bodyweight, bench. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Corrida Estacionária",
+      "id": "running-in-place",
+      "kind": "cardio",
+      "environments": [
+        "home"
+      ],
+      "prescriptionField": "duration",
+      "equipment": [
+        "bodyweight"
+      ],
+      "executionReference": [
+        "Corra sem deslocar-se, alternando as pernas e coordenando os braços. Mantenha o tronco estável e aterrissagens controladas pelo tempo prescrito."
+      ],
+      "shotBrief": "Gravar Corrida Estacionária, preservando exatamente a execução indicada. Equipamento: bodyweight. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Elíptico",
+      "id": "elliptical-trainer",
+      "kind": "cardio",
+      "environments": [
+        "gym"
+      ],
+      "prescriptionField": "duration",
+      "equipment": [
+        "machine"
+      ],
+      "executionReference": [
+        "Suba no aparelho elíptico parado usando os apoios. Inicie passadas contínuas mantendo os pés nas plataformas e ajuste a resistência conforme a prescrição; reduza o ritmo antes de descer."
+      ],
+      "shotBrief": "Gravar Elíptico, preservando exatamente a execução indicada. Equipamento: machine. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    },
+    {
+      "exercise": "Polichinelo",
+      "id": "jumping-jack",
+      "kind": "cardio",
+      "environments": [
+        "home"
+      ],
+      "prescriptionField": "duration",
+      "equipment": [
+        "bodyweight"
+      ],
+      "executionReference": [
+        "Partindo de pés juntos e braços ao lado do corpo, salte abrindo as pernas e elevando os braços. Retorne à posição inicial com aterrissagens controladas e repita pelo tempo prescrito."
+      ],
+      "shotBrief": "Gravar Polichinelo, preservando exatamente a execução indicada. Equipamento: bodyweight. Duas tomadas nativas (horizontal e vertical), sem mudar pegada, apoio ou unilateralidade.",
+      "candidateSources": [],
+      "producedMedia": [],
+      "qualityChecks": {
+        "initialPosition": "pending_human_review",
+        "finalPosition": "pending_human_review",
+        "trajectory": "pending_human_review",
+        "rangeOfMotion": "pending_human_review",
+        "equipmentAndGrip": "pending_human_review",
+        "anatomy": "pending_human_review",
+        "continuity": "pending_human_review",
+        "instructionMatch": "pending_human_review"
+      },
+      "productionStatus": "PENDENTE",
+      "integrationStatus": "Sem mídia associada"
+    }
+  ],
+  "rejectedOrHeldCandidates": [
+    {
+      "source": "AJ Fit Videos Exercicios/IMG_3579.MOV + IMG_3580.MOV",
+      "reason": "Máquina articulada; não corresponde ao supino inclinado com barra livre."
+    },
+    {
+      "source": "AJ Fit Videos Exercicios/IMG_3563.MOV + IMG_3564.MOV",
+      "reason": "Execução de terra com flexão de joelhos; não aprovada como stiff com barra de joelhos estáveis."
+    },
+    {
+      "source": "AJ Fit Videos Exercicios/IMG_3610.MOV + IMG_3611.MOV",
+      "reason": "Rosca inclinada; não é supino reto com halteres."
+    },
+    {
+      "source": "wger 16",
+      "reason": "Câmera começa fora do movimento e os pés aparecem sem apoio estável visível; não selecionado para o cadastro com pés firmes."
+    },
+    {
+      "source": "wger 17",
+      "reason": "Corte de câmera/enquadramento apertado; preferida a tomada contínua 20 para o piloto de supino com halteres."
+    },
+    {
+      "source": "wger 21/22",
+      "reason": "640×352, abaixo do gate de resolução; não usados nem ampliados artificialmente."
+    },
+    {
+      "source": "wger 23",
+      "reason": "Enquadramento frontal fechado não mostra banco e apoios de forma suficiente; não associado apenas pelo nome Bench Press."
+    },
+    {
+      "source": "wger 64/66",
+      "reason": "Não selecionados: enquadramento não permite concluir todos os apoios e amplitude para liberar mergulho sem assistência."
+    },
+    {
+      "source": "wger 47",
+      "reason": "Movimento/corda observados; original HEVC HLG/BT.2020. Gate real HDR_REQUIRES_REVIEWED_TONEMAP impede conversão/integração automática."
+    },
+    {
+      "source": "wger 567 (metadados)",
+      "reason": "Instruções da própria fonte mantêm palmas para a frente durante todo o movimento; não fundamenta reutilização como Arnold."
+    },
+    {
+      "source": "wger 622 (metadados)",
+      "reason": "Descrição exige máquina de panturrilha; não fundamenta reutilização como variante com halteres."
+    }
+  ],
+  "retrievalPending": [
+    {
+      "videoId": 31,
+      "status": "partial_download_not_used",
+      "reason": "Transferência/resume expirou antes do tamanho esperado; arquivo não foi considerado válido ou associado."
+    },
+    {
+      "videoId": 69,
+      "status": "partial_download_not_used",
+      "reason": "Transferência/resume expirou antes do tamanho esperado; arquivo não foi considerado válido ou associado."
+    },
+    {
+      "videoId": 68,
+      "status": "partial_download_not_used",
+      "reason": "Transferência/resume expirou antes do tamanho esperado; arquivo não foi considerado válido ou associado."
+    },
+    {
+      "videoId": 71,
+      "status": "partial_download_not_used",
+      "reason": "Transferência/resume expirou antes do tamanho esperado; arquivo não foi considerado válido ou associado."
+    },
+    {
+      "videoId": 2,
+      "status": "partial_download_not_used",
+      "reason": "Transferência/resume expirou antes do tamanho esperado; arquivo não foi considerado válido ou associado."
+    }
+  ],
+  "validation": {
+    "typecheck": "passed",
+    "eslint": "passed_without_warnings",
+    "targeted": {
+      "files": 6,
+      "passedTests": 42,
+      "failedTests": 0,
+      "includesRealFfmpegSyntheticSmokeTest": true
+    },
+    "fullSuite": {
+      "passedFiles": 614,
+      "failedFiles": 16,
+      "passedTests": 7873,
+      "failedTests": 44,
+      "skippedTests": 227
+    },
+    "samePreexistingFailures": true,
+    "failures": [
+      {
+        "file": "src/lib/__tests__/iosRestActivityStructure.test.ts",
+        "test": "versioned Live Activity extension does not add storage sharing or push entitlements preemptively"
+      },
+      {
+        "file": "src/lib/__tests__/premiumEntitlementPrecedence.test.ts",
+        "test": "FASE 6 — entitlement wins over commercial status (access side) status=grace_period with an active entitlement: resolveSubscriptionCenterModel reports hasPremiumAccess=true"
+      },
+      {
+        "file": "src/lib/__tests__/workoutLogicIntact.test.ts",
+        "test": "WorkoutScreen source — 7B + 7C strings fully migrated (positive guard) raw literal \"REGISTRADO\" has been removed"
+      },
+      {
+        "file": "src/loadProgress/__tests__/loadProgressWiring.test.ts",
+        "test": "real load-progress wiring offers the requested search, record list and four time ranges"
+      },
+      {
+        "file": "src/loadProgress/__tests__/loadProgressWiring.test.ts",
+        "test": "real load-progress wiring publishes an invalidation only after the queued set write resolves"
+      },
+      {
+        "file": "src/scheduleEngine/__tests__/scheduleRefreshState.test.ts",
+        "test": "Schedule refresh authority gates resolution, config and loading publication against the latest reload id"
+      },
+      {
+        "file": "src/screens/__tests__/editProfileFixedLayout.test.ts",
+        "test": "EditProfileScreen fixed layout anchors the footer within the available height instead of pushing it below the viewport"
+      },
+      {
+        "file": "src/screens/__tests__/editProfileFixedLayout.test.ts",
+        "test": "EditProfileScreen fixed layout keeps the form and save action in a non-scrolling safe-area layout"
+      },
+      {
+        "file": "src/screens/__tests__/healthIntegrationScreenStructure.test.ts",
+        "test": "HealthIntegrationScreen — disconnect requires explicit confirmation never calls disconnect() directly from the disconnect row — it only opens a confirmation sheet"
+      },
+      {
+        "file": "src/screens/__tests__/healthIntegrationScreenStructure.test.ts",
+        "test": "HealthIntegrationScreen — platform isolation (no iOS copy on Android, no Android copy on iOS) never presents OS authorization as \"granted\" for iOS — permissionsRequested is treated as non-committal"
+      },
+      {
+        "file": "src/screens/__tests__/healthIntegrationScreenStructure.test.ts",
+        "test": "HealthIntegrationScreen — platform isolation (no iOS copy on Android, no Android copy on iOS) only shows the iOS \"cannot verify permission\" notice behind an explicit iOS check"
+      },
+      {
+        "file": "src/screens/__tests__/migratedScreensLifecycle.test.ts",
+        "test": "EditProfileScreen — draft resets explicitly per session, not via unmount imports useScreenFocusEffect and resets every draft field on activation"
+      },
+      {
+        "file": "src/screens/__tests__/paywallRedesignStructure.test.ts",
+        "test": "Paywall redesign — i18n coverage for new copy, no new hardcoded strings entryContext-driven plan intro stays copy-only and goes through i18n"
+      },
+      {
+        "file": "src/screens/__tests__/premiumCommercialContextFase6.test.ts",
+        "test": "FASE 6 — SubscriptionCenterScreen already correctly separates access from commercial presentation (audited, not rewritten) billing_issue/grace_period route to the real subscription management flow (manageSubscription), not an invented destination"
+      },
+      {
+        "file": "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+        "test": "WorkoutScreen rest overlay — button label and next-exercise indicator (B) the last set of an exercise (with another exercise left) switches the label and shows the next exercise"
+      },
+      {
+        "file": "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+        "test": "WorkoutScreen rest overlay — button label and next-exercise indicator derives nextExerciseAction only from the shared nextAction decision, never standalone"
+      },
+      {
+        "file": "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+        "test": "WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision (E) computes the next-exercise lookup exactly once, feeding both the Live Activity call site and the in-app one"
+      },
+      {
+        "file": "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+        "test": "WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision completeSet feeds the shared lookup into the Live Activity decision"
+      },
+      {
+        "file": "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+        "test": "WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision passes the decision down to RestOverlay as a single prop, not re-derived props"
+      },
+      {
+        "file": "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+        "test": "WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision restNextAction rebuilds the same decision from the authoritative, restorable rest record (not fresh component state)"
+      },
+      {
+        "file": "src/state/__tests__/restLiveActivityIntegrationStructure.test.ts",
+        "test": "RestSessionContext live transition wiring keeps completed cardio visible until the final workout CTA"
+      },
+      {
+        "file": "src/theme/__tests__/sharedComponentsTheme.test.ts",
+        "test": "Phase 4 acquisition and primary app coverage keeps the Phase 4 critical screens free of Dark color literals"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/canonicalV127SubstitutionMapUnification.test.ts",
+        "test": "v1.27 exercise_substitution_map — closed identity unifications (no allowlist) 1. no A/B/C candidate resolves, after canonicalization, to the canonical id of the entry it is listed under (global, zero exceptions)"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/canonicalV127SubstitutionMapUnification.test.ts",
+        "test": "v1.27 exercise_substitution_map — closed identity unifications (no allowlist) 2. no tier contains two candidates that canonicalize to the same runtime id (global, per key per tier)"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/canonicalV127SubstitutionMapUnification.test.ts",
+        "test": "v1.27 exercise_substitution_map — closed identity unifications (no allowlist) none of the unified-away ids/names appear as a map key, or as a candidate name/exercise_id, anywhere"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate ankle_foot composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate closes the complete individual 102x7 matrix (714/714)"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate elbow composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate elbow+wrist uses the safety intersection and composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate hip composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate hip+spine uses the safety intersection and composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate knee composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate knee+ankle_foot uses the safety intersection and composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate knee+hip uses the safety intersection and composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate knee+spine uses the safety intersection and composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate shoulder composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate shoulder+elbow uses the safety intersection and composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate shoulder+elbow+wrist uses the safety intersection and composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate shoulder+wrist uses the safety intersection and composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate spine composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate spine+hip uses the safety intersection and composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate spine+shoulder uses the safety intersection and composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate wrist composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/spineHomeClosureV127.test.ts",
+        "test": "v1.27 spine/Home closure — all-template audit runs all 102 templates with no remaining spine blocker"
+      }
+    ],
+    "nativePlayback": "not tested",
+    "approvedVideos": 0
+  }
+}

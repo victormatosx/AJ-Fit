@@ -4,10 +4,11 @@ import type { CallableRequest } from 'firebase-functions/v2/https';
 import { describe, expect, it } from 'vitest';
 import { db } from '../../lib/firebaseAdmin';
 import { OpenAiNutritionProvider } from '../ai/provider';
+import { MAX_AI_CALLS, PROMPT_VERSION } from '../ai/config';
 import { requestNutritionPlanGenerationHandler } from '../generation/request';
 import { processNutritionGenerationJob } from '../generation/worker';
 
-// Explicit opt-in: calls the real provider (at most three paid attempts),
+// Explicit opt-in: calls the real provider (at most four calls across both roles),
 // but all user/profile/job/plan writes MUST stay in the Firestore emulator.
 const enabled = Boolean(process.env.FIRESTORE_EMULATOR_HOST
   && process.env.NUTRITION_REAL_AI_SMOKE === '1' && process.env.OPENAI_API_KEY);
@@ -39,19 +40,21 @@ describe.skipIf(!enabled)('real AI with synthetic context and emulator persisten
     const realProvider = new OpenAiNutritionProvider(process.env.OPENAI_API_KEY!);
     const success = await processNutritionGenerationJob(uid, generationId, {
       generatePlan: async (request) => { calls++; return realProvider.generatePlan(request); },
+      reviewPlan: async (request) => { calls++; return realProvider.reviewPlan(request); },
     }, db);
     const job = await jobRef.get();
     // Log only operational enums/counts, never the generated diet or profile.
     console.info(JSON.stringify({ synthetic: true, generationId, status: job.get('status'),
       failureCode: job.get('errorCode'), calls }));
-    expect(calls).toBeGreaterThan(0);
-    expect(calls).toBeLessThanOrEqual(3);
+    expect(calls).toBeGreaterThanOrEqual(2);
+    expect(calls).toBeLessThanOrEqual(MAX_AI_CALLS);
     expect(success).toBe(true);
     expect(job.get('status')).toBe('completed');
     const plan = await user.collection('nutritionPlans').doc(generationId).get();
     expect(plan.get('status')).toBe('active');
     expect(plan.get('meals')).toHaveLength(4);
-    expect(plan.get('versions.promptVersion')).toBe('nutrition-full-plan-v3.1.0');
+    expect(plan.get('versions.promptVersion')).toBe(PROMPT_VERSION);
+    expect(plan.get('generationMetadata.review.calls')).toBe(calls);
     expect((await user.collection('nutritionPlans').where('status', '==', 'active').get()).size).toBe(1);
     expect(await processNutritionGenerationJob(uid, generationId, {
       generatePlan: async () => { throw new Error('duplicate provider call'); },

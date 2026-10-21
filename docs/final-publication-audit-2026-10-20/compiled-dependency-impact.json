@@ -1,0 +1,23 @@
+{
+  "onNutritionGenerationJobCreated": [
+    "nutrition/ai/config.js",
+    "nutrition/ai/prompt.js",
+    "nutrition/ai/provider.js",
+    "nutrition/generation/attempts.js",
+    "nutrition/generation/domain.js"
+  ],
+  "retryNutritionGenerationJobs": [
+    "nutrition/ai/config.js",
+    "nutrition/ai/prompt.js",
+    "nutrition/ai/provider.js",
+    "nutrition/generation/attempts.js",
+    "nutrition/generation/domain.js"
+  ],
+  "requestNutritionMealAlternative": [
+    "nutrition/ai/config.js",
+    "nutrition/ai/prompt.js",
+    "nutrition/ai/provider.js",
+    "nutrition/generation/attempts.js",
+    "nutrition/generation/domain.js"
+  ]
+}

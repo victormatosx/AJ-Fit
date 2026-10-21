@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'vitest';
 import { Timestamp } from 'firebase/firestore';
-import { defaultQuiz, type Quiz } from '../../state/AppState';
+import { describe,expect,it } from 'vitest';
+import { defaultQuiz,type Quiz } from '../../state/AppState';
 import { computeAge } from '../ageCalculator';
-import { fromPersistedAnswers, toPersistedAnswers } from '../questionnaireAnswers';
+import { fromPersistedAnswers,toPersistedAnswers } from '../questionnaireAnswers';
 
 const fullQuiz: Quiz = {
   ...defaultQuiz,
@@ -44,14 +44,14 @@ describe('toPersistedAnswers / fromPersistedAnswers (new shape)', () => {
     expect(fromPersistedAnswers(persisted, Timestamp.now()).goal).toBe('health');
   });
 
-  it('round-trips canonical selector, modifier, and safety fields', () => {
+  it('round-trips canonical selector and modifier fields', () => {
     const canonical: Quiz = {
       ...fullQuiz,
       goal: 'body_composition',
       level: 'intermediate',
       place: 'home',
       equipment: ['dumbbells', 'bands'],
-      specialConditions: ['musculoskeletal_limitation', 'pregnancy'],
+      specialConditions: ['pregnancy'],
       pregnancyScreening: {
         weeks: 18,
         prenatalCare: 'yes',
@@ -65,9 +65,36 @@ describe('toPersistedAnswers / fromPersistedAnswers (new shape)', () => {
       level: 'intermediate',
       place: 'home',
       equipment: ['dumbbells', 'bands'],
-      specialConditions: ['musculoskeletal_limitation', 'pregnancy'],
+      specialConditions: ['pregnancy'],
       pregnancyScreening: canonical.pregnancyScreening,
     });
+  });
+
+  it('never persists physical-limitation answers to Firestore — purely informational, local-state-only (see src/workoutPrescription/input.ts sanitizeAnswersForEngine for the matching read-side strip)', () => {
+    const withLimitation: Quiz = {
+      ...fullQuiz,
+      limits: ['knee', 'back'],
+      specialConditions: ['musculoskeletal_limitation'],
+    };
+    const persisted = toPersistedAnswers(withLimitation);
+    expect(Object.prototype.hasOwnProperty.call(persisted, 'limits')).toBe(false);
+    expect(JSON.stringify(persisted)).not.toMatch(/limits|musculoskeletal/);
+    expect(persisted.specialConditions).not.toContain('musculoskeletal_limitation');
+
+    const restored = fromPersistedAnswers(persisted, Timestamp.now());
+    expect(restored.limits).toEqual([]);
+    expect(restored.specialConditions).not.toContain('musculoskeletal_limitation');
+  });
+
+  it('never resurrects a legacy Firestore document that happens to still carry limits/musculoskeletal_limitation', () => {
+    const legacyRaw = {
+      ...toPersistedAnswers(fullQuiz),
+      limits: ['shoulder'],
+      specialConditions: ['musculoskeletal_limitation'],
+    };
+    const restored = fromPersistedAnswers(legacyRaw as any, Timestamp.now());
+    expect(restored.limits).toEqual([]);
+    expect(restored.specialConditions).not.toContain('musculoskeletal_limitation');
   });
 
   it('folds legacy both + primaryPlace into the canonical place and never writes primaryPlace again', () => {

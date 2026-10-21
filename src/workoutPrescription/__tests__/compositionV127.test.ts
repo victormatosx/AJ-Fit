@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest';
-import { completeAnswers } from './fixtures';
+import { describe,expect,it } from 'vitest';
 import { getCanonicalTemplateV127ById } from '../canonicalCatalog';
-import { composeTemplateV127, type CompositionResultV127 } from '../compositionV127';
-import { selectBaseTemplateV127, V127_TEMPLATE_PROFILES } from '../selectorV127';
-import type { CanonicalTemplate, TemplateId } from '../types';
+import { composeTemplateV127,type CompositionResultV127 } from '../compositionV127';
+import { V127_TEMPLATE_PROFILES,selectBaseTemplateV127 } from '../selectorV127';
+import type { CanonicalTemplate,TemplateId } from '../types';
+import { completeAnswers } from './fixtures';
 
 /** Every call site in this file omits `limitationRegions`, so the result is always `COMPOSED` — this just gives TS that narrowing without repeating an `if` at every call site. */
 function composed(result: CompositionResultV127) {
@@ -165,7 +165,7 @@ describe('composeTemplateV127 — metamorphic: answers-shaped context has zero e
     completeAnswers({ days: 7 }),
     completeAnswers({ scheduleMode: 'flexible' }),
     completeAnswers({ muscleFocus: ['chest', 'back'] }),
-    completeAnswers({ limits: ['knee'] }),
+    completeAnswers({ }),
   ];
 
   it.each(variedAnswers.map((a, i) => [i, a] as const))(
@@ -181,24 +181,6 @@ describe('composeTemplateV127 — metamorphic: answers-shaped context has zero e
       expect(result).toEqual(baseline);
     },
   );
-
-  it('an empty context runs neither Fase 5 nor Fase 6 stage; both are Fase 5/6-active when given real input (see musculoskeletalLimitationV127.test.ts / musclePriorityV127.test.ts)', () => {
-    const template = getCanonicalTemplateV127ById('T001');
-    const withoutContext = composeTemplateV127(template);
-    expect(withoutContext.trace.musculoskeletalLimitationApplied).toBe(false);
-    expect(withoutContext.trace.musclePriorityApplied).toBe(false);
-    expect(withoutContext.trace.stagesApplied).toEqual([]);
-
-    const withMusclePriorityOnly = composeTemplateV127(template, { musclePriority: ['chest', 'back'] });
-    expect(withMusclePriorityOnly.trace.musclePriorityApplied).toBe(true);
-    expect(withMusclePriorityOnly.trace.stagesApplied).toEqual(['muscle_priority']);
-    expect(withMusclePriorityOnly.status).toBe('COMPOSED');
-    if (withMusclePriorityOnly.status !== 'COMPOSED' || withoutContext.status !== 'COMPOSED') return;
-    // Same exercise set, only order can differ.
-    const idsBefore = withoutContext.sessions.flatMap((s) => s.exercises.map((e) => e.exerciseId)).sort();
-    const idsAfter = withMusclePriorityOnly.sessions.flatMap((s) => s.exercises.map((e) => e.exerciseId)).sort();
-    expect(idsAfter).toEqual(idsBefore);
-  });
 });
 
 describe('selectBaseTemplateV127 vs composeTemplateV127 — structural separation', () => {
@@ -227,7 +209,7 @@ describe('selectBaseTemplateV127 vs composeTemplateV127 — structural separatio
     // template itself and the Fase 5/6-reserved (currently inert) context.
     expect(composeTemplateV127.length).toBe(1); // default param does not count toward .length
     const template = getCanonicalTemplateV127ById('T001');
-    const contextKeys = Object.keys({ limitationRegions: [], musclePriority: [] });
+    const contextKeys = Object.keys({ musclePriority: [] });
     expect(contextKeys).not.toContain('goal');
     expect(contextKeys).not.toContain('sex');
     expect(contextKeys).not.toContain('environment');

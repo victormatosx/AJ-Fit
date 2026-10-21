@@ -1,22 +1,22 @@
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
-import { buildRecentSlotHistory, evolveCycle, type ExerciseSubstitutionExplanation } from '../prescriptionEvolution/cycleEvolution';
-import { PRESCRIPTION_EVOLUTION_CONFIG } from '../prescriptionEvolution/config';
-import { collectRecentPrescriptionSessions } from '../prescriptionEvolution/recentPrescriptionHistory';
-import { buildLevelPromotionAnswers, type LevelPromotionTarget } from '../prescriptionEvolution/levelPromotion';
-import { buildPrescriptionInputSnapshot } from '../workoutLifecycle/prescriptionInputs';
-import type { PrescriptionInputSnapshot, ProgramInstance } from '../workoutLifecycle/types';
+import { currentPrescriptionMetadata } from '../workoutPrescription/prescriptionMetadata';
+import { doc,getDoc } from 'firebase/firestore';
 import { EXERCISES_SEED } from '../data/exercisesSeedData';
+import { db } from '../lib/firebase';
+import { PRESCRIPTION_EVOLUTION_CONFIG } from '../prescriptionEvolution/config';
+import { buildRecentSlotHistory,evolveCycle,type ExerciseSubstitutionExplanation } from '../prescriptionEvolution/cycleEvolution';
+import { buildLevelPromotionAnswers,type LevelPromotionTarget } from '../prescriptionEvolution/levelPromotion';
+import { collectRecentPrescriptionSessions } from '../prescriptionEvolution/recentPrescriptionHistory';
+import { buildPrescriptionInputSnapshot } from '../workoutLifecycle/prescriptionInputs';
+import type { PrescriptionInputSnapshot,ProgramInstance } from '../workoutLifecycle/types';
 import { equipmentContextFor } from '../workoutPrescription/equipment';
-import { mapQuestionnaireLimitations, type LimitationCatalogExercise } from '../workoutPrescription/limitationResolver';
+import type { CatalogExercise } from '../workoutPrescription/exerciseCatalog';
 import { fromWorkoutTemplateDocument } from '../workoutPrescription/templateDocument';
 import type { FinalWorkoutPlan } from '../workoutPrescription/types';
 import { loadAuthoritativePrescriptionInputs } from './prescriptionInputs';
-import { loadProgramInstance, loadWorkoutLifecycle } from './workoutLifecycle';
+import { loadProgramInstance,loadWorkoutLifecycle } from './workoutLifecycle';
 import {
   isProgramSnapshot,
   loadActiveWorkoutProgram,
-  loadExerciseCatalogForLimitations,
   loadWorkoutTemplate,
   prepareWorkoutProgram,
   type WorkoutProgramSnapshot,
@@ -141,8 +141,6 @@ export async function evolvePrescription(request: PrescriptionEvolutionRequest):
         const template = await loadWorkoutTemplate(templateId);
         return template ? fromWorkoutTemplateDocument(template) : null;
       },
-      loadLimitationDataset: loadExerciseCatalogForLimitations,
-      usedLocalLimitationCatalog: false,
     });
     if (prepared.status !== 'SUCCESS') return { status: 'FAILED', reasonCodes: prepared.reasonCodes };
     const resultFrequency = prepared.plan.prescribedTrainingFrequency ?? prepared.plan.prescribedStructuredDays;
@@ -187,12 +185,7 @@ export async function evolvePrescription(request: PrescriptionEvolutionRequest):
       ? `${lifecycle.lifecycle.currentCycleId}:${lifecycle.lifecycle.activeProgramInstanceId}`
       : `${program.programId}:no-lifecycle`);
 
-  const limitationMapping = mapQuestionnaireLimitations(currentAnswers);
-  if (limitationMapping.status !== 'MAPPED') {
-    return { status: 'FAILED', reasonCodes: limitationMapping.reasonCodes };
-  }
-
-  const catalog = new Map<string, LimitationCatalogExercise>(EXERCISES_SEED.map((exercise) => [exercise.id, exercise]));
+  const catalog = new Map<string, CatalogExercise>(EXERCISES_SEED.map((exercise) => [exercise.id, exercise]));
   const equipmentContext = equipmentContextFor(currentAnswers, program.environment);
   const priorSessions = lifecycle
     ? await loadRecentPrescriptionSessions(request.uid, lifecycle.programInstance)
@@ -201,7 +194,6 @@ export async function evolvePrescription(request: PrescriptionEvolutionRequest):
   const result = evolveCycle({
     sessions: program.sessions,
     targetCycleIdentity,
-    limitationRegions: limitationMapping.regions,
     equipmentContext,
     catalog,
     recentSlotHistory: buildRecentSlotHistory(priorSessions),
@@ -221,11 +213,8 @@ export async function evolvePrescription(request: PrescriptionEvolutionRequest):
     goalFamily: program.goalFamily,
     split: program.split,
     adaptationStage: program.adaptationStage,
-    limitationDatasetVersion: program.limitationDatasetVersion,
-    limitationDatasetHash: program.limitationDatasetHash,
     sessions: result.sessions,
-    versions: program.versions,
-    trace: program.trace,
+    ...currentPrescriptionMetadata(program as FinalWorkoutPlan),
   };
 
   return {

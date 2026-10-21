@@ -1,13 +1,4 @@
-/**
- * Own-video lookup for the in-session exercise UI (`WorkoutScreen`/
- * `ExerciseGif`) — deliberately separate from `workoutPrograms.ts`'s
- * `loadExerciseCatalogForLimitations`, which is the Limitation Resolver's
- * exclusive I/O boundary and fetches the ENTIRE exercise collection with
- * strict shape validation. This fetches only `execution` (the admin-panel
- * video slots) for the small set of exercise ids actually in the current
- * session, via a targeted `documentId() in [...]` query — never the whole
- * catalog, and never on the generation/prescription path.
- */
+
 import { collection, documentId, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { logWarn } from '../lib/logger';

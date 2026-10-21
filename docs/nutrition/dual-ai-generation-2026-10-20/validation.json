@@ -1,0 +1,182 @@
+{
+  "functions-tests-final": {
+    "passed": 2084,
+    "failed": 0,
+    "skipped": 412,
+    "startTime": 1792542937715,
+    "failures": []
+  },
+  "app-tests-final": {
+    "passed": 7600,
+    "failed": 23,
+    "skipped": 221,
+    "startTime": 1792542895302,
+    "failures": [
+      {
+        "name": "real load-progress wiring publishes an invalidation only after the queued set write resolves",
+        "file": "src/loadProgress/__tests__/loadProgressWiring.test.ts"
+      },
+      {
+        "name": "real load-progress wiring offers the requested search, record list and four time ranges",
+        "file": "src/loadProgress/__tests__/loadProgressWiring.test.ts"
+      },
+      {
+        "name": "RestSessionContext live transition wiring keeps completed cardio visible until the final workout CTA",
+        "file": "src/state/__tests__/restLiveActivityIntegrationStructure.test.ts"
+      },
+      {
+        "name": "Schedule refresh authority gates resolution, config and loading publication against the latest reload id",
+        "file": "src/scheduleEngine/__tests__/scheduleRefreshState.test.ts"
+      },
+      {
+        "name": "Phase 4 acquisition and primary app coverage keeps the Phase 4 critical screens free of Dark color literals",
+        "file": "src/theme/__tests__/sharedComponentsTheme.test.ts"
+      },
+      {
+        "name": "versioned Live Activity extension does not add storage sharing or push entitlements preemptively",
+        "file": "src/lib/__tests__/iosRestActivityStructure.test.ts"
+      },
+      {
+        "name": "FASE 6 — entitlement wins over commercial status (access side) status=grace_period with an active entitlement: resolveSubscriptionCenterModel reports hasPremiumAccess=true",
+        "file": "src/lib/__tests__/premiumEntitlementPrecedence.test.ts"
+      },
+      {
+        "name": "hasRecentAuth is true exactly at the boundary of the window",
+        "file": "src/lib/__tests__/recentAuth.test.ts"
+      },
+      {
+        "name": "WorkoutScreen source — 7B + 7C strings fully migrated (positive guard) raw literal \"REGISTRADO\" has been removed",
+        "file": "src/lib/__tests__/workoutLogicIntact.test.ts"
+      },
+      {
+        "name": "EditProfileScreen fixed layout keeps the form and save action in a non-scrolling safe-area layout",
+        "file": "src/screens/__tests__/editProfileFixedLayout.test.ts"
+      },
+      {
+        "name": "EditProfileScreen fixed layout anchors the footer within the available height instead of pushing it below the viewport",
+        "file": "src/screens/__tests__/editProfileFixedLayout.test.ts"
+      },
+      {
+        "name": "HealthIntegrationScreen — platform isolation (no iOS copy on Android, no Android copy on iOS) only shows the iOS \"cannot verify permission\" notice behind an explicit iOS check",
+        "file": "src/screens/__tests__/healthIntegrationScreenStructure.test.ts"
+      },
+      {
+        "name": "HealthIntegrationScreen — platform isolation (no iOS copy on Android, no Android copy on iOS) never presents OS authorization as \"granted\" for iOS — permissionsRequested is treated as non-committal",
+        "file": "src/screens/__tests__/healthIntegrationScreenStructure.test.ts"
+      },
+      {
+        "name": "HealthIntegrationScreen — disconnect requires explicit confirmation never calls disconnect() directly from the disconnect row — it only opens a confirmation sheet",
+        "file": "src/screens/__tests__/healthIntegrationScreenStructure.test.ts"
+      },
+      {
+        "name": "EditProfileScreen — draft resets explicitly per session, not via unmount imports useScreenFocusEffect and resets every draft field on activation",
+        "file": "src/screens/__tests__/migratedScreensLifecycle.test.ts"
+      },
+      {
+        "name": "Paywall redesign — i18n coverage for new copy, no new hardcoded strings entryContext-driven plan intro stays copy-only and goes through i18n",
+        "file": "src/screens/__tests__/paywallRedesignStructure.test.ts"
+      },
+      {
+        "name": "FASE 6 — SubscriptionCenterScreen already correctly separates access from commercial presentation (audited, not rewritten) billing_issue/grace_period route to the real subscription management flow (manageSubscription), not an invented destination",
+        "file": "src/screens/__tests__/premiumCommercialContextFase6.test.ts"
+      },
+      {
+        "name": "WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision (E) computes the next-exercise lookup exactly once, feeding both the Live Activity call site and the in-app one",
+        "file": "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts"
+      },
+      {
+        "name": "WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision completeSet feeds the shared lookup into the Live Activity decision",
+        "file": "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts"
+      },
+      {
+        "name": "WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision restNextAction rebuilds the same decision from the authoritative, restorable rest record (not fresh component state)",
+        "file": "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts"
+      },
+      {
+        "name": "WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision passes the decision down to RestOverlay as a single prop, not re-derived props",
+        "file": "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts"
+      },
+      {
+        "name": "WorkoutScreen rest overlay — button label and next-exercise indicator derives nextExerciseAction only from the shared nextAction decision, never standalone",
+        "file": "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts"
+      },
+      {
+        "name": "WorkoutScreen rest overlay — button label and next-exercise indicator (B) the last set of an exercise (with another exercise left) switches the label and shows the next exercise",
+        "file": "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts"
+      }
+    ]
+  },
+  "emulator-final": {
+    "passed": 318,
+    "failed": 0,
+    "skipped": 1,
+    "startTime": 1792542958367,
+    "failures": []
+  },
+  "rules-nutrition": {
+    "passed": 20,
+    "failed": 0,
+    "skipped": 0,
+    "startTime": 1792543000970,
+    "failures": []
+  },
+  "client-recovery": {
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "startTime": 1792543004066,
+    "failures": []
+  },
+  "client-final-focused": {
+    "passed": 18,
+    "failed": 0,
+    "skipped": 0,
+    "startTime": 1792542964956,
+    "failures": []
+  },
+  "recent-auth-head": {
+    "passed": 8,
+    "failed": 0,
+    "skipped": 0,
+    "startTime": 1792542973823,
+    "failures": []
+  },
+  "appBaselineComparison": {
+    "priorAudit": "docs/final-publication-audit-2026-10-20/validation.json",
+    "all22PreviouslyReproducedFailuresPresent": true,
+    "additionalFailures": [
+      "hasRecentAuth is true exactly at the boundary of the window"
+    ],
+    "previousFailuresNowAbsent": [],
+    "additionalFailureClassification": "Unchanged HEAD real-clock boundary test; focused and isolated HEAD reruns both pass. The isolated HEAD failure was not reproduced. No out-of-scope authentication change made.",
+    "headSourceHashComparison": {
+      "src/lib/recentAuth.ts": {
+        "headSha256": "8b090d6c826a2bd3b49ef5dae932489fb932744550e6ce5b92bcdee676f58314",
+        "currentSha256": "8b090d6c826a2bd3b49ef5dae932489fb932744550e6ce5b92bcdee676f58314"
+      },
+      "src/lib/__tests__/recentAuth.test.ts": {
+        "headSha256": "b07781dd69e5dd8c25e968fdc4f57a6822496262dd82142a96535daec3a34792",
+        "currentSha256": "b07781dd69e5dd8c25e968fdc4f57a6822496262dd82142a96535daec3a34792"
+      }
+    }
+  },
+  "app-typecheck-final": {
+    "exitCode": 0
+  },
+  "functions-typecheck-final": {
+    "exitCode": 0
+  },
+  "functions-build-final": {
+    "exitCode": 0
+  },
+  "executionLimits": {
+    "realOpenAI": false,
+    "paidSmoke": "NUTRITION_REAL_AI_SMOKE=0; explicitly skipped",
+    "project": "demo-ajfit-dual-ai",
+    "node": "20.20.2",
+    "java": "21",
+    "productionRuntimeNotExecuted": "Node22 / full HTTP Functions App Check",
+    "productionActions": [],
+    "overlappingSuites": "Do not add counts from overlapping suites."
+  }
+}

@@ -1,3 +1,4 @@
+import { approveReview } from './reviewFixture';
 import { randomUUID } from 'node:crypto';
 import { Timestamp } from 'firebase-admin/firestore';
 import type { CallableRequest } from 'firebase-functions/v2/https';
@@ -109,9 +110,9 @@ describe.skipIf(!process.env.FIRESTORE_EMULATOR_HOST)('first onboarding generati
     let release!: () => void;
     const blocked = new Promise<void>((resolve) => { release = resolve; });
     const generatePlan = vi.fn(async () => { await blocked; return result; });
-    const worker = processNutritionGenerationJob(uid, generationId, { generatePlan }, db);
+    const worker = processNutritionGenerationJob(uid, generationId, { reviewPlan: approveReview, generatePlan }, db);
     await vi.waitFor(() => expect(generatePlan).toHaveBeenCalledOnce());
-    expect(await processNutritionGenerationJob(uid, generationId, { generatePlan }, db)).toBe(false);
+    expect(await processNutritionGenerationJob(uid, generationId, { reviewPlan: approveReview, generatePlan }, db)).toBe(false);
     const requests = await Promise.all(Array.from({ length: 5 }, () => requestNutritionPlanGenerationHandler(request, db, async () => true)));
     expect(requests.every((response) => response.generationId === generationId)).toBe(true);
     release(); expect(await worker).toBe(true);
@@ -131,12 +132,12 @@ describe.skipIf(!process.env.FIRESTORE_EMULATOR_HOST)('first onboarding generati
     await ref.update({ status: 'running', aiAttemptCount: 1, leaseUntil: Timestamp.fromMillis(0), nextAttemptAt: Timestamp.fromMillis(0) });
     const generatePlan = vi.fn().mockRejectedValueOnce(new NutritionAiProviderError('AI_RATE_LIMIT', true))
       .mockResolvedValueOnce(await validResult(uid));
-    expect(await processNutritionGenerationJob(uid, generationId, { generatePlan }, db)).toBe(true);
+    expect(await processNutritionGenerationJob(uid, generationId, { reviewPlan: approveReview, generatePlan }, db)).toBe(true);
     expect(generatePlan.mock.calls.map(([input]) => input.trace.attempt)).toEqual([2, 3]);
     expect((await ref.get()).get('aiAttemptCount')).toBe(3);
     expect((await ref.get()).get('status')).toBe('completed');
     expect((await root.collection('nutritionPlans').get()).size).toBe(1);
-    expect(await processNutritionGenerationJob(uid, generationId, { generatePlan }, db)).toBe(false);
+    expect(await processNutritionGenerationJob(uid, generationId, { reviewPlan: approveReview, generatePlan }, db)).toBe(false);
     expect(generatePlan).toHaveBeenCalledTimes(2);
   });
 
@@ -147,9 +148,10 @@ describe.skipIf(!process.env.FIRESTORE_EMULATOR_HOST)('first onboarding generati
     await ref.update({ status: 'validating', aiAttemptCount: 3, lastFailureCode: 'AI_MACRO_VALIDATION_FAILED',
       leaseUntil: Timestamp.fromMillis(0), nextAttemptAt: Timestamp.fromMillis(0) });
     const generatePlan = vi.fn();
-    expect(await processNutritionGenerationJob(uid, generationId, { generatePlan }, db)).toBe(false);
+    expect(await processNutritionGenerationJob(uid, generationId, { reviewPlan: approveReview, generatePlan }, db)).toBe(false);
     expect(generatePlan).not.toHaveBeenCalled();
-    expect((await ref.get()).get('errorCode')).toBe('AI_MACRO_VALIDATION_FAILED');
+    expect((await ref.get()).get('errorCode')).toBe('AI_RETRY_EXHAUSTED');
+    expect((await ref.get()).get('lastFailureCode')).toBe('AI_MACRO_VALIDATION_FAILED');
     expect((await ref.get()).get('status')).toBe('failed');
     expect((await root.collection('nutritionPlans').get()).empty).toBe(true);
     expect((await requestNutritionPlanGenerationHandler(request, db, async () => true)).generationId).toBe(generationId);
@@ -167,20 +169,23 @@ describe.skipIf(!process.env.FIRESTORE_EMULATOR_HOST)('first onboarding generati
     const { generationId } = await requestNutritionPlanGenerationHandler(request, db, async () => true);
     const ref = root.collection('nutritionGenerationJobs').doc(generationId);
     const result = await validResult(uid);
-    const generatePlan = vi.fn().mockImplementationOnce(async () => {
-      // Fail only the next persistence transaction; no real service is interrupted.
-      vi.spyOn(db, 'runTransaction').mockRejectedValueOnce(Object.assign(new Error('emulated unavailable'), { code: 14 }));
-      return result;
-    }).mockResolvedValue(result);
+    const generatePlan = vi.fn().mockResolvedValue(result);
+    const originalTransaction = db.runTransaction.bind(db);
+    const reviewPlan = vi.fn().mockImplementationOnce(async input => {
+      // First record the review operation, then fail precisely the activation transaction.
+      vi.spyOn(db, 'runTransaction').mockImplementationOnce(originalTransaction)
+        .mockRejectedValueOnce(Object.assign(new Error('emulated unavailable'), { code: 14 }));
+      return approveReview(input);
+    }).mockImplementation(approveReview);
     try {
-      expect(await processNutritionGenerationJob(uid, generationId, { generatePlan }, db)).toBe(false);
+      expect(await processNutritionGenerationJob(uid, generationId, { reviewPlan, generatePlan }, db)).toBe(false);
     } finally { vi.restoreAllMocks(); }
     expect((await ref.get()).get('status')).toBe('validating');
     expect((await root.collection('nutritionPlans').get()).empty).toBe(true);
-    expect(await processNutritionGenerationJob(uid, generationId, { generatePlan }, db)).toBe(false);
+    expect(await processNutritionGenerationJob(uid, generationId, { reviewPlan, generatePlan }, db)).toBe(false);
     expect(generatePlan).toHaveBeenCalledOnce();
     await ref.update({ leaseUntil: Timestamp.fromMillis(0), nextAttemptAt: Timestamp.fromMillis(0) });
-    expect(await processNutritionGenerationJob(uid, generationId, { generatePlan }, db)).toBe(true);
+    expect(await processNutritionGenerationJob(uid, generationId, { reviewPlan, generatePlan }, db)).toBe(true);
     expect(generatePlan.mock.calls.map(([input]) => input.trace.attempt)).toEqual([1, 2]);
     expect((await root.collection('nutritionGenerationJobs').get()).size).toBe(1);
     expect((await root.collection('nutritionPlans').get()).size).toBe(1);

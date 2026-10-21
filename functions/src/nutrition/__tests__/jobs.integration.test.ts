@@ -1,3 +1,4 @@
+import { approveReview } from './reviewFixture';
 import { randomUUID } from 'node:crypto';
 import { Timestamp } from 'firebase-admin/firestore';
 import type { CallableRequest } from 'firebase-functions/v2/https';
@@ -50,7 +51,7 @@ describe.skipIf(!process.env.FIRESTORE_EMULATOR_HOST)('nutrition job Firestore t
       expect((await user.collection('nutritionGenerationJobs').doc(first.generationId).get()).get('status')).toBe('running');
       return { output, model: 'fake', usage: { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0 }, latencyMs: 1 };
     });
-    const provider: NutritionAiProvider = { generatePlan };
+    const provider: NutritionAiProvider = { reviewPlan: approveReview, generatePlan };
     expect(await processNutritionGenerationJob(uid, first.generationId, provider, db)).toBe(true);
     expect(generatePlan).toHaveBeenCalledTimes(1);
     const firstPlan = user.collection('nutritionPlans').doc(first.generationId);
@@ -63,14 +64,14 @@ describe.skipIf(!process.env.FIRESTORE_EMULATOR_HOST)('nutrition job Firestore t
     await db.collection('nutritionRateLimits').doc(uid).update({ lastRequestedAt: Timestamp.fromMillis(0) });
     const second = await requestNutritionPlanGenerationHandler(request('request-0002'), db);
     expect(second.generationId).not.toBe(first.generationId);
-    expect(await processNutritionGenerationJob(uid, second.generationId, { generatePlan: async () => ({
+    expect(await processNutritionGenerationJob(uid, second.generationId, { reviewPlan: approveReview, generatePlan: async () => ({
       output, model: 'fake', usage: { inputTokens: null, outputTokens: null, cachedInputTokens: null }, latencyMs: 1,
     }) }, db)).toBe(true);
     expect((await firstPlan.get()).get('status')).toBe('archived');
     expect((await user.collection('nutritionPlans').where('status', '==', 'active').get()).size).toBe(1);
     await db.collection('nutritionRateLimits').doc(uid).update({ lastRequestedAt: Timestamp.fromMillis(0) });
     const third = await requestNutritionPlanGenerationHandler(request('request-0003'), db);
-    await processNutritionGenerationJob(uid, third.generationId, { generatePlan: async () => ({
+    await processNutritionGenerationJob(uid, third.generationId, { reviewPlan: approveReview, generatePlan: async () => ({
       output: { meals: [] }, model: 'fake', usage: { inputTokens: null, outputTokens: null, cachedInputTokens: null }, latencyMs: 1,
     }) }, db);
     expect((await user.collection('nutritionGenerationJobs').doc(third.generationId).get()).get('status')).toBe('failed');
@@ -98,7 +99,7 @@ describe.skipIf(!process.env.FIRESTORE_EMULATOR_HOST)('nutrition job Firestore t
     await db.collection('nutritionRolloutConfig').doc('active').update({ 'nutritionPlanGenerationEnabled.enabled': true });
     await db.collection('nutritionRateLimits').doc(uid).update({ lastRequestedAt: Timestamp.fromMillis(0) });
     const profileRace = await requestNutritionPlanGenerationHandler(request('request-profile-race'), db);
-    expect(await processNutritionGenerationJob(uid, profileRace.generationId, { generatePlan: async () => {
+    expect(await processNutritionGenerationJob(uid, profileRace.generationId, { reviewPlan: approveReview, generatePlan: async () => {
       await user.collection('nutritionProfile').doc('current').update({ dietaryPattern: 'vegan', updatedAt: Timestamp.now() });
       return { output, model: 'fake', usage: { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0 }, latencyMs: 1 };
     } }, db)).toBe(false);
@@ -107,7 +108,7 @@ describe.skipIf(!process.env.FIRESTORE_EMULATOR_HOST)('nutrition job Firestore t
     await user.collection('nutritionProfile').doc('current').update({ dietaryPattern: 'omnivore', updatedAt: Timestamp.now() });
     await db.collection('nutritionRateLimits').doc(uid).update({ lastRequestedAt: Timestamp.fromMillis(0) });
     const deletionRace = await requestNutritionPlanGenerationHandler(request('request-deletion-race'), db);
-    const deletionRaceProvider: NutritionAiProvider = { generatePlan: async () => {
+    const deletionRaceProvider: NutritionAiProvider = { reviewPlan: approveReview, generatePlan: async () => {
       await db.collection('accountDeletionLocks').doc(uid).set({ status: 'REQUESTED' });
       return { output, model: 'fake', usage: { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0 }, latencyMs: 1 };
     } };

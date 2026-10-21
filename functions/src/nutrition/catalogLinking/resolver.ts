@@ -78,7 +78,7 @@ export function nutritionFailure(candidate: CatalogCandidate): CatalogFailureRea
     || /^farinha de (trigo|milho)\b/.test(name) || /^soja farinha\b/.test(name)) return 'preparation';
   return null;
 }
-function verifiedEvidence(candidate: CatalogCandidate): NutritionCatalogSafetyEvidence | null {
+export function verifiedEvidence(candidate: CatalogCandidate): NutritionCatalogSafetyEvidence | null {
   const e = candidate.food.safetyEvidence;
   return e?.schemaVersion === 1 && e.nutritionRevision === catalogNutritionRevision(candidate.food)
     && typeof e.reference === 'string' && e.reference.trim().length > 0
@@ -110,7 +110,7 @@ export function restrictionFailure(candidate: CatalogCandidate, profile: Policy,
     const ingredientText = text.replace(/sem (leite|ovo|soja|trigo|amendoim)/g, '')
       .replace(/leite de (soja|aveia|arroz|coco|amendoa)/g, '').replace(/couve manteiga/g, 'couve');
     const presence: Record<string, RegExp> = {
-      milk: /\b(leite|queijo|iogurte|whey|caseina|manteiga|nata)\b/,
+      milk: /\b(leite|queijo|iogurte|whey|caseina|caseinato|caseinate|casein|lactoalbumina|lactoglobulina|manteiga|nata)\b/,
       egg: /\b(ovo|ovos|clara|gema|albumina)\b/,
       soy: /\b(soja|tofu)\b/, wheat: /\btrigo\b/,
       gluten: /\b(trigo|centeio|cevada|malte)\b/,

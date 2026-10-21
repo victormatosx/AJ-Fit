@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe,expect,it } from 'vitest';
 
 import { EXERCISES_SEED } from '../../data/exercisesSeedData';
 import { validateExerciseSeed } from '../../validators/exerciseValidation';
@@ -25,24 +25,6 @@ describe('exercisesSeedData', () => {
     for (const ex of EXERCISES_SEED) {
       for (const simId of ex.substitution.similarExerciseIds) {
         expect(ids.has(simId)).toBe(true);
-      }
-    }
-  });
-
-  it('keeps limitation-only variants explicit, non-self-referential, and catalog-backed', () => {
-    const ids = new Set(EXERCISES_SEED.map((exercise) => exercise.id));
-    const configured = EXERCISES_SEED
-      .filter((exercise) => exercise.substitution.limitationVariantIds?.length)
-      .map((exercise) => [exercise.id, exercise.substitution.limitationVariantIds]);
-
-    expect(configured).toEqual([
-      ['cable-rear-delt-fly', ['resistance-band-row']],
-      ['conventional-deadlift', ['hip-hinge-drill', 'dumbbell-stiff-leg-deadlift']],
-    ]);
-    for (const exercise of EXERCISES_SEED) {
-      for (const variantId of exercise.substitution.limitationVariantIds ?? []) {
-        expect(variantId).not.toBe(exercise.id);
-        expect(ids.has(variantId)).toBe(true);
       }
     }
   });

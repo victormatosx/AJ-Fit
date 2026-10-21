@@ -10,23 +10,19 @@
  * Skipped by default — only runs when `WORKOUT_RECONCILIATION_INTEGRATION=1`
  * is set (see the `test:integration:workoutReconciliation` npm script).
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { collection, doc, getDoc, getDocs, setDoc, Timestamp } from 'firebase/firestore';
+import { Timestamp,collection,doc,getDoc,getDocs,setDoc } from 'firebase/firestore';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { afterAll,beforeAll,beforeEach,describe,expect,it,vi } from 'vitest';
 
 import { buildSeedDocuments } from '../../../scripts/seedWorkoutTemplates';
-import { completeAnswers } from '../../workoutPrescription/__tests__/fixtures';
 import { toPersistedAnswers } from '../../lib/questionnaireAnswers';
-import {
-  CANONICAL_LIMITATION_DATASET_HASH,
-  CANONICAL_LIMITATION_DATASET_VERSION,
-} from '../../workoutPrescription/limitationDataset';
 import { WEEKDAY_ORDER } from '../../state/AppState';
+import { completeAnswers } from '../../workoutPrescription/__tests__/fixtures';
 
 const PROJECT_ID = 'ajfit-rules-test';
 const UID = 'bob';
@@ -44,8 +40,8 @@ vi.mock('../../lib/firebase', () => ({
 }));
 
 import { generateAndPersistWorkoutProgram } from '../workoutPrograms';
+import { installWorkoutLifecycleAuthorityFixture,resetWorkoutLifecycleAuthorityFixture } from './workoutLifecycleAuthorityFixture';
 import { enableWorkoutLifecycleRollout } from './workoutLifecycleRolloutFixture';
-import { installWorkoutLifecycleAuthorityFixture, resetWorkoutLifecycleAuthorityFixture } from './workoutLifecycleAuthorityFixture';
 
 const T003_SEED = buildSeedDocuments().find((t) => t.id === 'T003');
 if (!T003_SEED) throw new Error('T003 fixture missing from catalog — cannot run reconciliation integration tests');
@@ -75,10 +71,6 @@ async function seedUserAndQuestionnaire(
       metadata: { role: 'user', createdAt: Timestamp.now(), updatedAt: Timestamp.now(), commercialGateResolvedAt: Timestamp.now() },
     });
     await setDoc(doc(rawDb, 'workoutTemplates', 'T003'), T003_SEED);
-    await setDoc(doc(rawDb, 'limitationDatasetState', 'active'), {
-      datasetVersion: CANONICAL_LIMITATION_DATASET_VERSION,
-      limitationDatasetHash: CANONICAL_LIMITATION_DATASET_HASH,
-    });
     await setDoc(doc(rawDb, 'users', UID, 'questionnaires', QUESTIONNAIRE_ID), {
       answers: rawLegacyAnswers ?? toPersistedAnswers(answers),
       version: 1,
@@ -122,8 +114,6 @@ describe.skipIf(!enabled)('First Workout Program reconciliation — real Firesto
     if (result.status !== 'SUCCESS') return;
     expect(result.program.status).toBe('active');
     expect(result.program.source).toBe('automatic_reconciliation');
-    expect(result.program.limitationDatasetVersion).toBe(CANONICAL_LIMITATION_DATASET_VERSION);
-    expect(result.program.limitationDatasetHash).toBe(CANONICAL_LIMITATION_DATASET_HASH);
 
     const activeState = await getDoc(doc(mocks.db as never, 'users', UID, 'workoutProgramState', 'active'));
     expect(activeState.data()?.programId).toBe(result.program.programId);

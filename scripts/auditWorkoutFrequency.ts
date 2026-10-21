@@ -1,9 +1,7 @@
 import { defaultQuiz, WEEKDAY_ORDER, type Quiz, type Weekday } from '../src/state/AppState';
 import { generateWorkoutPrescription } from '../src/workoutPrescription/engine';
-import { loadLocalExerciseCatalogForLimitations } from '../src/workoutPrescription/localLimitationCatalog';
 
 const equipment = ['bodyweight', 'dumbbells', 'bands', 'bench_or_box', 'barbell'];
-const limitationCatalog = loadLocalExerciseCatalogForLimitations();
 const weekdays = (count: number): Weekday[] => WEEKDAY_ORDER.slice(0, count);
 const base: Quiz = {
   ...defaultQuiz,
@@ -29,14 +27,11 @@ const personas: Array<[string, Partial<Quiz>]> = [
   ['pregnancy availability 7', { sex: 'f', specialConditions: ['pregnancy'], pregnancyScreening: { weeks: 20, prenatalCare: 'yes', exerciseRestriction: 'no', complication: 'no', warningSigns: ['none'] } }],
   ['postpartum availability 7', { sex: 'f', specialConditions: ['postpartum'], postpartumScreening: { timeSinceBirth: '3_6_months', deliveryType: 'vaginal', signs: ['none'], returnClearance: 'yes' } }],
   ['frailty availability 7', { specialConditions: ['functional_limitation'], functionalScreening: { situations: ['stairs_difficulty'] } }],
-  ['knee limitation availability 7', { specialConditions: ['musculoskeletal_limitation'], limits: ['knee'] }],
-  ['wrist limitation availability 7', { specialConditions: ['musculoskeletal_limitation'], limits: ['wrist'] }],
-  ['multiple limitations availability 7', { specialConditions: ['musculoskeletal_limitation'], limits: ['knee', 'wrist'] }],
 ];
 
 const rows = personas.map(([persona, overrides]) => {
   const questionnaire = { ...base, ...overrides };
-  const result = generateWorkoutPrescription(questionnaire, { exerciseCatalog: limitationCatalog });
+  const result = generateWorkoutPrescription(questionnaire);
   if (result.status !== 'SUCCESS') return { persona, status: result.status, reasonCodes: result.reasonCodes };
   const { plan } = result;
   const stateCount = (state: 'TRAINING' | 'ACTIVE_RECOVERY' | 'REST') =>
@@ -54,7 +49,6 @@ const rows = personas.map(([persona, overrides]) => {
     sessionExerciseCounts: plan.sessions.map((session) => session.exercises.length),
     cardioFinishers: plan.sessions.filter((session) => session.cardioFinisher).length,
     substitutions: plan.trace.substitutions.length,
-    omissions: plan.trace.exerciseOmissions?.length ?? 0,
     status: result.status,
   };
 });

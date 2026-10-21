@@ -1,0 +1,1291 @@
+{
+  "date": "2026-10-20",
+  "policyInitial": "v3",
+  "policyFinal": "v3",
+  "verdict": "V3 ATIVA — PRONTO PARA GERAR BUILD",
+  "dataset": {
+    "version": "ajfit-substitutions-v3.2.0",
+    "sha256": "04894080bd3c50f3e812373b9cf51d47334fb8efc8b4f5ba0f669c1df079da37",
+    "workbookSha256": "01ef1ba8246bbdd1dcc9041f25054729bf7998762348ccf8beeafc75ca06604a",
+    "relations": 1156,
+    "operational": 871,
+    "exercise": 231,
+    "profile": 50,
+    "equipment": 4,
+    "other": 0,
+    "review": 26,
+    "noneAccepted": 1,
+    "conditionals": 139,
+    "drafts": 41
+  },
+  "appBaselineExactFailedCaseMatch": true,
+  "originalAdditional67": [
+    {
+      "file": "src/prescriptionEvolution/__tests__/cycleEvolution.test.ts",
+      "name": "novelty target ~20-30% > changes roughly a quarter of eligible slots when abundant safe candidates exist",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Fixture sintética de famílias/novidade/anti-ping-pong histórica, sem aprovação editorial V3; política legacy explícita."
+    },
+    {
+      "file": "src/prescriptionEvolution/__tests__/cycleEvolution.test.ts",
+      "name": "determinism > a different targetCycleIdentity can select a different subset/candidates",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Fixture sintética de famílias/novidade/anti-ping-pong histórica, sem aprovação editorial V3; política legacy explícita."
+    },
+    {
+      "file": "src/prescriptionEvolution/__tests__/cycleEvolution.test.ts",
+      "name": "anti-ping-pong > falls back to the recently-used variant when it is the only safe option",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Fixture sintética de famílias/novidade/anti-ping-pong histórica, sem aprovação editorial V3; política legacy explícita."
+    },
+    {
+      "file": "src/prescriptionEvolution/__tests__/cycleEvolution.test.ts",
+      "name": "equipment independence — v1.27 cycle evolution ignores answers.equipment > sanity check: the legacy v2 mechanism (equipmentContextFor) IS sensitive to answers.equipment for the same home program",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Fixture sintética de famílias/novidade/anti-ping-pong histórica, sem aprovação editorial V3; política legacy explícita."
+    },
+    {
+      "file": "src/prescriptionEvolution/__tests__/equivalence.test.ts",
+      "name": "evaluateEquivalenceCandidate > rejects the real hip-thrust -> cable-glute-kickback compound-to-isolation regression even when declared similar",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Contrato histórico de equivalência mecânica/família; legacy explícita, contraparte V3 global cobre as aprovações editoriais."
+    },
+    {
+      "file": "src/prescriptionEvolution/__tests__/equivalence.test.ts",
+      "name": "evaluateEquivalenceCandidate > the real dataset exposes valid positive coverage for both compound and isolation roles, and every accepted declared edge preserves role",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Contrato histórico de equivalência mecânica/família; legacy explícita, contraparte V3 global cobre as aprovações editoriais."
+    },
+    {
+      "file": "src/screens/__tests__/myPlanPresentation.test.ts",
+      "name": "buildMyPlanEffectiveSessions — permanent substitution effective view > shows a valid permanent A -> B preference while retaining both identities",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Fixture de preferência atualizada para barbell-back-squat -> smith-machine-squat, aprovada em academia; sem override de política."
+    },
+    {
+      "file": "src/screens/__tests__/myPlanPresentation.test.ts",
+      "name": "buildMyPlanEffectiveSessions — permanent substitution effective view > resolves A -> X / B -> X by slot order and never displays X/X",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Fixture de preferência atualizada para barbell-back-squat -> smith-machine-squat, aprovada em academia; sem override de política."
+    },
+    {
+      "file": "src/screens/__tests__/myPlanPresentation.test.ts",
+      "name": "buildMyPlanEffectiveSessions — permanent substitution effective view > returns from B to A when the preference disappears",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Fixture de preferência atualizada para barbell-back-squat -> smith-machine-squat, aprovada em academia; sem override de política."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/engineV127Integration.test.ts",
+      "name": "engineV127 — musculoskeletal limitation end-to-end > T025 (male/gym/strength/2d) keeps farmers-walk unchanged for an active elbow limitation — the app's OWN reviewed limitationProfile rates it \"compatible\" for elbow, unlike the pre-rewrite v1.27-only avoid list",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Cenários históricos de fallback por limitação; contexto legacy explícito, geração V3 global coberta separadamente."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/engineV127Integration.test.ts",
+      "name": "engineV127 — musculoskeletal limitation end-to-end > T009 (male/home/hypertrophy/4d) resolves the former hip collision through the reviewed low-step fallback",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Cenários históricos de fallback por limitação; contexto legacy explícito, geração V3 global coberta separadamente."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/equivalenceDivergence.characterization.test.ts",
+      "name": "DIVERGENCE: ROLE_MISMATCH (movement.mechanic) is Evolution-only, not universal > equivalence.ts rejects a mechanic-mismatched candidate declared in similarExerciseIds (real dataset regression: hip-thrust -> cable-glute-kickback)",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Caracterização intencional das divergências históricas entre motores; legacy explícita."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/equivalenceDivergence.characterization.test.ts",
+      "name": "DIVERGENCE: ROLE_MISMATCH (movement.mechanic) is Evolution-only, not universal > limitationResolver.ts has NO equivalent mechanic-equality gate for \"declared\"/\"similar\"/\"preferred\" origins — only \"family\" origin enforces same mechanic",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Caracterização intencional das divergências históricas entre motores; legacy explícita."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/limitationClinicalDecisions.test.ts",
+      "name": "approved limitation clinical decisions v1 > proves every effective approved adapt row has a direct terminal target accepted by the real resolver",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Auditoria do dataset clínico anterior à planilha; legacy explícita nas chamadas diretas e mock local ao classificador histórico."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/limitationClinicalDecisions.test.ts",
+      "name": "approved limitation clinical decisions v1 > keeps all 71 reachable exercises valid across all 7 regions",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Auditoria do dataset clínico anterior à planilha; legacy explícita nas chamadas diretas e mock local ao classificador histórico."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/limitationDatasetAudit.test.ts",
+      "name": "auditLimitationDataset — classifyPair > classifies plank×knee as a valid, terminal adaptation to dead-bug",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Classificações históricas de scripts/auditLimitationDataset.ts, sem parâmetro de ambiente/política; mock local legacy."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/limitationDatasetAudit.test.ts",
+      "name": "auditLimitationDataset — classifyPair > classifies a genuinely resolvable adaptation as VALID_ADAPTATION",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Classificações históricas de scripts/auditLimitationDataset.ts, sem parâmetro de ambiente/política; mock local legacy."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/limitationDatasetQualityGate.test.ts",
+      "name": "Limitation dataset quality gate — zero-debt baseline > never introduces a NEW invalid combination beyond the known baseline",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Gate do dataset histórico, com métricas e famílias anteriores à V3; mock local legacy."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/limitationDatasetQualityGate.test.ts",
+      "name": "Limitation dataset quality gate — zero-debt baseline > keeps the reachable limitation debt at zero",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Gate do dataset histórico, com métricas e famílias anteriores à V3; mock local legacy."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/limitationDatasetQualityGate.test.ts",
+      "name": "Limitation dataset quality gate — zero-debt baseline > resolved debt is welcome and never blocks CI (documents current count, does not enforce it)",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Gate do dataset histórico, com métricas e famílias anteriores à V3; mock local legacy."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/limitationIntegration.test.ts",
+      "name": "Prescription Engine + Limitation Resolver V1 > uses the next deterministic safe candidate when two preferred targets collide",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Integração histórica do motor v2 com expansão por família; legacy explícita agora propagada pelo engine.ts, sem mock global."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/limitationIntegration.test.ts",
+      "name": "Prescription Engine + Limitation Resolver V1 > omits only the unsafe slot and keeps a session with another safe exercise valid",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Integração histórica do motor v2 com expansão por família; legacy explícita agora propagada pelo engine.ts, sem mock global."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/limitationIntegration.test.ts",
+      "name": "Prescription Engine + Limitation Resolver V1 > returns controlled NO_EXECUTABLE_SESSION when every slot is omitted",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Integração histórica do motor v2 com expansão por família; legacy explícita agora propagada pelo engine.ts, sem mock global."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/limitationIntegration.test.ts",
+      "name": "Prescription Engine + Limitation Resolver V1 > consumes the persisted V2 profile shape and applies a real adaptation",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Integração histórica do motor v2 com expansão por família; legacy explícita agora propagada pelo engine.ts, sem mock global."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/limitationIntegration.test.ts",
+      "name": "Prescription Engine + Limitation Resolver V1 > keeps the final adaptation executable in gym",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Integração histórica do motor v2 com expansão por família; legacy explícita agora propagada pelo engine.ts, sem mock global."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/limitationIntegration.test.ts",
+      "name": "Prescription Engine + Limitation Resolver V1 > keeps the final adaptation executable in home",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Integração histórica do motor v2 com expansão por família; legacy explícita agora propagada pelo engine.ts, sem mock global."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/limitationIntegration.test.ts",
+      "name": "Prescription Engine + Limitation Resolver V1 > applies an ordered limitation substitute in the full pipeline and snapshots the decision",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Integração histórica do motor v2 com expansão por família; legacy explícita agora propagada pelo engine.ts, sem mock global."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/limitationIntegration.test.ts",
+      "name": "Prescription Engine + Limitation Resolver V1 > intersects simultaneous regions when both approved rules share a terminal target",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Integração histórica do motor v2 com expansão por família; legacy explícita agora propagada pelo engine.ts, sem mock global."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/limitationIntegration.test.ts",
+      "name": "Prescription Engine + Limitation Resolver V1 > Beginner runs after resolution without reintroducing the rejected source",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Integração histórica do motor v2 com expansão por família; legacy explícita agora propagada pelo engine.ts, sem mock global."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/limitationIntegration.test.ts",
+      "name": "Prescription Engine + Limitation Resolver V1 > Duration runs after resolution without reintroducing the rejected source",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Integração histórica do motor v2 com expansão por família; legacy explícita agora propagada pelo engine.ts, sem mock global."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/limitationIntegration.test.ts",
+      "name": "Prescription Engine + Limitation Resolver V1 > Priority runs after resolution without reintroducing the rejected source",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Integração histórica do motor v2 com expansão por família; legacy explícita agora propagada pelo engine.ts, sem mock global."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/limitationResolver.test.ts",
+      "name": "Limitation Resolver V1 > uses the preferred clinical target when it is terminal and executable",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Contrato do Limitation Resolver V1; legacy explícita, sem mock (corrigida propagação interna)."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/limitationResolver.test.ts",
+      "name": "Limitation Resolver V1 > skips an unavailable preferred target and selects an executable declared fallback",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Contrato do Limitation Resolver V1; legacy explícita, sem mock (corrigida propagação interna)."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/limitationResolver.test.ts",
+      "name": "Limitation Resolver V1 > computes the intersection of multiple limitations with no region precedence",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Contrato do Limitation Resolver V1; legacy explícita, sem mock (corrigida propagação interna)."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/limitationResolver.test.ts",
+      "name": "Limitation Resolver V1 > uses the first limitation substitute valid for every constraint",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Contrato do Limitation Resolver V1; legacy explícita, sem mock (corrigida propagação interna)."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/limitationResolver.test.ts",
+      "name": "Limitation Resolver V1 > skips the first candidate rejected by equipment and selects the second original candidate",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Contrato do Limitation Resolver V1; legacy explícita, sem mock (corrigida propagação interna)."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/limitationResolver.test.ts",
+      "name": "Limitation Resolver V1 > executes one concrete adaptation and revalidates its profile",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Contrato do Limitation Resolver V1; legacy explícita, sem mock (corrigida propagação interna)."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/limitationResolver.test.ts",
+      "name": "Limitation Resolver V1 > accepts only an explicitly allowlisted cross-primary-muscle limitation variant",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Contrato do Limitation Resolver V1; legacy explícita, sem mock (corrigida propagação interna)."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/limitationResolver.test.ts",
+      "name": "Limitation Resolver V1 > still rejects an explicitly listed limitation variant with a different movement pattern",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Contrato do Limitation Resolver V1; legacy explícita, sem mock (corrigida propagação interna)."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/limitationResolver.test.ts",
+      "name": "Limitation Resolver V1 > fails closed when an adaptation target is itself not directly safe",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Contrato do Limitation Resolver V1; legacy explícita, sem mock (corrigida propagação interna)."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/limitationResolver.test.ts",
+      "name": "Limitation Resolver V1 > fails closed when an adaptation target does not exist",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Contrato do Limitation Resolver V1; legacy explícita, sem mock (corrigida propagação interna)."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/limitationResolver.test.ts",
+      "name": "Limitation Resolver V1 > does not recurse through an A ↔ B cycle",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Contrato do Limitation Resolver V1; legacy explícita, sem mock (corrigida propagação interna)."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/limitationResolver.test.ts",
+      "name": "Limitation Resolver V1 > rejects a candidate from the unreviewed 40 when it has no profile",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Contrato do Limitation Resolver V1; legacy explícita, sem mock (corrigida propagação interna)."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/manualSubstitutionResolver.test.ts",
+      "name": "resolveManualSubstitutionCandidates: candidate universe is the full substitution.group, not the pre-cut similarExerciseIds > surfaces bodyweight-squat/goblet-squat/chair-squat for barbell-back-squat even though buildSubstitutions() cut them from similarExerciseIds",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Regras e fixtures sintéticas do resolvedor histórico; legacy explícita; regressão global V3 independente."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/manualSubstitutionResolver.test.ts",
+      "name": "evaluateManualSubstitutionCandidate: mechanic policy (ROLE_MISMATCH) with the limitationVariantIds exception > rejects a mechanic-mismatched candidate that is only a declared similarExerciseIds entry (real dataset regression: hip-thrust -> cable-glute-kickback)",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Regras e fixtures sintéticas do resolvedor histórico; legacy explícita; regressão global V3 independente."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/manualSubstitutionResolver.test.ts",
+      "name": "resolveManualSubstitutionCandidates: top-3 is applied only after every filter, never padded > returns exactly 3 when 10+ are eligible",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Regras e fixtures sintéticas do resolvedor histórico; legacy explícita; regressão global V3 independente."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/manualSubstitutionResolver.test.ts",
+      "name": "resolveManualSubstitutionCandidates: top-3 is applied only after every filter, never padded > returns exactly 2 when only 2 are eligible (never pads to 3)",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Regras e fixtures sintéticas do resolvedor histórico; legacy explícita; regressão global V3 independente."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/manualSubstitutionResolver.test.ts",
+      "name": "resolveManualSubstitutionCandidates: top-3 is applied only after every filter, never padded > returns exactly 1 when only 1 is eligible",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Regras e fixtures sintéticas do resolvedor histórico; legacy explícita; regressão global V3 independente."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/manualSubstitutionResolver.test.ts",
+      "name": "resolvePermanentSubstitutionsForSession (\"Todos os próximos treinos\" materialization) > applies a valid A -> B preference",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Regras e fixtures sintéticas do resolvedor histórico; legacy explícita; regressão global V3 independente."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/manualSubstitutionResolver.test.ts",
+      "name": "resolvePermanentSubstitutionsForSession (\"Todos os próximos treinos\" materialization) > A -> X and B -> X in the same session: only the first slot receives X, deterministically by slot order",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Regras e fixtures sintéticas do resolvedor histórico; legacy explícita; regressão global V3 independente."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/manualSubstitutionResolver.test.ts",
+      "name": "resolvePermanentSubstitutionsForSession (\"Todos os próximos treinos\" materialization) > reversing slot order flips which slot wins the collision — proves the rule is slot-order-based, not id-based",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Regras e fixtures sintéticas do resolvedor histórico; legacy explícita; regressão global V3 independente."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/musclePriorityV127.test.ts",
+      "name": "musculoskeletal limitation -> muscle priority integration > a substitute that becomes a priority match is classified and prioritized by its FINAL identity, not the original",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Ordem/prioridade muscular com uma adaptação histórica de limitação; legacy explícita só no cenário histórico."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+      "name": "v1.27 complete musculoskeletal coverage gate > uses leg-press-90 only after the occupied preferred spine adaptation",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Baseline histórica de cobertura por expansão; contexto legacy mantém inclusive as 18 falhas preexistentes visíveis."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/musculoskeletalLimitationPerRegionCoverage.test.ts",
+      "name": "per-region limitationProfile coverage — cable-crossover-fly > 4. activeRegions=[knee, shoulder] requires and satisfies both regions",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Cobertura regional sobre dataset histórico; legacy explícita."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/musculoskeletalLimitationPerRegionCoverage.test.ts",
+      "name": "per-region limitationProfile coverage — cable-crossover-fly > uses pec-deck through the declared adaptation, not an unreviewed family shortcut",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Cobertura regional sobre dataset histórico; legacy explícita."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/musculoskeletalLimitationPerRegionCoverage.test.ts",
+      "name": "per-region limitationProfile coverage — dumbbell-rear-delt-fly > 7. activeRegions=[shoulder] resolves through the already-decided adapt rule (cable-rear-delt-fly), since shoulder is NOT pending for this exercise",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Cobertura regional sobre dataset histórico; legacy explícita."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/musculoskeletalLimitationPerRegionCoverage.test.ts",
+      "name": "per-region coverage does not weaken fail-closed for already-covered regions > a fully-decided exercise (leg-press-45) is completely unaffected by the pending mechanism — no regression",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Cobertura regional sobre dataset histórico; legacy explícita."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/musculoskeletalLimitationV127.test.ts",
+      "name": "applyMusculoskeletalLimitationV127 — real data, resolved through the shared limitation resolver > leg-press-45 + knee substitutes via the exercise's own reviewed `adapt` rule (chair-sit-to-stand) — the exact scenario that was structurally unresolvable pre-rewrite",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Fixtures do motor histórico e candidatos sintéticos; legacy explícita."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/musculoskeletalLimitationV127.test.ts",
+      "name": "applyMusculoskeletalLimitationV127 — multiple active regions (candidate must clear ALL of them) > a candidate compatible with knee but avoid-listed for spine is rejected; a candidate compatible with both is accepted",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Fixtures do motor histórico e candidatos sintéticos; legacy explícita."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/musculoskeletalLimitationV127.test.ts",
+      "name": "applyMusculoskeletalLimitationV127 — environment compatibility (same isExerciseExecutable gate the rest of the app uses) > a candidate requiring gym-only equipment is rejected in a Home session",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Fixtures do motor histórico e candidatos sintéticos; legacy explícita."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/musculoskeletalLimitationV127.test.ts",
+      "name": "applyMusculoskeletalLimitationV127 — environment compatibility (same isExerciseExecutable gate the rest of the app uses) > gym sessions never reject a candidate purely on equipment (same permissive gym rule the rest of the app already applies)",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Fixtures do motor histórico e candidatos sintéticos; legacy explícita."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/musculoskeletalLimitationV127.test.ts",
+      "name": "applyMusculoskeletalLimitationV127 — self and duplicate-in-session rejection > a candidate already used earlier in the same session is rejected, forcing the next ranked candidate",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Fixtures do motor histórico e candidatos sintéticos; legacy explícita."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/musculoskeletalLimitationV127.test.ts",
+      "name": "applyMusculoskeletalLimitationV127 — self and duplicate-in-session rejection > real data: duplicate-in-session forces leg-press-45 past its preferred chair-sit-to-stand (already claimed by barbell-back-squat) to a different, still-safe family candidate",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Fixtures do motor histórico e candidatos sintéticos; legacy explícita."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/musculoskeletalLimitationV127.test.ts",
+      "name": "applyMusculoskeletalLimitationV127 — dose transfers verbatim (same rule composition.ts/manualSubstitutionResolver.ts/cycleEvolution already use) > every dose field (sets/reps/duration/distance/cycles/cycleRange/intensity/notes) is copied unchanged onto the substitute, regardless of how \"different\" the substitute is",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Fixtures do motor histórico e candidatos sintéticos; legacy explícita."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/musculoskeletalLimitationV127.test.ts",
+      "name": "applyMusculoskeletalLimitationV127 — scoped blast radius > only the vetoed exercise in the vetoed session changes; every other exercise/session is untouched (same object reference)",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Fixtures do motor histórico e candidatos sintéticos; legacy explícita."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/musculoskeletalLimitationV127.test.ts",
+      "name": "composeTemplateV127 — musculoskeletal_limitation stage integration > resolves the former T009 hip collision through the reviewed low-step fallback",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Fixtures do motor histórico e candidatos sintéticos; legacy explícita."
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/spineHomeClosureV127.test.ts",
+      "name": "v1.27 spine/Home closure — two approved catalog additions > uses the seated band row as the normal family fallback when resistance-band-row is already occupied",
+      "category": "A",
+      "finalStatus": "passed",
+      "reason": "Fechamento histórico de coluna/casa e ordem de fallback; legacy explícita; falha antiga all-template mantida."
+    }
+  ],
+  "originalBaseline44": [
+    {
+      "file": "src/lib/__tests__/iosRestActivityStructure.test.ts",
+      "name": "versioned Live Activity extension > does not add storage sharing or push entitlements preemptively",
+      "category": "D"
+    },
+    {
+      "file": "src/lib/__tests__/premiumEntitlementPrecedence.test.ts",
+      "name": "FASE 6 — entitlement wins over commercial status (access side) > status=grace_period with an active entitlement: resolveSubscriptionCenterModel reports hasPremiumAccess=true",
+      "category": "D"
+    },
+    {
+      "file": "src/lib/__tests__/workoutLogicIntact.test.ts",
+      "name": "WorkoutScreen source — 7B + 7C strings fully migrated (positive guard) > raw literal \"REGISTRADO\" has been removed",
+      "category": "D"
+    },
+    {
+      "file": "src/loadProgress/__tests__/loadProgressWiring.test.ts",
+      "name": "real load-progress wiring > offers the requested search, record list and four time ranges",
+      "category": "D"
+    },
+    {
+      "file": "src/loadProgress/__tests__/loadProgressWiring.test.ts",
+      "name": "real load-progress wiring > publishes an invalidation only after the queued set write resolves",
+      "category": "D"
+    },
+    {
+      "file": "src/scheduleEngine/__tests__/scheduleRefreshState.test.ts",
+      "name": "Schedule refresh authority > gates resolution, config and loading publication against the latest reload id",
+      "category": "D"
+    },
+    {
+      "file": "src/screens/__tests__/editProfileFixedLayout.test.ts",
+      "name": "EditProfileScreen fixed layout > anchors the footer within the available height instead of pushing it below the viewport",
+      "category": "D"
+    },
+    {
+      "file": "src/screens/__tests__/editProfileFixedLayout.test.ts",
+      "name": "EditProfileScreen fixed layout > keeps the form and save action in a non-scrolling safe-area layout",
+      "category": "D"
+    },
+    {
+      "file": "src/screens/__tests__/healthIntegrationScreenStructure.test.ts",
+      "name": "HealthIntegrationScreen — disconnect requires explicit confirmation > never calls disconnect() directly from the disconnect row — it only opens a confirmation sheet",
+      "category": "D"
+    },
+    {
+      "file": "src/screens/__tests__/healthIntegrationScreenStructure.test.ts",
+      "name": "HealthIntegrationScreen — platform isolation (no iOS copy on Android, no Android copy on iOS) > never presents OS authorization as \"granted\" for iOS — permissionsRequested is treated as non-committal",
+      "category": "D"
+    },
+    {
+      "file": "src/screens/__tests__/healthIntegrationScreenStructure.test.ts",
+      "name": "HealthIntegrationScreen — platform isolation (no iOS copy on Android, no Android copy on iOS) > only shows the iOS \"cannot verify permission\" notice behind an explicit iOS check",
+      "category": "D"
+    },
+    {
+      "file": "src/screens/__tests__/migratedScreensLifecycle.test.ts",
+      "name": "EditProfileScreen — draft resets explicitly per session, not via unmount > imports useScreenFocusEffect and resets every draft field on activation",
+      "category": "D"
+    },
+    {
+      "file": "src/screens/__tests__/paywallRedesignStructure.test.ts",
+      "name": "Paywall redesign — i18n coverage for new copy, no new hardcoded strings > entryContext-driven plan intro stays copy-only and goes through i18n",
+      "category": "D"
+    },
+    {
+      "file": "src/screens/__tests__/premiumCommercialContextFase6.test.ts",
+      "name": "FASE 6 — SubscriptionCenterScreen already correctly separates access from commercial presentation (audited, not rewritten) > billing_issue/grace_period route to the real subscription management flow (manageSubscription), not an invented destination",
+      "category": "D"
+    },
+    {
+      "file": "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+      "name": "WorkoutScreen rest overlay — button label and next-exercise indicator > (B) the last set of an exercise (with another exercise left) switches the label and shows the next exercise",
+      "category": "D"
+    },
+    {
+      "file": "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+      "name": "WorkoutScreen rest overlay — button label and next-exercise indicator > derives nextExerciseAction only from the shared nextAction decision, never standalone",
+      "category": "D"
+    },
+    {
+      "file": "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+      "name": "WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision > (E) computes the next-exercise lookup exactly once, feeding both the Live Activity call site and the in-app one",
+      "category": "D"
+    },
+    {
+      "file": "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+      "name": "WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision > completeSet feeds the shared lookup into the Live Activity decision",
+      "category": "D"
+    },
+    {
+      "file": "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+      "name": "WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision > passes the decision down to RestOverlay as a single prop, not re-derived props",
+      "category": "D"
+    },
+    {
+      "file": "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+      "name": "WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision > restNextAction rebuilds the same decision from the authoritative, restorable rest record (not fresh component state)",
+      "category": "D"
+    },
+    {
+      "file": "src/state/__tests__/restLiveActivityIntegrationStructure.test.ts",
+      "name": "RestSessionContext live transition wiring > keeps completed cardio visible until the final workout CTA",
+      "category": "D"
+    },
+    {
+      "file": "src/theme/__tests__/sharedComponentsTheme.test.ts",
+      "name": "Phase 4 acquisition and primary app coverage > keeps the Phase 4 critical screens free of Dark color literals",
+      "category": "D"
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/canonicalV127SubstitutionMapUnification.test.ts",
+      "name": "v1.27 exercise_substitution_map — closed identity unifications (no allowlist) > 1. no A/B/C candidate resolves, after canonicalization, to the canonical id of the entry it is listed under (global, zero exceptions)",
+      "category": "D"
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/canonicalV127SubstitutionMapUnification.test.ts",
+      "name": "v1.27 exercise_substitution_map — closed identity unifications (no allowlist) > 2. no tier contains two candidates that canonicalize to the same runtime id (global, per key per tier)",
+      "category": "D"
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/canonicalV127SubstitutionMapUnification.test.ts",
+      "name": "v1.27 exercise_substitution_map — closed identity unifications (no allowlist) > none of the unified-away ids/names appear as a map key, or as a candidate name/exercise_id, anywhere",
+      "category": "D"
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+      "name": "v1.27 complete musculoskeletal coverage gate > ankle_foot composes all 102 templates",
+      "category": "D"
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+      "name": "v1.27 complete musculoskeletal coverage gate > closes the complete individual 102x7 matrix (714/714)",
+      "category": "D"
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+      "name": "v1.27 complete musculoskeletal coverage gate > elbow composes all 102 templates",
+      "category": "D"
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+      "name": "v1.27 complete musculoskeletal coverage gate > elbow+wrist uses the safety intersection and composes all 102 templates",
+      "category": "D"
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+      "name": "v1.27 complete musculoskeletal coverage gate > hip composes all 102 templates",
+      "category": "D"
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+      "name": "v1.27 complete musculoskeletal coverage gate > hip+spine uses the safety intersection and composes all 102 templates",
+      "category": "D"
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+      "name": "v1.27 complete musculoskeletal coverage gate > knee composes all 102 templates",
+      "category": "D"
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+      "name": "v1.27 complete musculoskeletal coverage gate > knee+ankle_foot uses the safety intersection and composes all 102 templates",
+      "category": "D"
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+      "name": "v1.27 complete musculoskeletal coverage gate > knee+hip uses the safety intersection and composes all 102 templates",
+      "category": "D"
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+      "name": "v1.27 complete musculoskeletal coverage gate > knee+spine uses the safety intersection and composes all 102 templates",
+      "category": "D"
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+      "name": "v1.27 complete musculoskeletal coverage gate > shoulder composes all 102 templates",
+      "category": "D"
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+      "name": "v1.27 complete musculoskeletal coverage gate > shoulder+elbow uses the safety intersection and composes all 102 templates",
+      "category": "D"
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+      "name": "v1.27 complete musculoskeletal coverage gate > shoulder+elbow+wrist uses the safety intersection and composes all 102 templates",
+      "category": "D"
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+      "name": "v1.27 complete musculoskeletal coverage gate > shoulder+wrist uses the safety intersection and composes all 102 templates",
+      "category": "D"
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+      "name": "v1.27 complete musculoskeletal coverage gate > spine composes all 102 templates",
+      "category": "D"
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+      "name": "v1.27 complete musculoskeletal coverage gate > spine+hip uses the safety intersection and composes all 102 templates",
+      "category": "D"
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+      "name": "v1.27 complete musculoskeletal coverage gate > spine+shoulder uses the safety intersection and composes all 102 templates",
+      "category": "D"
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+      "name": "v1.27 complete musculoskeletal coverage gate > wrist composes all 102 templates",
+      "category": "D"
+    },
+    {
+      "file": "src/workoutPrescription/__tests__/spineHomeClosureV127.test.ts",
+      "name": "v1.27 spine/Home closure — all-template audit > runs all 102 templates with no remaining spine blocker",
+      "category": "D"
+    }
+  ],
+  "checks": {
+    "app": {
+      "passed": 7915,
+      "failed": 44,
+      "skipped": 232,
+      "failedCases": [
+        {
+          "file": "src/loadProgress/__tests__/loadProgressWiring.test.ts",
+          "name": "real load-progress wiring publishes an invalidation only after the queued set write resolves"
+        },
+        {
+          "file": "src/loadProgress/__tests__/loadProgressWiring.test.ts",
+          "name": "real load-progress wiring offers the requested search, record list and four time ranges"
+        },
+        {
+          "file": "src/scheduleEngine/__tests__/scheduleRefreshState.test.ts",
+          "name": "Schedule refresh authority gates resolution, config and loading publication against the latest reload id"
+        },
+        {
+          "file": "src/screens/__tests__/editProfileFixedLayout.test.ts",
+          "name": "EditProfileScreen fixed layout keeps the form and save action in a non-scrolling safe-area layout"
+        },
+        {
+          "file": "src/screens/__tests__/editProfileFixedLayout.test.ts",
+          "name": "EditProfileScreen fixed layout anchors the footer within the available height instead of pushing it below the viewport"
+        },
+        {
+          "file": "src/screens/__tests__/healthIntegrationScreenStructure.test.ts",
+          "name": "HealthIntegrationScreen — platform isolation (no iOS copy on Android, no Android copy on iOS) only shows the iOS \"cannot verify permission\" notice behind an explicit iOS check"
+        },
+        {
+          "file": "src/screens/__tests__/healthIntegrationScreenStructure.test.ts",
+          "name": "HealthIntegrationScreen — platform isolation (no iOS copy on Android, no Android copy on iOS) never presents OS authorization as \"granted\" for iOS — permissionsRequested is treated as non-committal"
+        },
+        {
+          "file": "src/screens/__tests__/healthIntegrationScreenStructure.test.ts",
+          "name": "HealthIntegrationScreen — disconnect requires explicit confirmation never calls disconnect() directly from the disconnect row — it only opens a confirmation sheet"
+        },
+        {
+          "file": "src/screens/__tests__/migratedScreensLifecycle.test.ts",
+          "name": "EditProfileScreen — draft resets explicitly per session, not via unmount imports useScreenFocusEffect and resets every draft field on activation"
+        },
+        {
+          "file": "src/screens/__tests__/paywallRedesignStructure.test.ts",
+          "name": "Paywall redesign — i18n coverage for new copy, no new hardcoded strings entryContext-driven plan intro stays copy-only and goes through i18n"
+        },
+        {
+          "file": "src/screens/__tests__/premiumCommercialContextFase6.test.ts",
+          "name": "FASE 6 — SubscriptionCenterScreen already correctly separates access from commercial presentation (audited, not rewritten) billing_issue/grace_period route to the real subscription management flow (manageSubscription), not an invented destination"
+        },
+        {
+          "file": "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+          "name": "WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision (E) computes the next-exercise lookup exactly once, feeding both the Live Activity call site and the in-app one"
+        },
+        {
+          "file": "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+          "name": "WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision completeSet feeds the shared lookup into the Live Activity decision"
+        },
+        {
+          "file": "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+          "name": "WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision restNextAction rebuilds the same decision from the authoritative, restorable rest record (not fresh component state)"
+        },
+        {
+          "file": "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+          "name": "WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision passes the decision down to RestOverlay as a single prop, not re-derived props"
+        },
+        {
+          "file": "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+          "name": "WorkoutScreen rest overlay — button label and next-exercise indicator derives nextExerciseAction only from the shared nextAction decision, never standalone"
+        },
+        {
+          "file": "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+          "name": "WorkoutScreen rest overlay — button label and next-exercise indicator (B) the last set of an exercise (with another exercise left) switches the label and shows the next exercise"
+        },
+        {
+          "file": "src/state/__tests__/restLiveActivityIntegrationStructure.test.ts",
+          "name": "RestSessionContext live transition wiring keeps completed cardio visible until the final workout CTA"
+        },
+        {
+          "file": "src/lib/__tests__/iosRestActivityStructure.test.ts",
+          "name": "versioned Live Activity extension does not add storage sharing or push entitlements preemptively"
+        },
+        {
+          "file": "src/lib/__tests__/premiumEntitlementPrecedence.test.ts",
+          "name": "FASE 6 — entitlement wins over commercial status (access side) status=grace_period with an active entitlement: resolveSubscriptionCenterModel reports hasPremiumAccess=true"
+        },
+        {
+          "file": "src/lib/__tests__/workoutLogicIntact.test.ts",
+          "name": "WorkoutScreen source — 7B + 7C strings fully migrated (positive guard) raw literal \"REGISTRADO\" has been removed"
+        },
+        {
+          "file": "src/theme/__tests__/sharedComponentsTheme.test.ts",
+          "name": "Phase 4 acquisition and primary app coverage keeps the Phase 4 critical screens free of Dark color literals"
+        },
+        {
+          "file": "src/workoutPrescription/__tests__/canonicalV127SubstitutionMapUnification.test.ts",
+          "name": "v1.27 exercise_substitution_map — closed identity unifications (no allowlist) none of the unified-away ids/names appear as a map key, or as a candidate name/exercise_id, anywhere"
+        },
+        {
+          "file": "src/workoutPrescription/__tests__/canonicalV127SubstitutionMapUnification.test.ts",
+          "name": "v1.27 exercise_substitution_map — closed identity unifications (no allowlist) 1. no A/B/C candidate resolves, after canonicalization, to the canonical id of the entry it is listed under (global, zero exceptions)"
+        },
+        {
+          "file": "src/workoutPrescription/__tests__/canonicalV127SubstitutionMapUnification.test.ts",
+          "name": "v1.27 exercise_substitution_map — closed identity unifications (no allowlist) 2. no tier contains two candidates that canonicalize to the same runtime id (global, per key per tier)"
+        },
+        {
+          "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+          "name": "v1.27 complete musculoskeletal coverage gate knee composes all 102 templates"
+        },
+        {
+          "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+          "name": "v1.27 complete musculoskeletal coverage gate hip composes all 102 templates"
+        },
+        {
+          "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+          "name": "v1.27 complete musculoskeletal coverage gate spine composes all 102 templates"
+        },
+        {
+          "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+          "name": "v1.27 complete musculoskeletal coverage gate shoulder composes all 102 templates"
+        },
+        {
+          "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+          "name": "v1.27 complete musculoskeletal coverage gate elbow composes all 102 templates"
+        },
+        {
+          "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+          "name": "v1.27 complete musculoskeletal coverage gate wrist composes all 102 templates"
+        },
+        {
+          "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+          "name": "v1.27 complete musculoskeletal coverage gate ankle_foot composes all 102 templates"
+        },
+        {
+          "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+          "name": "v1.27 complete musculoskeletal coverage gate closes the complete individual 102x7 matrix (714/714)"
+        },
+        {
+          "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+          "name": "v1.27 complete musculoskeletal coverage gate knee+hip uses the safety intersection and composes all 102 templates"
+        },
+        {
+          "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+          "name": "v1.27 complete musculoskeletal coverage gate knee+spine uses the safety intersection and composes all 102 templates"
+        },
+        {
+          "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+          "name": "v1.27 complete musculoskeletal coverage gate hip+spine uses the safety intersection and composes all 102 templates"
+        },
+        {
+          "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+          "name": "v1.27 complete musculoskeletal coverage gate shoulder+elbow uses the safety intersection and composes all 102 templates"
+        },
+        {
+          "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+          "name": "v1.27 complete musculoskeletal coverage gate shoulder+wrist uses the safety intersection and composes all 102 templates"
+        },
+        {
+          "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+          "name": "v1.27 complete musculoskeletal coverage gate elbow+wrist uses the safety intersection and composes all 102 templates"
+        },
+        {
+          "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+          "name": "v1.27 complete musculoskeletal coverage gate shoulder+elbow+wrist uses the safety intersection and composes all 102 templates"
+        },
+        {
+          "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+          "name": "v1.27 complete musculoskeletal coverage gate spine+shoulder uses the safety intersection and composes all 102 templates"
+        },
+        {
+          "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+          "name": "v1.27 complete musculoskeletal coverage gate spine+hip uses the safety intersection and composes all 102 templates"
+        },
+        {
+          "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+          "name": "v1.27 complete musculoskeletal coverage gate knee+ankle_foot uses the safety intersection and composes all 102 templates"
+        },
+        {
+          "file": "src/workoutPrescription/__tests__/spineHomeClosureV127.test.ts",
+          "name": "v1.27 spine/Home closure — all-template audit runs all 102 templates with no remaining spine blocker"
+        }
+      ]
+    },
+    "backend": {
+      "passed": 2026,
+      "failed": 0,
+      "skipped": 401,
+      "failedCases": []
+    },
+    "clientFlows": {
+      "passed": 93,
+      "failed": 5,
+      "skipped": 0,
+      "failedCases": [
+        {
+          "file": "src/services/__tests__/firstProgramGeneration.integration.test.ts",
+          "name": "First program generation — real device regression, real Firestore Emulator onboarding answers → persist → load → automatic reconciliation → SUCCESS, even before email verification"
+        },
+        {
+          "file": "src/services/__tests__/firstProgramGeneration.integration.test.ts",
+          "name": "First program generation — real device regression, real Firestore Emulator 10C catalog race INITIALIZE A→B persists only backend canonical B and its identities"
+        },
+        {
+          "file": "src/services/__tests__/firstProgramGeneration.integration.test.ts",
+          "name": "First program generation — real device regression, real Firestore Emulator 10C INITIALIZE fails closed before persistence when canonical is missing"
+        },
+        {
+          "file": "src/services/__tests__/firstProgramGeneration.integration.test.ts",
+          "name": "First program generation — real device regression, real Firestore Emulator same scenario succeeds identically once the account IS email-verified (no regression for the happy path)"
+        },
+        {
+          "file": "src/services/__tests__/prescriptionEvolution.integration.test.ts",
+          "name": "Prescription Evolution Engine (Fase 3) — real Firestore Emulator integration LEVEL_PROMOTION: Beginner -> Intermediate preserves frequency=4 and never writes/activates anything"
+        }
+      ]
+    },
+    "legacyClientFlowControl": {
+      "passed": 6,
+      "failed": 5,
+      "skipped": 0,
+      "failedCases": [
+        {
+          "file": "src/services/__tests__/firstProgramGeneration.integration.test.ts",
+          "name": "First program generation — real device regression, real Firestore Emulator onboarding answers → persist → load → automatic reconciliation → SUCCESS, even before email verification"
+        },
+        {
+          "file": "src/services/__tests__/firstProgramGeneration.integration.test.ts",
+          "name": "First program generation — real device regression, real Firestore Emulator 10C catalog race INITIALIZE A→B persists only backend canonical B and its identities"
+        },
+        {
+          "file": "src/services/__tests__/firstProgramGeneration.integration.test.ts",
+          "name": "First program generation — real device regression, real Firestore Emulator 10C INITIALIZE fails closed before persistence when canonical is missing"
+        },
+        {
+          "file": "src/services/__tests__/firstProgramGeneration.integration.test.ts",
+          "name": "First program generation — real device regression, real Firestore Emulator same scenario succeeds identically once the account IS email-verified (no regression for the happy path)"
+        },
+        {
+          "file": "src/services/__tests__/prescriptionEvolution.integration.test.ts",
+          "name": "Prescription Evolution Engine (Fase 3) — real Firestore Emulator integration LEVEL_PROMOTION: Beginner -> Intermediate preserves frequency=4 and never writes/activates anything"
+        }
+      ]
+    },
+    "callable": {
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "failedCases": []
+    },
+    "backendFlows": {
+      "passed": 102,
+      "failed": 2,
+      "skipped": 0,
+      "failedCases": [
+        {
+          "file": "functions/src/workoutLifecycle/__tests__/authorizeMutation.integration.test.ts",
+          "name": "Workout Lifecycle authority — real Firestore Emulator INITIALIZE seals the three-day conditioning plan with typed interval cycles"
+        },
+        {
+          "file": "functions/src/workoutLifecycle/__tests__/authorizeMutation.integration.test.ts",
+          "name": "Workout Lifecycle authority — real Firestore Emulator persistLifecycleActivationV127 — Fase 16 backend-authoritative v1.27 ADAPT/ACTIVATE v2 ADAPT is completely unaffected — still returns a grant, never the persisted shape"
+        }
+      ]
+    },
+    "firestoreRules": {
+      "passed": 582,
+      "failed": 0,
+      "skipped": 0
+    },
+    "executionAfterFinalRules": {
+      "passed": 87,
+      "failed": 0,
+      "skipped": 0
+    },
+    "callableAfterFinalRules": {
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0
+    },
+    "storageRules": {
+      "passed": 93,
+      "failed": 0,
+      "skipped": 0
+    },
+    "appTypecheck": {
+      "errors": 0
+    },
+    "functionsTypecheck": {
+      "errors": 0
+    },
+    "lint": {
+      "errors": 0,
+      "warnings": 50
+    }
+  },
+  "bugsCorrected": [
+    {
+      "category": "B",
+      "file": "src/prescriptionEvolution/equivalence.ts",
+      "reason": "SESSION_CONTEXT_MISMATCH reaplicava heurísticas de padrão/mecânica sobre relações aprovadas na evolução real com slotContext."
+    },
+    {
+      "category": "B",
+      "file": "src/workoutPrescription/limitationResolver.ts",
+      "reason": "Ramo avoid do legado não propagava política/ambiente à avaliação direta; mock histórico mascarava a falha."
+    },
+    {
+      "category": "B",
+      "file": "firestore.rules",
+      "reason": "Validação do snapshot excedia orçamento de expressões na atualização de oito exercícios; HEAD passa, Rules anteriores desta sessão falham, correção local mantém todas as proteções."
+    }
+  ],
+  "pendingPublication": {
+    "rules": false,
+    "functions": [],
+    "applyExerciseSubstitutionNeedsRedeploy": false
+  },
+  "operationalActions": {
+    "deploy": true,
+    "appBuild": false,
+    "commit": false,
+    "push": false,
+    "realDataMutation": false,
+    "workbookMutation": false,
+    "functionsCompilation": true
+  },
+  "changedFiles": [
+    "firestore-debug.log",
+    "firestore-tests/workoutExecutions.rules.test.ts",
+    "firestore.rules",
+    "functions/src/workoutLifecycle/__tests__/exerciseSubstitution.test.ts",
+    "functions/src/workoutLifecycle/exerciseSubstitution.ts",
+    "package.json",
+    "scripts/syncPrescriptionEngineToFunctions.cjs",
+    "src/components/fitness/ExerciseGif.tsx",
+    "src/prescriptionEvolution/__tests__/cycleEvolution.test.ts",
+    "src/prescriptionEvolution/__tests__/equivalence.test.ts",
+    "src/prescriptionEvolution/cycleEvolution.ts",
+    "src/prescriptionEvolution/equivalence.ts",
+    "src/screens/__tests__/myPlanPresentation.test.ts",
+    "src/services/__tests__/workoutExecutions.integration.test.ts",
+    "src/services/exerciseSubstitutionCandidates.ts",
+    "src/services/workoutExecutions.ts",
+    "src/workoutExecution/types.ts",
+    "src/workoutPrescription/__tests__/engineV127Integration.test.ts",
+    "src/workoutPrescription/__tests__/equivalenceDivergence.characterization.test.ts",
+    "src/workoutPrescription/__tests__/limitationClinicalDecisions.test.ts",
+    "src/workoutPrescription/__tests__/limitationDatasetAudit.test.ts",
+    "src/workoutPrescription/__tests__/limitationDatasetQualityGate.test.ts",
+    "src/workoutPrescription/__tests__/limitationIntegration.test.ts",
+    "src/workoutPrescription/__tests__/limitationResolver.test.ts",
+    "src/workoutPrescription/__tests__/manualSubstitutionResolver.test.ts",
+    "src/workoutPrescription/__tests__/musclePriorityV127.test.ts",
+    "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+    "src/workoutPrescription/__tests__/musculoskeletalLimitationPerRegionCoverage.test.ts",
+    "src/workoutPrescription/__tests__/musculoskeletalLimitationV127.test.ts",
+    "src/workoutPrescription/__tests__/spineHomeClosureV127.test.ts",
+    "src/workoutPrescription/composition.ts",
+    "src/workoutPrescription/compositionV127.ts",
+    "src/workoutPrescription/engine.ts",
+    "src/workoutPrescription/engineV127.ts",
+    "src/workoutPrescription/limitationResolver.ts",
+    "src/workoutPrescription/manualSubstitutionCatalog.ts",
+    "src/workoutPrescription/manualSubstitutionResolver.ts",
+    "src/workoutPrescription/musculoskeletalLimitationV127.ts",
+    "src/workoutPrescription/types.ts"
+  ],
+  "newFiles": [
+    "AJ_Fit_Substituicoes_4_Abas_REVISADA_V3.xlsx",
+    "ajfit_substituicoes_auditoria_completa.json",
+    "ajfit_substituicoes_auditoria_relatorio.md",
+    "assets/videos/exercises-v3/LICENSE.md",
+    "assets/videos/exercises-v3/dumbbell-flat-bench-press-horizontal.mp4",
+    "assets/videos/exercises-v3/dumbbell-flat-bench-press-horizontal.mp4.contact.jpg",
+    "assets/videos/exercises-v3/dumbbell-flat-bench-press-horizontal.mp4.json",
+    "assets/videos/exercises-v3/dumbbell-triceps-kickback-horizontal.mp4",
+    "assets/videos/exercises-v3/dumbbell-triceps-kickback-horizontal.mp4.contact.jpg",
+    "assets/videos/exercises-v3/dumbbell-triceps-kickback-horizontal.mp4.json",
+    "assets/videos/exercises-v3/lying-dumbbell-triceps-extension-horizontal.mp4",
+    "assets/videos/exercises-v3/lying-dumbbell-triceps-extension-horizontal.mp4.contact.jpg",
+    "assets/videos/exercises-v3/lying-dumbbell-triceps-extension-horizontal.mp4.json",
+    "docs/exercises-v3-audit.json",
+    "docs/exercises-v3-production/etapa3-implementation-report.md",
+    "docs/exercises-v3-production/etapa3-integrity-report.md",
+    "docs/exercises-v3-production/etapa3-next-steps.md",
+    "docs/exercises-v3-production/etapa4-auditoria-final.md",
+    "docs/exercises-v3-production/etapa5-correcoes-relatorio.md",
+    "docs/exercises-v3-production/etapa5c-5d-relatorio.md",
+    "docs/exercises-v3-production/etapa6a-relatorio.md",
+    "docs/exercises-v3-production/etapa6b-relatorio.md",
+    "docs/exercises-v3-production/etapa6c-ativacao-relatorio.md",
+    "docs/exercises-v3-production/etapa6c-ativacao-validacao.json",
+    "docs/exercises-v3-production/etapa6c-relatorio.md",
+    "docs/exercises-v3-production/plan.json",
+    "docs/exercises-v3-production/report.md",
+    "docs/exercises-v3-production/review.html",
+    "docs/exercises-v3-production/wger-source-metadata.json",
+    "docs/exercises-v3-registration.md",
+    "docs/substitutions-v3/dataset.json",
+    "docs/substitutions-v3/editorial-exceptions-addendum.json",
+    "docs/substitutions-v3/integrity-report.json",
+    "docs/substitutions-v3/report.md",
+    "docs/substitutions-v3/verification.json",
+    "functions/src/workoutLifecycle/__tests__/exerciseSubstitution.integration.test.ts",
+    "scripts/auditSubstitutionsV3.ts",
+    "scripts/importSubstitutionsV3.py",
+    "scripts/lib/exerciseV3VideoPipeline.ts",
+    "scripts/prepareExerciseV3Videos.ts",
+    "src/data/__tests__/exerciseV3VideoAssets.test.ts",
+    "src/data/__tests__/exercisesV3DraftData.test.ts",
+    "src/data/exerciseV3VideoAssets.ts",
+    "src/data/exercisesV3DraftData.ts",
+    "src/lib/__tests__/exerciseV3VideoPipeline.test.ts",
+    "src/workoutPrescription/__tests__/substitutionPolicyV3.test.ts",
+    "src/workoutPrescription/__tests__/substitutionPolicyV3Global.test.ts",
+    "src/workoutPrescription/__tests__/substitutionPolicyV3Regression.test.ts",
+    "src/workoutPrescription/substitutionPolicyV3.ts"
+  ],
+  "rulesRegressionControl": {
+    "headRulesEightExerciseStress": "passed",
+    "inheritedV3RulesEightExerciseStress": "failed: maximum of 1000 expressions",
+    "finalV3RulesEightExerciseStress": "passed",
+    "finalSevenExercisePinnedV3AndTampering": "passed",
+    "invalidSnapshotValues": [
+      null,
+      "V3",
+      "unknown",
+      1
+    ],
+    "invalidSnapshotValuesRejected": true
+  },
+  "publication": {
+    "project": "ajfit-2f321",
+    "authorization": "Autorização explícita do proprietário em 20/10/2026, incluindo compilação exclusiva do backend e predeploy automático.",
+    "order": [
+      "firestore:rules",
+      "functions:authorizeWorkoutLifecycleMutation,functions:initializeWorkoutProgramV127,functions:installActiveWorkoutProgram"
+    ],
+    "rules": {
+      "release": "projects/ajfit-2f321/releases/cloud.firestore",
+      "rulesetName": "projects/ajfit-2f321/rulesets/128b4ad7-18a0-4f68-a264-d0815f2b748d",
+      "updateTime": "2026-10-20T15:29:56.091234Z",
+      "sha256": "e09ff77ffca3738edc580e72f5d4606a64a10a0fe69396bd915af66bec9189ce",
+      "exactMatch": true
+    },
+    "functions": [
+      {
+        "name": "projects/ajfit-2f321/locations/us-central1/functions/authorizeWorkoutLifecycleMutation",
+        "state": "ACTIVE",
+        "updateTime": "2026-10-20T15:31:45.476325325Z",
+        "runtime": "nodejs22",
+        "entryPoint": "authorizeWorkoutLifecycleMutation",
+        "build": "projects/753375043967/locations/us-central1/builds/080c6f58-8a63-46cd-a3d0-9326e09f3c2a",
+        "source": {
+          "storageSource": {
+            "bucket": "gcf-v2-sources-753375043967-us-central1",
+            "object": "authorizeWorkoutLifecycleMutation/function-source.zip",
+            "generation": "1792510258516783"
+          }
+        },
+        "sourceProvenance": {
+          "resolvedStorageSource": {
+            "bucket": "gcf-v2-sources-753375043967-us-central1",
+            "object": "authorizeWorkoutLifecycleMutation/function-source.zip",
+            "generation": "1792510258516783"
+          }
+        },
+        "revision": "authorizeworkoutlifecyclemutation-00019-jut"
+      },
+      {
+        "name": "projects/ajfit-2f321/locations/us-central1/functions/initializeWorkoutProgramV127",
+        "state": "ACTIVE",
+        "updateTime": "2026-10-20T15:31:59.911020513Z",
+        "runtime": "nodejs22",
+        "entryPoint": "initializeWorkoutProgramV127",
+        "build": "projects/753375043967/locations/us-central1/builds/080c6f58-8a63-46cd-a3d0-9326e09f3c2a",
+        "source": {
+          "storageSource": {
+            "bucket": "gcf-v2-sources-753375043967-us-central1",
+            "object": "initializeWorkoutProgramV127/function-source.zip",
+            "generation": "1792510302998539"
+          }
+        },
+        "sourceProvenance": {
+          "resolvedStorageSource": {
+            "bucket": "gcf-v2-sources-753375043967-us-central1",
+            "object": "initializeWorkoutProgramV127/function-source.zip",
+            "generation": "1792510302998539"
+          }
+        },
+        "revision": "initializeworkoutprogramv127-00007-vab"
+      },
+      {
+        "name": "projects/ajfit-2f321/locations/us-central1/functions/installActiveWorkoutProgram",
+        "state": "ACTIVE",
+        "updateTime": "2026-10-20T15:32:08.333057322Z",
+        "runtime": "nodejs22",
+        "entryPoint": "installActiveWorkoutProgram",
+        "build": "projects/753375043967/locations/us-central1/builds/080c6f58-8a63-46cd-a3d0-9326e09f3c2a",
+        "source": {
+          "storageSource": {
+            "bucket": "gcf-v2-sources-753375043967-us-central1",
+            "object": "installActiveWorkoutProgram/function-source.zip",
+            "generation": "1792510303109471"
+          }
+        },
+        "sourceProvenance": {
+          "resolvedStorageSource": {
+            "bucket": "gcf-v2-sources-753375043967-us-central1",
+            "object": "installActiveWorkoutProgram/function-source.zip",
+            "generation": "1792510303109471"
+          }
+        },
+        "revision": "installactiveworkoutprogram-00003-poq"
+      }
+    ],
+    "verifiedCompiledManifest": {
+      "project": "ajfit-2f321",
+      "policy": "v3",
+      "artifacts": {
+        "workoutPrescription/substitutionPolicyV3": "50990573def06ddbe46b999be67f6ed989c2559173b70a1c2b3deccc0dfc9f92",
+        "workoutPrescription/limitationResolver": "fd19eaa7582e960ec686cd0318564930cbb06d0d4fc57ed4b78ded732d65d329",
+        "workoutPrescription/engine": "7b6c920dc3e72470ef495b6543ed641667f916366942495f121d5ec5a8bde9ce",
+        "workoutPrescription/engineV127": "681f9dd42c5abd591429bc59f3fb22a096e7ec499ff6e11db47383d6ba222767",
+        "prescriptionEvolution/equivalence": "480cc5f920be0c29e97c3a482eece3cf642c2fb761392a587199591bf2b903a6"
+      },
+      "datasetSha256": "04894080bd3c50f3e812373b9cf51d47334fb8efc8b4f5ba0f669c1df079da37",
+      "compiledEvolutionSmoke": "passed",
+      "rulesSha256": "e09ff77ffca3738edc580e72f5d4606a64a10a0fe69396bd915af66bec9189ce"
+    },
+    "scopeVerification": {
+      "totalFunctions": 75,
+      "changed": [
+        "authorizeWorkoutLifecycleMutation",
+        "initializeWorkoutProgramV127",
+        "installActiveWorkoutProgram"
+      ],
+      "otherFunctionsUnchanged": 72,
+      "applyExerciseSubstitutionUnchanged": true
+    },
+    "publishedSourceArchiveComparison": [
+      {
+        "archiveIndex": 0,
+        "compiledFilesCompared": 625,
+        "allCompiledFilesExactlyMatchLocal": true,
+        "policy": "v3",
+        "archiveSha256": "31f757881c0ce270542b5c715372e29bd381e346e8557449223307ec4f5ab92a"
+      },
+      {
+        "archiveIndex": 1,
+        "compiledFilesCompared": 625,
+        "allCompiledFilesExactlyMatchLocal": true,
+        "policy": "v3",
+        "archiveSha256": "31f757881c0ce270542b5c715372e29bd381e346e8557449223307ec4f5ab92a"
+      },
+      {
+        "archiveIndex": 2,
+        "compiledFilesCompared": 625,
+        "allCompiledFilesExactlyMatchLocal": true,
+        "policy": "v3",
+        "archiveSha256": "31f757881c0ce270542b5c715372e29bd381e346e8557449223307ec4f5ab92a"
+      }
+    ],
+    "productionDataWritten": false,
+    "appBuild": false,
+    "easBuild": false,
+    "ota": false,
+    "commit": false,
+    "push": false
+  },
+  "physicalHomologation": {
+    "status": "BLOCKED_FOR_UNAVAILABLE_SAFE_CONFIGURATIONS",
+    "report": "v3-geracao-stiff-relatorio.md",
+    "correctionsPublished": false
+  }
+}

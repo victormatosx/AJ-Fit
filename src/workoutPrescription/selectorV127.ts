@@ -1,18 +1,12 @@
 import canonicalJson from '../../docs/workouts/AJ_Fit_T001_T102_workouts_canonical_v1_33_peck_deck_runtime_id_fixed.json';
 import { questionnaireLevelForCurrentLevel } from '../workoutLifecycle/prescriptionInputs';
 import type { CurrentTrainingLevel } from '../workoutLifecycle/types';
-import { environmentFor, goalFamilyFor } from './input';
+import { environmentFor,goalFamilyFor } from './input';
 import { isBeginnerExperience } from './personalization';
 import { populationFor } from './selection';
-import type { GoalFamily, Population, QuestionnaireAnswers, TemplateEnvironment, TemplateId } from './types';
+import type { GoalFamily,Population,QuestionnaireAnswers,TemplateEnvironment,TemplateId } from './types';
 
-/**
- * Phase 3 — pure base-template selector for the future v1.27.0 library.
- * NOT wired into the production runtime (see catalog.ts, which still loads
- * v2.0.0). Selection only: it never touches sets, reps, rest, exercises,
- * cardio, duration, equipment or limitations — those remain modifiers that
- * run downstream of template selection.
- */
+
 
 export interface TemplateProfileV127 {
   id: TemplateId;

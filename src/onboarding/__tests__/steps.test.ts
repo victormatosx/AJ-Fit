@@ -1,16 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { describe,expect,it } from 'vitest';
 import {
-  computeOnboardingProgress,
   PRESENTATION_SLIDE_COUNT,
   FORCED_QUESTIONNAIRE_STEP_IDS,
+  MAX_MUSCLE_FOCUS,
+  ONBOARDING_STEPS,
+  computeOnboardingProgress,
   getNextStepId,
   getPreviousStepId,
   getStepDef,
   getStepIndex,
   getStepSequence,
   isStepDevJumpable,
-  MAX_MUSCLE_FOCUS,
-  ONBOARDING_STEPS,
   type OnboardingStepId,
 } from '../steps';
 

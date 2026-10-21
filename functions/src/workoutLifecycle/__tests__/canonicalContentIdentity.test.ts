@@ -10,7 +10,7 @@
  * proving client and backend now agree regardless of which order either
  * side's Firestore SDK happens to hand back.
  */
-import { describe, expect, it } from 'vitest';
+import { describe,expect,it } from 'vitest';
 import { canonicalContentIdentity } from '../authorizeMutation';
 import type { FinalWorkoutPlan } from '../prescriptionEngine/workoutPrescription/types';
 
@@ -19,8 +19,6 @@ const TEMPLATE_METADATA = { version: 2, contentHash: 'e3aa4b3cba2df92ff4a89ebe2b
 const BASE_PLAN = {
   planId: 'wp_a874860f',
   templateId: 'T003',
-  limitationDatasetVersion: 'phase3-limitation-dataset-v3',
-  limitationDatasetHash: '21ce79bcb57802df8a6072e933942b02ea34ba1d9ab85f0dc091395bff0f3944',
 } as Partial<FinalWorkoutPlan>;
 
 const NODE_ORDER_VERSIONS = {
@@ -50,7 +48,7 @@ describe('canonicalContentIdentity golden vectors — backend/client parity', ()
     // (src/services/__tests__/contentIdentityCanonicalization.test.ts) —
     // proves client and backend are not just internally order-independent,
     // but mutually consistent with each other for identical logical input.
-    expect(nodeOrderId).toBe('wpg_21e1db98');
+    expect(nodeOrderId).toBe('wpg_bc19d587');
   });
 
   it('reversed key order produces the same identity too', () => {

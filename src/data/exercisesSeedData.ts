@@ -18,8 +18,7 @@ import type { ExerciseSeedInput, MuscleId } from '../types/exercise';
 type SeedEntry = Omit<ExerciseSeedInput, 'substitution'> & {
   /** Family used to auto-derive `substitution.similarExerciseIds` — see `buildSubstitutions` below. */
   substitutionGroup?: string;
-  /** Narrow allowlist for clinically approved limitation variants outside the primary-muscle match. */
-  limitationVariantIds?: string[];
+
 };
 
 const ACTIVE_AVAILABLE = {
@@ -208,7 +207,6 @@ const RAW_EXERCISES: SeedEntry[] = [
     equipment: ['cable'],
     difficulty: 'beginner',
     substitutionGroup: 'rear_delt_fly',
-    limitationVariantIds: ['resistance-band-row'],
     ...ACTIVE_AVAILABLE, ...NO_EXECUTION,
   },
   {
@@ -755,7 +753,6 @@ const RAW_EXERCISES: SeedEntry[] = [
     equipment: ['barbell'],
     difficulty: 'advanced',
     substitutionGroup: 'hip_hinge',
-    limitationVariantIds: ['hip-hinge-drill', 'dumbbell-stiff-leg-deadlift'],
     ...ACTIVE_AVAILABLE, ...NO_EXECUTION,
   },
   {
@@ -1311,11 +1308,6 @@ const RAW_EXERCISES: SeedEntry[] = [
     instructions: { ptBR: ['Próximo a um apoio estável, desloque o peso lentamente de um pé ao outro sem tirar os pés do chão.'], en: ['Near a stable support, slowly shift weight from one foot to the other without lifting the feet.'], es: ['Cerca de un apoyo estable, transfiera lentamente el peso de un pie al otro sin levantar los pies.'] },
     ...ACTIVE_AVAILABLE, ...NO_EXECUTION,
   },
-  // v1.27 exercise-identity closure (Fase 2 pendency) — 7 resistance
-  // exercises for previously TRULY_MISSING canonical ids. The four strength
-  // movements below now join their normal equivalence groups so the shared
-  // resolver can reach controlled limitation variants after a preferred
-  // candidate is already occupied. The remaining three stay ungrouped.
   {
     id: 'decline-barbell-bench-press', slug: 'decline-barbell-bench-press',
     name: { ptBR: 'Supino Declinado', en: 'Decline Barbell Bench Press', es: 'Press de Banca Declinado con Barra' },
@@ -1402,13 +1394,12 @@ function buildSubstitutions(entries: SeedEntry[]): ExerciseSeedInput[] {
     byGroup.set(e.substitutionGroup, list);
   }
 
-  return entries.map(({ substitutionGroup, limitationVariantIds, ...rest }) => {
+  return entries.map(({ substitutionGroup, ...rest }) => {
     if (!substitutionGroup) {
       return {
         ...rest,
         substitution: {
           similarExerciseIds: [],
-          ...(limitationVariantIds ? { limitationVariantIds } : {}),
         },
       };
     }
@@ -1421,7 +1412,6 @@ function buildSubstitutions(entries: SeedEntry[]): ExerciseSeedInput[] {
       substitution: {
         group: substitutionGroup,
         similarExerciseIds,
-        ...(limitationVariantIds ? { limitationVariantIds } : {}),
       },
     };
   });

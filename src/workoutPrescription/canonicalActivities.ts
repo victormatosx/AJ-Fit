@@ -1,23 +1,6 @@
-import type { LocalizedInstructions, LocalizedText, MovementPattern } from '../types/exercise';
+import type { LocalizedInstructions,LocalizedText,MovementPattern } from '../types/exercise';
 
-/**
- * v1.27 Fase 2 closure — the 6 canonical ids that are cardio/mobility
- * "blocks" rather than muscle-targeted exercises (see
- * docs/workouts/AJ_Fit_v1_27_exercise_identity_matrix.json's prior
- * AMBIGUOUS evidence: forcing a primaryMuscle/equipment/modality here would
- * have fabricated a choice — walking vs. bike vs. elliptical for cardio,
- * a single joint region for the generic mobility blocks — that the product
- * decision now explicitly says the user never makes in-app). Deliberately
- * NOT part of `EXERCISES_SEED`/`Exercise` (`data/exercisesSeedData.ts`):
- * that catalog's `target.primaryMuscle` is required and read
- * unconditionally by the active v2 runtime's limitation resolver,
- * equipment substitution and muscle-priority reordering — none of which
- * this list is, or ever needs to be, part of.
- *
- * `id` is the same string as the v1.27 canonical `exercise_id` — no
- * translation/aliasing needed; `resolveCanonicalExerciseId` in
- * `canonicalExerciseIdentity.ts` resolves these as an exact match.
- */
+
 export interface CanonicalActivity {
   id: string;
   kind: 'cardio' | 'mobility';

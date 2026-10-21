@@ -1,0 +1,130 @@
+{
+  "baseline": {
+    "typescript": "pass",
+    "unitTests": {
+      "passed": 7920,
+      "failed": 44,
+      "skipped": 232
+    },
+    "lintErrors": 48,
+    "lintWarnings": 492
+  },
+  "phaseA": {
+    "unitTests": {
+      "passed": 7578,
+      "failed": 22,
+      "skipped": 221
+    },
+    "newUnitFailures": [],
+    "functionsUnitTests": {
+      "passed": 2020,
+      "failed": 0
+    },
+    "firestoreRules": {
+      "passed": 554,
+      "failed": 0
+    },
+    "storageRules": {
+      "passed": 93,
+      "failed": 0
+    },
+    "workoutExecutionIntegration": {
+      "passed": 83,
+      "failed": 0
+    },
+    "manualSubstitutionAndInstallationIntegration": {
+      "passed": 20,
+      "failed": 0
+    },
+    "focusedGenerationManualEquipmentEvolutionPresentation": {
+      "passed": 108,
+      "failed": 0
+    },
+    "backendIntegration": {
+      "passed": 147,
+      "failed": 4
+    },
+    "newBackendFailuresComparedWithIsolatedHEAD": []
+  },
+  "secondSessionVerification": {
+    "note": "Re-ran every suite below in this checkout (not just re-read prior claims). One real defect was found and fixed; see fixedDefect. Remaining failures (4 backend-integration + 5 app-integration) were reproduced identically in a disposable `git worktree` of HEAD (pre-removal state, since the removal itself is all uncommitted) proving they predate this task.",
+    "fixedDefect": {
+      "file": "src/workoutPrescription/prescriptionMetadata.ts",
+      "symptom": "TypeError: Cannot read properties of undefined (reading 'safety') when currentPrescriptionMetadata() received a plan without `trace`/`versions` (a historical/legacy active program predating the trace schema, or a test fixture simulating one).",
+      "crashedTests": [
+        "authorizeMutation.integration.test.ts > CYCLE_EVOLUTION starts from the currently sealed sessions and only substitutes exercises, never the template/split/frequency",
+        "authorizeMutation.integration.test.ts > v1.27 CYCLE_EVOLUTION picks the identical substitution regardless of answers.equipment (no home equipment answered)",
+        "authorizeMutation.integration.test.ts > v1.27 CYCLE_EVOLUTION picks the identical substitution regardless of answers.equipment (every home equipment answered)"
+      ],
+      "fix": "currentPrescriptionMetadata now defaults to an empty/neutral trace and omits `versions` when the source plan lacks them, instead of throwing or fabricating data — preserving the Fase A rule of never retroactively rewriting historical plans.",
+      "verifiedBy": "app + functions typecheck pass; all 3 crashing tests now pass; backend integration suite went from 144 passed/7 failed to 147 passed/4 failed (the 4 remaining match the pre-existing documented baseline exactly)."
+    },
+    "deadCodeRemoved": {
+      "file": "firestore-tests/exercises.rules.test.ts",
+      "removed": ["validLimitationProfile()", "updateLimitationProfile()"],
+      "reason": "Orphaned helpers with zero callers, left over from the deletion of the 'exercises — limitationProfile validation' describe block. Removal does not change the 554 passing Firestore Rules test count."
+    },
+    "appIntegrationSuite": {
+      "files": [
+        "src/services/__tests__/firstProgramGeneration.integration.test.ts",
+        "src/services/__tests__/workoutExecutions.integration.test.ts",
+        "src/services/__tests__/workoutLifecycle.integration.test.ts",
+        "src/services/__tests__/prescriptionEvolution.integration.test.ts",
+        "src/services/__tests__/workoutProgramReconciliation.integration.test.ts"
+      ],
+      "passed": 108,
+      "failed": 5,
+      "failuresConfirmedPreExistingViaIsolatedHeadWorktree": true,
+      "unrelatedCause": "Pre-existing, unrelated to this removal: these specific failures trace to the earlier, separate v2→v1.27 generation-default cutover (generationVersion.ts), not to any musculoskeletal/limitation code."
+    }
+  },
+  "remainingUnitFailures": [
+    "src/lib/__tests__/iosRestActivityStructure.test.ts > versioned Live Activity extension > does not add storage sharing or push entitlements preemptively",
+    "src/lib/__tests__/premiumEntitlementPrecedence.test.ts > FASE 6 — entitlement wins over commercial status (access side) > status=grace_period with an active entitlement: resolveSubscriptionCenterModel reports hasPremiumAccess=true",
+    "src/lib/__tests__/workoutLogicIntact.test.ts > WorkoutScreen source — 7B + 7C strings fully migrated (positive guard) > raw literal \"REGISTRADO\" has been removed",
+    "src/loadProgress/__tests__/loadProgressWiring.test.ts > real load-progress wiring > offers the requested search, record list and four time ranges",
+    "src/loadProgress/__tests__/loadProgressWiring.test.ts > real load-progress wiring > publishes an invalidation only after the queued set write resolves",
+    "src/scheduleEngine/__tests__/scheduleRefreshState.test.ts > Schedule refresh authority > gates resolution, config and loading publication against the latest reload id",
+    "src/screens/__tests__/editProfileFixedLayout.test.ts > EditProfileScreen fixed layout > anchors the footer within the available height instead of pushing it below the viewport",
+    "src/screens/__tests__/editProfileFixedLayout.test.ts > EditProfileScreen fixed layout > keeps the form and save action in a non-scrolling safe-area layout",
+    "src/screens/__tests__/healthIntegrationScreenStructure.test.ts > HealthIntegrationScreen — disconnect requires explicit confirmation > never calls disconnect() directly from the disconnect row — it only opens a confirmation sheet",
+    "src/screens/__tests__/healthIntegrationScreenStructure.test.ts > HealthIntegrationScreen — platform isolation (no iOS copy on Android, no Android copy on iOS) > never presents OS authorization as \"granted\" for iOS — permissionsRequested is treated as non-committal",
+    "src/screens/__tests__/healthIntegrationScreenStructure.test.ts > HealthIntegrationScreen — platform isolation (no iOS copy on Android, no Android copy on iOS) > only shows the iOS \"cannot verify permission\" notice behind an explicit iOS check",
+    "src/screens/__tests__/migratedScreensLifecycle.test.ts > EditProfileScreen — draft resets explicitly per session, not via unmount > imports useScreenFocusEffect and resets every draft field on activation",
+    "src/screens/__tests__/paywallRedesignStructure.test.ts > Paywall redesign — i18n coverage for new copy, no new hardcoded strings > entryContext-driven plan intro stays copy-only and goes through i18n",
+    "src/screens/__tests__/premiumCommercialContextFase6.test.ts > FASE 6 — SubscriptionCenterScreen already correctly separates access from commercial presentation (audited, not rewritten) > billing_issue/grace_period route to the real subscription management flow (manageSubscription), not an invented destination",
+    "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts > WorkoutScreen rest overlay — button label and next-exercise indicator > (B) the last set of an exercise (with another exercise left) switches the label and shows the next exercise",
+    "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts > WorkoutScreen rest overlay — button label and next-exercise indicator > derives nextExerciseAction only from the shared nextAction decision, never standalone",
+    "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts > WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision > (E) computes the next-exercise lookup exactly once, feeding both the Live Activity call site and the in-app one",
+    "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts > WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision > completeSet feeds the shared lookup into the Live Activity decision",
+    "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts > WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision > passes the decision down to RestOverlay as a single prop, not re-derived props",
+    "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts > WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision > restNextAction rebuilds the same decision from the authoritative, restorable rest record (not fresh component state)",
+    "src/state/__tests__/restLiveActivityIntegrationStructure.test.ts > RestSessionContext live transition wiring > keeps completed cardio visible until the final workout CTA",
+    "src/theme/__tests__/sharedComponentsTheme.test.ts > Phase 4 acquisition and primary app coverage > keeps the Phase 4 critical screens free of Dark color literals"
+  ],
+  "remainingBackendFailures": [
+    "src/workoutLifecycle/__tests__/authorizeMutation.integration.test.ts > Workout Lifecycle authority — real Firestore Emulator > INITIALIZE seals the three-day conditioning plan with typed interval cycles",
+    "src/workoutLifecycle/__tests__/authorizeMutation.integration.test.ts > Workout Lifecycle authority — real Firestore Emulator > persistLifecycleActivationV127 — Fase 16 backend-authoritative v1.27 ADAPT/ACTIVATE > v2 ADAPT is completely unaffected — still returns a grant, never the persisted shape",
+    "src/workoutLifecycle/__tests__/finalizeWorkoutSession.integration.test.ts > finalizeWorkoutSession — real Firestore Emulator integration > keeps explicit fixed calendar authority even when client-writable config claims flexible",
+    "src/workoutLifecycle/__tests__/finalizeWorkoutSession.integration.test.ts > finalizeWorkoutSession — real Firestore Emulator integration > treats a legacy program/instance without scheduleMode as fixed"
+  ],
+  "newLintErrors": [],
+  "manualCommonRelations": {
+    "sources": 112,
+    "relations": 289
+  },
+  "files": {
+    "deletedTracked": 70,
+    "modifiedTracked": 155,
+    "deletedPreviouslyUntracked": 9
+  },
+  "notExecuted": [
+    "deploy",
+    "OTA",
+    "EAS build",
+    "commit",
+    "push",
+    "real data cleanup",
+    "physical iPhone verification"
+  ]
+}

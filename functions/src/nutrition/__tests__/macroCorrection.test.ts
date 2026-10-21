@@ -1,3 +1,4 @@
+import { approveReview } from './reviewFixture';
 import { describe, expect, it, vi } from 'vitest';
 import * as logger from '../../lib/logger';
 import { generateValidatedPlan } from '../generation/attempts';
@@ -18,7 +19,7 @@ function validationError(run: () => unknown): PlanValidationError {
 function providerFor(...outputs: unknown[]) {
   const generatePlan = vi.fn().mockImplementation(async () => ({ output: outputs.shift(), model: 'synthetic',
     usage: { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0 }, latencyMs: 0 }));
-  return { generatePlan };
+  return { reviewPlan: approveReview, generatePlan };
 }
 
 describe('P1 admissible proportional correction', () => {
@@ -143,20 +144,32 @@ describe('P1 representable portions', () => {
 });
 
 describe('P1 safety precedence, diagnostics and bounded retries', () => {
-  it.each(['later_allergy', 'later_exclusion', 'later_diet'])('stops %s before a macro retry', async (name) => {
-    const fixture = macroCases().find((entry) => entry.name === name)!;
-    const provider = providerFor(fixture.plan, macroPlan());
-    await expect(generateValidatedPlan(provider, { ...macroProfile, excludedAllergens: fixture.allergens,
-      dietaryPattern: fixture.restrictions?.dietaryPattern ?? 'omnivore' }, macroEngine, 'health',
-    { ...names, excluded: fixture.restrictions ? [...fixture.restrictions.excludedFoodNames] : [] })).rejects.toMatchObject({ code: 'AI_SAFETY_VALIDATION_FAILED' });
-    expect(provider.generatePlan).toHaveBeenCalledTimes(1);
-  });
+  it.each(['later_allergy', 'later_exclusion', 'later_diet'])(
+    'flags %s as a content-safety mismatch before any macro check, and recovers on the next attempt', async (name) => {
+      const fixture = macroCases().find((entry) => entry.name === name)!;
+      const provider = providerFor(fixture.plan, macroPlan());
+      // AI_CONTENT_SAFETY_MISMATCH (2026-10-20 fix): the AI's own draft
+      // failing a safety check (not treated as a correctable macro
+      // deviation) is retryable — the same unweakened safety check still
+      // runs first, within the SAME attempt, before any macro correction
+      // logic; a subsequent attempt (here, a clean queued plan) can still
+      // recover instead of permanently stranding the request.
+      const audits: { code: string | null }[] = [];
+      const result = await generateValidatedPlan(provider, { ...macroProfile, excludedAllergens: fixture.allergens,
+        dietaryPattern: fixture.restrictions?.dietaryPattern ?? 'omnivore' }, macroEngine, 'health',
+        { ...names, excluded: fixture.restrictions ? [...fixture.restrictions.excludedFoodNames] : [] },
+        async (audit) => { audits.push({ code: audit.code }); });
+      expect(audits[0]?.code).toBe('AI_CONTENT_SAFETY_MISMATCH');
+      expect(result.attempt).toBe(2);
+      expect(provider.generatePlan).toHaveBeenCalledTimes(2);
+    },
+  );
 
   it('checks every alternative option for safety before its first macro failure', () => {
     const wrong = macroFood(); wrong.estimatedNutrition.proteinG = 100;
     const unsafe = macroFood(); unsafe.allergens = ['milk'];
     expect(validationError(() => validateAndBuildMealAlternative({ recommendedOptionIndex: 0,
-      options: [{ foods: [wrong] }, { foods: [unsafe] }] }, 'breakfast', macroEngine.mealTargets[0], ['milk'])).code).toBe('AI_SAFETY_VALIDATION_FAILED');
+      options: [{ foods: [wrong] }, { foods: [unsafe] }] }, 'breakfast', macroEngine.mealTargets[0], ['milk'])).code).toBe('AI_CONTENT_SAFETY_MISMATCH');
   });
 
   it('successful deterministic correction consumes exactly one simulated provider call', async () => {
@@ -192,13 +205,13 @@ describe('P1 safety precedence, diagnostics and bounded retries', () => {
     } finally { info.mockRestore(); }
   });
 
-  it('preserves fallback on attempt three and never calls a fourth time on exhaustion', async () => {
+  it('keeps attempt three cheap, reviews it once, and does not exceed the creator budget on exhaustion', async () => {
     const bad = macroCases().find((entry) => entry.name === 'impossible_intersection')!.plan;
     const recovered = providerFor(bad, bad, macroPlan());
-    expect((await generateValidatedPlan(recovered, macroProfile, macroEngine, 'health', names)).fallback).toBe(true);
-    expect(recovered.generatePlan.mock.calls.map((call) => call[0].fallback)).toEqual([false, false, true]);
+    expect((await generateValidatedPlan(recovered, macroProfile, macroEngine, 'health', names)).fallback).toBe(false);
+    expect(recovered.generatePlan.mock.calls.map((call) => call[0].fallback)).toEqual([false, false, false]);
     const exhausted = providerFor(bad, bad, bad, macroPlan());
-    await expect(generateValidatedPlan(exhausted, macroProfile, macroEngine, 'health', names)).rejects.toMatchObject({ code: 'AI_MACRO_VALIDATION_FAILED' });
+    await expect(generateValidatedPlan(exhausted, macroProfile, macroEngine, 'health', names)).rejects.toMatchObject({ code: 'AI_RETRY_EXHAUSTED', lastFailureCode: 'AI_MACRO_VALIDATION_FAILED' });
     expect(exhausted.generatePlan).toHaveBeenCalledTimes(3);
   });
 
@@ -207,7 +220,7 @@ describe('P1 safety precedence, diagnostics and bounded retries', () => {
     bad.options[0].foods[0].estimatedNutrition.proteinG = 100;
     const good = { recommendedOptionIndex: 0, options: [{ foods: [macroFood()] }, { foods: [macroFood()] }] };
     const generateMealAlternative = vi.fn().mockResolvedValueOnce({ output: bad }).mockResolvedValue({ output: good });
-    const result = await generateValidatedMealAlternative({ generatePlan: vi.fn(), generateMealAlternative }, macroProfile,
+    const result = await generateValidatedMealAlternative({ reviewPlan: approveReview, generatePlan: vi.fn(), generateMealAlternative }, macroProfile,
       'breakfast', macroEngine.mealTargets[0], [], 'health', names, undefined);
     expect(result.attempt).toBe(2);
     expect(JSON.parse(generateMealAlternative.mock.calls[1][0].feedback).validation.daily.status).toBe('not_applicable');

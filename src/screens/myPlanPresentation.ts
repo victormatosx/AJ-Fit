@@ -9,7 +9,7 @@
 import { WEEKDAY_ORDER, type Weekday } from '../state/AppState';
 import type { ScheduleResolution } from '../scheduleEngine/types';
 import type { ManualSubstitutionUserContext } from '../services/exerciseSubstitutionCandidates';
-import type { LimitationCatalog } from '../workoutPrescription/limitationResolver';
+import type { ExerciseCatalog } from '../workoutPrescription/exerciseCatalog';
 import { resolvePermanentSubstitutionsForSession } from '../workoutPrescription/manualSubstitutionResolver';
 import type { CompositionReasonCode, FinalWorkoutPlan, PrescriptionTrace, WorkoutDayState, WorkoutWeekdayPrescription } from '../workoutPrescription/types';
 
@@ -42,7 +42,7 @@ export function buildMyPlanEffectiveSessions(input: {
   plan: FinalWorkoutPlan;
   preferences: ReadonlyMap<string, string>;
   userContext: ManualSubstitutionUserContext | null;
-  catalog: LimitationCatalog;
+  catalog: ExerciseCatalog;
 }): MyPlanEffectiveSession[] {
   return input.plan.sessions.map((session) => {
     const prescribedExerciseIds = session.exercises.map((exercise) => exercise.exerciseId);
@@ -51,7 +51,6 @@ export function buildMyPlanEffectiveSessions(input: {
           sessionExerciseIds: prescribedExerciseIds,
           preferences: input.preferences,
           catalog: input.catalog,
-          regions: input.userContext.regions,
           equipmentContext: input.userContext.equipmentContext,
         })
       : new Map<number, string>();
@@ -122,16 +121,9 @@ const DURATION_REASON_CODES: readonly CompositionReasonCode[] = [
   'PRIORITY_SET_SKIPPED_DURATION',
 ];
 
-/**
- * Which "adjusted for you" claims are actually backed by evidence in this
- * plan's own trace — never a fixed marketing list. Each flag maps to one
- * concrete, checkable fact (a real substitution, a real limitation
- * resolution, a real composition decision), so the UI can never show a claim
- * the engine didn't actually make.
- */
+
 export interface AdaptationFlags {
   equipment: boolean;
-  limitations: boolean;
   experience: boolean;
   duration: boolean;
 }
@@ -139,7 +131,6 @@ export interface AdaptationFlags {
 export function buildAdaptationFlags(trace: PrescriptionTrace): AdaptationFlags {
   return {
     equipment: trace.substitutions.length > 0,
-    limitations: trace.limitationDecisions.length > 0,
     experience: trace.compositionDecisions.some((decision) =>
       BEGINNER_REASON_CODES.includes(decision.reasonCode),
     ),
@@ -150,5 +141,5 @@ export function buildAdaptationFlags(trace: PrescriptionTrace): AdaptationFlags 
 }
 
 export function hasAnyAdaptation(flags: AdaptationFlags): boolean {
-  return flags.equipment || flags.limitations || flags.experience || flags.duration;
+  return flags.equipment || flags.experience || flags.duration;
 }

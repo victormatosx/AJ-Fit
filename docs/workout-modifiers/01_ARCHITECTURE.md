@@ -1,3 +1,5 @@
+> Registro histórico: o sistema musculoesquelético e as políticas clínicas V3/legacy descritos aqui foram descontinuados. Não são contratos atuais. Ver [remoção definitiva](../removal-physical-limitations/REPORT.md).
+
 # AJ Fit --- Arquitetura do Motor de Modificadores
 
 ## 1. Responsabilidade

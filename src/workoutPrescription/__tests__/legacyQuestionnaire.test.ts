@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe,expect,it } from 'vitest';
 import { generateWorkoutPrescription } from '../engine';
 import { sanitizeAnswersForEngine } from '../input';
 import { completeAnswers } from './fixtures';
@@ -25,21 +25,19 @@ describe('legacy questionnaire shapes never crash the engine', () => {
     expect(result.status).toBe('NEEDS_QUESTIONNAIRE_UPDATE');
     if (result.status !== 'NEEDS_QUESTIONNAIRE_UPDATE') return;
     expect(result.reasonCodes).toContain('QUESTIONNAIRE_SPECIAL_CONDITIONS_UNKNOWN');
-    expect(result.reasonCodes).toContain('QUESTIONNAIRE_LIMITS_UNKNOWN');
   });
 
   it('missing specialConditions alone (limits present) is still rejected — a partial legacy gap must not be papered over', () => {
-    const raw = { ...completeAnswers({ limits: ['none'] }) } as Record<string, unknown>;
+    const raw = { ...completeAnswers({ }) } as Record<string, unknown>;
     delete raw.specialConditions;
     const result = generateWorkoutPrescription(raw as never);
     expect(result.status).toBe('NEEDS_QUESTIONNAIRE_UPDATE');
     if (result.status !== 'NEEDS_QUESTIONNAIRE_UPDATE') return;
     expect(result.reasonCodes).toContain('QUESTIONNAIRE_SPECIAL_CONDITIONS_UNKNOWN');
-    expect(result.reasonCodes).not.toContain('QUESTIONNAIRE_LIMITS_UNKNOWN');
   });
 
   it('an explicit, previously-collected empty array is trusted — NOT flagged as a legacy gap', () => {
-    const answers = completeAnswers({ specialConditions: ['none'], limits: ['none'] });
+    const answers = completeAnswers({ specialConditions: ['none'], });
     const result = generateWorkoutPrescription(answers);
     expect(result.status).toBe('SUCCESS');
   });
@@ -60,15 +58,5 @@ describe('legacy questionnaire shapes never crash the engine', () => {
     const answers = completeAnswers({ sex: null, goal: null, place: null });
     const result = generateWorkoutPrescription(answers);
     expect(result.status).toBe('NEEDS_QUESTIONNAIRE_UPDATE');
-  });
-
-  it('a declared musculoskeletal region alone is a complete, valid questionnaire — no removed limitationImpact gate blocks it', () => {
-    const answers = completeAnswers({
-      specialConditions: ['musculoskeletal_limitation'],
-      limits: ['knee'],
-    });
-    expect(answers).not.toHaveProperty('limitationImpact');
-    const result = generateWorkoutPrescription(answers);
-    expect(result.status).not.toBe('NEEDS_QUESTIONNAIRE_UPDATE');
   });
 });

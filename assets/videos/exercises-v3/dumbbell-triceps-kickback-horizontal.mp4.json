@@ -1,0 +1,123 @@
+{
+  "exerciseId": "dumbbell-triceps-kickback",
+  "orientation": "horizontal",
+  "file": "dumbbell-triceps-kickback-horizontal.mp4",
+  "sha256": "77de8e283430830cc9d696f69b4b53f638ac8d158dd80caa72690c0ea2ad2268",
+  "sourceSha256": "049c503eaaa174a957baade1b3b9a66fd63b414f00728a11c069742f1bd74ad3",
+  "trim": {
+    "startSeconds": 0.3,
+    "durationSeconds": 6
+  },
+  "provenance": {
+    "author": "Goulart",
+    "sourceUrl": "https://wger.de/media/exercise-video/655/2d88a05b-bde3-4026-bfbf-524c11068dc5.MOV",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "commercialUseVerified": true
+  },
+  "probe": {
+    "streams": [
+      {
+        "index": 0,
+        "codec_name": "h264",
+        "codec_long_name": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+        "profile": "Main",
+        "codec_type": "video",
+        "codec_tag_string": "avc1",
+        "codec_tag": "0x31637661",
+        "mime_codec_string": "avc1.4d401f",
+        "width": 1280,
+        "height": 720,
+        "coded_width": 1280,
+        "coded_height": 720,
+        "has_b_frames": 2,
+        "sample_aspect_ratio": "1:1",
+        "display_aspect_ratio": "16:9",
+        "pix_fmt": "yuv420p",
+        "level": 31,
+        "color_range": "tv",
+        "color_space": "smpte170m",
+        "color_transfer": "bt709",
+        "color_primaries": "bt470bg",
+        "chroma_location": "left",
+        "field_order": "progressive",
+        "is_avc": "true",
+        "nal_length_size": "4",
+        "id": "0x1",
+        "r_frame_rate": "30/1",
+        "avg_frame_rate": "30/1",
+        "time_base": "1/15360",
+        "start_pts": 0,
+        "start_time": "0.000000",
+        "duration_ts": 92160,
+        "duration": "6.000000",
+        "bit_rate": "3280058",
+        "bits_per_raw_sample": "8",
+        "nb_frames": "180",
+        "extradata_size": 44,
+        "disposition": {
+          "default": 1,
+          "dub": 0,
+          "original": 0,
+          "comment": 0,
+          "lyrics": 0,
+          "karaoke": 0,
+          "forced": 0,
+          "hearing_impaired": 0,
+          "visual_impaired": 0,
+          "clean_effects": 0,
+          "attached_pic": 0,
+          "timed_thumbnails": 0,
+          "non_diegetic": 0,
+          "captions": 0,
+          "descriptions": 0,
+          "metadata": 0,
+          "dependent": 0,
+          "still_image": 0,
+          "multilayer": 0
+        },
+        "tags": {
+          "language": "und",
+          "handler_name": "VideoHandler",
+          "encoder": "Lavc62.28.102 libx264"
+        }
+      }
+    ],
+    "format": {
+      "filename": "/Users/victor/CropSight-Solutions/AJ-Fit/assets/videos/exercises-v3/.dumbbell-triceps-kickback-horizontal.mp4.partial.mp4",
+      "nb_streams": 1,
+      "nb_programs": 0,
+      "nb_stream_groups": 0,
+      "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+      "format_long_name": "QuickTime / MOV",
+      "start_time": "0.000000",
+      "duration": "6.000000",
+      "size": "2463120",
+      "bit_rate": "3284160",
+      "probe_score": 100,
+      "tags": {
+        "major_brand": "isom",
+        "minor_version": "512",
+        "compatible_brands": "isomiso2avc1mp41",
+        "encoder": "Lavf62.12.102"
+      }
+    }
+  },
+  "status": "PRODUZIDO — AGUARDANDO REVISÃO",
+  "biomechanicalReview": "pending",
+  "loopReview": "pending",
+  "nativePlaybackReview": "pending",
+  "changes": "Trim, resize without cropping, H.264/yuv420p encoding, audio/metadata removal, MP4 faststart.",
+  "visualInspection": {
+    "method": "Inspeção dos 12 quadros da contact sheet e referência de execução do cadastro; não é revisão profissional nem teste em iPhone.",
+    "sampleFile": "dumbbell-triceps-kickback-horizontal.mp4.contact.jpg",
+    "correspondence": "Movimento e equipamento correspondentes observados nos quadros amostrados.",
+    "observations": "Um halter, mão contrária apoiada no banco, tronco inclinado; extensão unilateral de cotovelo. Confirmar estabilidade do ombro e costura do loop.",
+    "releaseDecision": "pending",
+    "remaining": [
+      "Revisão humana do clipe completo e loop",
+      "Aprovação do padrão visual/atribuição",
+      "Tomada vertical nativa",
+      "Reprodução no iPhone/Android e música externa"
+    ]
+  }
+}

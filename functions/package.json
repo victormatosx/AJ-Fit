@@ -2,7 +2,7 @@
   "name": "aj-fit-functions",
   "private": true,
   "version": "0.1.0",
-  "description": "AJ Fit backend — Firebase Cloud Functions v2 for billing, promotions, authentication and Photo Vault.",
+  "description": "AJ Fit backend \u2014 Firebase Cloud Functions v2 for billing, promotions, authentication and Photo Vault.",
   "engines": {
     "node": "22"
   },
@@ -12,7 +12,7 @@
     "verify:scheduleEngineSync": "node ../scripts/syncScheduleEngineToFunctions.cjs --check",
     "sync:prescriptionEngine": "node ../scripts/syncPrescriptionEngineToFunctions.cjs",
     "sync:nutrition": "node ../scripts/syncNutritionToFunctions.cjs",
-    "prebuild": "npm run sync:scheduleEngine && npm run sync:prescriptionEngine && npm run sync:nutrition",
+    "prebuild": "npm run clean && npm run sync:scheduleEngine && npm run sync:prescriptionEngine && npm run sync:nutrition",
     "pretypecheck": "npm run sync:scheduleEngine && npm run sync:prescriptionEngine && npm run sync:nutrition",
     "pretest": "npm run sync:scheduleEngine && npm run sync:prescriptionEngine && npm run sync:nutrition",
     "build": "tsc -p tsconfig.build.json",
@@ -25,7 +25,8 @@
     "logs": "../node_modules/.bin/firebase functions:log",
     "logs:production": "../node_modules/.bin/firebase functions:log --project production",
     "deploy:production": "npm run build && ../node_modules/.bin/firebase deploy --only functions --project production",
-    "deploy:staging": "npm run build && ../node_modules/.bin/firebase deploy --only functions --project staging"
+    "deploy:staging": "npm run build && ../node_modules/.bin/firebase deploy --only functions --project staging",
+    "clean": "node -e \"require('node:fs').rmSync('lib', { recursive: true, force: true })\""
   },
   "dependencies": {
     "@google-cloud/kms": "^6.0.0",

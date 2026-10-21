@@ -5,8 +5,15 @@ import type { AiResult } from '../ai/provider';
 import type { NutritionGenerationOperationType } from '../shared/types/nutrition';
 import { AI_SCHEMA_VERSION } from '../ai/config';
 import { estimateOpenAiCost } from '../observability/modelPricing';
+import { operationId } from './callBudget';
+import type { AiAgentRole } from './attempts';
+import { AI_REVIEW_VERSION } from '../ai/config';
 
 export interface RecordAiOperationParams {
+  role?: AiAgentRole;
+  callNumber?: number;
+  reviewStatus?: string;
+  issueCategories?: string[];
   catalogMetrics?: CatalogMetrics;
   ownerUid: string;
   generationId: string;
@@ -26,7 +33,8 @@ export interface RecordAiOperationParams {
  */
 export async function recordAiOperation(db: Firestore, params: RecordAiOperationParams): Promise<void> {
   const { ownerUid, generationId, operation, defaultModel, attempt, result, code, fallback, latencyMs } = params;
-  const ref = db.collection('nutritionAiOperations').doc(`${generationId}-${attempt}`);
+  const ref = db.collection('nutritionAiOperations').doc(params.role && params.callNumber
+    ? operationId(generationId, params.role, params.callNumber) : `${generationId}-${attempt}`);
   const model = result?.model ?? defaultModel;
   const usage = result?.usage ?? { inputTokens: null, outputTokens: null, cachedInputTokens: null };
   const cost = estimateOpenAiCost({ model, ...usage });
@@ -34,12 +42,16 @@ export async function recordAiOperation(db: Firestore, params: RecordAiOperation
     const lock = await tx.get(db.collection('accountDeletionLocks').doc(ownerUid));
     if (lock.exists) return;
     tx.set(ref, { ownerUid, generationId, operation, provider: 'openai',
+      ...(params.role ? { agentRole: params.role, callNumber: params.callNumber,
+        reviewerVersion: AI_REVIEW_VERSION, reviewStatus: params.reviewStatus ?? null,
+        issueCategories: params.issueCategories ?? [] } : {}),
       ...(params.catalogMetrics ? { catalogMetrics: params.catalogMetrics } : {}),
-      model, promptVersion: params.catalogMetrics ? `${PROMPT_VERSION}+catalog-intent-v1` : PROMPT_VERSION, aiSchemaVersion: AI_SCHEMA_VERSION,
+      model, promptVersion: params.role ? PROMPT_VERSION : params.catalogMetrics ? `${PROMPT_VERSION}+catalog-intent-v1` : PROMPT_VERSION, aiSchemaVersion: AI_SCHEMA_VERSION,
       attempts: attempt, attemptNumber: attempt, retryCount: attempt - 1,
       fallbackUsed: fallback, latencyMs, inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens, cachedInputTokens: usage.cachedInputTokens,
       ...(cost ?? {}),
-      resultStatus: code ? 'failed' : 'validated', failureCode: code, createdAt: Timestamp.now() });
+      resultStatus: code ? 'failed' : params.role === 'creator' ? 'created' : params.role === 'reviewer' ? 'approved' : 'validated',
+      failureCode: code, createdAt: Timestamp.now() }, { merge: true });
   });
 }

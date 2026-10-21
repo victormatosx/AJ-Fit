@@ -6,7 +6,7 @@ import type { ExerciseTarget } from '../types/exercise';
  * Firestore read. `EXERCISES_SEED` is already the canonical, bundled
  * runtime catalog used throughout `workoutPrescription` (see
  * `catalog.ts`'s own `Map(EXERCISES_SEED.map(...))` and
- * `localLimitationCatalog.ts`), so this mirrors that pattern instead of
+ * `localExerciseCatalog.ts`), so this mirrors that pattern instead of
  * opening a second source of truth or a network dependency for a
  * visual-only projection (`BodyMuscleMap`).
  */

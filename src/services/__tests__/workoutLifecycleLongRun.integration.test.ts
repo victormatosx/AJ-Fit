@@ -1,3 +1,4 @@
+import { EXERCISES_SEED } from '../../data/exercisesSeedData';
 /**
  * Phase 10D-V2 — Long-Run Journey Closure (docs/workout-lifecycle/v2/
  * architecture/25_PHASE_10DV2_LONG_RUN_JOURNEY_CLOSURE.md). Closes the three
@@ -14,11 +15,11 @@
  * recomputes from ground truth on every call, exactly as it would for a real
  * user who trained for months.
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { initializeTestEnvironment,type RulesTestEnvironment } from '@firebase/rules-unit-testing';
+import { Timestamp,doc,getDoc,setDoc } from 'firebase/firestore';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
+import { afterAll,beforeAll,beforeEach,describe,expect,it,vi } from 'vitest';
 
 // Required for any journey step that exercises a REAL musculoskeletal
 // limitation (VG-I) — `loadLimitationDataset`'s content-hash path pulls in
@@ -35,13 +36,9 @@ vi.mock('expo-crypto', async () => {
 });
 
 import { buildSeedDocuments } from '../../../scripts/seedWorkoutTemplates';
-import { completeAnswers } from '../../workoutPrescription/__tests__/fixtures';
 import { toPersistedAnswers } from '../../lib/questionnaireAnswers';
-import { CANONICAL_LIMITATION_DATASET_HASH, CANONICAL_LIMITATION_DATASET_VERSION } from '../../workoutPrescription/limitationDataset';
-import { CANONICAL_LIMITATION_PROFILES } from '../../workoutPrescription/limitationDataset';
-import { EXERCISES_SEED } from '../../data/exercisesSeedData';
 import { PROGRESSION_V2_CONFIG } from '../../progressionEngineV2/config';
-import { isLimitationSafe } from '../../prescriptionEvolution/equivalence';
+import { completeAnswers } from '../../workoutPrescription/__tests__/fixtures';
 
 const PROJECT_ID = 'ajfit-rules-test';
 const UID = 'lara';
@@ -52,19 +49,19 @@ let testEnv: RulesTestEnvironment;
 const mocks = vi.hoisted(() => ({ db: undefined as unknown }));
 vi.mock('../../lib/firebase', () => ({ get db() { return mocks.db; } }));
 
-import { generateAndPersistWorkoutProgram, type WorkoutProgramSnapshot } from '../workoutPrograms';
 import {
-  loadWorkoutLifecycle, listTrainingCycles, listProgramInstances,
-  loadPendingEvolution, listWorkoutLifecycleEvents,
+  listProgramInstances,
+  listTrainingCycles,
+  listWorkoutLifecycleEvents,
+  loadWorkoutLifecycle
 } from '../workoutLifecycle';
 import {
   activatePendingEvolution,
-  adaptWorkoutProgram,
-  prepareEvolution,
-  reconcileWorkoutLifecycle,
+  prepareEvolution
 } from '../workoutLifecycleApplication';
+import { generateAndPersistWorkoutProgram } from '../workoutPrograms';
+import { installWorkoutLifecycleAuthorityFixture,resetWorkoutLifecycleAuthorityFixture } from './workoutLifecycleAuthorityFixture';
 import { enableWorkoutLifecycleRollout } from './workoutLifecycleRolloutFixture';
-import { installWorkoutLifecycleAuthorityFixture, resetWorkoutLifecycleAuthorityFixture } from './workoutLifecycleAuthorityFixture';
 
 const T003_SEED = buildSeedDocuments().find((t) => t.id === 'T003');
 if (!T003_SEED) throw new Error('T003 fixture missing from catalog — cannot run this integration test');
@@ -78,6 +75,13 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const { beginnerMinimumActiveDays, intermediateAdvancedMinimumActiveDays,
   motivationalRenewalExtensionDays, intermediateCyclesForPromotion } = PROGRESSION_V2_CONFIG;
 
+async function seedCanonicalExerciseCatalog() {
+  await testEnv.withSecurityRulesDisabled(async context => {
+    const rawDb = context.firestore();
+    await Promise.all(EXERCISES_SEED.map(exercise => setDoc(doc(rawDb, 'exercises', exercise.id), exercise)));
+  });
+}
+
 async function seedBaseUser() {
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
     const rawDb = ctx.firestore();
@@ -88,10 +92,6 @@ async function seedBaseUser() {
       metadata: { role: 'user', createdAt: Timestamp.now(), updatedAt: Timestamp.now(), commercialGateResolvedAt: Timestamp.now() },
     });
     await setDoc(doc(rawDb, 'workoutTemplates', 'T003'), T003_SEED);
-    await setDoc(doc(rawDb, 'limitationDatasetState', 'active'), {
-      datasetVersion: CANONICAL_LIMITATION_DATASET_VERSION,
-      limitationDatasetHash: CANONICAL_LIMITATION_DATASET_HASH,
-    });
     await setDoc(doc(rawDb, 'users', UID, 'questionnaires', QUESTIONNAIRE_ID), {
       answers: toPersistedAnswers(BEGINNER_ANSWERS), version: 1, createdAt: Timestamp.now(),
     });
@@ -101,15 +101,6 @@ async function seedBaseUser() {
   });
 }
 
-async function seedCanonicalExerciseCatalog() {
-  const profileById = new Map(CANONICAL_LIMITATION_PROFILES.map((item) => [item.exerciseId, item.limitationProfile]));
-  await testEnv.withSecurityRulesDisabled(async (ctx) => {
-    const rawDb = ctx.firestore();
-    await Promise.all(EXERCISES_SEED.map((exercise) => setDoc(doc(rawDb, 'exercises', exercise.id), JSON.parse(JSON.stringify({
-      ...exercise, limitationProfile: profileById.get(exercise.id),
-    })))));
-  });
-}
 
 function isTrainingWeekday(date: Date): boolean {
   const map = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
@@ -305,70 +296,6 @@ describe.skipIf(!enabled)('Phase 10D-V2 — long-run lifecycle journeys (real Fi
     expect(events.filter((e) => e.type === 'EVOLUTION_EARNED').length).toBeGreaterThanOrEqual(intermediateCyclesForPromotion + 1);
     expect((await listProgramInstances(UID)).filter((i) => i.supersededAt === null)).toHaveLength(1);
     expect((await listTrainingCycles(UID)).filter((c) => c.status === 'ACTIVE')).toHaveLength(1);
-  }, 600_000);
-
-  it('VG-I: ADAPT mid-journey preserves career progress and future evolution still works', async () => {
-    const generated = await generateAndPersistWorkoutProgram({
-      uid: UID, questionnaireId: QUESTIONNAIRE_ID, questionnaireVersion: 1, answers: BEGINNER_ANSWERS, source: 'onboarding',
-    });
-    if (generated.status !== 'SUCCESS') throw new Error('setup failed');
-    await backdateAndFillHistory(UID, beginnerMinimumActiveDays + 2, generated.program.programInstanceId!, generated.program.programId);
-    await prepareAndActivate(UID, 'LEVEL_PROMOTION');
-    // Earn Intermediate Cycle 1 first, so ADAPT happens mid-career (Cycle 2), not at the very first Intermediate cycle.
-    {
-      const { programInstanceId, programId } = await currentInstanceAndProgram(UID);
-      await backdateAndFillHistory(UID, intermediateAdvancedMinimumActiveDays + 2, programInstanceId, programId);
-      await prepareAndActivate(UID, 'CYCLE_EVOLUTION');
-    }
-
-    const beforeAdapt = (await loadWorkoutLifecycle(UID))!;
-    const beforeInstances = (await listProgramInstances(UID)).length;
-    const beforeEarnedCount = (await listWorkoutLifecycleEvents(UID)).filter((e) => e.type === 'EVOLUTION_EARNED').length;
-
-    // LA-01/LA-07: real limitation change with a real substitution ('knee' — proven elsewhere in this codebase's concurrency suite to have real alternatives in the canonical limitation dataset).
-    const adaptResult = await adaptWorkoutProgram({
-      uid: UID, updatedFields: { limits: ['knee'], specialConditions: ['musculoskeletal_limitation'] },
-      reason: 'LIMITATION', idempotencyKey: 'vg-i-adapt-knee',
-    });
-    expect(adaptResult.status).toBe('SUCCESS');
-
-    const afterAdapt = (await loadWorkoutLifecycle(UID))!;
-    // LA-02/LA-03/LA-04: career level/cycle/earned-count unchanged by ADAPT.
-    expect(afterAdapt.lifecycle.startingLevel).toBe(beforeAdapt.lifecycle.startingLevel);
-    expect(afterAdapt.lifecycle.currentTrainingLevel).toBe(beforeAdapt.lifecycle.currentTrainingLevel);
-    expect(afterAdapt.cycle.cycleId).toBe(beforeAdapt.cycle.cycleId);
-    expect((await listWorkoutLifecycleEvents(UID)).filter((e) => e.type === 'EVOLUTION_EARNED')).toHaveLength(beforeEarnedCount);
-    // LA-01: a NEW ProgramInstance was created (old one superseded, not mutated in place).
-    expect(afterAdapt.programInstance.programInstanceId).not.toBe(beforeAdapt.programInstance.programInstanceId);
-    expect((await listProgramInstances(UID)).length).toBe(beforeInstances + 1);
-    expect((await listProgramInstances(UID)).filter((i) => i.supersededAt === null)).toHaveLength(1);
-    // LA-06: latest snapshot carries the adaptation.
-    expect(afterAdapt.programInstance.prescriptionInputSnapshot?.inputs.limits).toEqual(['knee']);
-    // LA-07: the new canonical program never prescribes a knee-unsafe
-    // exercise — same in-memory-catalog `isLimitationSafe` validation
-    // approach already proven in workoutLifecycleApplication.integration.
-    // test.ts's `expectProgramKneeSafe` helper.
-    const newProgramSnapshot = await getDoc(doc(mocks.db as never, 'users', UID, 'workoutPrograms', afterAdapt.lifecycle.activeContentIdentity));
-    const newProgram = newProgramSnapshot.data() as { sessions: Array<{ exercises: Array<{ exerciseId: string }> }> };
-    const prescribedIds = newProgram.sessions.flatMap((session) => session.exercises.map((exercise) => exercise.exerciseId));
-    expect(prescribedIds.length).toBeGreaterThan(0);
-    const profileByExerciseId = new Map(CANONICAL_LIMITATION_PROFILES.map((entry) => [entry.exerciseId, entry.limitationProfile]));
-    const catalog = new Map(EXERCISES_SEED.map((exercise) => [exercise.id, { ...exercise, limitationProfile: profileByExerciseId.get(exercise.id) }]));
-    for (const exerciseId of prescribedIds) {
-      const exercise = catalog.get(exerciseId);
-      expect(exercise, exerciseId).toBeDefined();
-      if (!exercise) continue;
-      expect(isLimitationSafe(exercise, ['knee']), exerciseId).toBe(true);
-    }
-
-    // LA-05/LA-08 (§13 — the most important VG-I assertion): the journey
-    // must be able to CONTINUE past the ADAPT to a further real earned
-    // evolution — proves no stale snapshot/source identity/dead cycle.
-    const { programInstanceId: postAdaptInstance, programId: postAdaptProgram } = await currentInstanceAndProgram(UID);
-    await backdateAndFillHistory(UID, intermediateAdvancedMinimumActiveDays + 2, postAdaptInstance, postAdaptProgram);
-    await prepareAndActivate(UID, 'CYCLE_EVOLUTION');
-    expect((await loadWorkoutLifecycle(UID))!.lifecycle.currentTrainingLevel).toBe('INTERMEDIATE');
-    expect((await loadWorkoutLifecycle(UID))!.lifecycle.startingLevel).toBe('BEGINNER');
   }, 600_000);
 
   it('VG-J: Motivational Renewal never counts as earned, and 3 earned + 1 renewal never unlocks Advanced', async () => {

@@ -1,7 +1,7 @@
 import type { Firestore } from 'firebase-admin/firestore';
+import { EXERCISES_SEED } from '../prescriptionEngine/data/exercisesSeedData';
 
-import { WORKOUT_TEMPLATES, TEMPLATE_LIBRARY_ID } from '../prescriptionEngine/workoutPrescription/catalog';
-import { loadLocalLimitationDataset } from '../prescriptionEngine/workoutPrescription/localLimitationCatalog';
+import { TEMPLATE_LIBRARY_ID,WORKOUT_TEMPLATES } from '../prescriptionEngine/workoutPrescription/catalog';
 import { toWorkoutTemplateDocumentBody } from '../prescriptionEngine/workoutPrescription/templateDocument';
 import { PRESCRIPTION_VERSIONS } from '../prescriptionEngine/workoutPrescription/types';
 
@@ -16,24 +16,19 @@ import { PRESCRIPTION_VERSIONS } from '../prescriptionEngine/workoutPrescription
  * global (not user-scoped) — call once per test file, in `beforeAll`.
  */
 export async function seedRealPrescriptionCatalog(db: Firestore): Promise<void> {
-  const local = loadLocalLimitationDataset();
+  const local = { exercises: EXERCISES_SEED };
 
   const exerciseBatch = db.batch();
   for (const exercise of local.exercises) {
     // Firestore rejects `undefined` field values; exercises without a
     // limitation profile carry `limitationProfile: undefined` here.
-    const { limitationProfile, ...rest } = exercise;
+
     exerciseBatch.set(
       db.collection('exercises').doc(exercise.id),
-      limitationProfile === undefined ? rest : { ...rest, limitationProfile },
+      exercise,
     );
   }
   await exerciseBatch.commit();
-
-  await db.collection('limitationDatasetState').doc('active').set({
-    datasetVersion: local.version,
-    limitationDatasetHash: local.hash,
-  });
 
   const templateBatch = db.batch();
   for (const template of WORKOUT_TEMPLATES) {

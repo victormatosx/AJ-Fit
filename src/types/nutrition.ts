@@ -805,7 +805,7 @@ export interface NutritionPlanPayload {
   engineSnapshot: NutritionEngineSnapshot;
   meals: NutritionMeal[];
   dailyTotals: NutritionTotals;
-  generationMetadata: { mode?: 'catalog'; provider: string; model: string; attempts: number; corrected: boolean; fallbackUsed: boolean };
+  generationMetadata: { mode?: 'catalog'; review?: NutritionReviewApprovalMetadata; provider: string; model: string; attempts: number; corrected: boolean; fallbackUsed: boolean };
   versions: NutritionPlanVersions;
 }
 
@@ -1012,12 +1012,12 @@ export const NUTRITION_GENERATION_OPERATION_TYPES = ['full_plan', 'meal_alternat
 export type NutritionGenerationOperationType = (typeof NUTRITION_GENERATION_OPERATION_TYPES)[number];
 
 /** `06_ai/ai_observability.md` §4 — the only place any nutrition doc enumerates literal failure codes. */
-/**
- * Diet-quality-v3 (2026-10-10): `AI_UNKNOWN_FOOD`/`AI_EXCLUDED_FOOD`
- * (catalog-ID lookup failures) and `CATALOG_INSUFFICIENT` (candidate-pool
- * preflight) are gone — generation no longer resolves against
- * `nutritionFoods` at all, so neither failure mode can occur anymore.
- */
+/** Additive review metadata. Historical plans without it remain readable. */
+export interface NutritionReviewApprovalMetadata {
+  version: string; model: string; candidateDigest: string; calls: number;
+}
+/** Creator/provider, deterministic checks, independent review and budget exhaustion
+ * have separate codes. Unknown future codes must remain safe generic client failures. */
 export const NUTRITION_GENERATION_ERROR_CODES = [
   'AI_TIMEOUT',
   'AI_RATE_LIMIT',
@@ -1025,6 +1025,17 @@ export const NUTRITION_GENERATION_ERROR_CODES = [
   'AI_SCHEMA_INVALID',
   'AI_MACRO_VALIDATION_FAILED',
   'AI_SAFETY_VALIDATION_FAILED',
+  'AI_DETERMINISTIC_SAFETY_BLOCKED',
+  'AI_CONTENT_SAFETY_MISMATCH',
+  'AI_PROVIDER_REFUSAL',
+  'AI_REVIEW_PROVIDER_REFUSAL',
+  'AI_REVIEW_SCHEMA_INVALID',
+  'AI_REVIEW_UNAVAILABLE',
+  'AI_REVIEW_TIMEOUT',
+  'AI_REVIEW_RATE_LIMIT',
+  'AI_REVIEW_REJECTED',
+  'AI_REVIEW_INSUFFICIENT_INFORMATION',
+  'AI_EVIDENCE_INSUFFICIENT',
   'AI_RETRY_EXHAUSTED',
   'AI_COST_LIMIT_EXCEEDED',
   'FEATURE_DISABLED',
@@ -1036,7 +1047,9 @@ export type NutritionGenerationErrorCode = (typeof NUTRITION_GENERATION_ERROR_CO
 
 /** `users/{uid}/nutritionGenerationJobs/{generationId}` (`07_backend/firestore_schema.md` §9). */
 export interface NutritionGenerationJob<TTimestamp = unknown> {
-  generationMode?: 'catalog';
+  generationMode?: 'catalog' | 'reviewed';
+  aiCallCount?: number;
+  aiReservedUsd?: number;
   generationId: string;
   operationType: NutritionGenerationOperationType;
   status: NutritionGenerationStatus;
@@ -1080,7 +1093,7 @@ export interface NutritionMealAlternative<TTimestamp = unknown> {
   recommendedOptionId: string;
   feedback?: { reason: NutritionMealFeedbackReason; dislikedFoodIds?: string[] } | null;
   catalogVersion: string;
-  generationMetadata: { mode?: 'catalog'; provider: string; model: string; attempts: number; corrected: boolean; fallbackUsed: boolean };
+  generationMetadata: { mode?: 'catalog'; review?: NutritionReviewApprovalMetadata; provider: string; model: string; attempts: number; corrected: boolean; fallbackUsed: boolean };
   createdAt: TTimestamp;
 }
 

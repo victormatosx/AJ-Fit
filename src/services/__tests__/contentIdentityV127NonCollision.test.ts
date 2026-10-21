@@ -9,7 +9,7 @@
  * from its v2.0 namesake, so its content hash always differs too)
  * participate in the hashed preimage (`contentIdentityPreimage`).
  */
-import { describe, expect, it, vi } from 'vitest';
+import { describe,expect,it,vi } from 'vitest';
 
 vi.mock('../../lib/firebase', () => ({ db: undefined }));
 
@@ -32,8 +32,6 @@ function identityFor(versions: Record<string, string>, templateContentHash: stri
     plan: {
       planId: 'wp_same',
       templateId: 'T091',
-      limitationDatasetVersion: 'n/a',
-      limitationDatasetHash: 'n/a',
       versions,
     } as unknown as Parameters<typeof contentIdentityFor>[0]['plan'],
     template: { id: 'T091' as never, version: 1, contentHash: templateContentHash },
@@ -76,12 +74,10 @@ describe('contentIdentityFor — v2 vs v1.27 non-collision (Fase 8 §8)', () => 
       plan: {
         planId: 'wp_a874860f',
         templateId: 'T003',
-        limitationDatasetVersion: 'phase3-limitation-dataset-v3',
-        limitationDatasetHash: '21ce79bcb57802df8a6072e933942b02ea34ba1d9ab85f0dc091395bff0f3944',
         versions: V2_VERSIONS,
       } as unknown as Parameters<typeof contentIdentityFor>[0]['plan'],
       template: { id: 'T003' as never, version: 2, contentHash: 'e3aa4b3cba2df92ff4a89ebe2bd90aa8c43bf763957167ec7a72a6145eaa731d' },
     });
-    expect(identity).toBe('wpg_21e1db98');
+    expect(identity).toBe('wpg_bc19d587');
   });
 });

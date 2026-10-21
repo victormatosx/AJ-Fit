@@ -287,11 +287,6 @@ export async function recoverWorkoutLifecyclePartialState(uid: string): Promise<
   if (program.prescriptionId !== state.activePrescriptionIdentity || typeof program.questionnaireId !== 'string') {
     return { classification: 'UNRECOVERABLE', recovered: false, lifecycle: null };
   }
-  // If the authoritative ProgramInstance snapshot itself is gone, only a
-  // proven questionnaire baseline is reconstructable. Rebuilding an adapted
-  // or evolved instance from the origin questionnaire would silently erase
-  // 8A safety inputs (for example a newly added knee limitation), so fail
-  // explicitly instead of inventing a replacement snapshot.
   if (!instance && state.initializationOrigin !== 'V1_MIGRATION_BASELINE' && program.source !== 'onboarding') {
     return { classification: 'UNRECOVERABLE', recovered: false, lifecycle: null };
   }

@@ -12,7 +12,7 @@
  * iPhone's reported `versionsFingerprint = c46fcd04`) plus the classic
  * undefined/absent/null and array/nested-object edge cases.
  */
-import { describe, expect, it, vi } from 'vitest';
+import { describe,expect,it,vi } from 'vitest';
 
 vi.mock('../../lib/firebase', () => ({ db: undefined }));
 
@@ -23,8 +23,6 @@ const TEMPLATE = { id: 'T003' as never, version: 2, contentHash: 'e3aa4b3cba2df9
 const BASE_PLAN = {
   planId: 'wp_a874860f',
   templateId: 'T003',
-  limitationDatasetVersion: 'phase3-limitation-dataset-v3',
-  limitationDatasetHash: '21ce79bcb57802df8a6072e933942b02ea34ba1d9ab85f0dc091395bff0f3944',
 } as const;
 
 // The two REAL orders from the wpe_e3c68302 investigation.
@@ -56,7 +54,7 @@ describe('contentIdentityFor golden vectors — canonicalization', () => {
     const nodeOrderId = identityWith(NODE_ORDER_VERSIONS);
     const iphoneOrderId = identityWith(IPHONE_ORDER_VERSIONS);
     expect(nodeOrderId).toBe(iphoneOrderId);
-    expect(nodeOrderId).toBe('wpg_21e1db98'); // pinned — a future regression must change this test, not silently pass
+    expect(nodeOrderId).toBe('wpg_bc19d587'); // pinned — a future regression must change this test, not silently pass
   });
 
   it('golden vector: reversed key order produces the same identity too (not just one specific permutation)', () => {

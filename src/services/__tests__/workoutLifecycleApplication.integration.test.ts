@@ -1,10 +1,10 @@
 /** Opt-in real Firestore Emulator coverage for the Fase 4 Lifecycle Orchestrator (activation, deferral, adaptation). */
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { initializeTestEnvironment,type RulesTestEnvironment } from '@firebase/rules-unit-testing';
+import { Timestamp,collection,deleteDoc,doc,getDoc,getDocs,setDoc } from 'firebase/firestore';
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
-import { collection, deleteDoc, doc, getDoc, getDocs, setDoc, Timestamp } from 'firebase/firestore';
 import { createRequire } from 'node:module';
+import { resolve } from 'node:path';
+import { afterAll,afterEach,beforeAll,beforeEach,describe,expect,it,vi } from 'vitest';
 
 // Deliberately resolved (at runtime, via `require`) from
 // `functions/node_modules`, NOT this project's own root `firebase-admin`
@@ -35,17 +35,10 @@ type AdminFirestore = import('firebase-admin/firestore').Firestore;
 import { finalizeWorkoutSessionHandler } from '../../../functions/src/workoutLifecycle/finalizeWorkoutSession';
 
 import { buildSeedDocuments } from '../../../scripts/seedWorkoutTemplates';
-import { completeAnswers } from '../../workoutPrescription/__tests__/fixtures';
 import { toPersistedAnswers } from '../../lib/questionnaireAnswers';
-import {
-  CANONICAL_LIMITATION_DATASET_HASH,
-  CANONICAL_LIMITATION_DATASET_VERSION,
-  CANONICAL_LIMITATION_PROFILES,
-} from '../../workoutPrescription/limitationDataset';
-import { EXERCISES_SEED } from '../../data/exercisesSeedData';
-import { isLimitationSafe } from '../../prescriptionEvolution/equivalence';
 import { countEarnedIntermediateCycles } from '../../progressionEngineV2/earnedCycles';
 import { programInstanceIdForOperation } from '../../workoutLifecycle/domain';
+import { completeAnswers } from '../../workoutPrescription/__tests__/fixtures';
 
 const PROJECT_ID = 'ajfit-rules-test';
 const UID = 'frank';
@@ -64,11 +57,11 @@ vi.mock('expo-crypto', async () => {
   };
 });
 
-import { contentIdentityFor, generateAndPersistWorkoutProgram, loadActiveWorkoutProgram } from '../workoutPrograms';
-import { loadWorkoutLifecycle, listTrainingCycles, listProgramInstances, loadPendingEvolution, recoverWorkoutLifecyclePartialState } from '../workoutLifecycle';
-import { evolvePrescription } from '../prescriptionEvolution';
-import { evaluateProgressionV2ForUser } from '../workoutProgressionV2';
+import { currentPlanAvailableDays } from '../../screens/myPlanPresentation';
+import type { WorkoutLifecycleAuthorityCanonicalContent } from '../../workoutLifecycle/authorityProvider';
+import type { FinalWorkoutPlan } from '../../workoutPrescription/types';
 import { startOrResumeWorkoutExecution } from '../workoutExecutions';
+import { listProgramInstances,listTrainingCycles,loadPendingEvolution,loadWorkoutLifecycle } from '../workoutLifecycle';
 import {
   activatePendingEvolution,
   adaptWorkoutProgram,
@@ -79,15 +72,14 @@ import {
   processWorkoutLifecycleAfterSession,
   reconcileWorkoutLifecycle,
 } from '../workoutLifecycleApplication';
-import { enableWorkoutLifecycleRollout } from './workoutLifecycleRolloutFixture';
+import { contentIdentityFor,generateAndPersistWorkoutProgram,loadActiveWorkoutProgram } from '../workoutPrograms';
+import { evaluateProgressionV2ForUser } from '../workoutProgressionV2';
 import {
   installWorkoutLifecycleAuthorityFixture,
   resetWorkoutLifecycleAuthorityFixture,
   setWorkoutLifecycleCanonicalResponseOverrideForTests,
 } from './workoutLifecycleAuthorityFixture';
-import type { WorkoutLifecycleAuthorityCanonicalContent } from '../../workoutLifecycle/authorityProvider';
-import type { FinalWorkoutPlan } from '../../workoutPrescription/types';
-import { currentPlanAvailableDays } from '../../screens/myPlanPresentation';
+import { enableWorkoutLifecycleRollout } from './workoutLifecycleRolloutFixture';
 
 const T003_SEED = buildSeedDocuments().find((t) => t.id === 'T003');
 const T004_SEED = buildSeedDocuments().find((t) => t.id === 'T004');
@@ -139,10 +131,6 @@ async function seedBaseUser() {
     });
     await setDoc(doc(rawDb, 'workoutTemplates', 'T003'), T003_SEED);
     await setDoc(doc(rawDb, 'workoutTemplates', 'T004'), T004_SEED);
-    await setDoc(doc(rawDb, 'limitationDatasetState', 'active'), {
-      datasetVersion: CANONICAL_LIMITATION_DATASET_VERSION,
-      limitationDatasetHash: CANONICAL_LIMITATION_DATASET_HASH,
-    });
     await setDoc(doc(rawDb, 'users', UID, 'questionnaires', QUESTIONNAIRE_ID), {
       answers: toPersistedAnswers(BEGINNER_ANSWERS), version: 1, createdAt: Timestamp.now(),
     });
@@ -152,39 +140,6 @@ async function seedBaseUser() {
   });
 }
 
-async function seedCanonicalExerciseCatalog() {
-  const profileByExerciseId = new Map(
-    CANONICAL_LIMITATION_PROFILES.map((entry) => [entry.exerciseId, entry.limitationProfile]),
-  );
-  await testEnv.withSecurityRulesDisabled(async (ctx) => {
-    const rawDb = ctx.firestore();
-    await Promise.all(EXERCISES_SEED.map(async (exercise) => {
-      const data = JSON.parse(JSON.stringify({
-        ...exercise,
-        limitationProfile: profileByExerciseId.get(exercise.id),
-      })) as Record<string, unknown>;
-      await setDoc(doc(rawDb, 'exercises', exercise.id), data);
-    }));
-  });
-}
-
-function expectProgramKneeSafe(program: { sessions: Array<{ exercises: Array<{ exerciseId: string }> }> }) {
-  const profileByExerciseId = new Map(
-    CANONICAL_LIMITATION_PROFILES.map((entry) => [entry.exerciseId, entry.limitationProfile]),
-  );
-  const catalog = new Map(EXERCISES_SEED.map((exercise) => [exercise.id, {
-    ...exercise,
-    limitationProfile: profileByExerciseId.get(exercise.id),
-  }]));
-  const exerciseIds = program.sessions.flatMap((session) => session.exercises.map((exercise) => exercise.exerciseId));
-  expect(exerciseIds.length).toBeGreaterThan(0);
-  for (const exerciseId of exerciseIds) {
-    const exercise = catalog.get(exerciseId);
-    expect(exercise, exerciseId).toBeDefined();
-    if (!exercise) continue;
-    expect(isLimitationSafe(exercise, ['knee']), exerciseId).toBe(true);
-  }
-}
 
 function isTrainingWeekday(date: Date): boolean {
   const map = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
@@ -924,30 +879,6 @@ describe.skipIf(!enabled)('Fase 4 Lifecycle Orchestrator — real Firestore Emul
     expect(active?.weeklySchedule?.filter((day) => day.state === 'TRAINING')).toHaveLength(trainingDaysBefore);
   }, 30_000);
 
-  it('8B missing adapted ProgramInstance fails safely instead of rebuilding stale questionnaire inputs', async () => {
-    await seedBaseUser();
-    await seedCanonicalExerciseCatalog();
-    const generated = await generateAndPersistWorkoutProgram({
-      uid: UID, questionnaireId: QUESTIONNAIRE_ID, questionnaireVersion: 1,
-      answers: BEGINNER_ANSWERS, source: 'onboarding',
-    });
-    if (generated.status !== 'SUCCESS') throw new Error('setup failed');
-    const adapted = await adaptWorkoutProgram({
-      uid: UID,
-      updatedFields: { specialConditions: ['musculoskeletal_limitation'], limits: ['knee'] },
-      reason: 'LIMITATION', idempotencyKey: 'missing-adapted-instance',
-    });
-    if (adapted.status !== 'SUCCESS') throw new Error('setup failed');
-    const adaptedInstanceId = adapted.program.programInstanceId!;
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await deleteDoc(doc(ctx.firestore(), 'users', UID, 'programInstances', adaptedInstanceId));
-    });
-
-    const recovery = await recoverWorkoutLifecyclePartialState(UID);
-    expect(recovery).toMatchObject({ classification: 'UNRECOVERABLE', recovered: false, lifecycle: null });
-    expect((await listProgramInstances(UID)).some((item) => item.programInstanceId === adaptedInstanceId)).toBe(false);
-  }, 30_000);
-
   it('§113 adaptation is idempotent under retry — same idempotencyKey converges on one Program Instance', async () => {
     await seedBaseUser();
     const generated = await generateAndPersistWorkoutProgram({
@@ -1009,138 +940,6 @@ describe.skipIf(!enabled)('Fase 4 Lifecycle Orchestrator — real Firestore Emul
     },
     30_000,
   );
-
-  it('§AV/§AW LIMITATION adaptation activates immediately — never deferred', async () => {
-    await seedBaseUser();
-    const generated = await generateAndPersistWorkoutProgram({
-      uid: UID, questionnaireId: QUESTIONNAIRE_ID, questionnaireVersion: 1, answers: BEGINNER_ANSWERS, source: 'onboarding',
-    });
-    if (generated.status !== 'SUCCESS') throw new Error('setup failed');
-
-    const result = await adaptWorkoutProgram({
-      uid: UID, updatedFields: {}, reason: 'LIMITATION', idempotencyKey: 'safety-1',
-    });
-    expect(result.status).toBe('SUCCESS');
-    if (result.status !== 'SUCCESS') return;
-    // No pending/deferral artifact exists anywhere for adaptation — it is
-    // synchronous and immediate by construction (adaptWorkoutProgram never
-    // touches pendingEvolutions except to clear a stale one).
-    expect(await loadPendingEvolution(UID)).toBeNull();
-    const lifecycle = await loadWorkoutLifecycle(UID);
-    expect(lifecycle!.programInstance.activatedAt).not.toBeNull();
-  }, 30_000);
-
-  it('Fase 8A P0 — adapted inputs remain authoritative across consecutive adaptations and future evolution', async () => {
-    await seedBaseUser();
-    await seedCanonicalExerciseCatalog();
-    const questionnaireBefore = (await getDoc(doc(
-      mocks.db as never, 'users', UID, 'questionnaires', QUESTIONNAIRE_ID,
-    ))).data();
-    const generated = await generateAndPersistWorkoutProgram({
-      uid: UID, questionnaireId: QUESTIONNAIRE_ID, questionnaireVersion: 1,
-      answers: BEGINNER_ANSWERS, source: 'onboarding',
-    });
-    if (generated.status !== 'SUCCESS') throw new Error('setup failed');
-    const programAInstanceId = generated.program.programInstanceId!;
-
-    const firstAdaptation = await adaptWorkoutProgram({
-      uid: UID,
-      updatedFields: { specialConditions: ['musculoskeletal_limitation'], limits: ['knee'] },
-      reason: 'LIMITATION',
-      idempotencyKey: 'phase8a-knee',
-    });
-    expect(firstAdaptation.status).toBe('SUCCESS');
-    if (firstAdaptation.status !== 'SUCCESS') return;
-    const programBInstanceId = firstAdaptation.program.programInstanceId!;
-    expectProgramKneeSafe(firstAdaptation.program);
-
-    const afterFirst = await loadWorkoutLifecycle(UID);
-    expect(afterFirst!.programInstance.prescriptionInputSnapshot).toMatchObject({
-      source: 'PROGRAM_ADAPTATION',
-      schemaVersion: 1,
-      inputs: {
-        level: 'beginner',
-        limits: ['knee'],
-        specialConditions: ['musculoskeletal_limitation'],
-      },
-    });
-
-    // A promotion candidate must be derived from Program B's effective
-    // inputs, not from the original Beginner questionnaire.
-    const promotion = await evolvePrescription({ mode: 'LEVEL_PROMOTION', uid: UID, targetLevel: 'INTERMEDIATE' });
-    expect(promotion.status).toBe('SUCCESS');
-    if (promotion.status !== 'SUCCESS') return;
-    expect(promotion.prescriptionInputSnapshot.inputs).toMatchObject({
-      level: 'intermediate', limits: ['knee'], specialConditions: ['musculoskeletal_limitation'],
-    });
-    expectProgramKneeSafe(promotion.plan);
-
-    const secondAdaptation = await adaptWorkoutProgram({
-      uid: UID,
-      updatedFields: { duration: '45' },
-      reason: 'AVAILABILITY',
-      idempotencyKey: 'phase8a-duration',
-    });
-    expect(secondAdaptation.status).toBe('SUCCESS');
-    if (secondAdaptation.status !== 'SUCCESS') return;
-    const programCInstanceId = secondAdaptation.program.programInstanceId!;
-    const afterSecond = await loadWorkoutLifecycle(UID);
-    expect(afterSecond!.programInstance.prescriptionInputSnapshot?.inputs).toMatchObject({
-      duration: '45', limits: ['knee'], specialConditions: ['musculoskeletal_limitation'],
-    });
-    expectProgramKneeSafe(secondAdaptation.program);
-
-    // Simulate a career fact newer than the historical questionnaire. The
-    // next adaptation must pin Advanced, while preserving the adapted knee
-    // limitation. This is intentionally an admin-only fixture mutation.
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      const rawDb = ctx.firestore();
-      const current = (await loadWorkoutLifecycle(UID))!;
-      await setDoc(doc(rawDb, 'users', UID, 'workoutLifecycleState', 'current'), {
-        currentTrainingLevel: 'ADVANCED',
-      }, { merge: true });
-      await setDoc(doc(rawDb, 'users', UID, 'trainingCycles', current.lifecycle.currentCycleId), {
-        level: 'ADVANCED',
-      }, { merge: true });
-    });
-    const thirdAdaptation = await adaptWorkoutProgram({
-      uid: UID,
-      updatedFields: { goal: 'lose_fat' },
-      reason: 'GOAL',
-      idempotencyKey: 'phase8a-current-level',
-    });
-    expect(thirdAdaptation.status).toBe('SUCCESS');
-    if (thirdAdaptation.status !== 'SUCCESS') return;
-    expect((await loadWorkoutLifecycle(UID))!.programInstance.prescriptionInputSnapshot?.inputs).toMatchObject({
-      level: 'advanced', goal: 'lose_fat', duration: '45', limits: ['knee'],
-    });
-    expectProgramKneeSafe(thirdAdaptation.program);
-
-    const futureCycle = await evolvePrescription({
-      mode: 'CYCLE_EVOLUTION', uid: UID, targetCycleIdentity: 'phase8a-future',
-    });
-    expect(futureCycle.status).toBe('SUCCESS');
-    if (futureCycle.status !== 'SUCCESS') return;
-    expect(futureCycle.prescriptionInputSnapshot.inputs).toMatchObject({
-      level: 'advanced', goal: 'lose_fat', duration: '45', limits: ['knee'],
-    });
-    expectProgramKneeSafe(futureCycle.plan);
-
-    // Origin stays immutable, and each ProgramInstance retains its own
-    // historical identity rather than pointing at a mutable current object.
-    const questionnaireAfter = (await getDoc(doc(
-      mocks.db as never, 'users', UID, 'questionnaires', QUESTIONNAIRE_ID,
-    ))).data();
-    expect(questionnaireAfter).toEqual(questionnaireBefore);
-    const instances = await listProgramInstances(UID);
-    expect(instances.find((item) => item.programInstanceId === programAInstanceId)
-      ?.prescriptionInputSnapshot?.inputs.limits).toEqual(BEGINNER_ANSWERS.limits);
-    expect(instances.find((item) => item.programInstanceId === programBInstanceId)
-      ?.prescriptionInputSnapshot?.inputs.limits).toEqual(['knee']);
-    expect(instances.find((item) => item.programInstanceId === programCInstanceId)
-      ?.prescriptionInputSnapshot?.inputs.duration).toBe('45');
-    expect(new Set(instances.map((item) => item.prescriptionInputSnapshot?.snapshotId)).size).toBe(instances.length);
-  }, 60_000);
 
   it('Fase 8A P0 — adaptation resets only the progression window and the new ProgramInstance progresses independently', async () => {
     await seedBaseUser();
@@ -1507,7 +1306,7 @@ describe.skipIf(!enabled)('Fase 4 Lifecycle Orchestrator — real Firestore Emul
         await testEnv.withSecurityRulesDisabled(async (ctx) => {
           await setDoc(doc(ctx.firestore(), 'users', UID, 'pendingEvolutions', 'current'), {
             ...prepared.pending,
-            plan: { ...originalPlan, limitationDatasetVersion: 'CORRUPTED_LEGACY_ARTIFACT' },
+            plan: { ...originalPlan, },
           });
         });
 

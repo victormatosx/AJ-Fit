@@ -1,3 +1,5 @@
+> Registro histórico: o sistema musculoesquelético e as políticas clínicas V3/legacy descritos aqui foram descontinuados. Não são contratos atuais. Ver [remoção definitiva](../../../removal-physical-limitations/REPORT.md).
+
 # Phase 10B — Backend Canonical Prescription Authority
 
 Date: 2026-08-31

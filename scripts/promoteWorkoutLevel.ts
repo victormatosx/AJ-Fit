@@ -53,8 +53,6 @@ import { fromWorkoutTemplateDocument, WORKOUT_TEMPLATE_DOCUMENT_VERSION } from '
 import { PRESCRIPTION_VERSIONS, type QuestionnaireAnswers, type FinalWorkoutPlan, type CanonicalTemplate } from '../src/workoutPrescription/types';
 import { EXERCISES_SEED } from '../src/data/exercisesSeedData';
 import { exerciseCatalogErrors } from '../src/services/exerciseCatalogValidity';
-import { canonicalizeLimitationProfiles, LIMITATION_DATASET_STATE_COLLECTION, LIMITATION_DATASET_ACTIVE_DOCUMENT, type LimitationDatasetSnapshot } from '../src/workoutPrescription/limitationDataset';
-import type { LimitationCatalogExercise } from '../src/workoutPrescription/limitationResolver';
 import { buildLevelPromotionAnswers, type LevelPromotionTarget } from '../src/prescriptionEvolution/levelPromotion';
 import {
   buildPrescriptionInputSnapshot,
@@ -124,38 +122,12 @@ function contentIdentityFor(input: {
     templateVersion: input.template.version,
     templateContentHash: input.template.contentHash,
     versions: input.plan.versions,
-    limitationDatasetVersion: input.plan.limitationDatasetVersion,
-    limitationDatasetHash: input.plan.limitationDatasetHash,
     adaptationStage: input.plan.adaptationStage ?? null,
   });
   return `wpg_${lifecycleStableHash(preimage)}`;
 }
 
-async function loadLimitationDataset(needsExercises: boolean): Promise<LimitationDatasetSnapshot> {
-  const identitySnap = await db.doc(`${LIMITATION_DATASET_STATE_COLLECTION}/${LIMITATION_DATASET_ACTIVE_DOCUMENT}`).get();
-  if (!identitySnap.exists) throw new Error('LIMITATION_DATASET_ACTIVE_IDENTITY_MISSING');
-  const identityData = identitySnap.data()!;
-  const version = identityData.datasetVersion as string;
-  const hash = identityData.limitationDatasetHash as string;
-  if (typeof version !== 'string' || typeof hash !== 'string' || !/^[a-f0-9]{64}$/.test(hash)) {
-    throw new Error('LIMITATION_DATASET_ACTIVE_IDENTITY_INVALID');
-  }
-  if (!needsExercises) return { version, hash, source: 'firestore', exercises: [] };
 
-  const snap = await db.collection('exercises').get();
-  const documents = snap.docs.map((d) => ({ id: d.id, data: { ...d.data(), id: d.id } }));
-  const errors = exerciseCatalogErrors(documents);
-  if (errors.length) throw new Error(errors.join(','));
-  const exercises = documents.map((d) => d.data as LimitationCatalogExercise);
-  const profiles = exercises
-    .filter((e) => (e as any).limitationProfile != null)
-    .map((e: any) => ({ exerciseId: e.id, limitationProfile: e.limitationProfile }));
-  const computedHash = crypto.createHash('sha256')
-    .update(canonicalizeLimitationProfiles(profiles, exercises as any))
-    .digest('hex');
-  if (computedHash !== hash) throw new Error('LIMITATION_DATASET_VERSION_MISMATCH');
-  return { version, hash, source: 'firestore', exercises };
-}
 
 async function main() {
   const { uid, confirm, targetArg } = parseArgs(process.argv.slice(2));
@@ -266,14 +238,10 @@ async function main() {
   const template = fromWorkoutTemplateDocument(templateDoc);
 
   // ─── Limitation dataset (identity always required; exercises only if declared) ───
-  const needsLimitationCatalog = syntheticAnswers.specialConditions.includes('musculoskeletal_limitation');
-  const limitationDataset = await loadLimitationDataset(needsLimitationCatalog);
 
   // ─── Generate the new prescription content ───
   const result = generateWorkoutPrescription(syntheticAnswers, {
     template,
-    exerciseCatalog: needsLimitationCatalog ? limitationDataset.exercises : undefined,
-    limitationDataset,
   });
   if (result.status !== 'SUCCESS') {
     console.error(`Aborting: prescription generation failed (${result.status})`, (result as any).reasonCodes);

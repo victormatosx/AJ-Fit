@@ -243,6 +243,9 @@
       "excludedAllergens": {
         "title": "¿Tienes alguna alergia o restricción alimentaria?",
         "subtitle": "Selecciona todas las que correspondan.",
+        "lactoseIntolerant": "Intolerancia a la lactosa",
+        "legacyMilkNotice": "Anteriormente indicaste alergia a la leche. Alergia a la leche e intolerancia a la lactosa son condiciones diferentes — si tu caso es intolerancia a la lactosa, actualiza tu respuesta abajo.",
+        "legacyMilkAction": "No tengo alergia a la leche",
         "options": {
           "milk": "Leche",
           "egg": "Huevo",
@@ -319,9 +322,21 @@
       "title": "Función no disponible",
       "body": "La generación de dietas no está disponible temporalmente."
     },
+    "reviewNotApproved": {
+      "title": "No pudimos aprobar esta dieta",
+      "body": "La revisión encontró incompatibilidades o información insuficiente. No se activó ninguna dieta nueva. Inténtalo de nuevo más tarde."
+    },
+    "reviewUnavailable": {
+      "title": "No pudimos completar la revisión",
+      "body": "La revisión de la dieta no está disponible en este momento. No se activó ninguna dieta nueva. Inténtalo de nuevo más tarde."
+    },
+    "attemptsExhausted": {
+      "title": "No pudimos completar tu dieta",
+      "body": "Se agotaron los intentos sin obtener un plan aprobado. No se activó ninguna dieta nueva. Puedes intentarlo de nuevo más tarde."
+    },
     "safetyBlocked": {
       "title": "Generación no disponible",
-      "body": "Durante el embarazo o la lactancia, recomendamos seguimiento profesional en lugar de la generación automática."
+      "body": "No pudimos generar una dieta automática de forma segura con los datos de tu perfil. Contacta a soporte para continuar."
     },
     "accountInactive": {
       "title": "Cuenta inactiva",

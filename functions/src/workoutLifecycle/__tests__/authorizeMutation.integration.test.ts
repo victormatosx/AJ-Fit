@@ -1,19 +1,19 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { deleteApp, initializeApp, type App } from 'firebase-admin/app';
-import { getFirestore, Timestamp, type Firestore } from 'firebase-admin/firestore';
+import { deleteApp,initializeApp,type App } from 'firebase-admin/app';
+import { Timestamp,getFirestore,type Firestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
+import { afterAll,beforeAll,beforeEach,describe,expect,it,vi } from 'vitest';
 
 import {
-  authorizeWorkoutLifecycleMutationHandler,
   authoritativeEarnedFact,
   authoritativeEarnedFactFullScanOracleForTest,
+  authorizeWorkoutLifecycleMutationHandler,
   initializeWorkoutProgramV127Handler,
 } from '../authorizeMutation';
 import { countEarnedIntermediateCycles } from '../prescriptionEngine/progressionEngineV2/earnedCycles';
 import { effectivePrescriptionInputsFromAnswers } from '../prescriptionEngine/workoutLifecycle/prescriptionInputs';
-import { seedRealPrescriptionCatalog } from './realCatalogFixture';
 import { weekdayOfLocalDate } from '../scheduleEngine/calendar';
 import { resolveWorkoutSchedule } from '../scheduleEngine/resolver';
+import { seedRealPrescriptionCatalog } from './realCatalogFixture';
 
 const enabled = process.env.WORKOUT_LIFECYCLE_AUTHORITY_INTEGRATION === '1';
 const UID = 'authority-adversary';
@@ -22,7 +22,7 @@ const UID = 'authority-adversary';
 function completeInputs(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     sex: 'm', goal: 'gain_muscle', level: 'beginner', days: 4, duration: '60', place: 'gym',
-    trainingDays: ['MON', 'TUE', 'THU', 'FRI'], equipment: [], style: [], limits: [], muscleFocus: [],
+    trainingDays: ['MON', 'TUE', 'THU', 'FRI'], equipment: [], style: [], muscleFocus: [],
     specialConditions: ['none'],
     pregnancyScreening: null, postpartumScreening: null, functionalScreening: null,
     lipedemaScreening: null, dizzinessScreening: null, postSurgicalScreening: null,
@@ -377,61 +377,6 @@ describe.skipIf(!enabled)('Workout Lifecycle authority — real Firestore Emulat
     });
   });
 
-  it('ADAPT never seals a knee-unsafe exercise even when the declared limitation would have allowed the client to ask for one', async () => {
-    // Phase 10B (docs/workout-lifecycle/v2/decisions/
-    // ADR-016_BACKEND_AUTHORITATIVE_PRESCRIPTION.md): the backend now
-    // generates its OWN plan from the authoritative limitation-bearing
-    // inputs against the real catalog — it never seals whatever the client
-    // submitted, safe or not. The real proof of safety is checking the
-    // SEALED content's real exercise docs, not merely rejecting a client
-    // plan (which is not even read for content anymore).
-    const inputs = completeInputs({ specialConditions: ['musculoskeletal_limitation'], limits: ['knee'] });
-    await db.collection('users').doc(UID).collection('programInstances').doc('wpi_active').update({
-      prescriptionInputSnapshot: {
-        snapshotId: 'pis_active', schemaVersion: 1, source: 'QUESTIONNAIRE_BASELINE', inputs,
-      },
-    });
-    const targetInputs = { ...inputs, level: 'beginner' };
-    const result = await authorizeWorkoutLifecycleMutationHandler({
-      auth: { uid: UID },
-      data: {
-        operation: 'ADAPT', targetProgramSource: 'program_adaptation', eventType: 'PROGRAM_ADAPTED',
-        questionnaireId: 'q1', questionnaireVersion: 1,
-        sourceProgramInstanceId: 'wpi_active', sourceCycleId: 'cyc_active',
-        sourcePrescriptionInputSnapshotId: 'pis_active', targetProgramInstanceId: 'wpi_unsafe',
-        targetContentIdentity: 'wpg_client_claimed_identity', targetPrescriptionIdentity: 'rx_client_claimed_identity',
-        targetTrainingLevel: 'BEGINNER', targetCycleNumber: 1,
-        updatedFields: {},
-        // Structurally valid, in-bounds, "safe-looking" — but irrelevant:
-        // the backend never reads this for content.
-        targetPlan: {
-          planId: 'rx_client_claimed_identity',
-          sessions: [{ exercises: [{ exerciseId: 'lat-pulldown', sets: 3 }] }],
-        },
-        targetPrescriptionInputSnapshot: {
-          snapshotId: snapshotIdFor('PROGRAM_ADAPTATION', targetInputs),
-          schemaVersion: 1, source: 'PROGRAM_ADAPTATION', inputs: targetInputs,
-        },
-      },
-    } as never, db);
-    expect(result).toMatchObject({ grantId: 'current' });
-    const grant = (await db.collection('users').doc(UID)
-      .collection('workoutLifecycleAuthorityGrants').doc('current').get()).data();
-    // The client's claimed identity is never what actually gets sealed.
-    expect(grant?.targetContentIdentity).not.toBe('wpg_client_claimed_identity');
-    const sealed = await db.collection('users').doc(UID)
-      .collection('workoutPrograms').doc(grant!.targetContentIdentity as string).get();
-    expect(sealed.exists).toBe(true);
-    const sealedExerciseIds = (sealed.data()!.sessions as Array<{ exercises: Array<{ exerciseId: string }> }>)
-      .flatMap((session) => session.exercises.map((item) => item.exerciseId));
-    expect(sealedExerciseIds.length).toBeGreaterThan(0);
-    const exerciseDocs = await db.getAll(...sealedExerciseIds.map((id) => db.collection('exercises').doc(id)));
-    for (const document of exerciseDocs) {
-      const kneeRule = document.data()?.limitationProfile?.regions?.knee;
-      expect(kneeRule?.status).not.toBe('avoid');
-    }
-  });
-
   it('requires Firebase Auth before reading or granting lifecycle authority', async () => {
     await expect(authorizeWorkoutLifecycleMutationHandler({
       auth: null, data: { operation: 'FINISH_EXECUTION', executionId: 'exec_1' },
@@ -553,6 +498,21 @@ describe.skipIf(!enabled)('Workout Lifecycle authority — real Firestore Emulat
       return inputs;
     }
 
+    it('installs all five T004 sessions while discarding historical physical answers', async () => {
+      await seedQuestionnaire('q_old_physical', { sex: 'm', goal: 'gain_muscle', level: 'intermediate', days: 5, place: 'gym', specialConditions: ['musculoskeletal_limitation'], limits: ['knee', 'back', 'other'] });
+      const result = await initializeWorkoutProgramV127Handler({ auth: { uid: UID }, data: { questionnaireId: 'q_old_physical', questionnaireVersion: 1 } } as never, db);
+      const root = db.collection('users').doc(UID);
+      const program = (await root.collection('workoutPrograms').doc(result.programId).get()).data()!;
+      expect(program.templateId).toBe('T004');
+      expect(program.sessions).toHaveLength(5);
+      expect(program.sessions[2].exercises.some((item: { exerciseId: string }) => item.exerciseId === 'leg-press-45')).toBe(true);
+      expect(program.sessions[4].exercises.length).toBeGreaterThan(0);
+      expect(JSON.stringify(program)).not.toMatch(/limitation|musculoskeletal|substitutionPolicy/);
+      const instance = (await root.collection('programInstances').doc(result.programInstanceId).get()).data()!;
+      expect(instance.prescriptionInputSnapshot.inputs).not.toHaveProperty('limits');
+      expect(instance.prescriptionInputSnapshot.inputs.specialConditions).not.toContain('musculoskeletal_limitation');
+    });
+
     it('generates, safety-validates, and persists a real v1.27 plan entirely server-side — no client transaction involved', async () => {
       await seedQuestionnaire('q_v127_init');
       const result = await initializeWorkoutProgramV127Handler(
@@ -663,29 +623,6 @@ describe.skipIf(!enabled)('Workout Lifecycle authority — real Firestore Emulat
       await expect(initializeWorkoutProgramV127Handler(
         { auth: { uid: UID }, data: { questionnaireId: 'q_v127_second', questionnaireVersion: 1 } } as never, db,
       )).rejects.toMatchObject({ code: 'failed-precondition', message: 'workout_lifecycle_v127_initialize_not_applicable' });
-    });
-
-    it('preserves the existing fail-closed musculoskeletal-limitation behavior — never persists an unsafe plan', async () => {
-      // Mirrors `engineV127Integration.test.ts`'s T009 case exactly (male/
-      // home/hypertrophy/4d, hip limitation, no safe substitute for at least
-      // one exercise) — a pure local-engine invariant, independent of
-      // whatever `seedRealPrescriptionCatalog` happens to seed in Firestore.
-      await seedQuestionnaire('q_v127_unsafe', {
-        goal: 'gain_muscle', days: 4, place: 'home',
-        equipment: ['bodyweight', 'dumbbells', 'bands', 'bench_or_box'],
-        specialConditions: ['musculoskeletal_limitation'], limits: ['hip'],
-      });
-      await expect(initializeWorkoutProgramV127Handler(
-        { auth: { uid: UID }, data: { questionnaireId: 'q_v127_unsafe', questionnaireVersion: 1 } } as never, db,
-      )).rejects.toMatchObject({ code: 'failed-precondition' });
-
-      const root = db.collection('users').doc(UID);
-      const [lifecycle, state] = await Promise.all([
-        root.collection('workoutLifecycleState').doc('current').get(),
-        root.collection('workoutProgramState').doc('active').get(),
-      ]);
-      expect(lifecycle.exists).toBe(false);
-      expect(state.exists).toBe(false);
     });
   });
 

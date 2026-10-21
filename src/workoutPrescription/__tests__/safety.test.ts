@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe,expect,it } from 'vitest';
 import { evaluateSafety } from '../safety';
 import { completeAnswers } from './fixtures';
 
@@ -15,15 +15,6 @@ describe('safety engine', () => {
     ['unsure', 'cleared_no_restrictions', 'REQUIRES_CLEARANCE'],
   ] as const)('post-surgical %s + %s => %s', (status, clearance, expected) => {
     expect(evaluateSafety(postSurgical(status, clearance)).status).toBe(expected);
-  });
-
-  it('completed surgery with a residual mild limitation is adapted regionally', () => {
-    const answers = postSurgical('completed', 'cleared_no_restrictions');
-    answers.specialConditions = ['post_surgical', 'musculoskeletal_limitation'];
-    answers.limits = ['knee'];
-    expect(evaluateSafety(answers)).toEqual(expect.objectContaining({
-      status: 'ADAPTED', reasons: expect.arrayContaining(['MUSCULOSKELETAL_ADAPTATION_REQUIRED']),
-    }));
   });
 
   it.each([
@@ -49,17 +40,6 @@ describe('safety engine', () => {
     expect(evaluateSafety(completeAnswers({
       specialConditions: ['lipedema'], lipedemaScreening: { symptomImpact: impact, professionalGuidance: guidance },
     })).status).toBe(expected);
-  });
-
-  it('activates musculoskeletal adaptation from the selected region alone', () => {
-    expect(evaluateSafety(completeAnswers({
-      specialConditions: ['musculoskeletal_limitation'], limits: ['knee'],
-    }))).toEqual(expect.objectContaining({
-      status: 'ADAPTED',
-      reasons: ['MUSCULOSKELETAL_ADAPTATION_REQUIRED'],
-      requiredModifierIds: ['safety:musculoskeletal_adaptation'],
-      protectedConstraints: ['limitation:knee'],
-    }));
   });
 
   it('blocks only the documented pregnancy red flags', () => {

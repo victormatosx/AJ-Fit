@@ -1,9 +1,8 @@
-import { describe, expect, it } from 'vitest';
-import { equipmentContextFor, unrestrictedEquipmentContext, type EquipmentContext } from '../../workoutPrescription/equipment';
-import type { LimitationCatalogExercise } from '../../workoutPrescription/limitationResolver';
-import type { FinalWorkoutExercise, FinalWorkoutSession } from '../../workoutPrescription/types';
-import type { QuestionnaireAnswers } from '../../workoutPrescription/types';
-import { buildRecentSlotHistory, evolveCycle } from '../cycleEvolution';
+import { describe,expect,it } from 'vitest';
+import { equipmentContextFor,unrestrictedEquipmentContext,type EquipmentContext } from '../../workoutPrescription/equipment';
+import type { CatalogExercise } from '../../workoutPrescription/exerciseCatalog';
+import type { FinalWorkoutExercise,FinalWorkoutSession,QuestionnaireAnswers } from '../../workoutPrescription/types';
+import { buildRecentSlotHistory,evolveCycle } from '../cycleEvolution';
 
 const OPEN_EQUIPMENT: EquipmentContext = { environment: 'gym', availableEquipment: new Set(['bodyweight', 'dumbbell', 'barbell', 'cable', 'machine']) };
 
@@ -16,7 +15,7 @@ function makeExercise(input: {
   equipment?: string[];
   difficulty?: 'beginner' | 'intermediate' | 'advanced';
   similar?: string[];
-}): LimitationCatalogExercise {
+}): CatalogExercise {
   return {
     id: input.id,
     name: { en: input.id, pt: input.id },
@@ -29,7 +28,7 @@ function makeExercise(input: {
     substitution: { group: input.group, similarExerciseIds: input.similar ?? [] },
     difficulty: input.difficulty ?? 'intermediate',
     availability: { workoutGeneration: true, manualSelection: true, substitution: true },
-  } as unknown as LimitationCatalogExercise;
+  } as unknown as CatalogExercise;
 }
 
 /**
@@ -39,7 +38,7 @@ function makeExercise(input: {
  * to choose among — real tie-break room for the determinism-vs-cycle-identity
  * tests, not just a single forced choice.
  */
-function buildCatalog(): Map<string, LimitationCatalogExercise> {
+function buildCatalog(): Map<string, CatalogExercise> {
   const chest = ['chest-a', 'chest-b', 'chest-c', 'chest-d', 'chest-e', 'chest-f'].map((id) =>
     makeExercise({ id, group: 'horizontal_chest_press', pattern: 'horizontal_push', primaryMuscle: 'chest' }));
   const squat = ['squat-a', 'squat-b', 'squat-c', 'squat-d', 'squat-e'].map((id) =>
@@ -69,7 +68,6 @@ function evolve(overrides: Partial<Parameters<typeof evolveCycle>[0]> = {}) {
   return evolveCycle({
     sessions: baseSessions(),
     targetCycleIdentity: 'cycle-1',
-    limitationRegions: [],
     equipmentContext: OPEN_EQUIPMENT,
     catalog: buildCatalog(),
     recentSlotHistory: buildRecentSlotHistory([]),
@@ -104,7 +102,6 @@ describe('safety-constrained novelty falls back gracefully', () => {
     const result = evolveCycle({
       sessions: oneSlot,
       targetCycleIdentity: 'cycle-1',
-      limitationRegions: [],
       equipmentContext: OPEN_EQUIPMENT,
       catalog: buildCatalog(),
       recentSlotHistory: buildRecentSlotHistory([]),
@@ -113,23 +110,6 @@ describe('safety-constrained novelty falls back gracefully', () => {
     expect(result.changedSlots).toBe(0);
     expect(result.sessions[0].exercises[1].exerciseId).toBe('iso-a'); // preserved
     expect(result.warnings).toContain('NOVELTY_TARGET_NOT_REACHED_SAFETY_CONSTRAINED');
-  });
-
-  it('safety always wins: a limitation-incompatible candidate is never chosen even if it would reach the target', () => {
-    const catalog = buildCatalog();
-    // Give chest-b an "approved compatible for elbow" profile so it's clearly the only safe swap for chest-c.
-    catalog.set('chest-c', { ...catalog.get('chest-c')!, id: 'chest-c' });
-    const result = evolveCycle({
-      sessions: [session('A', [slot('chest-a'), slot('chest-b')])],
-      targetCycleIdentity: 'cycle-1',
-      limitationRegions: ['elbow'],
-      equipmentContext: OPEN_EQUIPMENT,
-      catalog,
-      recentSlotHistory: buildRecentSlotHistory([]),
-    });
-    // None of the synthetic fixtures carry an approved limitationProfile, so with a declared region every candidate is unsafe -> preserved.
-    expect(result.changedSlots).toBe(0);
-    expect(result.sessions[0].exercises[1].exerciseId).toBe('chest-b');
   });
 });
 
@@ -152,7 +132,6 @@ describe('duplicate prevention', () => {
     const result = evolveCycle({
       sessions,
       targetCycleIdentity: 'cycle-shared',
-      limitationRegions: [],
       equipmentContext: OPEN_EQUIPMENT,
       catalog: buildCatalog(),
       recentSlotHistory: buildRecentSlotHistory([]),
@@ -187,7 +166,6 @@ describe('anti-ping-pong', () => {
     const result = evolveCycle({
       sessions: [session('A', [slot('chest-a'), slot('chest-b')])],
       targetCycleIdentity: 'cycle-N',
-      limitationRegions: [],
       equipmentContext: OPEN_EQUIPMENT,
       catalog: buildCatalog(),
       recentSlotHistory: history,
@@ -207,7 +185,6 @@ describe('anti-ping-pong', () => {
     const result = evolveCycle({
       sessions: [session('A', [slot('placeholder-anchor'), slot('chest-a')])],
       targetCycleIdentity: 'cycle-N',
-      limitationRegions: [],
       equipmentContext: OPEN_EQUIPMENT,
       catalog: new Map([...tinyCatalog, ['placeholder-anchor', makeExercise({ id: 'placeholder-anchor', group: 'anchor-only' })]]),
       recentSlotHistory: buildRecentSlotHistory([priorSessions]),
@@ -258,7 +235,6 @@ describe('long-run multi-cycle simulation (C1..C8)', () => {
       const result = evolveCycle({
         sessions,
         targetCycleIdentity: `cycle-${cycle}`,
-        limitationRegions: [],
         equipmentContext: OPEN_EQUIPMENT,
         catalog: buildCatalog(),
         recentSlotHistory: buildRecentSlotHistory(history),
@@ -285,7 +261,7 @@ describe('equipment independence — v1.27 cycle evolution ignores answers.equip
   // index 0 is never touched), whose candidate pool contains one dumbbell
   // variant, one resistance-band variant, and one gym-only machine variant
   // that must never be reachable from a home program regardless of context.
-  function equipmentCatalog(): Map<string, LimitationCatalogExercise> {
+  function equipmentCatalog(): Map<string, CatalogExercise> {
     const anchor = makeExercise({ id: 'anchor-ex', group: 'unrelated', pattern: 'vertical_pull', primaryMuscle: 'lats' });
     const source = makeExercise({ id: 'row-source', group: 'row_family', pattern: 'horizontal_pull', primaryMuscle: 'upper_back', equipment: ['dumbbell'] });
     const dumbbellCandidate = makeExercise({ id: 'row-dumbbell-candidate', group: 'row_family', pattern: 'horizontal_pull', primaryMuscle: 'upper_back', equipment: ['dumbbell'] });
@@ -302,7 +278,6 @@ describe('equipment independence — v1.27 cycle evolution ignores answers.equip
     return evolveCycle({
       sessions: homeSessions(),
       targetCycleIdentity: 'cycle-equipment-1',
-      limitationRegions: [],
       equipmentContext,
       catalog: equipmentCatalog(),
       recentSlotHistory: buildRecentSlotHistory([]),

@@ -44,28 +44,7 @@ const MUSCLE_IDS_BY_TARGET_V127: Record<MusclePriorityTargetV127, readonly Muscl
   core: ['abs'],
 };
 
-/**
- * Boundary normalization only (Fase 6 §4) — accepts both the 10 canonical
- * v1.27 target ids and legacy questionnaire values still present in
- * existing data:
- *  - the 8 non-`core`, non-split-arms values already used by
- *    `muscleFocus`/`MUSCLE_FOCUS_MAP` pass straight through unchanged
- *    (`chest`, `back`, `shoulders`, `glutes`, `quads`, `hamstrings`,
- *    `calves`) — no rename, no reinterpretation;
- *  - legacy `arms` expands to `biceps` + `triceps` (never `forearms` — v1.27
- *    has no `forearms` target group, and this is only ever an input
- *    normalization, not a change to what `arms` meant historically wherever
- *    legacy code still reads it directly);
- *  - `core` (new) maps straight to the `core` target — the catalog's `abs`
- *    `MuscleId` is reached only through `MUSCLE_IDS_BY_TARGET_V127` above,
- *    never by accepting `abs` as a *target* id here (that would conflate
- *    the questionnaire vocabulary with the catalog's muscle vocabulary);
- *  - `none`/unrecognized values are dropped, not errors — mirrors
- *    `normalizeLimitationRegionV127`'s same "drop, don't throw" contract.
- * Never infers a target from an exercise name — this function only maps
- * questionnaire-shaped *input* tokens to target ids; exercise classification
- * itself is `MUSCLE_IDS_BY_TARGET_V127` + `primaryMuscleMatchesAnyTargetV127`.
- */
+
 export function normalizeMusclePriorityInputV127(rawValues: readonly string[]): MusclePriorityTargetV127[] {
   const expanded: string[] = [];
   for (const value of rawValues) {

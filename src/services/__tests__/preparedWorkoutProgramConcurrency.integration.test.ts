@@ -9,26 +9,22 @@
  * `PREPARED_WORKOUT_PROGRAM_CONCURRENCY_INTEGRATION=1` is set (see the
  * `test:integration:preparedWorkoutProgramConcurrency` npm script).
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { collection, doc, getDoc, getDocs, setDoc, Timestamp } from 'firebase/firestore';
+import { Timestamp,collection,doc,getDoc,getDocs,setDoc } from 'firebase/firestore';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { afterAll,beforeAll,beforeEach,describe,expect,it,vi } from 'vitest';
 
 import { buildSeedDocuments } from '../../../scripts/seedWorkoutTemplates';
-import { completeAnswers } from '../../workoutPrescription/__tests__/fixtures';
 import { toPersistedAnswers } from '../../lib/questionnaireAnswers';
-import {
-  CANONICAL_LIMITATION_DATASET_HASH,
-  CANONICAL_LIMITATION_DATASET_VERSION,
-} from '../../workoutPrescription/limitationDataset';
-import { buildPrescriptionInputSnapshot } from '../../workoutLifecycle/prescriptionInputs';
 import { WEEKDAY_ORDER } from '../../state/AppState';
+import { buildPrescriptionInputSnapshot } from '../../workoutLifecycle/prescriptionInputs';
+import { completeAnswers } from '../../workoutPrescription/__tests__/fixtures';
+import { installWorkoutLifecycleAuthorityFixture,resetWorkoutLifecycleAuthorityFixture } from './workoutLifecycleAuthorityFixture';
 import { enableWorkoutLifecycleRollout } from './workoutLifecycleRolloutFixture';
-import { installWorkoutLifecycleAuthorityFixture, resetWorkoutLifecycleAuthorityFixture } from './workoutLifecycleAuthorityFixture';
 
 const PROJECT_ID = 'ajfit-rules-test';
 const UID = 'erin';
@@ -86,10 +82,6 @@ describe.skipIf(!enabled)('prepared-persist + automatic_reconciliation concurren
         metadata: { role: 'user', createdAt: Timestamp.now(), updatedAt: Timestamp.now(), commercialGateResolvedAt: Timestamp.now() },
       });
       await setDoc(doc(rawDb, 'workoutTemplates', 'T003'), T003_SEED);
-      await setDoc(doc(rawDb, 'limitationDatasetState', 'active'), {
-        datasetVersion: CANONICAL_LIMITATION_DATASET_VERSION,
-        limitationDatasetHash: CANONICAL_LIMITATION_DATASET_HASH,
-      });
       await setDoc(doc(rawDb, 'users', UID, 'questionnaires', QUESTIONNAIRE_ID), {
         answers: toPersistedAnswers(VALID_ANSWERS),
         version: 1,

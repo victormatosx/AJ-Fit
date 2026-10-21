@@ -1,7 +1,5 @@
-import type { Quiz, ScheduleMode, Weekday } from '../state/AppState';
-import type { LimitationCatalogExercise, LimitationDecisionTrace } from './limitationResolver';
-import type { LimitationDatasetIdentity } from './limitationDataset';
-import type { MusculoskeletalLimitationDecisionV127 } from './musculoskeletalLimitationV127';
+import type { Quiz,ScheduleMode,Weekday } from '../state/AppState';
+import type { CatalogExercise } from './exerciseCatalog';
 import type { MusclePriorityDecisionV127 } from './musclePriorityV127';
 
 export type TemplateId = `T${string}`;
@@ -16,7 +14,6 @@ export interface PrescriptionVersions {
   safetyRules: string;
   modifierRules: string;
   compositionEngine: string;
-  limitationResolver: string;
 }
 
 export const PRESCRIPTION_VERSIONS = {
@@ -25,25 +22,14 @@ export const PRESCRIPTION_VERSIONS = {
   safetyRules: '1.0.0',
   modifierRules: '2.0.0',
   compositionEngine: '2.1.0',
-  limitationResolver: '1.0.0',
 } as const satisfies PrescriptionVersions;
 
-/**
- * Fase 9 — the v1.27/T001-T102 pipeline's own version identity, embedded in
- * `FinalWorkoutPlan.versions` by `engineV127.ts`. Never mixed with
- * `PRESCRIPTION_VERSIONS` in the same plan (`contentIdentityV127NonCollision.
- * test.ts`, Fase 8, already proves `templateLibrary` alone keeps `planId`/
- * `contentIdentity` from colliding across the two libraries). Matches the
- * synthetic fixture Fase 8's `storage.test.ts`/`workoutPrograms.
- * backwardCompatibility.test.ts` already exercised.
- */
 export const PRESCRIPTION_VERSIONS_V127 = {
   templateLibrary: '1.27.0',
   selectionEngine: '3.0.0',
   safetyRules: '1.0.0',
   modifierRules: '3.0.0',
   compositionEngine: '3.0.0',
-  limitationResolver: '2.0.0',
 } as const satisfies PrescriptionVersions;
 
 export type SafetyReasonCode =
@@ -64,7 +50,6 @@ export type SafetyReasonCode =
   | 'LIPEDEMA_MILD'
   | 'LIPEDEMA_INTERFERES'
   | 'LIPEDEMA_GUIDANCE_UNREPRESENTABLE'
-  | 'MUSCULOSKELETAL_ADAPTATION_REQUIRED'
   | 'MEDICAL_RESTRICTION_UNREPRESENTABLE';
 
 export interface SafetyDecision {
@@ -76,9 +61,7 @@ export interface SafetyDecision {
 
 export interface SelectionDecision {
   templateId: TemplateId;
-  /** Questionnaire availability ceiling. Kept as `requestedDays` on legacy snapshots. */
   requestedDays: number;
-  /** Number of TRAINING sessions. Recovery sessions never count toward this value. */
   prescribedStructuredDays: number;
   population: Population;
   environment: TemplateEnvironment;
@@ -90,14 +73,12 @@ export type WorkoutDayState = 'TRAINING' | 'ACTIVE_RECOVERY' | 'REST';
 
 export interface WorkoutAvailability {
   days: number;
-  /** Empty only when a legacy questionnaire did not collect concrete weekdays. */
   weekdays: Weekday[];
 }
 
 export interface WorkoutWeekdayPrescription {
   weekday: Weekday;
   state: WorkoutDayState;
-  /** Index into `FinalWorkoutPlan.sessions`; absent for REST. */
   sessionIndex?: number;
 }
 
@@ -135,22 +116,12 @@ export interface CanonicalExercise {
   source_name_v1_2?: string;
 }
 
-/**
- * A short, optional cardio block appended after a resistance session's own
- * exercises — never a replacement for them, never itself a `session`. Schema
- * introduced in the v2.0.0 template library (`cardio_finisher`). `required`
- * is catalog-authored intent, not a safety clearance: composition still runs
- * it through the same safety/population gates as everything else before it
- * can survive into a `FinalWorkoutSession` — see `composition.ts`.
- */
 export interface CanonicalCardioFinisher {
   mode: string;
-  /** Omitted only for `mode: "integrated"`, which marks cardio already in-session. */
   exercise_options?: string[];
   duration?: string;
   intensity?: string;
   required: boolean;
-  /** Authoring signal used by special-population finishers. */
   safety_gated?: boolean;
   notes?: string;
 }
@@ -160,13 +131,11 @@ export interface CanonicalSession {
   type: string;
   notes?: string;
   exercises: CanonicalExercise[];
-  /** v2.0.0+. Commercial/presentation name — see `sessionPresentation.ts`. */
   display_name?: string;
   technique_guideline?: string;
   effort_guideline?: string;
   rest_guideline?: string;
   progression_guideline?: string;
-  /** v2.0.0+. See `CanonicalCardioFinisher`. */
   cardio_finisher?: CanonicalCardioFinisher;
 }
 
@@ -185,19 +154,7 @@ export interface CanonicalTemplate {
   sessions: CanonicalSession[];
   assumptions?: unknown;
   safety?: unknown;
-  /**
-   * v2.0.0+. Documentation-only metadata, deliberately NOT consumed by the
-   * runtime calendar. Phase 2 deliberately keeps the typed, deterministic
-   * Schedule Engine authoritative instead of promoting localized authoring
-   * strings into a contract. Kept loosely typed for tooling only.
-   */
   weekly_schedule?: unknown;
-  /**
-   * v2.0.0+. Declarative authoring guidance (target exercise-count ranges,
-   * etc.) that informed how the v2 catalog content itself was written.
-   * Documentation-only this phase — NOT read by `personalization.ts`, which
-   * implements its own fixed beginner policy (see `beginnerAdjustedSets`).
-   */
   experience_modifiers?: unknown;
 }
 
@@ -212,19 +169,9 @@ export interface FinalWorkoutExercise {
   distance?: string;
   intensity?: string;
   notes?: string;
-  /**
-   * Prescribed rest between sets, in seconds — decided once, here, by
-   * `restPrescription.ts` at composition time (Phase 2). `0` is a
-   * deliberate "no traditional rest" value for movement patterns where it
-   * doesn't apply (mobility/balance/breathing/gait/cycling), not a missing
-   * value. Absent (`undefined`) ONLY on a snapshot persisted before this
-   * field existed — consumers (the Rest Timer) must use
-   * `LEGACY_REST_SECONDS_FALLBACK`, never silently treat that as `0`.
-   */
   restSeconds?: number;
 }
 
-/** Runtime counterpart of `CanonicalCardioFinisher` — camelCase, same fields. */
 export interface FinalCardioFinisher {
   mode: string;
   exerciseOptions: string[];
@@ -240,13 +187,11 @@ export interface FinalWorkoutSession {
   type: string;
   notes?: string;
   exercises: FinalWorkoutExercise[];
-  /** Preferred over `name` for UI presentation when present — see `sessionPresentation.ts`. */
   displayName?: string;
   techniqueGuideline?: string;
   effortGuideline?: string;
   restGuideline?: string;
   progressionGuideline?: string;
-  /** Absent when the source session has none, or when safety/population gating removed it. */
   cardioFinisher?: FinalCardioFinisher;
 }
 
@@ -255,19 +200,6 @@ export interface ExerciseSubstitutionTrace {
   fromExerciseId: string;
   toExerciseId: string;
   reasonCode: 'EQUIPMENT_UNAVAILABLE';
-}
-
-export type WorkoutExerciseOmissionReason =
-  | 'NO_SAFE_SUBSTITUTION'
-  | 'NO_ENVIRONMENT_CANDIDATE'
-  | 'COLLISION_NO_ALTERNATIVE'
-  | 'MULTI_LIMITATION_NO_INTERSECTION';
-
-export interface WorkoutExerciseOmissionTrace {
-  event: 'workout_exercise_omitted';
-  sessionIndex: number;
-  sourceExerciseId: string;
-  reason: WorkoutExerciseOmissionReason;
 }
 
 export type CompositionReasonCode =
@@ -279,8 +211,7 @@ export type CompositionReasonCode =
   | 'MUSCLE_PRIORITY_SET_ADDED'
   | 'PRIORITY_SET_SKIPPED_BEGINNER'
   | 'PRIORITY_SET_SKIPPED_DURATION'
-  | 'PRIORITY_SET_SKIPPED_SAFETY'
-  | 'OMIT_UNSAFE_EXERCISE';
+  | 'PRIORITY_SET_SKIPPED_SAFETY';
 
 export interface CompositionDecision {
   reasonCode: CompositionReasonCode;
@@ -291,7 +222,6 @@ export interface CompositionDecision {
   targetExerciseCount?: number;
   beforeSets?: number;
   afterSets?: number;
-  omissionReason?: WorkoutExerciseOmissionReason;
 }
 
 export interface PrescriptionTrace {
@@ -301,33 +231,15 @@ export interface PrescriptionTrace {
   unresolvedModifiers: string[];
   conflicts: ConflictResolution[];
   substitutions: ExerciseSubstitutionTrace[];
-  limitationResolverVersion: 1;
-  /**
-   * `MusculoskeletalLimitationDecisionV127[]` only ever appears on a v1.27
-   * (`versions.templateLibrary === '1.27.0'`) plan's trace — `engineV127.ts`
-   * is the only producer. v2 code (`engine.ts`, `composition.ts`) always
-   * produces `LimitationDecisionTrace[]`; existing v2 readers only ever use
-   * `.length` (see `myPlanPresentation.ts`), which is safe under either
-   * member of this union.
-   */
-  limitationDecisions: LimitationDecisionTrace[] | MusculoskeletalLimitationDecisionV127[];
-  /** v1.27 only (Fase 6 muscle-priority stage); always absent/empty on a v2 plan. */
   musclePriorityDecisions?: MusclePriorityDecisionV127[];
-  /** Absent only on plans persisted before contextual limitation omission support. */
-  exerciseOmissions?: WorkoutExerciseOmissionTrace[];
   compositionDecisions: CompositionDecision[];
   validationCodes: string[];
 }
 
 export interface PrescriptionGenerationContext {
-  /** Week 1 is the default for a newly generated beginner plan; 3 means Week 3+. */
   adaptationWeek?: number;
-  /** Explicit runtime template. Production supplies this from Firestore. */
   template?: CanonicalTemplate;
-  /** One preloaded catalog snapshot; the pure resolver performs no Firestore reads. */
-  exerciseCatalog?: readonly LimitationCatalogExercise[];
-  /** Exact clinical dataset used by this generation; remote callers must pass the verified Firestore identity. */
-  limitationDataset?: LimitationDatasetIdentity;
+  exerciseCatalog?: readonly CatalogExercise[];
 }
 
 export interface FinalWorkoutPlan {
@@ -335,21 +247,15 @@ export interface FinalWorkoutPlan {
   templateId: TemplateId;
   requestedDays: number;
   prescribedStructuredDays: number;
-  /** Phase 2 canonical name. `prescribedStructuredDays` remains a backward-compatible alias. */
   prescribedTrainingFrequency?: number;
-  /** Absent only on legacy snapshots; every reader must default absence to `fixed`. */
   scheduleMode?: ScheduleMode;
-  /** Phase 2 explicit availability; absent on Phase 1/v1.3 snapshots. */
   availability?: WorkoutAvailability;
-  /** Monday-first, reproducible calendar; absent on legacy snapshots. */
   weeklySchedule?: WorkoutWeekdayPrescription[];
   population: Population;
   environment: TemplateEnvironment;
   goalFamily: GoalFamily;
   split: string;
   adaptationStage?: 1 | 2 | 3;
-  limitationDatasetVersion: string;
-  limitationDatasetHash: string;
   sessions: FinalWorkoutSession[];
   versions: PrescriptionVersions;
   trace: PrescriptionTrace;
