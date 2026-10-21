@@ -543,7 +543,6 @@ export function MyPlanScreen({
                 <Slash style={{ marginBottom: 12 }}>{t('adaptations.title')}</Slash>
                 <Card style={{ padding: 16, gap: 12 }}>
                   {adaptations.equipment ? <AdaptationRow text={t('adaptations.equipment')} /> : null}
-                  {adaptations.limitations ? <AdaptationRow text={t('adaptations.limitations')} /> : null}
                   {adaptations.experience ? <AdaptationRow text={t('adaptations.experience')} /> : null}
                   {adaptations.duration ? <AdaptationRow text={t('adaptations.duration')} /> : null}
                 </Card>

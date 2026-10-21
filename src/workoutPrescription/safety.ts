@@ -1,4 +1,4 @@
-import type { QuestionnaireAnswers, SafetyDecision, SafetyReasonCode, SafetyStatus } from './types';
+import type { QuestionnaireAnswers,SafetyDecision,SafetyReasonCode,SafetyStatus } from './types';
 
 const STATUS_WEIGHT: Record<SafetyStatus, number> = {
   CLEAR: 0,
@@ -122,15 +122,7 @@ export function evaluateSafety(answers: QuestionnaireAnswers): SafetyDecision {
     }
   }
 
-  if (has('musculoskeletal_limitation')) {
-    add(
-      decision,
-      'ADAPTED',
-      'MUSCULOSKELETAL_ADAPTATION_REQUIRED',
-      'safety:musculoskeletal_adaptation',
-      answers.limits.filter((value) => value !== 'none').map((value) => `limitation:${value}`),
-    );
-  }
+
 
   if (has('lipedema')) {
     const screening = answers.lipedemaScreening;

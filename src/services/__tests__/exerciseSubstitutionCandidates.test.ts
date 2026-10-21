@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe,expect,it } from 'vitest';
 
-import { equipmentContextFor } from '../../workoutPrescription/equipment';
 import { completeAnswers } from '../../workoutPrescription/__tests__/fixtures';
+import { equipmentContextFor } from '../../workoutPrescription/equipment';
 import {
   canRevertToAnchor,
   exerciseDisplayName,
@@ -11,7 +11,7 @@ import {
 
 function userContext(overrides: Partial<Parameters<typeof completeAnswers>[0]> = {}) {
   const answers = completeAnswers(overrides);
-  return { regions: [], equipmentContext: equipmentContextFor(answers, answers.place === 'home' ? 'home' : 'gym') };
+  return { equipmentContext: equipmentContextFor(answers, answers.place === 'home' ? 'home' : 'gym') };
 }
 
 describe('resolveDisplayCandidates (client service wrapper)', () => {

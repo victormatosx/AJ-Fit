@@ -323,11 +323,6 @@ function AppShellContent({
   const treinoHubPlan = treinoHubPlanRef.current;
   const schedule = useWorkoutSchedule(activeProgram);
   const execution = useWorkoutExecution(activeProgram, schedule.config?.timezone, schedule.config?.scheduleMode);
-  // Manual Substitution (exercise-substitution architecture audit): the same
-  // declared-limitation-regions + equipment-context inputs the server-side
-  // resolver uses, loaded once per active program so the "trocar" action can
-  // compute a preview candidate list. Loading/error remain explicit UI states;
-  // neither is allowed to hide the action or fabricate a default context.
   const [manualSubstitutionContextState, setManualSubstitutionContextState] = useState<{
     status: ManualSubstitutionContextStatus;
     context: ManualSubstitutionUserContext | null;

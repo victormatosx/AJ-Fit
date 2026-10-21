@@ -33,7 +33,6 @@ export interface EffectivePrescriptionInputs {
   sex: import('../state/AppState').Quiz['sex'];
   goal: import('../state/AppState').Quiz['goal'];
   level: import('../state/AppState').Quiz['level'];
-  limits: import('../state/AppState').Quiz['limits'];
   duration: import('../state/AppState').Quiz['duration'];
   days: import('../state/AppState').Quiz['days'];
   /** Absent only in legacy persisted snapshots and read as `fixed`. */
@@ -172,7 +171,7 @@ export interface EvolutionDeferral {
 }
 
 export interface ProgramAdaptation {
-  reason: 'AVAILABILITY' | 'GOAL' | 'ENVIRONMENT' | 'LIMITATION' | 'PREFERENCE';
+  reason: 'AVAILABILITY' | 'GOAL' | 'ENVIRONMENT' | 'PREFERENCE';
 }
 
 export type WorkoutLifecycleEventType =

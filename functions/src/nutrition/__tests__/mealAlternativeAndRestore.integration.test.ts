@@ -1,3 +1,4 @@
+import { approveReview } from './reviewFixture';
 import { randomUUID } from 'node:crypto';
 import { Timestamp } from 'firebase-admin/firestore';
 import type { CallableRequest } from 'firebase-functions/v2/https';
@@ -56,7 +57,7 @@ describe.skipIf(!process.env.FIRESTORE_EMULATOR_HOST)('meal alternative + plan r
     const generateMealAlternative = vi.fn().mockResolvedValue({
       output, model: 'fake', usage: { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0 }, latencyMs: 1,
     });
-    const provider: NutritionAiProvider = { generatePlan: vi.fn(), generateMealAlternative };
+    const provider: NutritionAiProvider = { reviewPlan: approveReview, generatePlan: vi.fn(), generateMealAlternative };
     const request = (data: Record<string, unknown>) => ({
       auth: { uid }, data: { requestId: randomUUID(), ...data },
     } as unknown as CallableRequest);
@@ -100,7 +101,7 @@ describe.skipIf(!process.env.FIRESTORE_EMULATOR_HOST)('meal alternative + plan r
       lastMealAlternativeAt: Timestamp.fromMillis(Date.now() - MEAL_ALTERNATIVE_COOLDOWN_MS - 1),
     });
     const deletionRaceRequestId = randomUUID();
-    const deletionRaceProvider: NutritionAiProvider = {
+    const deletionRaceProvider: NutritionAiProvider = { reviewPlan: approveReview,
       generatePlan: vi.fn(),
       generateMealAlternative: vi.fn().mockImplementation(async () => {
         await db.collection('accountDeletionLocks').doc(uid).set({ status: 'REQUESTED' });

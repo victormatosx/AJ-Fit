@@ -1,3 +1,5 @@
+> Registro histórico: o sistema musculoesquelético e as políticas clínicas V3/legacy descritos aqui foram descontinuados. Não são contratos atuais. Ver [remoção definitiva](../../../removal-physical-limitations/REPORT.md).
+
 # Phase 3 Implementation — Prescription Evolution Engine
 
 **Status:** IMPLEMENTED for Phase 3 scope (pure "next prescription candidate" generation only)

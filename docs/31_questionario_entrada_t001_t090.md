@@ -1,3 +1,5 @@
+> Registro histórico: o sistema musculoesquelético e as políticas clínicas V3/legacy descritos aqui foram descontinuados. Não são contratos atuais. Ver [remoção definitiva](removal-physical-limitations/REPORT.md).
+
 # Questionário — contrato de entrada para T001–T090 (Fase 2)
 
 Este documento registra a auditoria, a redução de fricção e o contrato de

@@ -1,16 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { describe,expect,it } from 'vitest';
 
-import { WEEKDAY_ORDER, type Quiz, type Weekday } from '../../state/AppState';
 import { localDateInTimezone } from '../../scheduleEngine/localDate';
 import { resolveWorkoutSchedule } from '../../scheduleEngine/resolver';
 import type { ScheduleConfig } from '../../scheduleEngine/types';
+import { WEEKDAY_ORDER,type Quiz,type Weekday } from '../../state/AppState';
 import { WORKOUT_TEMPLATES } from '../catalog';
 import { generateWorkoutPrescription } from '../engine';
-import { selectTemplate } from '../selection';
-import { sessionDayState, selectTrainingWeekdays } from '../weeklySchedule';
-import { completeAnswers, realLimitationCatalogFixture } from './fixtures';
+import { selectTrainingWeekdays,sessionDayState } from '../weeklySchedule';
+import { completeAnswers,realExerciseCatalogFixture } from './fixtures';
 
-const limitationCatalog = realLimitationCatalogFixture();
+const exerciseCatalog = realExerciseCatalogFixture();
 
 function availableDays(count: number): Weekday[] {
   return WEEKDAY_ORDER.slice(0, count);
@@ -27,7 +26,7 @@ function answers(overrides: Partial<Quiz> = {}): Quiz {
 
 function successfulPlan(input: Quiz) {
   const result = generateWorkoutPrescription(input, {
-    exerciseCatalog: input.limits.length > 0 ? limitationCatalog : undefined,
+    exerciseCatalog: exerciseCatalog,
   });
   expect(result.status).toBe('SUCCESS');
   if (result.status !== 'SUCCESS') throw new Error(result.status);
@@ -176,9 +175,6 @@ describe('Phase 2 required 20-persona matrix', () => {
     ['pregnancy 7', { sex: 'f', specialConditions: ['pregnancy'], pregnancyScreening: { weeks: 20, prenatalCare: 'yes', exerciseRestriction: 'no', complication: 'no', warningSigns: ['none'] } }],
     ['postpartum 7', { sex: 'f', specialConditions: ['postpartum'], postpartumScreening: { timeSinceBirth: '3_6_months', deliveryType: 'vaginal', signs: ['none'], returnClearance: 'yes' } }],
     ['frailty 7', { specialConditions: ['functional_limitation'], functionalScreening: { situations: ['stairs_difficulty'] } }],
-    ['knee limitation 7', { specialConditions: ['musculoskeletal_limitation'], limits: ['knee'] }],
-    ['wrist limitation 7', { specialConditions: ['musculoskeletal_limitation'], limits: ['wrist'] }],
-    ['multiple limitations 7', { specialConditions: ['musculoskeletal_limitation'], limits: ['knee', 'wrist'] }],
   ];
 
   it.each(cases)('%s', (_label, overrides) => {

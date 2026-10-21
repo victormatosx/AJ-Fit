@@ -1,7 +1,6 @@
-import type { LimitationRegionId } from '../types/exercise';
-import { validateLimitationProfile, type LimitationCatalogExercise } from '../workoutPrescription/limitationResolver';
-import { isExerciseExecutable, type EquipmentContext } from '../workoutPrescription/equipment';
-import { DIFFICULTY_RANK, purposePreserved } from '../workoutPrescription/equivalenceShared';
+import { isExerciseExecutable,type EquipmentContext } from '../workoutPrescription/equipment';
+import { DIFFICULTY_RANK,purposePreserved } from '../workoutPrescription/equivalenceShared';
+import type { CatalogExercise } from '../workoutPrescription/exerciseCatalog';
 
 // Re-exported for backward compatibility — call sites/tests that import
 // `purposePreserved`/`DIFFICULTY_RANK` from this module keep working
@@ -9,42 +8,13 @@ import { DIFFICULTY_RANK, purposePreserved } from '../workoutPrescription/equiva
 // `equivalenceShared.ts`).
 export { purposePreserved };
 
-/**
- * Safety gate against the user's declared limitation regions. With no
- * declared regions, every operationally available exercise is safe from a
- * limitation standpoint. With declared regions, only a candidate carrying an
- * approved `limitationProfile` that is explicitly compatible for every
- * region is accepted — an exercise with no (or an unapproved) profile is
- * treated as unknown-risk, not safe-by-default, whenever the user has any
- * declared limitation (docs §14/§29/§30).
- */
-export function isLimitationSafe(
-  candidate: LimitationCatalogExercise,
-  regions: readonly LimitationRegionId[],
-): boolean {
-  if (regions.length === 0) return true;
-  const validation = validateLimitationProfile(candidate.id, candidate.limitationProfile);
-  if (!validation.valid) return false;
-  return regions.every((region) => {
-    const status = validation.profile.regions[region].status;
-    return status === 'compatible' || status === 'not_applicable';
-  });
-}
-
-function isOperationallyAvailable(exercise: LimitationCatalogExercise): boolean {
+function isOperationallyAvailable(exercise: CatalogExercise): boolean {
   return exercise.status === 'active' && exercise.availability.workoutGeneration && exercise.availability.substitution;
 }
 
-/**
- * Candidate pool for a source exercise: its own declared
- * `substitution.similarExerciseIds`, plus every other catalog exercise
- * sharing its `substitution.group` AND movement pattern/mechanic (the same
- * "family" shape `limitationResolver.ts`'s ranked candidate builder already
- * uses — reused here rather than re-derived, docs §29).
- */
 export function candidatePoolFor(
-  source: LimitationCatalogExercise,
-  catalog: ReadonlyMap<string, LimitationCatalogExercise>,
+  source: CatalogExercise,
+  catalog: ReadonlyMap<string, CatalogExercise>,
 ): string[] {
   const pool = new Set<string>();
   for (const id of source.substitution.similarExerciseIds) pool.add(id);
@@ -72,28 +42,19 @@ export interface EquivalenceCandidateEvaluation {
   difficultyDistance: number;
 }
 
-/** Slot-derived context. Session names are descriptive only; the reliable hard metadata is the source slot's movement/mechanic. */
 export interface EquivalenceSlotContext {
   sessionName: string;
   sessionType: string;
   exerciseIndex: number;
   isMovementAnchor: boolean;
-  sourceMovementPattern: LimitationCatalogExercise['movement']['pattern'];
-  sourceMechanic: LimitationCatalogExercise['movement']['mechanic'];
+  sourceMovementPattern: CatalogExercise['movement']['pattern'];
+  sourceMechanic: CatalogExercise['movement']['mechanic'];
 }
 
-/**
- * Evaluates one candidate against every hard constraint: not already used
- * elsewhere in the plan (duplicate prevention, docs §51), operationally
- * available, movement-purpose preserved, equipment/environment executable,
- * and limitation-safe. Safety and structural equivalence are resolved here,
- * before any novelty/history ranking ever runs (docs §21/§28).
- */
 export function evaluateEquivalenceCandidate(input: {
-  source: LimitationCatalogExercise;
+  source: CatalogExercise;
   candidateId: string;
-  catalog: ReadonlyMap<string, LimitationCatalogExercise>;
-  regions: readonly LimitationRegionId[];
+  catalog: ReadonlyMap<string, CatalogExercise>;
   equipmentContext: EquipmentContext;
   usedExerciseIds: ReadonlySet<string>;
   recentExerciseIds: ReadonlySet<string>;
@@ -110,12 +71,11 @@ export function evaluateEquivalenceCandidate(input: {
     candidate
     && input.slotContext
     && (
-      candidate.movement.pattern !== input.slotContext.sourceMovementPattern
-      || candidate.movement.mechanic !== input.slotContext.sourceMechanic
+      (candidate.movement.pattern !== input.slotContext.sourceMovementPattern)
+      || (candidate.movement.mechanic !== input.slotContext.sourceMechanic)
     )
   ) reasonCodes.push('SESSION_CONTEXT_MISMATCH');
   if (candidate && !isExerciseExecutable(candidate, input.equipmentContext)) reasonCodes.push('EQUIPMENT_UNAVAILABLE');
-  if (candidate && !isLimitationSafe(candidate, input.regions)) reasonCodes.push('LIMITATION_INCOMPATIBLE');
   return {
     exerciseId: input.candidateId,
     eligible: reasonCodes.length === 0,
@@ -137,14 +97,6 @@ function stableHash(value: string): string {
   return (hash >>> 0).toString(16).padStart(8, '0');
 }
 
-/**
- * Ranks only already-eligible candidates. Priority: an explicitly declared
- * similar exercise, then not-recently-used (anti-ping-pong penalty, never a
- * hard exclusion — docs §36), then closest difficulty. Ties break on a
- * stable hash salted by `tieBreakSalt` (normally `targetCycleIdentity` +
- * slot key) so the same cycle always re-resolves identically while a
- * different target cycle can legitimately choose differently (docs §32/§33).
- */
 export function rankCandidates(
   evaluations: readonly EquivalenceCandidateEvaluation[],
   tieBreakSalt: string,

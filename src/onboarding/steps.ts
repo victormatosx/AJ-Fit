@@ -1,4 +1,4 @@
-import { PROFILE_STEP_IDS, needsNutritionGoalCategory, type ProfileStepId } from '../nutrition/ui/profileSteps';
+import { PROFILE_STEP_IDS,needsNutritionGoalCategory,type ProfileStepId } from '../nutrition/ui/profileSteps';
 import type { NutritionGoal } from '../types/nutrition';
 
 /**

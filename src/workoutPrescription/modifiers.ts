@@ -1,6 +1,6 @@
-import type { QuestionnaireAnswers, ResolvedModifier, SafetyDecision } from './types';
-import { normalizeExperience, normalizeGoal } from './input';
-import { adaptationStage, isBeginnerExperience } from './personalization';
+import { normalizeExperience,normalizeGoal } from './input';
+import { adaptationStage,isBeginnerExperience } from './personalization';
+import type { QuestionnaireAnswers,ResolvedModifier,SafetyDecision } from './types';
 
 /**
  * Legacy v2.0/T001-T090 modifier resolution (P0-P7 priority matrix). Read
@@ -38,14 +38,6 @@ export function resolveModifiers(
   for (const id of safety.requiredModifierIds) {
     if (id.startsWith('population:')) {
       result.push(modifier(id, 'P1', 'APPLIED', 'SPECIAL_POPULATION_BASE_TEMPLATE'));
-    } else if (id === 'safety:musculoskeletal_adaptation') {
-      result.push(modifier(
-        id,
-        'P0',
-        'APPLIED',
-        'LIMITATION_RESOLVER_V1',
-        safety.protectedConstraints,
-      ));
     } else {
       result.push(modifier(
         id,

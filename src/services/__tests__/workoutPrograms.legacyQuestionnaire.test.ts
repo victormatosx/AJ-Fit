@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe,expect,it,vi } from 'vitest';
 
 // `workoutPrograms.ts` imports `db` from `../lib/firebase`, which throws at
 // module load without EXPO_PUBLIC_FIREBASE_* env vars. Mocked out exactly
@@ -12,8 +12,8 @@ vi.mock('../../lib/firebase', () => ({
   },
 }));
 
-import { generateAndPersistWorkoutProgram } from '../workoutPrograms';
 import { completeAnswers } from '../../workoutPrescription/__tests__/fixtures';
+import { generateAndPersistWorkoutProgram } from '../workoutPrograms';
 
 describe('generateAndPersistWorkoutProgram — legacy questionnaire boundary', () => {
   it('rejects a pre-Safety-phase questionnaire (missing specialConditions/limits) before touching Firestore', async () => {
@@ -36,6 +36,5 @@ describe('generateAndPersistWorkoutProgram — legacy questionnaire boundary', (
     expect(result.status).toBe('NEEDS_QUESTIONNAIRE_UPDATE');
     if (result.status !== 'NEEDS_QUESTIONNAIRE_UPDATE') return;
     expect(result.reasonCodes).toContain('QUESTIONNAIRE_SPECIAL_CONDITIONS_UNKNOWN');
-    expect(result.reasonCodes).toContain('QUESTIONNAIRE_LIMITS_UNKNOWN');
   });
 });

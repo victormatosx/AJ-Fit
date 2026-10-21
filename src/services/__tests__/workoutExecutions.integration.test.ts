@@ -9,14 +9,12 @@
  * Skipped by default — only runs when `WORKOUT_EXECUTION_INTEGRATION=1` is
  * set (see the `test:integration:workoutExecution` npm script).
  */
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
 import {
+  Timestamp,
   collection,
   deleteField,
   doc,
@@ -25,11 +23,13 @@ import {
   query,
   serverTimestamp,
   setDoc,
-  Timestamp,
   updateDoc,
   where,
 } from 'firebase/firestore';
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { resolve } from 'node:path';
+import { afterAll,afterEach,beforeAll,beforeEach,describe,expect,it,vi } from 'vitest';
 
 // Deliberately resolved (at runtime, via `require`) from
 // `functions/node_modules`, NOT this project's own root `firebase-admin`
@@ -65,6 +65,24 @@ import { toPersistedAnswers } from '../../lib/questionnaireAnswers';
 import { defaultQuiz } from '../../state/AppState';
 
 import {
+  computeWorkoutElapsedSeconds,
+  formatWorkoutSessionDuration,
+  isLongWorkoutSession,
+  safeStartedAtMs,
+} from '../../lib/workoutSessionTimer';
+import { resolveWorkoutSchedule } from '../../scheduleEngine/resolver';
+import {
+  applyScheduleReloadOutcome,
+  type ScheduleRefreshProjection,
+} from '../../scheduleEngine/scheduleRefreshState';
+import {
+  beginWorkoutStartFlight,
+  type WorkoutStartFlight,
+} from '../../workoutExecution/startSingleFlight';
+import { resolveWorkoutSessionRecoveryState } from '../../workoutExecution/useWorkoutSessionRecovery';
+import {
+  WorkoutExecutionConflictError,
+  WorkoutExecutionLegacyPendingError,
   abandonWorkoutExecution,
   activeExecutionId,
   completeCardioExecution,
@@ -81,27 +99,9 @@ import {
   skipExerciseExecution,
   skipSetExecution,
   startOrResumeWorkoutExecution,
-  WorkoutExecutionConflictError,
-  WorkoutExecutionLegacyPendingError,
 } from '../workoutExecutions';
-import { resolveWorkoutSessionRecoveryState } from '../../workoutExecution/useWorkoutSessionRecovery';
-import {
-  computeWorkoutElapsedSeconds,
-  formatWorkoutSessionDuration,
-  isLongWorkoutSession,
-  safeStartedAtMs,
-} from '../../lib/workoutSessionTimer';
-import { resolveWorkoutSchedule } from '../../scheduleEngine/resolver';
 import type { WorkoutProgramSnapshot } from '../workoutPrograms';
-import { installCompleteCardioFixture, resetCompleteCardioFixture } from './completeCardioFixture';
-import {
-  beginWorkoutStartFlight,
-  type WorkoutStartFlight,
-} from '../../workoutExecution/startSingleFlight';
-import {
-  applyScheduleReloadOutcome,
-  type ScheduleRefreshProjection,
-} from '../../scheduleEngine/scheduleRefreshState';
+import { installCompleteCardioFixture,resetCompleteCardioFixture } from './completeCardioFixture';
 
 const PROJECT_ID = 'ajfit-rules-test';
 const UID = 'alice';
@@ -306,6 +306,8 @@ describe.skipIf(!enabled)('Workout Execution & History — real Firestore Emulat
     expect((await loadActiveExecutionPointer(UID))?.executionId).toBe(result.executionId);
   });
 
+
+
   describe('Manual Substitution — permanent preference materialization at execution creation (2026-09 Development Build regression repro + fix)', () => {
     // Real catalog ids (unlike the toy `bench_press`/`squat` ids `program()`
     // uses elsewhere in this file) — `resolvePermanentSubstitutionsForSession`
@@ -347,9 +349,9 @@ describe.skipIf(!enabled)('Workout Execution & History — real Firestore Emulat
 
     it('a valid permanent preference is applied automatically on creation', async () => {
       await seedQuestionnaire('gym');
-      await seedPreference('barbell-back-squat', 'goblet-squat');
+      await seedPreference('barbell-back-squat', 'smith-machine-squat');
       const result = await startOrResumeWorkoutExecution({ uid: UID, program: squatProgram(), sessionIndex: 0, scheduledLocalDate: '2026-08-25' });
-      expect(result.exercises[0].exerciseId).toBe('goblet-squat');
+      expect(result.exercises[0].exerciseId).toBe('smith-machine-squat');
       expect(result.exercises[0].prescribedExerciseId).toBe('barbell-back-squat');
       expect(result.exercises[0].substitution).toMatchObject({ scope: 'PERMANENT' });
     });
@@ -362,15 +364,14 @@ describe.skipIf(!enabled)('Workout Execution & History — real Firestore Emulat
         scheduledLocalDate: '2026-08-25',
         preparation: {
           legacyInProgressExecutionIds: [],
-          permanentPreferences: new Map([['barbell-back-squat', 'goblet-squat']]),
+          permanentPreferences: new Map([['barbell-back-squat', 'smith-machine-squat']]),
           manualSubstitutionContextStatus: 'ready',
           manualSubstitutionContext: {
-            regions: [],
-            equipmentContext: { environment: 'gym', availableEquipment: new Set(['dumbbell', 'barbell']) },
+            equipmentContext: { environment: 'gym', availableEquipment: new Set(['smith_machine', 'barbell']) },
           },
         },
       });
-      expect(result.exercises[0].exerciseId).toBe('goblet-squat');
+      expect(result.exercises[0].exerciseId).toBe('smith-machine-squat');
       expect(result.exercises[0].substitution).toMatchObject({ scope: 'PERMANENT' });
     });
 
@@ -388,7 +389,7 @@ describe.skipIf(!enabled)('Workout Execution & History — real Firestore Emulat
       expect(first.exercises[0].exerciseId).toBe('barbell-back-squat');
 
       await seedQuestionnaire('gym');
-      await seedPreference('barbell-back-squat', 'goblet-squat');
+      await seedPreference('barbell-back-squat', 'smith-machine-squat');
 
       const resumed = await startOrResumeWorkoutExecution({ uid: UID, program: squatProgram(), sessionIndex: 0, scheduledLocalDate: '2026-08-25' });
       expect(resumed.executionId).toBe(first.executionId);

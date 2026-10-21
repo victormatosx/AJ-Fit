@@ -1,17 +1,17 @@
-import { describe, expect, it } from 'vitest';
-import { buildLevelPromotionAnswers } from '../levelPromotion';
-import { completeAnswers, realLimitationCatalogFixture } from '../../workoutPrescription/__tests__/fixtures';
+import { describe,expect,it } from 'vitest';
+import { completeAnswers,realExerciseCatalogFixture } from '../../workoutPrescription/__tests__/fixtures';
 import { generateWorkoutPrescription } from '../../workoutPrescription/engine';
+import { buildLevelPromotionAnswers } from '../levelPromotion';
 
-const limitationCatalog = realLimitationCatalogFixture();
+const exerciseCatalog = realExerciseCatalogFixture();
 
 function prepareWorkoutProgramLocally(
   answers: Parameters<typeof generateWorkoutPrescription>[0],
-  options?: { withLimitationCatalog?: boolean },
+  options?: { withExerciseCatalog?: boolean },
 ) {
   return Promise.resolve(generateWorkoutPrescription(
     answers,
-    options?.withLimitationCatalog ? { exerciseCatalog: limitationCatalog } : undefined,
+    options?.withExerciseCatalog ? { exerciseCatalog: exerciseCatalog } : undefined,
   ));
 }
 
@@ -48,22 +48,6 @@ describe('buildLevelPromotionAnswers (pure)', () => {
       pinnedTrainingDays: [],
     });
     expect(JSON.stringify(current)).toBe(snapshot);
-  });
-
-  it('preserves every other answer (goal, place, equipment, duration, limitations)', () => {
-    const current = completeAnswers({
-      level: 'beginner', days: 4, goal: 'lose_fat', place: 'home',
-      equipment: ['dumbbells'], duration: '45', specialConditions: ['musculoskeletal_limitation'], limits: ['knee'],
-    });
-    const promoted = buildLevelPromotionAnswers({
-      currentAnswers: current, targetLevel: 'INTERMEDIATE', pinnedFrequency: 4, pinnedTrainingDays: [],
-    });
-    expect(promoted.goal).toBe('lose_fat');
-    expect(promoted.place).toBe('home');
-    expect(promoted.equipment).toEqual(['dumbbells']);
-    expect(promoted.duration).toBe('45');
-    expect(promoted.specialConditions).toEqual(['musculoskeletal_limitation']);
-    expect(promoted.limits).toEqual(['knee']);
   });
 });
 
@@ -138,19 +122,5 @@ describe('Level Promotion through the real local prescription pipeline', () => {
     expect(result.status).toBe('SUCCESS');
     if (result.status !== 'SUCCESS') return;
     expect(result.plan.environment).toBe('home');
-  });
-
-  it('limitations remain applied through a Level Promotion regeneration', async () => {
-    const current = completeAnswers({
-      level: 'beginner', days: 4, specialConditions: ['musculoskeletal_limitation'], limits: ['knee'],
-    });
-    const promoted = buildLevelPromotionAnswers({
-      currentAnswers: current, targetLevel: 'INTERMEDIATE', pinnedFrequency: 4, pinnedTrainingDays: [],
-    });
-    const result = await prepareWorkoutProgramLocally(promoted, { withLimitationCatalog: true });
-    expect(result.status).toBe('SUCCESS');
-    if (result.status !== 'SUCCESS') return;
-    // Safety resolver still ran — every session has real, resolved exercises.
-    expect(result.plan.sessions.every((session) => session.exercises.length > 0)).toBe(true);
   });
 });

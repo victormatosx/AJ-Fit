@@ -41,31 +41,27 @@
  * `FIRST_PROGRAM_GENERATION_INTEGRATION=1` is set (see the
  * `test:integration:firstProgramGeneration` npm script).
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { collection, deleteDoc, doc, getDoc, getDocs, setDoc, Timestamp } from 'firebase/firestore';
+import { Timestamp,collection,deleteDoc,doc,getDoc,getDocs,setDoc } from 'firebase/firestore';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { afterAll,beforeAll,beforeEach,describe,expect,it,vi } from 'vitest';
 
 import { buildSeedDocuments } from '../../../scripts/seedWorkoutTemplates';
-import { completeAnswers } from '../../workoutPrescription/__tests__/fixtures';
 import { toPersistedAnswers } from '../../lib/questionnaireAnswers';
-import {
-  CANONICAL_LIMITATION_DATASET_HASH,
-  CANONICAL_LIMITATION_DATASET_VERSION,
-} from '../../workoutPrescription/limitationDataset';
 import { resolveWorkoutSchedule } from '../../scheduleEngine/resolver';
-import { WEEKDAY_ORDER, type Weekday } from '../../state/AppState';
-import type { WorkoutDayState } from '../../workoutPrescription/types';
+import { WEEKDAY_ORDER,type Weekday } from '../../state/AppState';
 import { setInstallActiveWorkoutProgramInvokerForTests } from '../../workoutLifecycle/authorityProvider';
 import {
   resetWorkoutLifecycleTelemetryLogger,
   setWorkoutLifecycleTelemetryLogger,
   type WorkoutLifecycleTelemetryEvent,
 } from '../../workoutLifecycle/telemetry';
+import { completeAnswers } from '../../workoutPrescription/__tests__/fixtures';
+import type { WorkoutDayState } from '../../workoutPrescription/types';
 
 const PROJECT_ID = 'ajfit-rules-test';
 const UID = 'dave';
@@ -80,15 +76,15 @@ vi.mock('../../lib/firebase', () => ({
   get db() { return mocks.db; },
 }));
 
-import { contentIdentityFor, generateAndPersistWorkoutProgram, loadActiveWorkoutProgram } from '../workoutPrograms';
 import { getLatestQuestionnaire } from '../userProfile';
+import { contentIdentityFor,generateAndPersistWorkoutProgram,loadActiveWorkoutProgram } from '../workoutPrograms';
 import { ensureScheduleConfigFromQuestionnaire } from '../workoutSchedule';
-import { enableWorkoutLifecycleRollout } from './workoutLifecycleRolloutFixture';
 import {
   installWorkoutLifecycleAuthorityFixture,
   resetWorkoutLifecycleAuthorityFixture,
   setWorkoutLifecycleCanonicalResponseOverrideForTests,
 } from './workoutLifecycleAuthorityFixture';
+import { enableWorkoutLifecycleRollout } from './workoutLifecycleRolloutFixture';
 
 const T003_SEED = buildSeedDocuments().find((t) => t.id === 'T003');
 if (!T003_SEED) throw new Error('T003 fixture missing from catalog — cannot run this integration test');
@@ -115,10 +111,6 @@ async function seedUserAndQuestionnaire() {
       metadata: { role: 'user', createdAt: Timestamp.now(), updatedAt: Timestamp.now(), commercialGateResolvedAt: Timestamp.now() },
     });
     await setDoc(doc(rawDb, 'workoutTemplates', 'T003'), T003_SEED);
-    await setDoc(doc(rawDb, 'limitationDatasetState', 'active'), {
-      datasetVersion: CANONICAL_LIMITATION_DATASET_VERSION,
-      limitationDatasetHash: CANONICAL_LIMITATION_DATASET_HASH,
-    });
     await setDoc(doc(rawDb, 'users', UID, 'questionnaires', QUESTIONNAIRE_ID), {
       answers: toPersistedAnswers(ORIGINAL_SCENARIO_ANSWERS),
       version: 1,

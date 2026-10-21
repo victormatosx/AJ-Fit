@@ -1,0 +1,119 @@
+{
+  "generatedAt": "2026-10-21T01:58:10.785Z",
+  "budgetCeilingUsd": 2,
+  "totalEstimatedCostUsd": 0.045854,
+  "scenarios": [
+    {
+      "scenario": "1_no_restrictions",
+      "status": "completed",
+      "failureCode": null,
+      "calls": 4,
+      "inputTokens": 14666,
+      "outputTokens": 8392,
+      "estimatedCostUsd": 0.005663,
+      "latencyMsTotal": 78404
+    },
+    {
+      "scenario": "2_lactose_intolerant",
+      "status": "failed",
+      "failureCode": "AI_RETRY_EXHAUSTED",
+      "calls": 3,
+      "inputTokens": 9674,
+      "outputTokens": 8285,
+      "estimatedCostUsd": 0.00511,
+      "latencyMsTotal": 79054
+    },
+    {
+      "scenario": "3_vegetarian",
+      "status": "failed",
+      "failureCode": "AI_RETRY_EXHAUSTED",
+      "calls": 3,
+      "inputTokens": 9605,
+      "outputTokens": 7485,
+      "estimatedCostUsd": 0.004703,
+      "latencyMsTotal": 67199
+    },
+    {
+      "scenario": "4_vegetarian_lactose",
+      "status": "failed",
+      "failureCode": "AI_RETRY_EXHAUSTED",
+      "calls": 3,
+      "inputTokens": 10458,
+      "outputTokens": 8018,
+      "estimatedCostUsd": 0.005055,
+      "latencyMsTotal": 73012
+    },
+    {
+      "scenario": "5_vegetarian_lactose_mandioca",
+      "status": "failed",
+      "failureCode": "AI_RETRY_EXHAUSTED",
+      "calls": 3,
+      "inputTokens": 9870,
+      "outputTokens": 7705,
+      "estimatedCostUsd": 0.00484,
+      "latencyMsTotal": 75880
+    },
+    {
+      "scenario": "6_protein_supplement",
+      "status": "completed",
+      "failureCode": null,
+      "calls": 3,
+      "inputTokens": 10620,
+      "outputTokens": 5960,
+      "estimatedCostUsd": 0.004042,
+      "latencyMsTotal": 59206
+    },
+    {
+      "scenario": "7_legacy_milk_allergy",
+      "status": "failed",
+      "failureCode": "AI_RETRY_EXHAUSTED",
+      "calls": 3,
+      "inputTokens": 10080,
+      "outputTokens": 7229,
+      "estimatedCostUsd": 0.004622,
+      "latencyMsTotal": 78421
+    },
+    {
+      "scenario": "8_gluten_exclusion",
+      "status": "failed",
+      "failureCode": "AI_RETRY_EXHAUSTED",
+      "calls": 3,
+      "inputTokens": 10744,
+      "outputTokens": 6821,
+      "estimatedCostUsd": 0.004485,
+      "latencyMsTotal": 69733
+    },
+    {
+      "scenario": "9_reviewer_rejects_incompatible_candidate",
+      "status": "rejected",
+      "failureCode": null,
+      "calls": 1,
+      "inputTokens": 1111,
+      "outputTokens": 911,
+      "estimatedCostUsd": 0.000567,
+      "latencyMsTotal": 11950,
+      "note": "checks.dietaryPattern=false requiresRegeneration=true"
+    },
+    {
+      "scenario": "10_rejection_feedback_correction",
+      "status": "failed",
+      "failureCode": "AI_RETRY_EXHAUSTED",
+      "calls": 3,
+      "inputTokens": 6229,
+      "outputTokens": 4380,
+      "estimatedCostUsd": 0.002813,
+      "latencyMsTotal": 40184,
+      "note": "creatorCalls=3 (attempt 1 synthetic/free, rest real)"
+    },
+    {
+      "scenario": "11_12_macros_and_persistence_safety",
+      "status": "completed",
+      "failureCode": null,
+      "calls": 3,
+      "inputTokens": 10187,
+      "outputTokens": 5873,
+      "estimatedCostUsd": 0.003955,
+      "latencyMsTotal": 59459
+    }
+  ]
+}

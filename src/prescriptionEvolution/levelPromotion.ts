@@ -1,4 +1,4 @@
-import type { ScheduleMode, Weekday } from '../state/AppState';
+import type { ScheduleMode,Weekday } from '../state/AppState';
 import type { CurrentTrainingLevel } from '../workoutLifecycle/types';
 import type { QuestionnaireAnswers } from '../workoutPrescription/types';
 
@@ -18,7 +18,7 @@ function targetLevelToAnswersLevel(level: LevelPromotionTarget): NonNullable<Que
  * prescription's actual `prescribedTrainingFrequency`/availability, never
  * from raw questionnaire availability — promoting a level must never
  * silently increase weekly frequency (docs §12/§68/§69). Every other answer
- * (goal, place, equipment, duration, limitations, ...) is preserved as-is.
+ * (goal, place, equipment, duration, ...) is preserved as-is.
  */
 export function buildLevelPromotionAnswers(input: {
   currentAnswers: QuestionnaireAnswers;

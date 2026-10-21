@@ -1,0 +1,140 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "candidateDigest",
+    "status",
+    "checks",
+    "issues",
+    "requiresRegeneration"
+  ],
+  "properties": {
+    "candidateDigest": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "approved",
+        "rejected",
+        "insufficient_information"
+      ]
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allergies",
+        "lactose",
+        "gluten",
+        "dietaryPattern",
+        "ingredients",
+        "quantities",
+        "macros",
+        "calories",
+        "preferences",
+        "evidence"
+      ],
+      "properties": {
+        "allergies": {
+          "type": "boolean"
+        },
+        "lactose": {
+          "type": "boolean"
+        },
+        "gluten": {
+          "type": "boolean"
+        },
+        "dietaryPattern": {
+          "type": "boolean"
+        },
+        "ingredients": {
+          "type": "boolean"
+        },
+        "quantities": {
+          "type": "boolean"
+        },
+        "macros": {
+          "type": "boolean"
+        },
+        "calories": {
+          "type": "boolean"
+        },
+        "preferences": {
+          "type": "boolean"
+        },
+        "evidence": {
+          "type": "boolean"
+        }
+      }
+    },
+    "issues": {
+      "type": "array",
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "category",
+          "severity",
+          "mealIndex",
+          "optionIndex",
+          "foodIndex",
+          "reason",
+          "suggestedCorrection"
+        ],
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": [
+              "allergy",
+              "lactose",
+              "gluten",
+              "dietary_pattern",
+              "ingredients",
+              "quantity",
+              "macros",
+              "calories",
+              "preferences",
+              "insufficient_information"
+            ]
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium"
+            ]
+          },
+          "mealIndex": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "optionIndex": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "foodIndex": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "suggestedCorrection": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "requiresRegeneration": {
+      "type": "boolean"
+    }
+  }
+}

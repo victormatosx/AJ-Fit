@@ -1,0 +1,744 @@
+{
+  "physicalQuestionnaireConfirmed": true,
+  "questionnaire": {
+    "sex": "m",
+    "goal": "gain_muscle",
+    "level": "intermediate",
+    "days": 5,
+    "place": "gym",
+    "specialConditions": [
+      "musculoskeletal_limitation"
+    ],
+    "limits": [
+      "knee"
+    ]
+  },
+  "policy": "v3",
+  "selection": {
+    "status": "SELECTED",
+    "templateId": "T004",
+    "trace": [
+      "population_route:conventional",
+      "beginner_route:false",
+      "goal_family:hypertrophy_body_composition",
+      "sex:male",
+      "environment:gym",
+      "effective_days:5",
+      "template_id:T004"
+    ]
+  },
+  "thirdSession": {
+    "name": "Legs",
+    "type": "resistance",
+    "display_name": "Legs",
+    "exercises": [
+      {
+        "name": "Agachamento Livre",
+        "reps": "6-10",
+        "exercise_id": "barbell-back-squat",
+        "sets": 3
+      },
+      {
+        "name": "Leg Press 45",
+        "reps": "10-15",
+        "exercise_id": "leg-press-45",
+        "sets": 3
+      },
+      {
+        "name": "Mesa Flexora",
+        "reps": "10-15",
+        "exercise_id": "lying-leg-curl-machine",
+        "sets": 3
+      },
+      {
+        "name": "Cadeira Extensora",
+        "reps": "12-15",
+        "exercise_id": "leg-extension-machine",
+        "sets": 3
+      },
+      {
+        "name": "Stiff com Halteres",
+        "reps": "8-12",
+        "exercise_id": "dumbbell-stiff-leg-deadlift",
+        "sets": 3
+      },
+      {
+        "name": "Panturrilha em Pé",
+        "reps": "12-15",
+        "exercise_id": "standing-calf-raise-machine",
+        "sets": 6
+      },
+      {
+        "name": "Prancha",
+        "reps": "até a falha técnica",
+        "exercise_id": "plank",
+        "notes": "Manter a posição até a falha técnica, encerrando quando não for possível sustentar alinhamento e controle adequados.",
+        "sets": 3
+      }
+    ]
+  },
+  "currentLocalResult": {
+    "status": "NO_SAFE_CONFIGURATION",
+    "reasonCodes": [
+      "MUSCULOSKELETAL_NO_SUBSTITUTE:2:dumbbell-stiff-leg-deadlift",
+      "MUSCULOSKELETAL_NO_SUBSTITUTE:2:leg-press-45",
+      "MUSCULOSKELETAL_NO_SUBSTITUTE:4:dumbbell-stiff-leg-deadlift"
+    ],
+    "safety": {
+      "status": "ADAPTED",
+      "reasons": [
+        "MUSCULOSKELETAL_ADAPTATION_REQUIRED"
+      ],
+      "requiredModifierIds": [
+        "safety:musculoskeletal_adaptation"
+      ],
+      "protectedConstraints": [
+        "limitation:knee"
+      ]
+    },
+    "trace": {
+      "selectionReasons": [
+        "population_route:conventional",
+        "beginner_route:false",
+        "goal_family:hypertrophy_body_composition",
+        "sex:male",
+        "environment:gym",
+        "effective_days:5",
+        "template_id:T004"
+      ],
+      "safety": {
+        "status": "ADAPTED",
+        "reasons": [
+          "MUSCULOSKELETAL_ADAPTATION_REQUIRED"
+        ],
+        "requiredModifierIds": [
+          "safety:musculoskeletal_adaptation"
+        ],
+        "protectedConstraints": [
+          "limitation:knee"
+        ]
+      },
+      "appliedModifiers": [
+        "musculoskeletal_limitation"
+      ],
+      "unresolvedModifiers": [],
+      "conflicts": [],
+      "substitutions": [],
+      "limitationResolverVersion": 1,
+      "limitationDecisions": [
+        {
+          "sessionIndex": 2,
+          "exerciseId": "barbell-back-squat",
+          "activeRegions": [
+            "knee"
+          ],
+          "outcome": "SUBSTITUTED",
+          "substituteExerciseId": "leg-press-90",
+          "candidateOrigin": "declared",
+          "candidateRank": 0,
+          "sourcePrimaryMuscle": "quads",
+          "substitutePrimaryMuscle": "quads",
+          "environment": "gym",
+          "limitationProfileResolution": "adapted",
+          "doseBefore": {
+            "sets": 3,
+            "reps": "6-10"
+          },
+          "doseAfter": {
+            "sets": 3,
+            "reps": "6-10"
+          },
+          "candidatesEvaluated": [
+            {
+              "exerciseId": "leg-press-90",
+              "accepted": true,
+              "reasonCodes": [],
+              "origin": "declared",
+              "rank": 0
+            }
+          ]
+        },
+        {
+          "sessionIndex": 2,
+          "exerciseId": "leg-press-45",
+          "activeRegions": [
+            "knee"
+          ],
+          "outcome": "BLOCKED",
+          "reasonCode": "NO_SAFE_SUBSTITUTION",
+          "sourceReasonCodes": [
+            "NO_SAFE_SUBSTITUTION"
+          ],
+          "candidatesEvaluated": [
+            {
+              "exerciseId": "leg-press-90",
+              "accepted": false,
+              "reasonCodes": [
+                "LIMITATION_CANDIDATE_VISITED"
+              ],
+              "origin": "declared",
+              "rank": 0
+            },
+            {
+              "exerciseId": "stiff-leg-deadlift-machine",
+              "accepted": false,
+              "reasonCodes": [
+                "LIMITATION_PROFILE_MISSING"
+              ],
+              "origin": "declared",
+              "rank": 1
+            }
+          ]
+        },
+        {
+          "sessionIndex": 2,
+          "exerciseId": "dumbbell-stiff-leg-deadlift",
+          "activeRegions": [
+            "knee"
+          ],
+          "outcome": "BLOCKED",
+          "reasonCode": "NO_SAFE_SUBSTITUTION",
+          "sourceReasonCodes": [
+            "NO_SAFE_SUBSTITUTION"
+          ],
+          "candidatesEvaluated": [
+            {
+              "exerciseId": "stiff-leg-deadlift-machine",
+              "accepted": false,
+              "reasonCodes": [
+                "LIMITATION_PROFILE_MISSING"
+              ],
+              "origin": "declared",
+              "rank": 0
+            }
+          ]
+        },
+        {
+          "sessionIndex": 2,
+          "exerciseId": "plank",
+          "activeRegions": [
+            "knee"
+          ],
+          "outcome": "SUBSTITUTED",
+          "substituteExerciseId": "dead-bug",
+          "candidateOrigin": "declared",
+          "candidateRank": 0,
+          "sourcePrimaryMuscle": "abs",
+          "substitutePrimaryMuscle": "abs",
+          "environment": "gym",
+          "limitationProfileResolution": "adapted",
+          "doseBefore": {
+            "sets": 3,
+            "reps": "até a falha técnica",
+            "notes": "Manter a posição até a falha técnica, encerrando quando não for possível sustentar alinhamento e controle adequados."
+          },
+          "doseAfter": {
+            "sets": 3,
+            "reps": "até a falha técnica",
+            "notes": "Manter a posição até a falha técnica, encerrando quando não for possível sustentar alinhamento e controle adequados."
+          },
+          "candidatesEvaluated": [
+            {
+              "exerciseId": "dead-bug",
+              "accepted": true,
+              "reasonCodes": [],
+              "origin": "declared",
+              "rank": 0
+            }
+          ]
+        },
+        {
+          "sessionIndex": 4,
+          "exerciseId": "leg-press-45",
+          "activeRegions": [
+            "knee"
+          ],
+          "outcome": "SUBSTITUTED",
+          "substituteExerciseId": "leg-press-90",
+          "candidateOrigin": "declared",
+          "candidateRank": 0,
+          "sourcePrimaryMuscle": "quads",
+          "substitutePrimaryMuscle": "quads",
+          "environment": "gym",
+          "limitationProfileResolution": "adapted",
+          "doseBefore": {
+            "sets": 3,
+            "reps": "10-15"
+          },
+          "doseAfter": {
+            "sets": 3,
+            "reps": "10-15"
+          },
+          "candidatesEvaluated": [
+            {
+              "exerciseId": "leg-press-90",
+              "accepted": true,
+              "reasonCodes": [],
+              "origin": "declared",
+              "rank": 0
+            }
+          ]
+        },
+        {
+          "sessionIndex": 4,
+          "exerciseId": "bulgarian-split-squat",
+          "activeRegions": [
+            "knee"
+          ],
+          "outcome": "SUBSTITUTED",
+          "substituteExerciseId": "supported-low-step-up",
+          "candidateOrigin": "declared",
+          "candidateRank": 1,
+          "sourcePrimaryMuscle": "quads",
+          "substitutePrimaryMuscle": "quads",
+          "environment": "gym",
+          "limitationProfileResolution": "adapted",
+          "doseBefore": {
+            "sets": 3,
+            "reps": "8-12/perna"
+          },
+          "doseAfter": {
+            "sets": 3,
+            "reps": "8-12/perna"
+          },
+          "candidatesEvaluated": [
+            {
+              "exerciseId": "leg-press-90",
+              "accepted": false,
+              "reasonCodes": [
+                "LIMITATION_CANDIDATE_VISITED"
+              ],
+              "origin": "declared",
+              "rank": 0
+            },
+            {
+              "exerciseId": "supported-low-step-up",
+              "accepted": true,
+              "reasonCodes": [],
+              "origin": "declared",
+              "rank": 1
+            }
+          ]
+        },
+        {
+          "sessionIndex": 4,
+          "exerciseId": "dumbbell-stiff-leg-deadlift",
+          "activeRegions": [
+            "knee"
+          ],
+          "outcome": "BLOCKED",
+          "reasonCode": "NO_SAFE_SUBSTITUTION",
+          "sourceReasonCodes": [
+            "NO_SAFE_SUBSTITUTION"
+          ],
+          "candidatesEvaluated": [
+            {
+              "exerciseId": "stiff-leg-deadlift-machine",
+              "accepted": false,
+              "reasonCodes": [
+                "LIMITATION_PROFILE_MISSING"
+              ],
+              "origin": "declared",
+              "rank": 0
+            }
+          ]
+        },
+        {
+          "sessionIndex": 4,
+          "exerciseId": "plank",
+          "activeRegions": [
+            "knee"
+          ],
+          "outcome": "SUBSTITUTED",
+          "substituteExerciseId": "dead-bug",
+          "candidateOrigin": "declared",
+          "candidateRank": 0,
+          "sourcePrimaryMuscle": "abs",
+          "substitutePrimaryMuscle": "abs",
+          "environment": "gym",
+          "limitationProfileResolution": "adapted",
+          "doseBefore": {
+            "sets": 3,
+            "reps": "até a falha técnica",
+            "notes": "Manter a posição até a falha técnica, encerrando quando não for possível sustentar alinhamento e controle adequados."
+          },
+          "doseAfter": {
+            "sets": 3,
+            "reps": "até a falha técnica",
+            "notes": "Manter a posição até a falha técnica, encerrando quando não for possível sustentar alinhamento e controle adequados."
+          },
+          "candidatesEvaluated": [
+            {
+              "exerciseId": "dead-bug",
+              "accepted": true,
+              "reasonCodes": [],
+              "origin": "declared",
+              "rank": 0
+            }
+          ]
+        }
+      ],
+      "compositionDecisions": [],
+      "musclePriorityDecisions": [],
+      "validationCodes": []
+    }
+  },
+  "priorCompiledResult": {
+    "status": "INVALID_CONFIGURATION",
+    "reasonCodes": [
+      "MUSCULOSKELETAL_NO_SUBSTITUTE:2:dumbbell-stiff-leg-deadlift",
+      "MUSCULOSKELETAL_NO_SUBSTITUTE:2:leg-press-45",
+      "MUSCULOSKELETAL_NO_SUBSTITUTE:4:dumbbell-stiff-leg-deadlift"
+    ],
+    "safety": {
+      "status": "ADAPTED",
+      "reasons": [
+        "MUSCULOSKELETAL_ADAPTATION_REQUIRED"
+      ],
+      "requiredModifierIds": [
+        "safety:musculoskeletal_adaptation"
+      ],
+      "protectedConstraints": [
+        "limitation:knee"
+      ]
+    },
+    "trace": {
+      "selectionReasons": [
+        "population_route:conventional",
+        "beginner_route:false",
+        "goal_family:hypertrophy_body_composition",
+        "sex:male",
+        "environment:gym",
+        "effective_days:5",
+        "template_id:T004"
+      ],
+      "safety": {
+        "status": "ADAPTED",
+        "reasons": [
+          "MUSCULOSKELETAL_ADAPTATION_REQUIRED"
+        ],
+        "requiredModifierIds": [
+          "safety:musculoskeletal_adaptation"
+        ],
+        "protectedConstraints": [
+          "limitation:knee"
+        ]
+      },
+      "appliedModifiers": [
+        "musculoskeletal_limitation"
+      ],
+      "unresolvedModifiers": [],
+      "conflicts": [],
+      "substitutions": [],
+      "limitationResolverVersion": 1,
+      "limitationDecisions": [
+        {
+          "sessionIndex": 2,
+          "exerciseId": "barbell-back-squat",
+          "activeRegions": [
+            "knee"
+          ],
+          "outcome": "SUBSTITUTED",
+          "substituteExerciseId": "leg-press-90",
+          "candidateOrigin": "declared",
+          "candidateRank": 0,
+          "sourcePrimaryMuscle": "quads",
+          "substitutePrimaryMuscle": "quads",
+          "environment": "gym",
+          "limitationProfileResolution": "adapted",
+          "doseBefore": {
+            "sets": 3,
+            "reps": "6-10"
+          },
+          "doseAfter": {
+            "sets": 3,
+            "reps": "6-10"
+          },
+          "candidatesEvaluated": [
+            {
+              "exerciseId": "leg-press-90",
+              "accepted": true,
+              "reasonCodes": [],
+              "origin": "declared",
+              "rank": 0
+            }
+          ]
+        },
+        {
+          "sessionIndex": 2,
+          "exerciseId": "leg-press-45",
+          "activeRegions": [
+            "knee"
+          ],
+          "outcome": "BLOCKED",
+          "reasonCode": "NO_SAFE_SUBSTITUTION",
+          "sourceReasonCodes": [
+            "NO_SAFE_SUBSTITUTION"
+          ],
+          "candidatesEvaluated": [
+            {
+              "exerciseId": "leg-press-90",
+              "accepted": false,
+              "reasonCodes": [
+                "LIMITATION_CANDIDATE_VISITED"
+              ],
+              "origin": "declared",
+              "rank": 0
+            },
+            {
+              "exerciseId": "stiff-leg-deadlift-machine",
+              "accepted": false,
+              "reasonCodes": [
+                "LIMITATION_PROFILE_MISSING"
+              ],
+              "origin": "declared",
+              "rank": 1
+            }
+          ]
+        },
+        {
+          "sessionIndex": 2,
+          "exerciseId": "dumbbell-stiff-leg-deadlift",
+          "activeRegions": [
+            "knee"
+          ],
+          "outcome": "BLOCKED",
+          "reasonCode": "NO_SAFE_SUBSTITUTION",
+          "sourceReasonCodes": [
+            "NO_SAFE_SUBSTITUTION"
+          ],
+          "candidatesEvaluated": [
+            {
+              "exerciseId": "stiff-leg-deadlift-machine",
+              "accepted": false,
+              "reasonCodes": [
+                "LIMITATION_PROFILE_MISSING"
+              ],
+              "origin": "declared",
+              "rank": 0
+            }
+          ]
+        },
+        {
+          "sessionIndex": 2,
+          "exerciseId": "plank",
+          "activeRegions": [
+            "knee"
+          ],
+          "outcome": "SUBSTITUTED",
+          "substituteExerciseId": "dead-bug",
+          "candidateOrigin": "declared",
+          "candidateRank": 0,
+          "sourcePrimaryMuscle": "abs",
+          "substitutePrimaryMuscle": "abs",
+          "environment": "gym",
+          "limitationProfileResolution": "adapted",
+          "doseBefore": {
+            "sets": 3,
+            "reps": "até a falha técnica",
+            "notes": "Manter a posição até a falha técnica, encerrando quando não for possível sustentar alinhamento e controle adequados."
+          },
+          "doseAfter": {
+            "sets": 3,
+            "reps": "até a falha técnica",
+            "notes": "Manter a posição até a falha técnica, encerrando quando não for possível sustentar alinhamento e controle adequados."
+          },
+          "candidatesEvaluated": [
+            {
+              "exerciseId": "dead-bug",
+              "accepted": true,
+              "reasonCodes": [],
+              "origin": "declared",
+              "rank": 0
+            }
+          ]
+        },
+        {
+          "sessionIndex": 4,
+          "exerciseId": "leg-press-45",
+          "activeRegions": [
+            "knee"
+          ],
+          "outcome": "SUBSTITUTED",
+          "substituteExerciseId": "leg-press-90",
+          "candidateOrigin": "declared",
+          "candidateRank": 0,
+          "sourcePrimaryMuscle": "quads",
+          "substitutePrimaryMuscle": "quads",
+          "environment": "gym",
+          "limitationProfileResolution": "adapted",
+          "doseBefore": {
+            "sets": 3,
+            "reps": "10-15"
+          },
+          "doseAfter": {
+            "sets": 3,
+            "reps": "10-15"
+          },
+          "candidatesEvaluated": [
+            {
+              "exerciseId": "leg-press-90",
+              "accepted": true,
+              "reasonCodes": [],
+              "origin": "declared",
+              "rank": 0
+            }
+          ]
+        },
+        {
+          "sessionIndex": 4,
+          "exerciseId": "bulgarian-split-squat",
+          "activeRegions": [
+            "knee"
+          ],
+          "outcome": "SUBSTITUTED",
+          "substituteExerciseId": "supported-low-step-up",
+          "candidateOrigin": "declared",
+          "candidateRank": 1,
+          "sourcePrimaryMuscle": "quads",
+          "substitutePrimaryMuscle": "quads",
+          "environment": "gym",
+          "limitationProfileResolution": "adapted",
+          "doseBefore": {
+            "sets": 3,
+            "reps": "8-12/perna"
+          },
+          "doseAfter": {
+            "sets": 3,
+            "reps": "8-12/perna"
+          },
+          "candidatesEvaluated": [
+            {
+              "exerciseId": "leg-press-90",
+              "accepted": false,
+              "reasonCodes": [
+                "LIMITATION_CANDIDATE_VISITED"
+              ],
+              "origin": "declared",
+              "rank": 0
+            },
+            {
+              "exerciseId": "supported-low-step-up",
+              "accepted": true,
+              "reasonCodes": [],
+              "origin": "declared",
+              "rank": 1
+            }
+          ]
+        },
+        {
+          "sessionIndex": 4,
+          "exerciseId": "dumbbell-stiff-leg-deadlift",
+          "activeRegions": [
+            "knee"
+          ],
+          "outcome": "BLOCKED",
+          "reasonCode": "NO_SAFE_SUBSTITUTION",
+          "sourceReasonCodes": [
+            "NO_SAFE_SUBSTITUTION"
+          ],
+          "candidatesEvaluated": [
+            {
+              "exerciseId": "stiff-leg-deadlift-machine",
+              "accepted": false,
+              "reasonCodes": [
+                "LIMITATION_PROFILE_MISSING"
+              ],
+              "origin": "declared",
+              "rank": 0
+            }
+          ]
+        },
+        {
+          "sessionIndex": 4,
+          "exerciseId": "plank",
+          "activeRegions": [
+            "knee"
+          ],
+          "outcome": "SUBSTITUTED",
+          "substituteExerciseId": "dead-bug",
+          "candidateOrigin": "declared",
+          "candidateRank": 0,
+          "sourcePrimaryMuscle": "abs",
+          "substitutePrimaryMuscle": "abs",
+          "environment": "gym",
+          "limitationProfileResolution": "adapted",
+          "doseBefore": {
+            "sets": 3,
+            "reps": "até a falha técnica",
+            "notes": "Manter a posição até a falha técnica, encerrando quando não for possível sustentar alinhamento e controle adequados."
+          },
+          "doseAfter": {
+            "sets": 3,
+            "reps": "até a falha técnica",
+            "notes": "Manter a posição até a falha técnica, encerrando quando não for possível sustentar alinhamento e controle adequados."
+          },
+          "candidatesEvaluated": [
+            {
+              "exerciseId": "dead-bug",
+              "accepted": true,
+              "reasonCodes": [],
+              "origin": "declared",
+              "rank": 0
+            }
+          ]
+        }
+      ],
+      "compositionDecisions": [],
+      "musclePriorityDecisions": [],
+      "validationCodes": []
+    }
+  },
+  "approvedStiffKneeRule": {
+    "sourceId": "dumbbell-stiff-leg-deadlift",
+    "environment": "gym",
+    "context": "musculoskeletal",
+    "region": "knee",
+    "state": "listed",
+    "relations": [
+      {
+        "targetId": "stiff-leg-deadlift-machine",
+        "priority": 1,
+        "approval": "editorial",
+        "conditions": [],
+        "sourceRow": 55
+      }
+    ],
+    "sourceSheet": "Limitações - academia"
+  },
+  "missingProfileExerciseId": "stiff-leg-deadlift-machine",
+  "threeRequiredSlotsHaveOnlyTwoEditorialTargets": true,
+  "tests": {
+    "onboardingService": {
+      "passed": 5,
+      "failed": 0
+    },
+    "backendDispatcher": {
+      "passed": 17,
+      "failed": 0
+    },
+    "realInitializeEmulator": {
+      "passed": 1,
+      "failed": 0,
+      "skipped": 98
+    },
+    "appTypecheck": "passed",
+    "functionsTypecheck": "passed",
+    "eslintErrors": 0
+  },
+  "generationSucceeded": false,
+  "previous66FixesResolveThisCase": false,
+  "newProductionLogicChanges": false,
+  "planWorkbookUnchanged": true,
+  "deploy": false,
+  "build": false,
+  "ota": false,
+  "commit": false,
+  "push": false,
+  "realDataWritten": false,
+  "pendingFunctionsForPriorLocalCorrections": [
+    "initializeWorkoutProgramV127",
+    "authorizeWorkoutLifecycleMutation",
+    "installActiveWorkoutProgram"
+  ]
+}

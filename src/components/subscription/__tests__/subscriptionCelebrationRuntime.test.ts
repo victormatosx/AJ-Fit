@@ -16,17 +16,27 @@ describe('SubscriptionCelebrationRuntime structure', () => {
     );
   });
 
-  it('observes only real RevenueCat state and silently baselines each uid', () => {
-    expect(runtime).toContain('const { realCustomerInfo } = useSubscription();');
-    expect(runtime).not.toContain('effectiveCustomerInfo');
+  it('never reacts to the raw RevenueCat CustomerInfo snapshot', () => {
+    // Regression guard: the runtime used to diff `realCustomerInfo` on every
+    // update and infer a "renewed" celebration whenever the latest purchase
+    // date advanced. That fired for auto-renewals delivered by the native
+    // RevenueCat listener, app startup and foreground syncs, not just manual
+    // in-app purchases. The runtime must not read subscription state at all —
+    // it may only react to the explicit purchase-completed event.
+    expect(runtime).not.toContain('useSubscription');
+    expect(runtime).not.toContain('realCustomerInfo');
+    expect(runtime).not.toContain('resolveSubscriptionCelebration');
+    expect(runtime).not.toContain('subscriptionCelebrationState');
     expect(runtime).not.toContain('isPremium');
-    expect(runtime).toContain('if (!previous || previous.uid !== uid)');
-    expect(runtime).toContain('baseline.current = { uid, snapshot };');
+  });
+
+  it('resets its dedup state when the signed-in identity changes', () => {
+    expect(runtime).toContain('celebratedTransaction.current = null');
+    expect(runtime).toContain('setCelebration(null)');
   });
 
   it('uses explicit purchase provenance and never treats restore as a purchase', () => {
     expect(runtime).toContain('subscribeToSubscriptionPurchaseCelebrations');
-    expect(runtime).toContain('subscribeToSubscriptionRestoreCelebrationBoundaries');
     expect(subscriptionContext).toContain('emitSubscriptionPurchaseCelebration({');
     const purchaseBlock = subscriptionContext.slice(
       subscriptionContext.indexOf('const performPurchase'),
@@ -38,8 +48,10 @@ describe('SubscriptionCelebrationRuntime structure', () => {
     );
     expect(purchaseBlock).toContain('emitSubscriptionPurchaseCelebration({');
     expect(restoreBlock).not.toContain('emitSubscriptionPurchaseCelebration({');
-    expect(restoreBlock).toContain("phase: 'started'");
-    expect(restoreBlock).toContain("phase: 'finished'");
+  });
+
+  it('only shows the celebration overlay for an id matching the dispatched event', () => {
+    expect(runtime).toContain('setCelebration({ id: ++nextId.current, kind: event.kind })');
   });
 
   it('uses its own animation without a native Modal transition', () => {

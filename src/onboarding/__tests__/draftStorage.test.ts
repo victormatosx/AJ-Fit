@@ -1,5 +1,5 @@
-import { nutritionDraftAnswers, emptyOnboardingNutrition } from '../nutritionDraft';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach,describe,expect,it,vi } from 'vitest';
+import { emptyOnboardingNutrition,nutritionDraftAnswers } from '../nutritionDraft';
 
 const localStore = new Map<string, string>();
 
@@ -16,18 +16,18 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
 }));
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { defaultQuiz } from '../../state/AppState';
 import {
+  ONBOARDING_DRAFT_STORAGE_KEY,
+  acknowledgeOnboardingHealthChoice,
   bindOnboardingDraft,
   bindOnboardingHealthSnapshot,
-  acknowledgeOnboardingHealthChoice,
   buildDraft,
   clearOnboardingDraft,
   draftToQuiz,
-  ONBOARDING_DRAFT_STORAGE_KEY,
   readOnboardingDraft,
   writeOnboardingDraft,
 } from '../draftStorage';
-import { defaultQuiz } from '../../state/AppState';
 
 beforeEach(() => {
   localStore.clear();

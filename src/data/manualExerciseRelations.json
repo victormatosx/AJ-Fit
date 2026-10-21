@@ -1,0 +1,515 @@
+{
+  "incline-dumbbell-bench-press": [
+    "iso-lateral-incline-chest-press-machine",
+    "decline-barbell-bench-press"
+  ],
+  "iso-lateral-incline-chest-press-machine": [
+    "incline-dumbbell-bench-press",
+    "machine-flat-bench-press"
+  ],
+  "machine-flat-bench-press": [
+    "iso-lateral-incline-chest-press-machine"
+  ],
+  "decline-barbell-bench-press": [
+    "machine-flat-bench-press",
+    "incline-dumbbell-bench-press"
+  ],
+  "push-up": [
+    "machine-flat-bench-press",
+    "decline-push-up"
+  ],
+  "decline-push-up": [
+    "incline-dumbbell-bench-press",
+    "iso-lateral-incline-chest-press-machine",
+    "push-up"
+  ],
+  "incline-push-up": [
+    "counter-push-up",
+    "machine-flat-bench-press",
+    "push-up",
+    "wall-push-up"
+  ],
+  "counter-push-up": [
+    "incline-push-up",
+    "machine-flat-bench-press",
+    "wall-push-up",
+    "push-up"
+  ],
+  "wall-push-up": [
+    "counter-push-up",
+    "incline-push-up",
+    "machine-flat-bench-press"
+  ],
+  "cable-crossover-fly": [
+    "pec-deck-machine-fly",
+    "dumbbell-fly"
+  ],
+  "dumbbell-fly": [
+    "pec-deck-machine-fly",
+    "cable-crossover-fly"
+  ],
+  "pec-deck-machine-fly": [
+    "cable-crossover-fly",
+    "dumbbell-fly"
+  ],
+  "bar-lat-pulldown": [
+    "iso-lateral-pulldown-machine",
+    "lat-pulldown",
+    "v-bar-pulldown"
+  ],
+  "lat-pulldown-supinated-grip": [
+    "v-bar-pulldown",
+    "bar-lat-pulldown",
+    "iso-lateral-pulldown-machine"
+  ],
+  "v-bar-pulldown": [
+    "lat-pulldown-supinated-grip",
+    "iso-lateral-pulldown-machine",
+    "bar-lat-pulldown"
+  ],
+  "lat-pulldown": [
+    "bar-lat-pulldown",
+    "iso-lateral-pulldown-machine",
+    "v-bar-pulldown"
+  ],
+  "iso-lateral-pulldown-machine": [
+    "bar-lat-pulldown",
+    "unilateral-iso-lateral-pulldown-machine",
+    "v-bar-pulldown"
+  ],
+  "unilateral-iso-lateral-pulldown-machine": [
+    "iso-lateral-pulldown-machine",
+    "bar-lat-pulldown",
+    "v-bar-pulldown"
+  ],
+  "resistance-band-lat-pulldown": [
+    "bar-lat-pulldown",
+    "iso-lateral-pulldown-machine",
+    "lat-pulldown"
+  ],
+  "bent-over-row-smith-machine": [
+    "bent-over-dumbbell-row",
+    "iso-lateral-row-machine"
+  ],
+  "bent-over-dumbbell-row": [
+    "bent-over-row-smith-machine",
+    "one-arm-dumbbell-row"
+  ],
+  "one-arm-dumbbell-row": [
+    "unilateral-iso-lateral-row-machine",
+    "bent-over-dumbbell-row",
+    "low-cable-row-wide-neutral-grip"
+  ],
+  "iso-lateral-row-machine": [
+    "unilateral-iso-lateral-row-machine",
+    "low-cable-row-wide-neutral-grip",
+    "bent-over-row-smith-machine"
+  ],
+  "unilateral-iso-lateral-row-machine": [
+    "iso-lateral-row-machine",
+    "one-arm-dumbbell-row",
+    "low-cable-row-wide-neutral-grip"
+  ],
+  "low-cable-row-wide-neutral-grip": [
+    "low-cable-row-wide-grip",
+    "low-cable-row-close-supinated-grip",
+    "iso-lateral-row-machine"
+  ],
+  "low-cable-row-wide-grip": [
+    "low-cable-row-wide-neutral-grip",
+    "iso-lateral-row-machine",
+    "bent-over-row-smith-machine"
+  ],
+  "low-cable-row-close-supinated-grip": [
+    "supinated-cable-row",
+    "low-cable-row-wide-neutral-grip",
+    "iso-lateral-row-machine"
+  ],
+  "supinated-cable-row": [
+    "low-cable-row-close-supinated-grip",
+    "low-cable-row-wide-neutral-grip",
+    "iso-lateral-row-machine"
+  ],
+  "resistance-band-row": [
+    "low-cable-row-wide-neutral-grip",
+    "iso-lateral-row-machine",
+    "bent-over-dumbbell-row",
+    "seated-resistance-band-row",
+    "one-arm-dumbbell-row"
+  ],
+  "seated-resistance-band-row": [
+    "low-cable-row-wide-neutral-grip",
+    "low-cable-row-close-supinated-grip",
+    "iso-lateral-row-machine",
+    "resistance-band-row",
+    "bent-over-dumbbell-row",
+    "one-arm-dumbbell-row"
+  ],
+  "cable-rear-delt-fly": [
+    "dumbbell-rear-delt-fly",
+    "face-pull"
+  ],
+  "face-pull": [
+    "cable-rear-delt-fly",
+    "dumbbell-rear-delt-fly"
+  ],
+  "dumbbell-rear-delt-fly": [
+    "cable-rear-delt-fly",
+    "face-pull"
+  ],
+  "resistance-band-rear-delt-fly": [
+    "cable-rear-delt-fly",
+    "dumbbell-rear-delt-fly"
+  ],
+  "machine-shoulder-press": [
+    "dumbbell-shoulder-press"
+  ],
+  "dumbbell-shoulder-press": [
+    "machine-shoulder-press"
+  ],
+  "resistance-band-shoulder-press": [
+    "dumbbell-shoulder-press",
+    "machine-shoulder-press",
+    "seated-resistance-band-shoulder-press"
+  ],
+  "seated-resistance-band-shoulder-press": [
+    "machine-shoulder-press",
+    "dumbbell-shoulder-press",
+    "resistance-band-shoulder-press"
+  ],
+  "dumbbell-lateral-raise": [
+    "machine-lateral-raise",
+    "cable-lateral-raise"
+  ],
+  "machine-lateral-raise": [
+    "dumbbell-lateral-raise",
+    "cable-lateral-raise"
+  ],
+  "cable-lateral-raise": [
+    "machine-lateral-raise",
+    "dumbbell-lateral-raise"
+  ],
+  "resistance-band-lateral-raise": [
+    "dumbbell-lateral-raise",
+    "machine-lateral-raise",
+    "cable-lateral-raise"
+  ],
+  "cable-biceps-curl": [
+    "ez-bar-biceps-curl",
+    "seated-dumbbell-curl",
+    "preacher-curl"
+  ],
+  "ez-bar-biceps-curl": [
+    "cable-biceps-curl",
+    "seated-dumbbell-curl",
+    "preacher-curl",
+    "incline-dumbbell-curl"
+  ],
+  "preacher-curl": [
+    "cable-biceps-curl",
+    "ez-bar-biceps-curl",
+    "seated-dumbbell-curl",
+    "incline-dumbbell-curl"
+  ],
+  "seated-dumbbell-curl": [
+    "seated-single-arm-dumbbell-curl",
+    "ez-bar-biceps-curl",
+    "cable-biceps-curl",
+    "incline-dumbbell-curl"
+  ],
+  "seated-single-arm-dumbbell-curl": [
+    "seated-dumbbell-curl",
+    "cable-biceps-curl",
+    "ez-bar-biceps-curl",
+    "incline-dumbbell-curl"
+  ],
+  "incline-dumbbell-curl": [
+    "seated-dumbbell-curl",
+    "cable-biceps-curl",
+    "ez-bar-biceps-curl",
+    "preacher-curl"
+  ],
+  "hammer-curl": [
+    "seated-dumbbell-curl",
+    "cable-biceps-curl",
+    "ez-bar-biceps-curl"
+  ],
+  "resistance-band-hammer-curl": [
+    "hammer-curl",
+    "cable-biceps-curl"
+  ],
+  "triceps-rope-pushdown": [
+    "cable-triceps-pushdown",
+    "cable-skull-crusher",
+    "dumbbell-overhead-triceps-extension"
+  ],
+  "cable-triceps-pushdown": [
+    "triceps-rope-pushdown",
+    "cable-skull-crusher",
+    "dumbbell-overhead-triceps-extension"
+  ],
+  "cable-skull-crusher": [
+    "dumbbell-overhead-triceps-extension",
+    "triceps-rope-pushdown",
+    "cable-triceps-pushdown"
+  ],
+  "dumbbell-overhead-triceps-extension": [
+    "cable-skull-crusher",
+    "triceps-rope-pushdown",
+    "cable-triceps-pushdown"
+  ],
+  "resistance-band-triceps-pushdown": [
+    "cable-triceps-pushdown",
+    "triceps-rope-pushdown",
+    "cable-skull-crusher",
+    "dumbbell-overhead-triceps-extension"
+  ],
+  "barbell-back-squat": [
+    "smith-machine-squat",
+    "hack-squat-machine",
+    "leg-press-45",
+    "goblet-squat"
+  ],
+  "smith-machine-squat": [
+    "barbell-back-squat",
+    "hack-squat-machine",
+    "leg-press-45"
+  ],
+  "hack-squat-machine": [
+    "hack-squat-machine-variation",
+    "leg-press-45",
+    "smith-machine-squat"
+  ],
+  "hack-squat-machine-variation": [
+    "hack-squat-machine",
+    "leg-press-45",
+    "smith-machine-squat"
+  ],
+  "leg-press-45": [
+    "leg-press-90",
+    "hack-squat-machine",
+    "smith-machine-squat"
+  ],
+  "leg-press-90": [
+    "leg-press-45",
+    "hack-squat-machine",
+    "smith-machine-squat"
+  ],
+  "leg-press-45-unilateral": [
+    "leg-press-45"
+  ],
+  "bodyweight-squat": [
+    "goblet-squat",
+    "smith-machine-squat",
+    "leg-press-90"
+  ],
+  "chair-squat": [
+    "bodyweight-squat",
+    "chair-sit-to-stand",
+    "goblet-squat"
+  ],
+  "goblet-squat": [
+    "smith-machine-squat",
+    "barbell-back-squat",
+    "hack-squat-machine"
+  ],
+  "chair-sit-to-stand": [
+    "chair-squat",
+    "bodyweight-squat",
+    "leg-press-90"
+  ],
+  "sissy-squat": [
+    "hack-squat-machine",
+    "goblet-squat"
+  ],
+  "reverse-hack-squat": [
+    "reverse-hack-squat-unilateral",
+    "sumo-squat-machine"
+  ],
+  "reverse-hack-squat-unilateral": [
+    "reverse-hack-squat",
+    "sumo-squat-machine"
+  ],
+  "sumo-squat-machine": [
+    "reverse-hack-squat",
+    "reverse-hack-squat-unilateral"
+  ],
+  "walking-lunges": [
+    "stationary-lunge",
+    "bulgarian-split-squat-machine",
+    "bulgarian-split-squat-dumbbell"
+  ],
+  "stationary-lunge": [
+    "walking-lunges",
+    "bulgarian-split-squat-machine",
+    "bulgarian-split-squat-dumbbell"
+  ],
+  "bulgarian-split-squat": [
+    "bulgarian-split-squat-dumbbell",
+    "bulgarian-split-squat-machine",
+    "stationary-lunge",
+    "walking-lunges"
+  ],
+  "bulgarian-split-squat-dumbbell": [
+    "bulgarian-split-squat-machine",
+    "bulgarian-split-squat",
+    "stationary-lunge"
+  ],
+  "bulgarian-split-squat-machine": [
+    "bulgarian-split-squat-dumbbell"
+  ],
+  "bench-step-up": [
+    "stationary-lunge",
+    "bulgarian-split-squat-dumbbell",
+    "bulgarian-split-squat-machine",
+    "bulgarian-split-squat"
+  ],
+  "low-step-up": [
+    "supported-low-step-up",
+    "bench-step-up"
+  ],
+  "supported-low-step-up": [
+    "low-step-up",
+    "bench-step-up"
+  ],
+  "dumbbell-stiff-leg-deadlift": [
+    "stiff-leg-deadlift-smith-machine",
+    "stiff-leg-deadlift-machine",
+    "single-leg-dumbbell-stiff-leg-deadlift"
+  ],
+  "stiff-leg-deadlift-smith-machine": [
+    "dumbbell-stiff-leg-deadlift",
+    "stiff-leg-deadlift-hack-machine"
+  ],
+  "stiff-leg-deadlift-hack-machine": [
+    "stiff-leg-deadlift-machine",
+    "stiff-leg-deadlift-smith-machine",
+    "dumbbell-stiff-leg-deadlift"
+  ],
+  "stiff-leg-deadlift-machine": [
+    "stiff-leg-deadlift-hack-machine",
+    "stiff-leg-deadlift-smith-machine",
+    "dumbbell-stiff-leg-deadlift"
+  ],
+  "single-leg-dumbbell-stiff-leg-deadlift": [
+    "dumbbell-stiff-leg-deadlift",
+    "stiff-leg-deadlift-smith-machine"
+  ],
+  "conventional-deadlift": [
+    "sumo-deadlift-smith-machine",
+    "sumo-deadlift-dumbbell"
+  ],
+  "sumo-deadlift-dumbbell": [
+    "sumo-deadlift-smith-machine",
+    "conventional-deadlift"
+  ],
+  "sumo-deadlift-smith-machine": [
+    "sumo-deadlift-dumbbell",
+    "conventional-deadlift"
+  ],
+  "hip-hinge-drill": [
+    "dumbbell-stiff-leg-deadlift"
+  ],
+  "lying-leg-curl-machine": [
+    "seated-leg-curl-machine",
+    "standing-single-leg-curl-machine"
+  ],
+  "seated-leg-curl-machine": [
+    "lying-leg-curl-machine",
+    "standing-single-leg-curl-machine"
+  ],
+  "standing-single-leg-curl-machine": [
+    "lying-leg-curl-machine",
+    "seated-leg-curl-machine"
+  ],
+  "resistance-band-standing-leg-curl": [
+    "standing-single-leg-curl-machine",
+    "lying-leg-curl-machine",
+    "seated-leg-curl-machine",
+    "seated-resistance-band-leg-curl",
+    "slider-leg-curl"
+  ],
+  "seated-resistance-band-leg-curl": [
+    "seated-leg-curl-machine",
+    "lying-leg-curl-machine",
+    "standing-single-leg-curl-machine",
+    "resistance-band-standing-leg-curl",
+    "slider-leg-curl"
+  ],
+  "supported-standing-leg-curl": [
+    "standing-single-leg-curl-machine",
+    "resistance-band-standing-leg-curl",
+    "lying-leg-curl-machine",
+    "slider-leg-curl",
+    "seated-resistance-band-leg-curl"
+  ],
+  "slider-leg-curl": [
+    "lying-leg-curl-machine",
+    "seated-leg-curl-machine",
+    "standing-single-leg-curl-machine",
+    "resistance-band-standing-leg-curl",
+    "seated-resistance-band-leg-curl"
+  ],
+  "glute-bridge": [
+    "hip-thrust"
+  ],
+  "roman-chair-back-extension": [
+    "roman-chair-back-extension-arms-crossed"
+  ],
+  "roman-chair-back-extension-arms-crossed": [
+    "roman-chair-back-extension"
+  ],
+  "mini-band-hip-abduction": [
+    "seated-hip-abductor-machine"
+  ],
+  "supported-hip-abduction": [
+    "mini-band-hip-abduction",
+    "seated-hip-abductor-machine"
+  ],
+  "seated-calf-raise-machine": [
+    "standing-calf-raise-machine"
+  ],
+  "standing-calf-raise-machine": [
+    "seated-calf-raise-machine"
+  ],
+  "supported-calf-raise": [
+    "standing-calf-raise-machine",
+    "seated-calf-raise-machine"
+  ],
+  "floor-crunch": [
+    "lying-leg-raise"
+  ],
+  "lying-leg-raise": [
+    "floor-crunch"
+  ],
+  "plank": [
+    "dead-bug",
+    "bird-dog"
+  ],
+  "dead-bug": [
+    "plank",
+    "bird-dog"
+  ],
+  "bird-dog": [
+    "dead-bug",
+    "plank"
+  ],
+  "march-in-place": [
+    "controlled-marching",
+    "walking"
+  ],
+  "controlled-marching": [
+    "march-in-place"
+  ],
+  "supported-balance": [
+    "supported-semi-tandem-stance",
+    "weight-shift"
+  ],
+  "supported-semi-tandem-stance": [
+    "supported-balance",
+    "weight-shift"
+  ],
+  "weight-shift": [
+    "supported-balance"
+  ]
+}

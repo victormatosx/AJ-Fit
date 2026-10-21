@@ -20,7 +20,7 @@ import { cleanApplicableAnswers, normalizeLoadedQuiz } from './questionnaireSche
  * is a `Timestamp` (Firestore has no native `Date`), plus the legacy `age`
  * field kept ONLY for reading pre-migration documents — never written again.
  */
-export type PersistedQuizAnswers = Omit<Quiz, 'birthDate' | 'place'> & {
+export type PersistedQuizAnswers = Omit<Quiz, 'birthDate' | 'place' | 'limits'> & {
   birthDate?: Timestamp | null;
   place?: Quiz['place'] | 'both' | null;
   /** @deprecated removed questionnaire field — used only to resolve legacy `place: both`. */
@@ -31,12 +31,34 @@ export type PersistedQuizAnswers = Omit<Quiz, 'birthDate' | 'place'> & {
   limitationImpact?: unknown;
   /** @deprecated removed questionnaire field — ignored on read, never written. */
   motivation?: unknown;
+  /**
+   * `limits` (and `musculoskeletal_limitation` inside `specialConditions`)
+   * is the purely-informational, frontend-only physical-limitations
+   * question — onboarding local state ONLY (see `Quiz['limits']`). It must
+   * never be written to Firestore. Kept here read-only so a pre-removal or
+   * accidentally-written legacy document can still be loaded without
+   * throwing; `toPersistedAnswers` never sets it.
+   */
+  limits?: unknown;
 };
 
-/** `Quiz` (client shape, `birthDate: Date | null`) → Firestore shape. */
+/**
+ * `Quiz` (client shape, `birthDate: Date | null`) → Firestore shape.
+ *
+ * `limits`/`musculoskeletal_limitation` are deliberately stripped here even
+ * though `cleanApplicableAnswers` keeps them for local in-session state —
+ * the physical-limitations question is purely informational (onboarding UI
+ * only) and must never reach Firestore or, downstream, the prescription
+ * Cloud Functions. See `src/workoutPrescription/input.ts`'s
+ * `sanitizeAnswersForEngine` for the matching read-side strip.
+ */
 export function toPersistedAnswers(answers: Quiz): PersistedQuizAnswers {
-  const { birthDate, ...rest } = cleanApplicableAnswers(answers);
-  return { ...rest, birthDate: birthDate ? Timestamp.fromDate(birthDate) : null };
+  const { birthDate, limits: _limits, specialConditions, ...rest } = cleanApplicableAnswers(answers);
+  return {
+    ...rest,
+    specialConditions: specialConditions.filter((value) => value !== 'musculoskeletal_limitation'),
+    birthDate: birthDate ? Timestamp.fromDate(birthDate) : null,
+  };
 }
 
 /**
@@ -61,6 +83,7 @@ export function fromPersistedAnswers(
     primaryPlace: legacyPrimaryPlace,
     limitationImpact: _legacyLimitationImpact,
     motivation: _legacyMotivation,
+    limits: _legacyLimits,
     ...rest
   } = raw ?? {};
   const resolvedBirthDate = birthDate
@@ -71,10 +94,21 @@ export function fromPersistedAnswers(
   // `defaultQuiz` backfills any field missing from a sparse/corrupted doc —
   // never throws, never leaves a field silently `undefined` for downstream
   // code (e.g. `.map()`/`.includes()` on the array fields) to crash on.
-  return normalizeLoadedQuiz({
+  const quiz = normalizeLoadedQuiz({
     ...defaultQuiz,
     ...rest,
     primaryPlace: legacyPrimaryPlace,
     birthDate: resolvedBirthDate,
   });
+  // Mirror of the strip in `toPersistedAnswers`: never resurrect
+  // `musculoskeletal_limitation`/`limits` into live state from a Firestore
+  // document, even a legacy one written before this field was removed from
+  // persistence. This is independent from (and stricter than)
+  // `normalizeLoadedQuiz`'s own legacy-inference logic, which only governs
+  // same-session local state (draft resume via `fromDraftAnswers`).
+  return {
+    ...quiz,
+    limits: [],
+    specialConditions: quiz.specialConditions.filter((value) => value !== 'musculoskeletal_limitation'),
+  };
 }

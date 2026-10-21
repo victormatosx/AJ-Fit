@@ -1,8 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe,expect,it } from 'vitest';
 import { EXERCISES_SEED } from '../../data/exercisesSeedData';
-import { getTemplateById, WORKOUT_TEMPLATES } from '../catalog';
+import { WORKOUT_TEMPLATES,getTemplateById } from '../catalog';
 import { generateWorkoutPrescription } from '../engine';
-import { limitationReadinessFailure } from '../generationPolicy';
 import { resolveModifiers } from '../modifiers';
 import { evaluateSafety } from '../safety';
 import { selectTemplate } from '../selection';
@@ -28,13 +27,6 @@ describe('prescription pipeline and invariants', () => {
     expect(flexible.plan.scheduleMode).toBe('flexible');
     expect(flexible.plan.availability?.weekdays).toEqual([]);
     expect(flexible.plan.weeklySchedule).toEqual([]);
-  });
-
-  it('marks the former DR-006 blanket gate as resolved', () => {
-    expect(limitationReadinessFailure(completeAnswers({
-      specialConditions: ['musculoskeletal_limitation'],
-      limits: ['knee'],
-    }))).toBeNull();
   });
 
   it('composes from the explicit runtime template without mutating the canonical fixture', () => {
@@ -81,8 +73,6 @@ describe('prescription pipeline and invariants', () => {
       expect(first.plan.versions.templateLibrary).toBe('2.0.0');
       expect(first.plan.versions.modifierRules).toBe('2.0.0');
       expect(first.plan.versions.compositionEngine).toBe('2.1.0');
-      expect(first.plan.versions.limitationResolver).toBe('1.0.0');
-      expect(first.plan.trace.limitationResolverVersion).toBe(1);
     }
   });
 

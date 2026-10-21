@@ -1,5 +1,8 @@
-import { assertCatalogBindingsCurrent } from '../catalogLinking/pipeline';
-import { catalogLinkingEnabled, CATALOG_PIPELINE_VERSION, CATALOG_PLAN_SCHEMA_VERSION } from '../catalogLinking/config';
+import { randomUUID } from 'node:crypto';
+import { assertReviewEvidenceCurrent } from './reviewEvidence';
+import { reserveAiCall, NutritionLeaseLost, operationId } from './callBudget';
+import { candidateDigest } from '../ai/review';
+import { CATALOG_PLAN_SCHEMA_VERSION } from '../catalogLinking/config';
 import { CatalogSearchSession, firestoreCatalogReader } from '../catalogLinking/search';
 import { Timestamp, type Firestore } from 'firebase-admin/firestore';
 import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/https';
@@ -31,7 +34,7 @@ const MEAL_ALTERNATIVE_WINDOW_MS = 60 * 60 * 1000;
 const REQUEST_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type FinalCode = AttemptCode | 'FEATURE_DISABLED' | 'INVALID_NUTRITION_CONTEXT'
-  | 'ACCOUNT_INACTIVE' | 'AI_PROVIDER_ERROR' | 'PLAN_NOT_FOUND' | 'MEAL_SLOT_NOT_IN_PLAN';
+  | 'ACCOUNT_INACTIVE' | 'AI_PROVIDER_ERROR' | 'PLAN_NOT_FOUND' | 'MEAL_SLOT_NOT_IN_PLAN' | 'AI_DETERMINISTIC_SAFETY_BLOCKED';
 
 interface MealAlternativeRequestData {
   requestId: string;
@@ -81,7 +84,8 @@ function errorCode(error: unknown): FinalCode {
     'ACCOUNT_INACTIVE', 'AI_PROVIDER_ERROR', 'PLAN_NOT_FOUND', 'MEAL_SLOT_NOT_IN_PLAN'].includes(error.message)) {
     return error.message === 'NUTRITION_GENERATION_DISABLED' ? 'FEATURE_DISABLED' : error.message as FinalCode;
   }
-  return classifyAttemptError(error);
+  const classified = classifyAttemptError(error);
+  return classified === 'AI_SAFETY_VALIDATION_FAILED' ? 'AI_DETERMINISTIC_SAFETY_BLOCKED' : classified;
 }
 
 function responseFrom(data: FirebaseFirestore.DocumentData): AlternativeResponse {
@@ -108,12 +112,26 @@ export async function requestNutritionMealAlternativeHandler(
   const rateRef = db.collection('nutritionRateLimits').doc(uid);
   const deletionLockRef = db.collection('accountDeletionLocks').doc(uid);
   const claimedAt = Timestamp.now();
+  const leaseOwner = randomUUID();
+  const requestFingerprint = candidateDigest({ planId, slot, feedback: feedback ?? null });
+  // Existing owned-operations collection is already covered by account deletion.
+  const budgetRef = db.collection('nutritionAiOperations').doc(`${requestId}-budget`);
   const claim = await db.runTransaction(async (tx) => {
-    const [lock, plan, existing, rate] = await Promise.all([
-      tx.get(deletionLockRef), tx.get(planRef), tx.get(alternativeRef), tx.get(rateRef),
+    const [lock, plan, existing, rate, budget] = await Promise.all([
+      tx.get(deletionLockRef), tx.get(planRef), tx.get(alternativeRef), tx.get(rateRef), tx.get(budgetRef),
     ]);
     if (lock.exists) throw new HttpsError('failed-precondition', 'ACCOUNT_INACTIVE');
-    if (existing.exists) return { replay: responseFrom(existing.data()!), meal: null };
+    if (existing.exists) {
+      if (existing.get('planId') !== planId || existing.get('slot') !== slot
+        || candidateDigest({ planId, slot, feedback: existing.get('feedback') ?? null }) !== requestFingerprint) {
+        throw new HttpsError('invalid-argument', 'INVALID_REQUEST');
+      }
+      return { replay: responseFrom(existing.data()!), meal: null };
+    }
+    if (budget.exists && (budget.get('ownerUid') !== uid
+      || budget.get('requestFingerprint') && budget.get('requestFingerprint') !== requestFingerprint)) {
+      throw new HttpsError('invalid-argument', 'INVALID_REQUEST');
+    }
     if (!plan.exists || plan.get('status') !== 'active') throw new HttpsError('not-found', 'PLAN_NOT_FOUND');
     const meals = plan.get('meals') as MealShape[];
     const meal = Array.isArray(meals) ? meals.find((item) => item.slot === slot) : undefined;
@@ -138,6 +156,10 @@ export async function requestNutritionMealAlternativeHandler(
     if (priorCount >= MEAL_ALTERNATIVE_HOURLY_LIMIT) {
       throw new HttpsError('resource-exhausted', 'MEAL_ALTERNATIVE_RATE_LIMIT');
     }
+    tx.set(budgetRef, { ownerUid: uid, generationId: requestId, operation: 'meal_alternative',
+      status: 'running', leaseOwner, requestFingerprint, aiCallCount: budget.get('aiCallCount') ?? 0,
+      aiReservedUsd: budget.get('aiReservedUsd') ?? 0, aiAttemptCount: budget.get('aiAttemptCount') ?? 0,
+      updatedAt: claimedAt }, { merge: true });
     tx.set(rateRef, {
       ownerUid: uid,
       activeMealAlternativeRequestId: requestId,
@@ -146,7 +168,7 @@ export async function requestNutritionMealAlternativeHandler(
       mealAlternativeWindowCount: priorCount + 1,
       updatedAt: claimedAt,
     }, { merge: true });
-    return { replay: null, meal, catalogPlan: plan.get('versions.planSchemaVersion') === CATALOG_PLAN_SCHEMA_VERSION,
+    return { replay: null, meal, usedCalls: budget.get('aiCallCount') ?? 0, usedAttempts: budget.get('aiAttemptCount') ?? 0, catalogPlan: plan.get('versions.planSchemaVersion') === CATALOG_PLAN_SCHEMA_VERSION,
       storedTargets: plan.get('engineSnapshot.output.mealTargets') as import('../shared/types/nutrition').MealNutritionTarget[] | undefined };
   });
   if (claim.replay) return claim.replay;
@@ -157,36 +179,40 @@ export async function requestNutritionMealAlternativeHandler(
     const context = await loadGenerationContext(db, uid);
     const mealIndex = context.profile.mealSlots.indexOf(slot);
     if (mealIndex === -1) throw new Error('INVALID_NUTRITION_CONTEXT');
-    const catalogMode = Boolean(claim.catalogPlan || catalogLinkingEnabled());
-    if (claim.catalogPlan && !catalogLinkingEnabled()) throw new Error('NUTRITION_GENERATION_DISABLED');
     const target = claim.catalogPlan ? claim.storedTargets?.find(t => t.slot === slot) : context.engine.mealTargets[mealIndex];
     if (!target) throw new Error('INVALID_NUTRITION_CONTEXT');
     const deadline = startedAt + 110_000;
-    const catalogSession = catalogMode ? new CatalogSearchSession(firestoreCatalogReader(db), deadline) : undefined;
+    const catalogSession = new CatalogSearchSession(firestoreCatalogReader(db), deadline, 240, 80);
     const foodNames = await resolvePromptFoodNames(db, context.profile, uid);
 
-    const { validated, result, attempt, fallback } = await generateValidatedMealAlternative(
+    const { validated, result, attempt, fallback, review } = await generateValidatedMealAlternative(
       provider, context.profile, slot, target, recommendedOptionFoodNames(meal),
       context.physical.goal, foodNames, feedback?.reason,
       async (audit) => {
         finalAttempt = audit.attempt;
         logValidationDiagnostics(audit.validationDiagnostics, { generationId: requestId, attempt: audit.attempt });
         await recordAiOperation(db, { ownerUid: uid, generationId: requestId, operation: 'meal_alternative',
-          defaultModel: audit.fallback ? NUTRITION_AI_MODELS.fallback : NUTRITION_AI_MODELS.mealAlternative,
+          defaultModel: audit.role === 'reviewer' ? NUTRITION_AI_MODELS.reviewer : NUTRITION_AI_MODELS.mealAlternative,
+          role: audit.role, callNumber: audit.callNumber, reviewStatus: audit.reviewStatus, issueCategories: audit.issueCategories,
           attempt: audit.attempt, result: audit.result, code: audit.code, fallback: audit.fallback,
           latencyMs: audit.latencyMs, ...(catalogSession ? { catalogMetrics: { ...catalogSession.metrics } } : {}) });
       },
-      catalogSession ? { catalogSession, deadline } : {},
+      { catalogSession, deadline, initialCallCount: claim.usedCalls, startAttempt: claim.usedAttempts + 1,
+        physicalContext: { sex: context.physical.sex, ageYears: context.physical.ageYears,
+          heightCm: context.physical.heightCm, weightKg: context.physical.weightKg },
+        onBeforeCall: async (role, currentAttempt, callNumber) => reserveAiCall(db, budgetRef, uid, leaseOwner,
+          requestId, 'meal_alternative', role, currentAttempt, callNumber) },
     );
 
     const createdAt = Timestamp.now();
     const saved = await db.runTransaction(async (tx) => {
-      const [lock, currentPlan, rate, existing, latestProfile] = await Promise.all([
+      const [lock, currentPlan, rate, existing, latestProfile, budget] = await Promise.all([
         tx.get(deletionLockRef), tx.get(planRef), tx.get(rateRef), tx.get(alternativeRef),
-        tx.get(user.collection('nutritionProfile').doc('current')),
+        tx.get(user.collection('nutritionProfile').doc('current')), tx.get(budgetRef),
       ]);
       if (lock.exists) throw new HttpsError('failed-precondition', 'ACCOUNT_INACTIVE');
       if (existing.exists) return responseFrom(existing.data()!);
+      if (budget.get('leaseOwner') !== leaseOwner) throw new NutritionLeaseLost();
       if (!latestProfile.get('updatedAt')?.isEqual(context.profile.updatedAt)) {
         throw new HttpsError('aborted', 'MEAL_ALTERNATIVE_STALE_REQUEST');
       }
@@ -196,13 +222,17 @@ export async function requestNutritionMealAlternativeHandler(
       if (rate.get('activeMealAlternativeRequestId') !== requestId) {
         throw new HttpsError('aborted', 'MEAL_ALTERNATIVE_STALE_REQUEST');
       }
-      if (catalogSession) await assertCatalogBindingsCurrent(tx, db, validated.options, context.profile, foodNames, catalogSession);
+      await assertReviewEvidenceCurrent(tx, db, review.evidence);
       const value = { alternativeId: requestId, planId, slot, options: validated.options,
         recommendedOptionId: validated.recommendedOptionId, feedback: feedback ?? null,
-        catalogVersion: catalogMode ? CATALOG_PIPELINE_VERSION : FOOD_CATALOG_VERSION_PLACEHOLDER,
-        generationMetadata: { ...(catalogMode ? { mode: 'catalog' } : {}), provider: 'openai', model: result.model, attempts: attempt,
+        catalogVersion: FOOD_CATALOG_VERSION_PLACEHOLDER,
+        generationMetadata: { review: { version: review.version, model: review.model,
+          candidateDigest: review.candidateDigest, calls: review.calls }, provider: 'openai', model: result.model, attempts: attempt,
           corrected: validated.corrected, fallbackUsed: fallback }, createdAt };
       tx.create(alternativeRef, value);
+      tx.update(db.collection('nutritionAiOperations').doc(operationId(requestId, 'reviewer', review.calls)),
+        { resultStatus: 'validated', activatedAt: createdAt });
+      tx.update(budgetRef, { status: 'completed', updatedAt: createdAt });
       tx.update(rateRef, { activeMealAlternativeRequestId: null, activeMealAlternativeStartedAt: null,
         lastMealAlternativeAt: createdAt, lastMealAlternativeRequestId: requestId,
         lastMealAlternativeId: requestId, updatedAt: createdAt });
@@ -214,8 +244,10 @@ export async function requestNutritionMealAlternativeHandler(
     return saved;
   } catch (error) {
     await db.runTransaction(async (tx) => {
-      const [lock, rate] = await Promise.all([tx.get(deletionLockRef), tx.get(rateRef)]);
-      if (lock.exists || !rate.exists || rate.get('activeMealAlternativeRequestId') !== requestId) return;
+      const [lock, rate, budget] = await Promise.all([tx.get(deletionLockRef), tx.get(rateRef), tx.get(budgetRef)]);
+      if (lock.exists || !rate.exists || rate.get('activeMealAlternativeRequestId') !== requestId || budget.get('leaseOwner') !== leaseOwner) return;
+      tx.update(budgetRef, { status: 'failed', lastFailureCode: error instanceof GenerationAttemptsExhausted
+        ? error.lastFailureCode : classifyAttemptError(error), updatedAt: Timestamp.now() });
       tx.update(rateRef, { activeMealAlternativeRequestId: null, activeMealAlternativeStartedAt: null,
         updatedAt: Timestamp.now() });
     }).catch(() => undefined);

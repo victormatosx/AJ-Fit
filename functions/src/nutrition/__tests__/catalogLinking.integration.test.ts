@@ -1,3 +1,6 @@
+import { linkAndValidatePlan, linkAndValidateAlternative } from '../catalogLinking/pipeline';
+import { CatalogSearchSession, firestoreCatalogReader } from '../catalogLinking/search';
+import { approveReview, rejectReview } from './reviewFixture';
 import { favoriteCatalogMealHandler } from '../catalogLinking/favoriteMeal';
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -40,11 +43,11 @@ describe.skipIf(!process.env.FIRESTORE_EMULATOR_HOST)('catalog linked lifecycle 
         const food = normalizeFoodRecord({ source: { type: 'taco', sourceId: `${uid}-${i}`, sourceName: 'Synthetic test' },
           name, category: 'other', nutritionPer100g: n, generationStatus: 'pending_review' }, 'test-v1');
         foods.push(food.id); await db.collection('nutritionFoods').doc(food.id).set({ ...food, createdAt: now, updatedAt: now });
-        intents.push({ name, quantity: 300, unit: 'g', preparationNote: '', estimatedNutrition: { ...n, kcal: 1 }, allergens: [], ingredients: [{ name, origin: 'plant' }] });
+        intents.push({ name, quantity: 300, unit: 'g', preparationNote: '', estimatedNutrition: { kcal: t.kcal.target, proteinG: t.proteinG.target, carbsG: t.carbsG.target, fatG: t.fatG.target, fiberG: t.fiberG!.target }, allergens: [], ingredients: [{ name, origin: 'plant' }] });
       }
       const output = { meals: context.profile.mealSlots.map((slot, i) => ({ slot, foods: [intents[i]] })) };
       const result = (output: unknown) => ({ output, model: 'synthetic', usage: { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0 }, latencyMs: 1 });
-      const provider: NutritionAiProvider = { generatePlan: vi.fn(async () => result(output)),
+      const provider: NutritionAiProvider = { reviewPlan: approveReview, generatePlan: vi.fn(async () => result(output)),
         generateMealAlternative: vi.fn(async () => result({ recommendedOptionIndex: 0, options: [{ foods: [intents[0]] }, { foods: [intents[0]] }] })) };
       await user.update({ 'metadata.createdAt': now });
       await user.collection('onboardingNutritionState').doc('current').set({ createdAt: now });
@@ -56,11 +59,17 @@ describe.skipIf(!process.env.FIRESTORE_EMULATOR_HOST)('catalog linked lifecycle 
       const first = await requestNutritionPlanGenerationHandler(req(uid, { intent: 'initial_onboarding' }), db, async () => true);
       expect(await requestNutritionPlanGenerationHandler(req(uid, { intent: 'initial_onboarding' }), db, async () => true)).toEqual(first);
       expect(await requestNutritionPlanGenerationHandler(req(uid, { requestId: 'catalog-request-1' }), db)).toEqual(first);
-      expect((await user.collection('nutritionGenerationJobs').doc(first.generationId).get()).get('generationMode')).toBe('catalog');
+      expect((await user.collection('nutritionGenerationJobs').doc(first.generationId).get()).get('generationMode')).toBe('reviewed');
       expect(await processNutritionGenerationJob(uid, first.generationId, provider, db)).toBe(true);
       expect(await processNutritionGenerationJob(uid, first.generationId, provider, db)).toBe(false);
+      const generated = (await user.collection('nutritionPlans').doc(first.generationId).get()).data()!;
+      expect(generated.versions.planSchemaVersion).toBe('2.0.0');
+      expect(generated.generationMetadata.review.calls).toBe(2);
+      expect(generated.meals[0].options[0].foods[0].catalogBinding).toBeUndefined();
+      // Simulate an already persisted historical catalog plan to retain compatibility coverage.
+      const linked = await linkAndValidatePlan(output, new CatalogSearchSession(firestoreCatalogReader(db)), context.profile, context.engine, { preferred: [], usual: [], excluded: [] });
+      await user.collection('nutritionPlans').doc(first.generationId).update({ meals: linked.meals, 'versions.planSchemaVersion': '3.0.0' });
       const plan = (await user.collection('nutritionPlans').doc(first.generationId).get()).data()!;
-      expect(plan.versions.planSchemaVersion).toBe('3.0.0');
       const item = plan.meals[0].options[0].foods[0];
       expect(item.estimatedNutrition).toEqual(catalogItemNutrition(item.catalogBinding));
       const log = { requestId: randomUUID(), origin: 'plan', documentId: first.generationId, optionId: 'breakfast-1', slot: 'breakfast', localDate: '2026-10-18', timezone: 'America/Sao_Paulo' };
@@ -74,7 +83,11 @@ describe.skipIf(!process.env.FIRESTORE_EMULATOR_HOST)('catalog linked lifecycle 
       expect(logged.docs[0].get('snapshot.kcal')).toBe(item.estimatedNutrition.kcal);
       await expect(requestNutritionPlanGenerationHandler(req(uid, { requestId: 'catalog-too-soon' }), db)).rejects.toThrow('NUTRITION_GENERATION_COOLDOWN');
       const alt = await requestNutritionMealAlternativeHandler(req(uid, { requestId: randomUUID(), planId: first.generationId, slot: 'breakfast' }), db, provider);
-      expect((alt.options as { foods: typeof item[] }[])[0].foods[0].catalogBinding).toBeDefined();
+      expect((alt.options as { foods: typeof item[] }[])[0].foods[0].catalogBinding).toBeUndefined();
+      // Likewise retain old catalog alternative/favorite/logging contracts using a historical fixture.
+      const historicalAlt = await linkAndValidateAlternative({ recommendedOptionIndex: 0, options: [{ foods: [intents[0]] }, { foods: [intents[0]] }] },
+        new CatalogSearchSession(firestoreCatalogReader(db)), context.profile, 'breakfast', context.engine.mealTargets[0], { preferred: [], usual: [], excluded: [] });
+      await user.collection('nutritionMealAlternatives').doc(alt.alternativeId).update({ options: historicalAlt.options });
       const favorite = await favoriteCatalogMealHandler(req(uid, { origin: 'alternative', documentId: alt.alternativeId, optionId: 'breakfast-1', slot: 'breakfast' }), db);
       const favoriteLog = { ...log, requestId: randomUUID(), origin: 'favorite', documentId: favorite.favoriteId, optionId: favorite.favoriteId, localDate: '2026-10-17' };
       await expect(logCatalogMealHandler(req(uid, favoriteLog), db)).resolves.toMatchObject({ replayed: false });
@@ -91,12 +104,13 @@ describe.skipIf(!process.env.FIRESTORE_EMULATOR_HOST)('catalog linked lifecycle 
       expect((await user.collection('nutritionPlans').doc(first.generationId).get()).get('meals')).toEqual(plan.meals);
       await db.collection('nutritionRateLimits').doc(uid).update({ lastRequestedAt: Timestamp.fromMillis(0) });
       const third = await requestNutritionPlanGenerationHandler(req(uid, { requestId: 'catalog-request-3' }), db);
-      const bad: NutritionAiProvider = { generatePlan: async () => result({ meals: output.meals.map(m => ({ ...m, foods: [{ ...intents[0], name: 'Inexistente' }] })) }) };
+      const bad: NutritionAiProvider = { reviewPlan: rejectReview, generatePlan: async () => result({ meals: output.meals.map(m => ({ ...m, foods: [{ ...intents[0], name: 'Inexistente' }] })) }) };
       expect(await processNutritionGenerationJob(uid, third.generationId, bad, db)).toBe(false);
       expect((await user.collection('nutritionPlans').doc(third.generationId).get()).exists).toBe(false);
       expect((await user.collection('nutritionPlans').doc(first.generationId).get()).get('status')).toBe('active');
       vi.stubEnv('NUTRITION_CATALOG_LINKING_ENABLED', 'false');
-      await expect(requestNutritionMealAlternativeHandler(req(uid, { requestId: randomUUID(), planId: first.generationId, slot: 'lunch' }), db, provider)).rejects.toThrow();
+      await db.collection('nutritionRateLimits').doc(uid).update({ lastMealAlternativeAt: Timestamp.fromMillis(0) });
+      await expect(requestNutritionMealAlternativeHandler(req(uid, { requestId: randomUUID(), planId: first.generationId, slot: 'lunch' }), db, provider)).resolves.toHaveProperty('alternativeId');
     } finally {
       await db.recursiveDelete(user);
       await db.collection('nutritionRateLimits').doc(uid).delete();

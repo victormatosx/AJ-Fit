@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* global __dirname */
 
 // Phase 10B (docs/workout-lifecycle/v2/decisions/ADR-016_BACKEND_AUTHORITATIVE_PRESCRIPTION.md):
 // the deterministic workout-prescription engine (`src/workoutPrescription/`) and the pure
@@ -17,13 +18,17 @@
 // copied into a generated, gitignored directory inside `functions/` before build/test/typecheck.
 // The `src/` originals remain the single source of truth; never edit the generated copies.
 
-const { readFileSync, writeFileSync, mkdirSync, existsSync, copyFileSync } = require('node:fs');
+const { readFileSync, writeFileSync, mkdirSync, existsSync, copyFileSync, rmSync } = require('node:fs');
 const path = require('node:path');
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 const DEST_ROOT = path.join(REPO_ROOT, 'functions', 'src', 'workoutLifecycle', 'prescriptionEngine');
 // `../../docs/...` from `<DEST_ROOT>/workoutPrescription/catalog.ts` resolves here.
 const DOCS_DEST_ROOT = path.join(REPO_ROOT, 'functions', 'src', 'workoutLifecycle', 'docs');
+
+// Rebuild the generated mirrors so deleted source modules cannot survive a build.
+rmSync(DEST_ROOT, { recursive: true, force: true });
+rmSync(DOCS_DEST_ROOT, { recursive: true, force: true });
 
 const HEADER = `// GENERATED FILE — do not edit directly.
 // Synced by scripts/syncPrescriptionEngineToFunctions.cjs. Edit the source file and re-run
@@ -34,11 +39,10 @@ const HEADER = `// GENERATED FILE — do not edit directly.
 // files resolves without any rewriting.
 const TS_FILES = [
   ['workoutPrescription', ['types', 'input', 'personalization', 'catalog', 'canonicalCatalog', 'canonicalExerciseIdentity', 'canonicalActivities', 'safety', 'selection',
-    'modifiers', 'conflicts', 'composition', 'equipment', 'equivalenceShared', 'limitationResolver',
+    'modifiers', 'conflicts', 'composition', 'equipment', 'prescriptionMetadata', 'exerciseCatalog', 'equivalenceShared',
     'manualSubstitutionResolver', 'validation',
-    'engine', 'templateDocument', 'generationPolicy', 'weeklySchedule', 'frequency',
-    'restPrescription', 'limitationDataset', 'localLimitationCatalog', 'sessionTypes', 'selectorV127', 'compositionV127',
-    'canonicalMusculoskeletalLimitationV127', 'musculoskeletalLimitationV127',
+    'engine', 'templateDocument', 'weeklySchedule', 'frequency',
+    'restPrescription', 'sessionTypes', 'selectorV127', 'compositionV127',
     'canonicalMusclePriorityV127', 'musclePriorityV127', 'generationVersion',
     'validationV127', 'safetyV127', 'engineV127', 'generatePrescription', 'index']],
   ['data', ['exercisesSeedData']],
@@ -68,12 +72,14 @@ const TS_FILES = [
   ['scheduleEngine', ['calendar', 'localDate']],
 ];
 
+const dataDest = path.join(DEST_ROOT, 'data');
+mkdirSync(dataDest, { recursive: true });
+copyFileSync(path.join(REPO_ROOT, 'src/data/manualExerciseRelations.json'), path.join(dataDest, 'manualExerciseRelations.json'));
+
 const JSON_FILES = [
   'workouts/AJ_Fit_T001_T090_workouts_reformed_v2_0.json',
   'workouts/AJ_Fit_v1_27_exercise_identity_matrix.json',
   'workouts/AJ_Fit_T001_T102_workouts_canonical_v1_33_peck_deck_runtime_id_fixed.json',
-  'workout-modifiers/exercise-limitations/15_LIMITATION_PROFILES_TECHNICAL_v2.json',
-  'workout-modifiers/exercise-limitations/limitation-dataset-identity.json',
 ];
 
 for (const [dir, files] of TS_FILES) {

@@ -1,9 +1,8 @@
-import type { LimitationRegionId } from '../types/exercise';
 import type { EquipmentContext } from '../workoutPrescription/equipment';
-import type { LimitationCatalogExercise } from '../workoutPrescription/limitationResolver';
-import type { FinalWorkoutExercise, FinalWorkoutSession } from '../workoutPrescription/types';
-import { PRESCRIPTION_EVOLUTION_CONFIG, type PrescriptionEvolutionConfig } from './config';
-import { candidatePoolFor, evaluateEquivalenceCandidate, rankCandidates } from './equivalence';
+import type { CatalogExercise } from '../workoutPrescription/exerciseCatalog';
+import type { FinalWorkoutExercise,FinalWorkoutSession } from '../workoutPrescription/types';
+import { PRESCRIPTION_EVOLUTION_CONFIG,type PrescriptionEvolutionConfig } from './config';
+import { candidatePoolFor,evaluateEquivalenceCandidate,rankCandidates } from './equivalence';
 
 function slotKey(sessionIndex: number, exerciseIndex: number): string {
   return `${sessionIndex}:${exerciseIndex}`;
@@ -88,9 +87,8 @@ export function evolveCycle(input: {
   sessions: readonly FinalWorkoutSession[];
   /** Deterministic salt identifying this evolution operation (e.g. `${cycleId}:${programInstanceId}`) — participates in slot ordering and tie-breaks so different target cycles can vary while retries of the same one never do (docs §32/§33). */
   targetCycleIdentity: string;
-  limitationRegions: readonly LimitationRegionId[];
   equipmentContext: EquipmentContext;
-  catalog: ReadonlyMap<string, LimitationCatalogExercise>;
+  catalog: ReadonlyMap<string, CatalogExercise>;
   recentSlotHistory: RecentSlotHistory;
   config?: PrescriptionEvolutionConfig;
 }): CycleEvolutionResult {
@@ -146,7 +144,6 @@ export function evolveCycle(input: {
       source,
       candidateId,
       catalog: input.catalog,
-      regions: input.limitationRegions,
       equipmentContext: input.equipmentContext,
       usedExerciseIds,
       recentExerciseIds,

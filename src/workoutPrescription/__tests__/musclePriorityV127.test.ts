@@ -1,6 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe,expect,it } from 'vitest';
 import { getCanonicalTemplateV127ById } from '../canonicalCatalog';
-import { composeTemplateV127 } from '../compositionV127';
 import {
   MUSCLE_PRIORITY_TARGETS_V127,
   normalizeMusclePriorityInputV127,
@@ -8,8 +7,9 @@ import {
   primaryMuscleMatchesAnyTargetV127,
   type MusclePriorityTargetV127,
 } from '../canonicalMusclePriorityV127';
+import { composeTemplateV127 } from '../compositionV127';
 import { applyMusclePriorityV127 } from '../musclePriorityV127';
-import type { FinalWorkoutExercise, FinalWorkoutSession, TemplateId } from '../types';
+import type { FinalWorkoutExercise,FinalWorkoutSession,TemplateId } from '../types';
 
 // One confirmed-real EXERCISES_SEED id per canonical target, audited
 // directly against exercisesSeedData.ts's `target.primaryMuscle`.
@@ -248,56 +248,5 @@ describe('applyMusclePriorityV127 — invariants: only order changes', () => {
         expect(new Set(ids).size).toBe(ids.length);
       }
     }
-  });
-});
-
-describe('musculoskeletal limitation -> muscle priority integration', () => {
-  it('a substitute that becomes a priority match is classified and prioritized by its FINAL identity, not the original', () => {
-    // T025 (gym/strength), knee limitation: the shared equivalence/limitation
-    // resolver (`resolveExerciseLimitationsFromCandidates`, the same
-    // production code path `composition.ts` already uses for v2) substitutes
-    // conventional-deadlift (primaryMuscle glutes) -> hip-hinge-drill
-    // (primaryMuscle hamstrings) — a real, reviewed `limitationProfile`
-    // `adapt` resolution, not a fixture. "hamstrings" priority must match the
-    // SUBSTITUTE's classification (hamstrings), never the original
-    // conventional-deadlift slot's (glutes).
-    expect(primaryMuscleForRuntimeIdV127('conventional-deadlift')).toBe('glutes');
-    expect(primaryMuscleForRuntimeIdV127('hip-hinge-drill')).toBe('hamstrings');
-    const template = getCanonicalTemplateV127ById('T025');
-    const withHamstringsPriority = composeTemplateV127(template, { limitationRegions: ['knee'], musclePriority: ['hamstrings'] });
-    expect(withHamstringsPriority.status).toBe('COMPOSED');
-    if (withHamstringsPriority.status !== 'COMPOSED') return;
-    const decision = withHamstringsPriority.trace.limitationDecisions.find((d) => d.exerciseId === 'conventional-deadlift');
-    expect(decision).toMatchObject({ outcome: 'SUBSTITUTED', substituteExerciseId: 'hip-hinge-drill' });
-    const substituteSession = withHamstringsPriority.sessions.find((s) => s.exercises.some((e) => e.exerciseId === 'hip-hinge-drill'));
-    expect(substituteSession).toBeDefined();
-    const resistanceExercisesInSubstituteSession = substituteSession!.exercises
-      .filter((e) => primaryMuscleForRuntimeIdV127(e.exerciseId) != null);
-    const hamstringsCount = resistanceExercisesInSubstituteSession
-      .filter((e) => primaryMuscleForRuntimeIdV127(e.exerciseId) === 'hamstrings').length;
-    const substituteIndex = resistanceExercisesInSubstituteSession.findIndex((e) => e.exerciseId === 'hip-hinge-drill');
-    // The substitute (classified hamstrings) must land within the
-    // prioritized (hamstrings) prefix of the resistance subsequence, not
-    // after it.
-    expect(substituteIndex).toBeGreaterThanOrEqual(0);
-    expect(substituteIndex).toBeLessThan(hamstringsCount);
-  });
-
-  it('an originally-prioritized exercise that gets substituted away from its priority group is no longer prioritized by the stale original classification', () => {
-    // Synthetic proof at the applyMusclePriorityV127 level (isolates the
-    // "classify by final id" rule from limitation-substitution specifics,
-    // already covered above): an exercise slot whose CURRENT exerciseId
-    // (post-substitution, as delivered by the limitation stage) is
-    // "cable-triceps-pushdown" (triceps) must not be treated as a "chest"
-    // match just because a hypothetical original chest exercise once
-    // occupied this slot — sourceExerciseId is chest, exerciseId is triceps.
-    const postSubstitution = exercise('cable-triceps-pushdown', { sourceExerciseId: 'machine-flat-bench-press', notes: 'was-chest-now-triceps' });
-    const other = exercise('bar-lat-pulldown', { notes: 'back' });
-    const sessions = [session([other, postSubstitution])];
-    const result = applyMusclePriorityV127(sessions, ['chest']);
-    // Not reordered — the final identity (triceps) does not match "chest",
-    // regardless of what the pre-substitution sourceExerciseId was.
-    expect(result.decisions).toEqual([{ sessionIndex: 0, reordered: false, prioritizedExerciseIds: [] }]);
-    expect(result.sessions[0].exercises.map((e) => e.notes)).toEqual(['back', 'was-chest-now-triceps']);
   });
 });

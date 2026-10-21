@@ -11,9 +11,12 @@ import { admissibleScale, scaledPortions, scaleCandidates, validPortion } from '
 import { NUTRIENTS, nutrientDeviations, withinNutritionRange, type MealValidationDiagnostic,
   type ValidationDiagnostics } from './diagnostics';
 
-/** Free-form AI meals require composition metadata and pass dietary, exclusion,
- * allergen and macro validation before persistence. Catalog IDs are not generated. */
-export type FailureCode = 'AI_CATALOG_RESOLUTION_FAILED' | 'AI_SCHEMA_INVALID' | 'AI_SAFETY_VALIDATION_FAILED' | 'AI_MACRO_VALIDATION_FAILED';
+/** Deterministic draft failures are retryable within the shared call budget.
+ * Permanent safety failures describe known profile/evidence-state conditions.
+ * Independent reviewer outcomes and deterministic evidence uncertainty have distinct codes. */
+export type FailureCode = 'AI_CATALOG_RESOLUTION_FAILED' | 'AI_SCHEMA_INVALID' | 'AI_SAFETY_VALIDATION_FAILED'
+  | 'AI_CONTENT_SAFETY_MISMATCH' | 'AI_MACRO_VALIDATION_FAILED' | 'AI_REVIEW_REJECTED'
+  | 'AI_REVIEW_INSUFFICIENT_INFORMATION' | 'AI_EVIDENCE_INSUFFICIENT';
 export interface ValidationIssue {
   scope: 'meal' | 'daily';
   slot?: NutritionMealSlot;
@@ -124,7 +127,10 @@ function assertFoodSafety(items: readonly RawAiFoodItem[], excludedAllergens: re
   // Only closed reason enums leave this function; food names never enter errors.
   const violations = items.map((item) => foodRestrictionViolation(item, excludedAllergens, restrictions));
   const violation = violations.find(Boolean);
-  if (violation) throw new PlanValidationError('AI_SAFETY_VALIDATION_FAILED', false, violation);
+  // Retryable (see the `FailureCode` doc comment above): this is the AI's
+  // own draft failing OUR unweakened check, not a permanent block on the
+  // request — give it the same bounded retry budget as a macro deviation.
+  if (violation) throw new PlanValidationError('AI_CONTENT_SAFETY_MISMATCH', true, violation);
 }
 
 function calculateItems(items: readonly RawAiFoodItem[]): NutritionTotals {

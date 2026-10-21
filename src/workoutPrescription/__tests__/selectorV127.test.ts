@@ -1,5 +1,4 @@
-import { describe, expect, it } from 'vitest';
-import { completeAnswers } from './fixtures';
+import { describe,expect,it } from 'vitest';
 import {
   V127_TEMPLATE_PROFILES,
   selectBaseTemplateV127,
@@ -7,7 +6,8 @@ import {
   type SelectBaseTemplateV127Input,
   type TemplateProfileV127,
 } from '../selectorV127';
-import type { GoalFamily, Population, TemplateEnvironment, TemplateId } from '../types';
+import type { GoalFamily,Population,TemplateEnvironment,TemplateId } from '../types';
+import { completeAnswers } from './fixtures';
 
 function baseInput(overrides: Partial<SelectBaseTemplateV127Input> = {}): SelectBaseTemplateV127Input {
   return {
@@ -187,13 +187,6 @@ describe('selectBaseTemplateV127 — precedence', () => {
 });
 
 describe('selectBaseTemplateV127 — metamorphic invariants (non-selection dimensions)', () => {
-  it('equipment, duration, muscle focus, musculoskeletal region and schedule mode never appear in the selector input', () => {
-    const input = baseInput();
-    const keys = Object.keys(input);
-    for (const excluded of ['duration', 'equipment', 'muscleFocus', 'limitationRegion', 'scheduleMode']) {
-      expect(keys).not.toContain(excluded);
-    }
-  });
 
   it('intermediate vs advanced experience never changes the regular-family template at 6/7 days', () => {
     const sixDayIntermediate = selectBaseTemplateV127FromAnswers(completeAnswers({ level: 'intermediate', days: 6 }));

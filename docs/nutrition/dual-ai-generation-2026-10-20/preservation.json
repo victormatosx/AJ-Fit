@@ -1,0 +1,23 @@
+{
+  "initialBranch": "main",
+  "initialHead": "18c27fc98439c7722b979592494a0eb57cb92bf7",
+  "finalHead": "18c27fc98439c7722b979592494a0eb57cb92bf7",
+  "initialStatusEntries": 322,
+  "initialStatusCounts": {
+    " D": 70,
+    " M": 182,
+    "??": 70
+  },
+  "unexpectedTrackedDiffChanges": [],
+  "missingInitiallyPresentFiles": [],
+  "protectedDiffsUnchanged": {
+    "functions/src/workoutLifecycle/": true,
+    "src/prescriptionEngine/": true,
+    "src/screens/OnboardingFunnelScreen.tsx": true,
+    "firestore.rules": true
+  },
+  "allTrackedDiffSectionsOutsideNutritionScopeUnchanged": true,
+  "initialPatchSha256": "7708f58ffcf24f6db7adecfc7c2ad292334839ba2084f5fcef9a99642bf62a40",
+  "initialStatusSha256": "bf2c364cdae2d60b1ccb75e87be7741fbf8c4e2fa52e8b376b7d640fcb7cfa32",
+  "untrackedPreservationLimit": "Initial untracked files are enumerated and still present; no initial byte snapshot exists for them. Existing prompt.test.ts was intentionally extended. No claim of an initial hash comparison for untracked files."
+}

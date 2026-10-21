@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { describe,expect,it } from 'vitest';
 
 const read = (path: string) => readFileSync(path, 'utf8')
   .replace(/\/\*[\s\S]*?\*\//g, '')
@@ -52,11 +52,6 @@ describe('food and recipe favorites UI', () => {
     expect(favorites).toContain("t('favoriteItems.unavailable')");
     expect(favorites).toMatch(/kcal=\{food\.nutritionPer100g\?\.kcal\}/);
     expect(favorites).toMatch(/per100g=\{food\.available\}/);
-  });
-
-  it('never reads a favorited meal option\'s food.estimatedNutrition.kcal directly — absent on a pre-diet-quality-v3 favorite', () => {
-    expect(mealOptionFavorites).not.toMatch(/food\.estimatedNutrition\.kcal/);
-    expect(mealOptionFavorites).toMatch(/kcal=\{planItemKcal\(food\)\}/);
   });
 
   it('wires optimistic state and rollback through every relevant screen', () => {

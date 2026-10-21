@@ -1,5 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe,expect,it } from 'vitest';
 import { FUNNEL_QUESTIONS } from '../questionDefs';
+import { readFileSync } from 'node:fs';
+
+it('renders the conditional limits step instead of leaving the onboarding screen empty', () => {
+  const source = readFileSync('src/screens/OnboardingFunnelScreen.tsx', 'utf8');
+  expect(source).toMatch(/case 'limits':(?:\s*case '[^']+':)*\s*content = renderQuestion\(\);/);
+});
 
 describe('goal question options', () => {
   it('offers exactly the five current goal intents in product order', () => {

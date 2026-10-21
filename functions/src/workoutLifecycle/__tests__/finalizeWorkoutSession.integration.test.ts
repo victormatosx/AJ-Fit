@@ -1,7 +1,7 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { deleteApp, initializeApp, type App } from 'firebase-admin/app';
-import { getFirestore, Timestamp, type Firestore } from 'firebase-admin/firestore';
+import { deleteApp,initializeApp,type App } from 'firebase-admin/app';
+import { Timestamp,getFirestore,type Firestore } from 'firebase-admin/firestore';
 import type { CallableRequest } from 'firebase-functions/v2/https';
+import { afterAll,beforeAll,beforeEach,describe,expect,it } from 'vitest';
 
 import { finalizeWorkoutSessionHandler } from '../finalizeWorkoutSession';
 import { seedRealPrescriptionCatalog } from './realCatalogFixture';
@@ -682,7 +682,7 @@ describe.skipIf(!enabled)('finalizeWorkoutSession — real Firestore Emulator in
       root.collection('programInstances').doc(INSTANCE_ID).update({
         prescriptionInputSnapshot: { inputs: {
           sex: 'm', goal: 'gain_muscle', level: 'beginner', days: 1, duration: '60',
-          place: 'home', trainingDays: [weekday], equipment: [], style: [], limits: [], muscleFocus: [],
+          place: 'home', trainingDays: [weekday], equipment: [], style: [], muscleFocus: [],
           specialConditions: ['none'], pregnancyScreening: null, postpartumScreening: null,
           functionalScreening: null, lipedemaScreening: null, dizzinessScreening: null,
           postSurgicalScreening: null, medicalRestrictionScreening: null,

@@ -319,8 +319,6 @@ export function OnboardingFunnelScreen({
       content = <GuidedWorkoutInterstitialScreen progress={progress} onContinue={goNext} />;
       break;
     case 'limits':
-      content = renderQuestion();
-      break;
     case 'specialConditions':
     case 'pregnancyWeeks':
     case 'pregnancyCare':

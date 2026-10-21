@@ -61,10 +61,6 @@ beforeEach(async () => {
     await setDoc(doc(context.firestore(), 'users', OTHER_UID), userDocument(OTHER_UID));
     await setDoc(doc(context.firestore(), 'users', UID, 'workoutPrograms', FROM_PROGRAM_ID), { programId: FROM_PROGRAM_ID, status: 'superseded' });
     await setDoc(doc(context.firestore(), 'users', OTHER_UID, 'workoutPrograms', FROM_PROGRAM_ID), { programId: FROM_PROGRAM_ID, status: 'superseded' });
-    await setDoc(doc(context.firestore(), 'limitationDatasetState', 'active'), {
-      datasetVersion: LIMITATION_DATASET_VERSION,
-      limitationDatasetHash: LIMITATION_DATASET_HASH,
-    });
   });
 });
 
@@ -134,7 +130,7 @@ describe('workoutPrograms — automatic_progression source (Progression Engine V
         id: 'T003', status: 'active', version: 1, sourceVersion: '1.3.0', contentHash: 'a'.repeat(64), sessions: [{}],
       });
       await setDoc(doc(db, 'users', UID, 'questionnaires', 'q1'), {
-        answers: { specialConditions: ['none'], limits: [] }, version: 1, createdAt: Timestamp.now(),
+        answers: { specialConditions: ['none'], }, version: 1, createdAt: Timestamp.now(),
       });
     });
     const db = dbFor(UID);
@@ -143,7 +139,6 @@ describe('workoutPrograms — automatic_progression source (Progression Engine V
       templateSourceVersion: '1.3.0', templateContentHash: 'a'.repeat(64), questionnaireId: 'q1', questionnaireVersion: 1,
       status: 'active', source: 'automatic_progression', requestedDays: 4, prescribedStructuredDays: 4,
       population: 'convencional', environment: 'gym', goalFamily: 'hypertrophy_body_composition', split: 'ABCD',
-      limitationDatasetVersion: LIMITATION_DATASET_VERSION, limitationDatasetHash: LIMITATION_DATASET_HASH,
       sessions: [{ name: 'A', type: 'strength', exercises: [] }],
       versions: { templateLibrary: '1.3.0', selectionEngine: '1.0.0', safetyRules: '1.0.0', modifierRules: '2.0.0', compositionEngine: '2.0.0' },
       trace: { safety: { status: 'CLEAR' }, unresolvedModifiers: [] },

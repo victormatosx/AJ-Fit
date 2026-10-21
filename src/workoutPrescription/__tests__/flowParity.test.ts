@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
-import { generateWorkoutPrescription } from '../engine';
+import { describe,expect,it } from 'vitest';
 import { FORCED_QUESTIONNAIRE_STEP_IDS } from '../../onboarding/steps';
+import { generateWorkoutPrescription } from '../engine';
 import { completeAnswers } from './fixtures';
 
 /**
@@ -71,7 +71,7 @@ describe('negative path — a questionnaire document existing is not completenes
     // Simulates a Firestore doc from before these fields existed at all —
     // `sanitizeAnswersForEngine` must treat this differently from an
     // explicit `[]` (see workoutPrescription/input.ts).
-    const { specialConditions: _sc, limits: _l, ...withoutSafetyFields } = legacyShaped;
+    const { specialConditions: _sc, ...withoutSafetyFields } = legacyShaped;
     const result = generateWorkoutPrescription(withoutSafetyFields as typeof legacyShaped);
     expect(result.status).toBe('NEEDS_QUESTIONNAIRE_UPDATE');
   });

@@ -1,42 +1,21 @@
 import {
-  collection,
   doc,
   getDoc,
-  getDocs,
   runTransaction,
   serverTimestamp,
   type Timestamp,
 } from 'firebase/firestore';
 
-import { db } from '../lib/firebase';
 import { EXERCISES_SEED } from '../data/exercisesSeedData';
-import { exerciseCatalogErrors } from './exerciseCatalogValidity';
-import { getTemplateById, TEMPLATE_LIBRARY_VERSION } from '../workoutPrescription/catalog';
-import { generateWorkoutPrescription } from '../workoutPrescription/engine';
-import { prescriptionInputErrors, sanitizeAnswersForEngine } from '../workoutPrescription/input';
-import type { LimitationCatalogExercise } from '../workoutPrescription/limitationResolver';
-import { loadLocalLimitationDataset } from '../workoutPrescription/localLimitationCatalog';
-import {
-  LIMITATION_DATASET_ACTIVE_DOCUMENT,
-  LIMITATION_DATASET_STATE_COLLECTION,
-  canonicalizeLimitationProfiles,
-  type LimitationDatasetIdentity,
-  type LimitationDatasetSnapshot,
-} from '../workoutPrescription/limitationDataset';
-import { logError, logInfo, logWarn } from '../lib/logger';
+import { db } from '../lib/firebase';
+import { logWarn } from '../lib/logger';
 import { countFirestoreRead } from '../lib/perf';
-import { getQuestionnaireById } from './userProfile';
 import {
-  loadWorkoutLifecycle,
-  loadWorkoutLifecycleRolloutConfig,
-  ensureWorkoutLifecycleV2,
-  recoverWorkoutLifecyclePartialState,
-} from './workoutLifecycle';
-import { isEligibleForNewMigration, stickyRolloutBucket } from '../workoutLifecycle/rollout';
-import {
-  logWorkoutLifecycleEvent,
-  workoutLifecycleErrorCategory,
-} from '../workoutLifecycle/telemetry';
+  WORKOUT_LIFECYCLE_AUTHORITY_GRANT_ID,
+  authorizeWorkoutLifecycleMutation,
+  installActiveWorkoutProgram,
+  requireWorkoutLifecycleCanonical,
+} from '../workoutLifecycle/authorityProvider';
 import {
   cycleIdForOperation,
   lifecycleEventId,
@@ -44,26 +23,29 @@ import {
   startingLevelFromQuestionnaire,
 } from '../workoutLifecycle/domain';
 import {
+  initializeWorkoutProgramV127,
+  isWorkoutLifecycleV127InitializeNotApplicable,
+} from '../workoutLifecycle/initializeV127Provider';
+import { buildPrescriptionInputSnapshot } from '../workoutLifecycle/prescriptionInputs';
+import { isEligibleForNewMigration,stickyRolloutBucket } from '../workoutLifecycle/rollout';
+import {
+  logWorkoutLifecycleEvent,
+  workoutLifecycleErrorCategory,
+} from '../workoutLifecycle/telemetry';
+import {
   WORKOUT_LIFECYCLE_SCHEMA_VERSION,
   type CurrentTrainingLevel,
   type PrescriptionInputSnapshot,
   type WorkoutLifecycleEventType,
 } from '../workoutLifecycle/types';
-import { buildPrescriptionInputSnapshot } from '../workoutLifecycle/prescriptionInputs';
-import {
-  authorizeWorkoutLifecycleMutation,
-  installActiveWorkoutProgram,
-  requireWorkoutLifecycleCanonical,
-  WORKOUT_LIFECYCLE_AUTHORITY_GRANT_ID,
-} from '../workoutLifecycle/authorityProvider';
-import {
-  initializeWorkoutProgramV127,
-  isWorkoutLifecycleV127InitializeNotApplicable,
-} from '../workoutLifecycle/initializeV127Provider';
+import { TEMPLATE_LIBRARY_VERSION,getTemplateById } from '../workoutPrescription/catalog';
+import { generateWorkoutPrescription } from '../workoutPrescription/engine';
+import { generateWorkoutPrescriptionRouted,resolveActiveGenerationVersion } from '../workoutPrescription/generatePrescription';
+import { prescriptionInputErrors,sanitizeAnswersForEngine } from '../workoutPrescription/input';
 import { selectTemplate } from '../workoutPrescription/selection';
 import {
-  fromWorkoutTemplateDocument,
   WORKOUT_TEMPLATE_DOCUMENT_VERSION,
+  fromWorkoutTemplateDocument,
   type WorkoutTemplateDocument,
 } from '../workoutPrescription/templateDocument';
 import {
@@ -76,14 +58,19 @@ import {
   type QuestionnaireAnswers,
   type TemplateId,
 } from '../workoutPrescription/types';
-import { generateWorkoutPrescriptionRouted, resolveActiveGenerationVersion } from '../workoutPrescription/generatePrescription';
 import { localWorkoutTemplateDocumentV127 } from './templateDocumentV127';
+import { getQuestionnaireById } from './userProfile';
+import {
+  ensureWorkoutLifecycleV2,
+  loadWorkoutLifecycle,
+  loadWorkoutLifecycleRolloutConfig,
+  recoverWorkoutLifecyclePartialState,
+} from './workoutLifecycle';
 
 const USERS = 'users';
 const PROGRAMS = 'workoutPrograms';
 const PROGRAM_STATE = 'workoutProgramState';
 const TEMPLATES = 'workoutTemplates';
-const EXERCISES = 'exercises';
 
 export type WorkoutProgramStatus = 'active' | 'superseded';
 /**
@@ -225,88 +212,13 @@ export async function loadWorkoutTemplate(templateId: TemplateId): Promise<Worko
   return data;
 }
 
-/** Single catalog query; Limitation Resolver remains pure and performs no I/O. */
-function limitationDatasetStateRef() {
-  return doc(db, LIMITATION_DATASET_STATE_COLLECTION, LIMITATION_DATASET_ACTIVE_DOCUMENT);
-}
-
-function parseRemoteLimitationDatasetIdentity(value: unknown): LimitationDatasetIdentity | null {
-  if (!value || typeof value !== 'object') return null;
-  const data = value as Record<string, unknown>;
-  if (
-    typeof data.datasetVersion !== 'string'
-    || typeof data.limitationDatasetHash !== 'string'
-    || !/^[a-f0-9]{64}$/.test(data.limitationDatasetHash)
-  ) return null;
-  return { version: data.datasetVersion, hash: data.limitationDatasetHash, source: 'firestore' };
-}
-
-export async function loadExerciseCatalogForLimitations(
-  includeExercises = true,
-): Promise<LimitationDatasetSnapshot> {
-  const identityBeforeSnapshot = await getDoc(limitationDatasetStateRef());
-  const identityBefore = identityBeforeSnapshot.exists()
-    ? parseRemoteLimitationDatasetIdentity(identityBeforeSnapshot.data())
-    : null;
-  if (!identityBefore) throw new Error('LIMITATION_DATASET_ACTIVE_IDENTITY_MISSING');
-
-  if (!includeExercises) {
-    logInfo('limitation_dataset', 'limitation_dataset_loaded', {
-      version: identityBefore.version,
-      hash: identityBefore.hash,
-      source: identityBefore.source,
-    });
-    return { ...identityBefore, exercises: [] };
-  }
-
-  const snapshot = await getDocs(collection(db, EXERCISES));
-  const documents = snapshot.docs.map((document) => ({ id: document.id, data: { ...document.data(), id: document.id } }));
-  const catalogErrors = exerciseCatalogErrors(documents);
-  if (catalogErrors.length) throw new Error(catalogErrors.join(','));
-  const exercises = documents.map((document) => {
-    return document.data as LimitationCatalogExercise;
-  });
-  const profiles = exercises
-    .filter((exercise) => exercise.limitationProfile != null)
-    .map((exercise) => ({ exerciseId: exercise.id, limitationProfile: exercise.limitationProfile }));
-  const Crypto = await import('expo-crypto');
-  const computedHash = await Crypto.digestStringAsync(
-    Crypto.CryptoDigestAlgorithm.SHA256,
-    canonicalizeLimitationProfiles(profiles, exercises),
-  );
-  const identityAfterSnapshot = await getDoc(limitationDatasetStateRef());
-  const identityAfter = identityAfterSnapshot.exists()
-    ? parseRemoteLimitationDatasetIdentity(identityAfterSnapshot.data())
-    : null;
-  if (
-    !identityAfter
-    || identityBefore.version !== identityAfter.version
-    || identityBefore.hash !== identityAfter.hash
-    || computedHash !== identityAfter.hash
-  ) {
-    logError('limitation_dataset_version_mismatch', new Error('LIMITATION_DATASET_VERSION_MISMATCH'), {
-      expectedVersion: identityAfter?.version ?? null,
-      expectedHash: identityAfter?.hash ?? null,
-      computedHash,
-      source: 'firestore',
-    });
-    throw new Error('LIMITATION_DATASET_VERSION_MISMATCH');
-  }
-  logInfo('limitation_dataset', 'limitation_dataset_loaded', {
-    version: identityAfter.version,
-    hash: identityAfter.hash,
-    source: identityAfter.source,
-  });
-  return { ...identityAfter, exercises };
-}
-
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 
 function hasValidPrescriptionVersions(value: unknown): boolean {
   if (!isPlainObject(value)) return false;
   return [
     'templateLibrary', 'selectionEngine', 'safetyRules',
-    'modifierRules', 'compositionEngine', 'limitationResolver',
+    'modifierRules', 'compositionEngine',
   ].every((key) => typeof value[key] === 'string' && SEMVER.test(value[key]));
 }
 
@@ -545,8 +457,6 @@ export function contentIdentityPreimage(input: {
     templateVersion: input.template.version,
     templateContentHash: input.template.contentHash,
     versions: input.plan.versions,
-    limitationDatasetVersion: input.plan.limitationDatasetVersion,
-    limitationDatasetHash: input.plan.limitationDatasetHash,
     adaptationStage: input.plan.adaptationStage ?? null,
   });
 }
@@ -1172,29 +1082,12 @@ export async function saveAndActivateWorkoutProgram(input: {
   };
 }
 
-// ─── COMPUTE (Phase 3, Part B) ───────────────────────────────────────────
-//
-// `prepareWorkoutProgram` is the ONE place the compute pipeline (sanitize →
-// validate → select Txxx → load template → Limitation Resolver → engine →
-// exercise-existence check) lives. `generateAndPersistWorkoutProgram`
-// (Firestore-backed, post-auth) and `prepareWorkoutProgramLocally`
-// (bundled-sources, pre-auth — Phase 3 Part C) both call this SAME function
-// with different loader callbacks; neither re-implements any of it. Persist
-// (Firestore transaction, active pointer, superseding) stays entirely
-// separate, in `saveAndActivateWorkoutProgram`.
 
 export interface PreparedWorkoutProgram {
   status: 'SUCCESS';
   plan: FinalWorkoutPlan;
   templateId: TemplateId;
-  /**
-   * True only when BOTH the Limitation Resolver actually ran AND it ran
-   * against the local bundled catalog (`loadLocalExerciseCatalogForLimitations`)
-   * rather than Firestore's. `persistPreparedWorkoutProgram` treats this as
-   * an automatic "do not trust for direct persist" signal — see its doc
-   * comment.
-   */
-  usedLocalLimitationCatalog: boolean;
+
   /** Deterministic hash of the normalized answers this plan was computed from — see `questionnaireFingerprint`. */
   questionnaireFingerprint: string;
   /**
@@ -1238,17 +1131,7 @@ export function questionnaireFingerprint(answers: QuestionnaireAnswers): string 
   return stableHash(stableStringify(sanitized));
 }
 
-/**
- * Classifies a `loadTemplate`/`loadLimitationDataset` failure for INTERNAL
- * diagnostics only — the public `status`/`reasonCodes` contract this feeds
- * into (`INVALID_CONFIGURATION`) is unchanged and never exposes this to the
- * end user. Before this, any thrown error (a real bad-config signal, a
- * Firestore Rules permission-denied, or a transient network/infra failure)
- * was reported identically, making a genuine data problem indistinguishable
- * from e.g. a signed-in-but-not-yet-verified account being denied a read —
- * exactly what made the first-app-entry `INVALID_CONFIGURATION` regression
- * hard to diagnose from logs alone.
- */
+
 type PrepareLoadFailureClass = 'ACCESS_DENIED' | 'NETWORK_UNAVAILABLE' | 'CONFIGURATION';
 
 function classifyPrepareLoadFailure(error: unknown): { failureClass: PrepareLoadFailureClass; code?: string } {
@@ -1258,7 +1141,7 @@ function classifyPrepareLoadFailure(error: unknown): { failureClass: PrepareLoad
   return { failureClass: 'CONFIGURATION', code };
 }
 
-function reportPrepareLoadFailure(step: 'TEMPLATE' | 'LIMITATION_DATASET', error: unknown, fallbackCode: string): string[] {
+function reportPrepareLoadFailure(step: 'TEMPLATE', error: unknown, fallbackCode: string): string[] {
   const { failureClass, code } = classifyPrepareLoadFailure(error);
   const message = error instanceof Error ? error.message : fallbackCode;
   // Internal-only: never surfaced to the end user, who only ever sees the
@@ -1271,9 +1154,7 @@ export async function prepareWorkoutProgram(input: {
   answers: QuestionnaireAnswers;
   adaptationWeek?: number;
   loadTemplate: (templateId: TemplateId) => Promise<CanonicalTemplate | null>;
-  loadLimitationDataset: (includeExercises: boolean) => Promise<LimitationDatasetSnapshot>;
-  /** Declares which source `loadLimitationDataset` actually reads from — never inferred. */
-  usedLocalLimitationCatalog: boolean;
+
 }): Promise<PrepareWorkoutProgramResult> {
   // Boundary first — same guard `generateWorkoutPrescription` applies
   // internally, but this function calls `selectTemplate` and inspects
@@ -1307,21 +1188,9 @@ export async function prepareWorkoutProgram(input: {
   if (!template) {
     return { status: 'MISSING_TEMPLATE', reasonCodes: ['WORKOUT_TEMPLATE_NOT_FOUND'] };
   }
-  let limitationDataset: LimitationDatasetSnapshot;
-  const needsLimitationCatalog = answers.specialConditions.includes('musculoskeletal_limitation');
-  try {
-    limitationDataset = await input.loadLimitationDataset(needsLimitationCatalog);
-  } catch (error) {
-    return {
-      status: 'INVALID_CONFIGURATION',
-      reasonCodes: reportPrepareLoadFailure('LIMITATION_DATASET', error, 'LIMITATION_CATALOG_LOAD_FAILED'),
-    };
-  }
   const result = generateWorkoutPrescription(answers, {
     adaptationWeek: input.adaptationWeek,
     template,
-    exerciseCatalog: needsLimitationCatalog ? limitationDataset.exercises : undefined,
-    limitationDataset,
   });
   if (result.status !== 'SUCCESS') return result;
   const missingExercises = validateProgramExerciseIds(result.plan);
@@ -1336,7 +1205,6 @@ export async function prepareWorkoutProgram(input: {
     status: 'SUCCESS',
     plan: result.plan,
     templateId: selection.decision.templateId,
-    usedLocalLimitationCatalog: needsLimitationCatalog && input.usedLocalLimitationCatalog,
     questionnaireFingerprint: questionnaireFingerprint(answers),
     prescriptionVersions: PRESCRIPTION_VERSIONS,
     templateLibraryVersion: TEMPLATE_LIBRARY_VERSION,
@@ -1344,17 +1212,7 @@ export async function prepareWorkoutProgram(input: {
   };
 }
 
-/**
- * Fase 10 (cutover) §2 — the v1.27 mirror of `prepareWorkoutProgram`, MUCH
- * simpler by construction: v1.27 templates are never Firestore documents,
- * so there is no `loadTemplate`/`loadLimitationDataset` async ceremony to
- * run first — `generateWorkoutPrescriptionV127` (reached only via the
- * central `generateWorkoutPrescriptionRouted` dispatcher, forced to
- * `'v1.27'` since the caller already resolved that this IS the v1.27
- * branch) resolves its own local canonical template and does its own
- * region-only musculoskeletal substitution synchronously. No pre-loaded
- * v2 template is ever required — see Fase 10 report §B.
- */
+
 async function prepareWorkoutProgramV127(input: {
   answers: QuestionnaireAnswers;
   currentTrainingLevel: CurrentTrainingLevel;
@@ -1365,13 +1223,6 @@ async function prepareWorkoutProgramV127(input: {
     status: 'SUCCESS',
     plan: result.plan,
     templateId: result.plan.templateId,
-    // Same meaning as v2's flag: true only when the musculoskeletal
-    // limitation stage actually ran AND it ran against a "local, not
-    // Firestore-verified" catalog. v1.27's substitution map
-    // (`canonicalMusculoskeletalLimitationV127.ts`) is ALWAYS the bundled
-    // local one (never Firestore) — so this is simply "was a limitation
-    // declared", matching v2's `needsLimitationCatalog && true` exactly.
-    usedLocalLimitationCatalog: input.answers.specialConditions.includes('musculoskeletal_limitation'),
     questionnaireFingerprint: questionnaireFingerprint(input.answers),
     prescriptionVersions: PRESCRIPTION_VERSIONS_V127,
     templateLibraryVersion: PRESCRIPTION_VERSIONS_V127.templateLibrary,
@@ -1379,22 +1230,12 @@ async function prepareWorkoutProgramV127(input: {
   };
 }
 
-/**
- * Fase 10 (cutover) §1/§2 — the ONE place a persistence-facing call site
- * asks "which pipeline, and how do I get a template for it". Delegates the
- * version decision itself to `resolveActiveGenerationVersion`
- * (`generatePrescription.ts`) — never re-implemented here. v2 keeps its
- * exact existing `loadTemplate`/`loadLimitationDataset` async contract
- * (Firestore-backed post-auth, bundled-local pre-auth — unchanged,
- * selected by each call site exactly as before); v1.27 needs neither.
- */
+
 async function prepareWorkoutProgramForActiveGeneration(input: {
   answers: QuestionnaireAnswers;
   currentTrainingLevel: CurrentTrainingLevel;
   adaptationWeek?: number;
   loadTemplate: (templateId: TemplateId) => Promise<CanonicalTemplate | null>;
-  loadLimitationDataset: (includeExercises: boolean) => Promise<LimitationDatasetSnapshot>;
-  usedLocalLimitationCatalog: boolean;
 }): Promise<PrepareWorkoutProgramResult> {
   if (resolveActiveGenerationVersion() === 'v1.27') {
     return prepareWorkoutProgramV127({ answers: input.answers, currentTrainingLevel: input.currentTrainingLevel });
@@ -1403,14 +1244,12 @@ async function prepareWorkoutProgramForActiveGeneration(input: {
     answers: input.answers,
     adaptationWeek: input.adaptationWeek,
     loadTemplate: input.loadTemplate,
-    loadLimitationDataset: input.loadLimitationDataset,
-    usedLocalLimitationCatalog: input.usedLocalLimitationCatalog,
   });
 }
 
 /**
  * Pre-auth compute (Phase 3, Part C) — uses ONLY bundled, versioned local
- * sources (`catalog.ts`'s `getTemplateById`, `localLimitationCatalog.ts`),
+ * sources (`catalog.ts`'s `getTemplateById`, `localExerciseCatalog.ts`),
  * never Firestore. This is necessary, not just an optimization:
  * `firestore.rules` requires `isSignedIn()` for `workoutTemplates` and
  * `hasVerifiedEmailForPrivateAccess()` for `exercises` — a client with no
@@ -1432,8 +1271,6 @@ export async function prepareWorkoutProgramLocally(
     currentTrainingLevel: startingLevelFromQuestionnaire(answers.level) ?? 'INTERMEDIATE',
     adaptationWeek,
     loadTemplate: (templateId) => Promise.resolve(getTemplateById(templateId) ?? null),
-    loadLimitationDataset: () => Promise.resolve(loadLocalLimitationDataset()),
-    usedLocalLimitationCatalog: true,
   });
 }
 
@@ -1525,8 +1362,6 @@ export async function generateAndPersistWorkoutProgram(input: {
       firestoreTemplate = await loadWorkoutTemplate(templateId);
       return firestoreTemplate ? fromWorkoutTemplateDocument(firestoreTemplate) : null;
     },
-    loadLimitationDataset: loadExerciseCatalogForLimitations,
-    usedLocalLimitationCatalog: false,
   });
   if (prepared.status !== 'SUCCESS') return prepared;
   // v1.27 never populates `firestoreTemplate` (its `loadTemplate` closure
@@ -1625,42 +1460,7 @@ export function generateAndPersistWorkoutProgramDeduped(
   return dedupedByKey(generationKey(input), () => generateAndPersistWorkoutProgram(input));
 }
 
-/**
- * Signup-time bridge for the pre-auth `prepared` result (Phase 3, Part F).
- * `prepared` is NEVER trusted blindly — Firestore remains authoritative
- * after signup:
- *
- *   1. `prepared` must exist and be `SUCCESS` (the process may have died,
- *      or the Analysis screen's compute may itself have failed/timed out).
- *   2. `questionnaireFingerprint` recomputed from the ACTUALLY-PERSISTED
- *      answers must match exactly — any drift (edited an answer, a stale
- *      object from a previous attempt, a different account) invalidates it.
- *   3. Every recorded engine/template-library version must match the
- *      CURRENT app's live constants — protects against a `prepared` value
- *      that survived an app update mid-onboarding.
- *   4. `usedLocalLimitationCatalog` must be `false` — a plan computed
- *      through the Limitation Resolver against the LOCAL catalog is never
- *      persisted directly, regardless of fingerprint/version match. This
- *      keeps the safety-critical case on the exact same Firestore-verified
- *      path as before Phase 3 existed; only the Analysis screen's PREVIEW
- *      benefits from the local computation in that case, not the actual
- *      persisted write.
- *   5. The dataset identity embedded in the plan must match a freshly
- *      loaded and content-hash-verified Firestore limitation dataset.
- *   6. Even once trusted, the REAL Firestore `workoutTemplates/{id}`
- *      document is still loaded and used for the persisted snapshot's
- *      version/hash metadata — `prepared.plan`'s content is reused, but
- *      never its (locally-sourced) template version bookkeeping.
- *
- * Any failure at any step silently falls back to the full, unchanged,
- * authoritative `generateAndPersistWorkoutProgram` — never a partial or
- * degraded result, never an error surfaced just because the fast path
- * didn't apply. The WHOLE function runs through the same
- * `inFlightGenerations` registry `generateAndPersistWorkoutProgramDeduped`
- * uses (Phase 3, Part I) — a concurrent `automatic_reconciliation` attempt
- * for the same (uid, questionnaireId) shares this exact call instead of
- * starting its own.
- */
+
 export async function persistPreparedWorkoutProgram(input: {
   uid: string;
   questionnaireId: string;
@@ -1673,7 +1473,7 @@ export async function persistPreparedWorkoutProgram(input: {
     generationKey({ uid: input.uid, questionnaireId: input.questionnaireId }),
     async () => {
       const { prepared } = input;
-      if (prepared && prepared.status === 'SUCCESS' && !prepared.usedLocalLimitationCatalog) {
+      if (prepared && prepared.status === 'SUCCESS') {
         const currentFingerprint = questionnaireFingerprint(input.answers);
         const versions = prepared.prescriptionVersions;
         const versionsMatch = versions.templateLibrary === PRESCRIPTION_VERSIONS.templateLibrary
@@ -1681,18 +1481,12 @@ export async function persistPreparedWorkoutProgram(input: {
           && versions.safetyRules === PRESCRIPTION_VERSIONS.safetyRules
           && versions.modifierRules === PRESCRIPTION_VERSIONS.modifierRules
           && versions.compositionEngine === PRESCRIPTION_VERSIONS.compositionEngine
-          && versions.limitationResolver === PRESCRIPTION_VERSIONS.limitationResolver
           && prepared.templateLibraryVersion === TEMPLATE_LIBRARY_VERSION;
 
         if (currentFingerprint === prepared.questionnaireFingerprint && versionsMatch) {
           try {
-            const [firestoreTemplate, firestoreLimitationDataset] = await Promise.all([
-              loadWorkoutTemplate(prepared.templateId),
-              loadExerciseCatalogForLimitations(false),
-            ]);
-            const datasetMatches = prepared.plan.limitationDatasetVersion === firestoreLimitationDataset.version
-              && prepared.plan.limitationDatasetHash === firestoreLimitationDataset.hash;
-            if (firestoreTemplate && datasetMatches) {
+            const firestoreTemplate = await loadWorkoutTemplate(prepared.templateId);
+            if (firestoreTemplate) {
               const program = await saveAndActivateWorkoutProgram({
                 uid: input.uid,
                 questionnaireId: input.questionnaireId,

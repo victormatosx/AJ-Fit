@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe,expect,it } from 'vitest';
 
-import { EXERCISES_SEED } from '../prescriptionEngine/data/exercisesSeedData';
-import { equipmentContextFor } from '../prescriptionEngine/workoutPrescription/equipment';
-import type { LimitationCatalogExercise } from '../prescriptionEngine/workoutPrescription/limitationResolver';
-import { defaultQuiz, type Quiz } from '../prescriptionEngine/state/AppState';
 import { isRequestedSubstitutionEligible } from '../exerciseSubstitution';
+import { EXERCISES_SEED } from '../prescriptionEngine/data/exercisesSeedData';
+import { defaultQuiz,type Quiz } from '../prescriptionEngine/state/AppState';
+import { equipmentContextFor } from '../prescriptionEngine/workoutPrescription/equipment';
+import type { CatalogExercise } from '../prescriptionEngine/workoutPrescription/exerciseCatalog';
 
 /**
  * Unit tests for the PURE decision core of the manual-substitution server
@@ -15,7 +15,7 @@ import { isRequestedSubstitutionEligible } from '../exerciseSubstitution';
  * anchor/catalog/context, is the requested id actually eligible.
  */
 
-const catalog = new Map<string, LimitationCatalogExercise>(EXERCISES_SEED.map((exercise) => [exercise.id, exercise]));
+const catalog = new Map<string, CatalogExercise>(EXERCISES_SEED.map((exercise) => [exercise.id, exercise]));
 
 function gymEquipmentContext() {
   const answers: Quiz = { ...defaultQuiz, place: 'gym', specialConditions: ['none'] };
@@ -28,12 +28,11 @@ function homeEquipmentContext(equipment: string[]) {
 }
 
 describe('isRequestedSubstitutionEligible', () => {
-  it('accepts a real eligible candidate (barbell-back-squat -> bodyweight-squat at home)', () => {
+  it('legacy accepts a real eligible candidate (barbell-back-squat -> bodyweight-squat at home)', () => {
     const eligible = isRequestedSubstitutionEligible({
       anchorExerciseId: 'barbell-back-squat',
       requestedExerciseId: 'bodyweight-squat',
       catalog,
-      regions: [],
       equipmentContext: homeEquipmentContext(['bodyweight']),
       effectiveExerciseIdsInSession: new Set(),
     });
@@ -45,7 +44,6 @@ describe('isRequestedSubstitutionEligible', () => {
       anchorExerciseId: 'barbell-back-squat',
       requestedExerciseId: 'hack-squat-machine-variation',
       catalog,
-      regions: [],
       equipmentContext: homeEquipmentContext(['bodyweight']),
       effectiveExerciseIdsInSession: new Set(),
     });
@@ -55,21 +53,19 @@ describe('isRequestedSubstitutionEligible', () => {
   it('rejects a candidate already effectively present in another slot of the session', () => {
     const eligible = isRequestedSubstitutionEligible({
       anchorExerciseId: 'barbell-back-squat',
-      requestedExerciseId: 'goblet-squat',
+      requestedExerciseId: 'smith-machine-squat',
       catalog,
-      regions: [],
       equipmentContext: gymEquipmentContext(),
-      effectiveExerciseIdsInSession: new Set(['goblet-squat']),
+      effectiveExerciseIdsInSession: new Set(['smith-machine-squat']),
     });
     expect(eligible).toBe(false);
   });
 
-  it('rejects a mechanic-mismatched candidate reachable only via similarExerciseIds (hip-thrust -> cable-glute-kickback)', () => {
+  it('legacy rejects a mechanic-mismatched candidate reachable only via similarExerciseIds (hip-thrust -> cable-glute-kickback)', () => {
     const eligible = isRequestedSubstitutionEligible({
       anchorExerciseId: 'hip-thrust',
       requestedExerciseId: 'cable-glute-kickback',
       catalog,
-      regions: [],
       equipmentContext: gymEquipmentContext(),
       effectiveExerciseIdsInSession: new Set(),
     });
@@ -81,7 +77,6 @@ describe('isRequestedSubstitutionEligible', () => {
       anchorExerciseId: 'does-not-exist',
       requestedExerciseId: 'bodyweight-squat',
       catalog,
-      regions: [],
       equipmentContext: gymEquipmentContext(),
       effectiveExerciseIdsInSession: new Set(),
     });
@@ -93,7 +88,6 @@ describe('isRequestedSubstitutionEligible', () => {
       anchorExerciseId: 'barbell-back-squat',
       requestedExerciseId: 'does-not-exist',
       catalog,
-      regions: [],
       equipmentContext: gymEquipmentContext(),
       effectiveExerciseIdsInSession: new Set(),
     });
@@ -106,7 +100,6 @@ describe('isRequestedSubstitutionEligible', () => {
         anchorExerciseId: 'barbell-back-squat',
         requestedExerciseId: 'barbell-back-squat',
         catalog,
-        regions: [],
         equipmentContext: gymEquipmentContext(),
         effectiveExerciseIdsInSession: new Set(),
       });
@@ -118,7 +111,6 @@ describe('isRequestedSubstitutionEligible', () => {
         anchorExerciseId: 'barbell-back-squat',
         requestedExerciseId: 'barbell-back-squat',
         catalog,
-        regions: [],
         equipmentContext: homeEquipmentContext(['bodyweight']),
         effectiveExerciseIdsInSession: new Set(),
       });
@@ -130,7 +122,6 @@ describe('isRequestedSubstitutionEligible', () => {
         anchorExerciseId: 'barbell-back-squat',
         requestedExerciseId: 'barbell-back-squat',
         catalog,
-        regions: [],
         equipmentContext: gymEquipmentContext(),
         effectiveExerciseIdsInSession: new Set(['barbell-back-squat']),
       });

@@ -1,3 +1,5 @@
+> Registro histórico: o sistema musculoesquelético e as políticas clínicas V3/legacy descritos aqui foram descontinuados. Não são contratos atuais. Ver [remoção definitiva](removal-physical-limitations/REPORT.md).
+
 # Motor de prescrição T001–T090 (runtime atual)
 
 ## 1. Escopo e fontes

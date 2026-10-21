@@ -3,7 +3,7 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 
 import { db } from '../../lib/firebaseAdmin';
 import { logInfo, logWarn } from '../../lib/logger';
-import { buildAiMetricsByOperation, type AiOperationFact } from './metrics';
+import { buildAiMetricsByOperation, buildAiMetricsByRole, type AiOperationFact } from './metrics';
 
 export const AI_ALERT_WINDOW_MS = 60 * 60 * 1000;
 export const AI_ALERT_MIN_REQUESTS = 5;
@@ -38,7 +38,7 @@ export const monitorNutritionAiOperations = onSchedule(
     const facts = snapshot.docs.map((document): AiOperationFact | null => {
       const data = document.data();
       if (!['full_plan', 'meal_alternative'].includes(String(data.operation))
-        || !['validated', 'failed'].includes(String(data.resultStatus))
+        || !['validated', 'failed', 'created', 'pending', 'approved'].includes(String(data.resultStatus))
         || typeof data.generationId !== 'string') return null;
       const numberOrNull = (value: unknown) => typeof value === 'number' && Number.isFinite(value) ? value : null;
       return {
@@ -50,13 +50,16 @@ export const monitorNutritionAiOperations = onSchedule(
         inputTokens: numberOrNull(data.inputTokens),
         outputTokens: numberOrNull(data.outputTokens),
         estimatedCostUsd: numberOrNull(data.estimatedCostUsd),
+        ...(data.agentRole === 'creator' || data.agentRole === 'reviewer' ? { agentRole: data.agentRole } : {}),
         resultStatus: data.resultStatus as AiOperationFact['resultStatus'],
         failureCode: typeof data.failureCode === 'string' ? data.failureCode : null,
       };
     }).filter((fact): fact is AiOperationFact => fact !== null);
     const metrics = buildAiMetricsByOperation(facts);
+    const byRole = buildAiMetricsByRole(facts);
     logInfo('nutrition.aiObservability', 'window_metrics', {
-      windowMinutes: 60,
+      windowMinutes: 60, creatorCalls: byRole.creator.attempts, reviewerCalls: byRole.reviewer.attempts,
+      creatorEstimatedCostUsd: byRole.creator.totalEstimatedCostUsd, reviewerEstimatedCostUsd: byRole.reviewer.totalEstimatedCostUsd,
       fullPlanRequests: metrics.full_plan.requests,
       fullPlanSuccessRate: metrics.full_plan.successRate,
       mealAlternativeRequests: metrics.meal_alternative.requests,

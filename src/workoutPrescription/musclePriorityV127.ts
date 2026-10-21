@@ -3,25 +3,9 @@ import {
   primaryMuscleMatchesAnyTargetV127,
   type MusclePriorityTargetV127,
 } from './canonicalMusclePriorityV127';
-import type { FinalWorkoutExercise, FinalWorkoutSession } from './types';
+import type { FinalWorkoutExercise,FinalWorkoutSession } from './types';
 
-/**
- * Fase 6 — the second (and, per this migration's plan, last) canonical
- * v1.27 modifier: `muscle_priority`. Pure, deterministic, no I/O. Runs
- * strictly after the musculoskeletal-limitation stage
- * (`musculoskeletalLimitationV127.ts`) in `compositionV127.ts` — it only
- * ever reads `exercise.exerciseId`, the FINAL id after any substitution,
- * never `sourceExerciseId` (Fase 6 §2/§10).
- *
- * Deliberately NOT the legacy v2 muscle-priority path
- * (`composition.ts`'s `priorityCandidates`/`selectSlotIndices`/the
- * `MUSCLE_PRIORITY_SET_ADDED`/`_REORDERED`/`_PRESERVED` decisions, or
- * `personalization.ts`/duration-driven slot protection) — that stays
- * exactly as-is, driving only the active v2 runtime. This module changes
- * order only: never a set count, never a rep/duration/distance/cycle/
- * intensity value, never which exercises exist, never rest, never which
- * session a slot belongs to.
- */
+
 
 export interface MusclePriorityDecisionV127 {
   sessionIndex: number;

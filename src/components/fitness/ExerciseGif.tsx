@@ -6,6 +6,7 @@ import { useTheme } from '../../theme';
 import { logWarn } from '../../lib/logger';
 import { configureSilentDemoVideo, observeSilentDemoAppState } from '../../lib/silentDemoVideo';
 import { EXERCISE_FALLBACK_VIDEO_ID } from '../../data/exerciseFallbackVideoMap';
+import { EXERCISE_V3_LOCAL_DEMOS } from '../../data/exerciseV3VideoAssets';
 import type { ExerciseExecution } from '../../types/exercise';
 
 const DB_BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises';
@@ -14,7 +15,8 @@ const DB_BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main
 // priority over the remote free-exercise-db frames. `landscape` is the
 // deitado (lying) take — matches the wide banner slot; `portrait` is the
 // em-pé (standing) take — matches the 9:16 fullscreen modal slot.
-const LOCAL_VIDEOS: Record<string, { landscape: number; portrait: number }> = {
+const LOCAL_VIDEOS: Record<string, { landscape?: number; portrait?: number }> = {
+  ...EXERCISE_V3_LOCAL_DEMOS,
   'Barbell_Bench_Press_-_Medium_Grip': {
     landscape: require('../../../assets/videos/supino-reto-maquina-deitado.mp4'),
     portrait: require('../../../assets/videos/supino-reto-maquina-em-pe.mp4'),
@@ -71,7 +73,7 @@ export function ExerciseGif({ id, name, height, aspectRatio, radius = 16, style,
   const isPortrait = !!aspectRatio && aspectRatio < 1;
   const ownVideoForOrientationRaw = isPortrait ? ownVideo?.vertical : ownVideo?.horizontal;
   const localVideos = id ? LOCAL_VIDEOS[id] : undefined;
-  const localSourceRaw = localVideos ? (isPortrait ? localVideos.portrait : localVideos.landscape) : null;
+  const localSourceRaw = localVideos ? ((isPortrait ? localVideos.portrait : localVideos.landscape) ?? null) : null;
 
   // A source that fails to actually PLAY (wrong/unsupported format, broken
   // URL, network error — `statusChange`'s `'error'` status below) must fall

@@ -31,7 +31,7 @@ function prescriptionInputSnapshot(overrides: Record<string, unknown> = {}) {
   return {
     snapshotId: 'pis_test', schemaVersion: 1, source: 'QUESTIONNAIRE_BASELINE',
     inputs: {
-      sex: 'm', goal: 'gain_muscle', level: 'beginner', limits: [], duration: '45', days: 4,
+      sex: 'm', goal: 'gain_muscle', level: 'beginner', duration: '45', days: 4,
       trainingDays: ['MON', 'TUE', 'THU', 'FRI'], place: 'gym', primaryPlace: null,
       equipment: [], style: [], muscleFocus: [], specialConditions: ['none'],
       pregnancyScreening: null, postpartumScreening: null, functionalScreening: null,
@@ -231,8 +231,7 @@ describe('Workout Lifecycle V2 rules', () => {
       plan: {
         planId: 'wp_content', templateId: 'T003', requestedDays: 4,
         prescribedStructuredDays: 4, population: 'general', environment: 'gym',
-        goalFamily: 'hypertrophy', split: 'upper_lower', limitationDatasetVersion: '1.0.0',
-        limitationDatasetHash: 'b'.repeat(64), sessions: [{ name: 'A', exercises: [] }],
+        goalFamily: 'hypertrophy', split: 'upper_lower', sessions: [{ name: 'A', exercises: [] }],
         versions: {}, trace: {},
       },
       targetContentIdentity: 'wpg_content', targetPrescriptionIdentity: 'wp_content',
@@ -461,6 +460,57 @@ describe('Workout Lifecycle V2 rules', () => {
     }));
     expect((await getDoc(doc(dbFor(UID), 'users', UID, 'programInstances', 'wpi_initial')))
       .data()?.prescriptionInputSnapshot.inputs.scheduleMode).toBe('flexible');
+  });
+
+  // Transition Rules (2026-10-20, Rules de transicao / B2 fix): the
+  // published ruleset required `inputs.limits`/`inputs.primaryPlace` on
+  // every snapshot, rejecting the new client's AUTOMATIC_RECONCILIATION/
+  // PROGRAM_ADAPTATION writes (src/services/workoutLifecycle.ts), which no
+  // longer emit them. Both directions must hold: a snapshot omitting them
+  // (new client) is accepted, and a snapshot still carrying them (old,
+  // already-distributed client) is also accepted — neither field is read
+  // for any authority/security decision anywhere in these Rules.
+  it('accepts an input snapshot with inputs.limits/primaryPlace absent (new client) and present (old client)', async () => {
+    const { primaryPlace: _omittedPrimaryPlace, ...inputsWithoutPrimaryPlace } = prescriptionInputSnapshot().inputs;
+    await createLifecycle(UID, prescriptionInputSnapshot({ inputs: inputsWithoutPrimaryPlace }));
+    expect((await getDoc(doc(dbFor(UID), 'users', UID, 'programInstances', 'wpi_initial')))
+      .data()?.prescriptionInputSnapshot.inputs.level).toBe('beginner');
+
+    await testEnv.clearFirestore();
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'users', UID), userDocument(UID));
+      await setDoc(doc(context.firestore(), 'users', UID, 'questionnaires', 'q1'), {
+        answers: { level: 'beginner' }, version: 1, createdAt: Timestamp.now(),
+      });
+      await setDoc(doc(context.firestore(), 'users', UID, 'workoutPrograms', 'wpg_content'), {
+        programId: 'wpg_content', prescriptionId: 'wp_content', status: 'active',
+      });
+    });
+    await createLifecycle(UID, prescriptionInputSnapshot({
+      inputs: { ...prescriptionInputSnapshot().inputs, limits: [], primaryPlace: 'home' },
+    }));
+    expect((await getDoc(doc(dbFor(UID), 'users', UID, 'programInstances', 'wpi_initial')))
+      .data()?.prescriptionInputSnapshot.inputs.limits).toEqual([]);
+  });
+
+  it('rejects an input snapshot whose present inputs.limits is not a list', async () => {
+    const invalid = prescriptionInputSnapshot({
+      inputs: { ...prescriptionInputSnapshot().inputs, limits: 'knee' },
+    });
+    await seedAuthorityGrant(UID, {
+      operation: 'MIGRATE',
+      targetProgramInstanceId: 'wpi_initial', targetCycleId: 'cyc_initial',
+      targetContentIdentity: 'wpg_content', targetPrescriptionIdentity: 'wp_content',
+      targetPrescriptionInputSnapshot: invalid,
+    });
+    const db = dbFor(UID);
+    await assertFails(setDoc(doc(db, 'users', UID, 'programInstances', 'wpi_initial'), {
+      programInstanceId: 'wpi_initial', cycleId: 'cyc_initial', contentIdentity: 'wpg_content',
+      prescriptionIdentity: 'wp_content', questionnaireId: 'q1',
+      prescriptionInputSnapshot: invalid, activatedAt: serverTimestamp(),
+      supersededAt: null, previousProgramInstanceId: null, activationReason: 'V1_MIGRATION_BASELINE',
+      schemaVersion: 2, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+    }));
   });
 
   it('rejects an input snapshot whose inputs.scheduleMode is not fixed or flexible', async () => {

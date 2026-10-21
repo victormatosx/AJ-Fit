@@ -1,3 +1,4 @@
+import { currentPrescriptionMetadata } from './prescriptionEngine/workoutPrescription/prescriptionMetadata';
 import { createHash } from 'node:crypto';
 
 import { FieldValue, Timestamp, type DocumentData, type Firestore } from 'firebase-admin/firestore';
@@ -12,7 +13,7 @@ import { buildScheduleAuthorityContext, prescribedExecutionCounts } from './fina
 import type { FinalWorkoutPlan, QuestionnaireAnswers } from './prescriptionEngine/workoutPrescription/types';
 import { EXERCISES_SEED } from './prescriptionEngine/data/exercisesSeedData';
 import { CANONICAL_ACTIVITIES } from './prescriptionEngine/workoutPrescription/canonicalActivities';
-import { mapQuestionnaireLimitations, type LimitationCatalogExercise } from './prescriptionEngine/workoutPrescription/limitationResolver';
+import type { CatalogExercise } from './prescriptionEngine/workoutPrescription/exerciseCatalog';
 import { equipmentContextFor, unrestrictedEquipmentContext } from './prescriptionEngine/workoutPrescription/equipment';
 import { buildRecentSlotHistory, evolveCycle } from './prescriptionEngine/prescriptionEvolution/cycleEvolution';
 import { PRESCRIPTION_EVOLUTION_CONFIG } from './prescriptionEngine/prescriptionEvolution/config';
@@ -166,8 +167,6 @@ export function canonicalContentIdentity(input: {
     templateVersion: input.templateMetadata.version,
     templateContentHash: input.templateMetadata.contentHash,
     versions: input.plan.versions,
-    limitationDatasetVersion: input.plan.limitationDatasetVersion,
-    limitationDatasetHash: input.plan.limitationDatasetHash,
     adaptationStage: input.plan.adaptationStage ?? null,
   });
   return `wpg_${lifecycleStableHash(identity)}`;
@@ -522,16 +521,6 @@ async function assertPlanSafe(request: AuthorityRequest, firestore: Firestore): 
       throw new HttpsError('invalid-argument', 'invalid_authority_plan_exercise_cycles');
     }
   }
-  const inputs = snapshot.inputs;
-  const special = Array.isArray(inputs.specialConditions) ? inputs.specialConditions : [];
-  const regions = special.includes('musculoskeletal_limitation') && Array.isArray(inputs.limits)
-    ? inputs.limits.filter((item): item is string => typeof item === 'string' && item !== 'none') : [];
-  // Fase 11 §5 — a v1.27 plan may legitimately reference a
-  // `CANONICAL_ACTIVITIES` id (cardio-leve, mobilidade-geral, etc.): a
-  // disjoint, non-Firestore-backed catalog with no `status`/
-  // `limitationProfile` concept at all (`canonicalActivities.ts`'s file
-  // doc — deliberately never part of the `exercises` collection). These
-  // are never looked up here, never treated as "unknown exercise".
   const resistanceExerciseIds = exerciseIds.filter(
     (id): id is string => typeof id === 'string' && !CANONICAL_ACTIVITY_IDS.has(id),
   );
@@ -539,18 +528,7 @@ async function assertPlanSafe(request: AuthorityRequest, firestore: Firestore): 
   for (const document of documents) {
     const exercise = document.data();
     if (!document.exists || exercise?.status !== 'active') throw new HttpsError('permission-denied', 'inactive_or_unknown_exercise');
-    if (regions.length === 0) continue;
-    const profile = exercise.limitationProfile;
-    if (!plainObject(profile) || profile.schemaVersion !== 1 || profile.protocolVersion !== 'musculoskeletal-v1'
-      || profile.reviewStatus !== 'approved' || !plainObject(profile.regions)) {
-      throw new HttpsError('permission-denied', 'exercise_limitation_profile_untrusted');
-    }
-    for (const region of regions) {
-      const rule = profile.regions[region];
-      if (!plainObject(rule) || !['compatible', 'not_applicable'].includes(String(rule.status))) {
-        throw new HttpsError('permission-denied', 'unsafe_exercise_for_authoritative_limitations');
-      }
-    }
+
   }
 }
 
@@ -625,11 +603,7 @@ async function generateCanonicalCycleEvolution(
   bundle: Awaited<ReturnType<typeof activeBundle>>,
   firestore: Firestore,
 ): Promise<{ plan: FinalWorkoutPlan; templateMetadata: { version: number; sourceVersion: string; contentHash: string } }> {
-  const limitationMapping = mapQuestionnaireLimitations(answers);
-  if (limitationMapping.status !== 'MAPPED') {
-    throw new HttpsError('failed-precondition', 'authoritative_cycle_evolution_limitation_unmapped');
-  }
-  const catalog = new Map<string, LimitationCatalogExercise>(EXERCISES_SEED.map((exercise) => [exercise.id, exercise]));
+  const catalog = new Map<string, CatalogExercise>(EXERCISES_SEED.map((exercise) => [exercise.id, exercise]));
   // The rule is decided by the active program's own authoritative version
   // (`templateSourceVersion`, server-read Firestore data), never by the
   // client-submitted `answers.equipment`: v1.27 programs never factor a home
@@ -643,7 +617,6 @@ async function generateCanonicalCycleEvolution(
   const result = evolveCycle({
     sessions: bundle.program.sessions,
     targetCycleIdentity,
-    limitationRegions: limitationMapping.regions,
     equipmentContext,
     catalog,
     recentSlotHistory: buildRecentSlotHistory(priorSessions),
@@ -663,11 +636,8 @@ async function generateCanonicalCycleEvolution(
     goalFamily: bundle.program.goalFamily,
     split: bundle.program.split,
     adaptationStage: bundle.program.adaptationStage,
-    limitationDatasetVersion: bundle.program.limitationDatasetVersion,
-    limitationDatasetHash: bundle.program.limitationDatasetHash,
     sessions: result.sessions,
-    versions: bundle.program.versions,
-    trace: bundle.program.trace,
+    ...currentPrescriptionMetadata(bundle.program as FinalWorkoutPlan),
   };
   return {
     plan: JSON.parse(JSON.stringify(plan)) as FinalWorkoutPlan,
@@ -852,7 +822,7 @@ export async function validateRequest(uid: string, request: AuthorityRequest, fi
     const questionnaire = await firestore.collection('users').doc(uid).collection('questionnaires').doc(request.questionnaireId).get();
     const answers = questionnaire.data()?.answers;
     if (!questionnaire.exists || !plainObject(answers)) throw new HttpsError('failed-precondition', 'questionnaire_missing');
-    for (const key of ['limits', 'specialConditions', 'pregnancyScreening', 'postpartumScreening', 'functionalScreening',
+    for (const key of ['specialConditions', 'pregnancyScreening', 'postpartumScreening', 'functionalScreening',
       'lipedemaScreening', 'dizzinessScreening', 'postSurgicalScreening', 'medicalRestrictionScreening']) {
       if (canonical(target.inputs[key]) !== canonical(answers[key])) {
         throw new HttpsError('permission-denied', 'initial_safety_inputs_do_not_match_questionnaire');
@@ -1951,58 +1921,7 @@ export async function authorizeWorkoutLifecycleMutationHandler(
   };
 }
 
-/**
- * Fase 15 (v1.27 INITIALIZE cutover) — the ONE-CALL, fully backend-persisted
- * alternative to `authorizeWorkoutLifecycleMutationHandler`'s
- * grant-then-client-writes pattern, for exactly one case: a brand-new
- * account's very first v1.27 program. `firestore-tests/
- * workoutPrograms.rules.test.ts`'s Fase 14 investigation proved that a real
- * v1.27 document (many sessions + a full decision trace) makes
- * `workoutProgramCommonValid`'s Firestore Rules evaluation exceed the
- * platform's per-request expression ceiling — no amount of Rules-side
- * restructuring fixes this, because the cost is proportional to the
- * document's own size, not to which validations run. The fix is
- * architectural, not a Rules tweak: for this one case, the client never
- * writes `workoutPrograms` (or any of the other lifecycle-bootstrap
- * documents) directly at all — this callable does, via the Admin SDK, which
- * is not subject to Security Rules or their expression budget.
- *
- * Reuses, never re-implements:
- *   - `generateCanonicalPlan`/`generateAuthoritativePlan` (the SAME engine
- *     call `validateRequest`'s INITIALIZE branch and every other lifecycle
- *     operation already use — no second engine, no v1.27-specific
- *     generation logic exists anywhere but there).
- *   - `assertPlanSafe` (the SAME fail-closed exercise/limitation-profile
- *     check every other content-installing operation already runs).
- *   - `sealTargetProgram` (the SAME idempotent Admin-SDK
- *     `workoutPrograms/{contentIdentity}` writer INITIALIZE/MIGRATE/ACTIVATE/
- *     ADAPT already use today, just reached one step earlier — it no longer
- *     needs a grant in between).
- *   - `canonicalContentIdentity`/`lifecycleStableHash`/`lifecycleEventId` —
- *     the exact same deterministic-id scheme the client's own
- *     `contentIdentityFor`/`programInstanceIdForOperation` mirror, so a
- *     program created here is byte-identical in identity to one the legacy
- *     client-transaction path would have produced for the same inputs.
- *
- * Does NOT reuse `validateRequest`'s INITIALIZE branch directly — that
- * branch throws immediately when `workoutLifecycleState/current` already
- * exists (correct for the grant flow, where the client's own transaction
- * provides retry/idempotency handling afterward). This callable has no such
- * follow-up transaction, so it performs its OWN idempotency comparison
- * instead of an unconditional early throw — see the retry handling below.
- *
- * Scope, deliberately narrow: ONLY the true first-ever INITIALIZE case
- * (no existing `workoutLifecycleState/current`, no existing
- * `workoutProgramState/active`) is handled end-to-end here. Any other
- * shape — an existing V1 baseline needing MIGRATE, an existing V2/v1.27
- * lifecycle needing ADAPT/PREPARE/RECOVER, or the active generation version
- * resolving to v2 instead of v1.27 — throws `workout_lifecycle_v127_
- * initialize_not_applicable`, a deliberately distinguishable error the
- * client (`src/services/workoutPrograms.ts`'s `tryInitializeWorkoutProgramV127`)
- * catches and falls back to the existing, unmodified, unaffected
- * grant-based flow for. v2's INITIALIZE, and every non-INITIALIZE
- * operation for both versions, are completely untouched by this function.
- */
+
 const INITIALIZE_V127_SOURCES = [
   'onboarding', 'manual_regeneration', 'automatic_progression',
   'automatic_reconciliation', 'evolution_activation', 'program_adaptation',

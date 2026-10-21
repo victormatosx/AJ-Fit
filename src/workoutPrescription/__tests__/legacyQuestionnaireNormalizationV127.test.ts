@@ -1,10 +1,9 @@
-import { describe, expect, it } from 'vitest';
-import { completeAnswers } from './fixtures';
-import { goalFamilyFor, normalizeGoal } from '../input';
-import { normalizeLimitationRegionV127 } from '../canonicalMusculoskeletalLimitationV127';
-import { normalizeMusclePriorityInputV127 } from '../canonicalMusclePriorityV127';
-import { selectBaseTemplateV127ForCurrentTrainingLevel, selectBaseTemplateV127FromAnswers } from '../selectorV127';
+import { describe,expect,it } from 'vitest';
 import { questionnaireLevelForCurrentLevel } from '../../workoutLifecycle/prescriptionInputs';
+import { normalizeMusclePriorityInputV127 } from '../canonicalMusclePriorityV127';
+import { goalFamilyFor,normalizeGoal } from '../input';
+import { selectBaseTemplateV127ForCurrentTrainingLevel,selectBaseTemplateV127FromAnswers } from '../selectorV127';
+import { completeAnswers } from './fixtures';
 
 /**
  * Fase 8 §5 — consolidated audit of every legacy/obsolete questionnaire
@@ -51,23 +50,6 @@ describe('Fase 8 — currentTrainingLevel remains the sole authority for level (
     expect(questionnaireLevelForCurrentLevel('BEGINNER')).toBe('beginner');
     expect(questionnaireLevelForCurrentLevel('INTERMEDIATE')).toBe('intermediate');
     expect(questionnaireLevelForCurrentLevel('ADVANCED')).toBe('advanced');
-  });
-});
-
-describe('Fase 8 — musculoskeletal limitation region: legacy "back" -> "spine" only, muscle "back" untouched', () => {
-  it('"back" (the legacy LimitationRegionId value) normalizes to the v1.27 "spine" region', () => {
-    expect(normalizeLimitationRegionV127('back')).toBe('spine');
-  });
-
-  it('the 7 canonical v1.27 region ids pass through unchanged', () => {
-    for (const region of ['knee', 'hip', 'spine', 'shoulder', 'elbow', 'wrist', 'ankle_foot']) {
-      expect(normalizeLimitationRegionV127(region)).toBe(region);
-    }
-  });
-
-  it('"other" (not implemented) and any unrecognized value are dropped, never fabricated into a region', () => {
-    expect(normalizeLimitationRegionV127('other')).toBeNull();
-    expect(normalizeLimitationRegionV127('not_a_real_region')).toBeNull();
   });
 });
 

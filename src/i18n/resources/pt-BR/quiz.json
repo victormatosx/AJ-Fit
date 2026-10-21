@@ -22,8 +22,14 @@
     "title": "Qual seu sexo?",
     "sub": "Calibra volume e recuperação.",
     "options": {
-      "m": { "label": "Masculino", "short": "M" },
-      "f": { "label": "Feminino", "short": "F" }
+      "m": {
+        "label": "Masculino",
+        "short": "M"
+      },
+      "f": {
+        "label": "Feminino",
+        "short": "F"
+      }
     }
   },
   "birthDate": {
@@ -48,33 +54,96 @@
     "title": "Qual é seu principal objetivo?",
     "sub": "Isso define a família de objetivo do seu plano.",
     "options": {
-      "gain_muscle": { "label": "Ganhar massa muscular", "description": "Aumentar massa e volume muscular" },
-      "lose_fat": { "label": "Perder gordura / emagrecer", "description": "Reduzir gordura corporal" },
-      "strength": { "label": "Aumentar minha força", "description": "Evoluir a capacidade de produzir força" },
-      "conditioning": { "label": "Melhorar meu condicionamento físico", "description": "Ganhar resistência e preparo físico" },
-      "health": { "label": "Melhorar minha saúde", "description": "Priorizar saúde, bem-estar e qualidade de vida" },
-      "body_composition": { "label": "Melhorar definição/composição corporal", "description": "Aprimorar a composição corporal" },
-      "return_to_training": { "label": "Voltar a treinar depois de um período parado", "description": "Retomar com uma progressão adequada" },
-      "hyper": { "label": "Hipertrofia", "description": "Ganhar massa muscular" },
-      "cut": { "label": "Emagrecimento", "description": "Queimar gordura" },
-      "perf": { "label": "Performance", "description": "Força e potência" },
-      "def": { "label": "Definição", "description": "Cortar e secar" },
-      "recon": { "label": "Recondicionamento", "description": "Voltar à forma" }
+      "gain_muscle": {
+        "label": "Ganhar massa muscular",
+        "description": "Aumentar massa e volume muscular"
+      },
+      "lose_fat": {
+        "label": "Perder gordura / emagrecer",
+        "description": "Reduzir gordura corporal"
+      },
+      "strength": {
+        "label": "Aumentar minha força",
+        "description": "Evoluir a capacidade de produzir força"
+      },
+      "conditioning": {
+        "label": "Melhorar meu condicionamento físico",
+        "description": "Ganhar resistência e preparo físico"
+      },
+      "health": {
+        "label": "Melhorar minha saúde",
+        "description": "Priorizar saúde, bem-estar e qualidade de vida"
+      },
+      "body_composition": {
+        "label": "Melhorar definição/composição corporal",
+        "description": "Aprimorar a composição corporal"
+      },
+      "return_to_training": {
+        "label": "Voltar a treinar depois de um período parado",
+        "description": "Retomar com uma progressão adequada"
+      },
+      "hyper": {
+        "label": "Hipertrofia",
+        "description": "Ganhar massa muscular"
+      },
+      "cut": {
+        "label": "Emagrecimento",
+        "description": "Queimar gordura"
+      },
+      "perf": {
+        "label": "Performance",
+        "description": "Força e potência"
+      },
+      "def": {
+        "label": "Definição",
+        "description": "Cortar e secar"
+      },
+      "recon": {
+        "label": "Recondicionamento",
+        "description": "Voltar à forma"
+      }
     }
   },
   "level": {
     "title": "Qual é seu nível de experiência na musculação?",
     "sub": "A experiência será usada para adaptar o plano.",
     "options": {
-      "never_or_starting": { "label": "Iniciante", "description": "Estou começando ou ainda tenho pouca experiência" },
-      "beginner": { "label": "Iniciante", "description": "Estou começando ou ainda tenho pouca experiência" },
-      "intermediate": { "label": "Intermediário", "description": "Já treino há algum tempo e conheço bem os principais exercícios e equipamentos." },
-      "intermediate_experienced": { "label": "Intermediário experiente", "description": "Treino há bastante tempo, tenho boa experiência, mas ainda não me considero avançado." },
-      "advanced": { "label": "Avançado", "description": "Tenho bastante experiência e domínio dos principais exercícios" },
-      "beg": { "label": "Iniciante", "description": "Menos de 6 meses" },
-      "int": { "label": "Intermediário", "description": "6 meses a 2 anos" },
-      "adv": { "label": "Avançado", "description": "Mais de 2 anos" },
-      "elite": { "label": "Elite", "description": "Atleta / 5+ anos" }
+      "never_or_starting": {
+        "label": "Iniciante",
+        "description": "Estou começando ou ainda tenho pouca experiência"
+      },
+      "beginner": {
+        "label": "Iniciante",
+        "description": "Estou começando ou ainda tenho pouca experiência"
+      },
+      "intermediate": {
+        "label": "Intermediário",
+        "description": "Já treino há algum tempo e conheço bem os principais exercícios e equipamentos."
+      },
+      "intermediate_experienced": {
+        "label": "Intermediário experiente",
+        "description": "Treino há bastante tempo, tenho boa experiência, mas ainda não me considero avançado."
+      },
+      "advanced": {
+        "label": "Avançado",
+        "description": "Tenho bastante experiência e domínio dos principais exercícios"
+      },
+      "beg": {
+        "label": "Iniciante",
+        "description": "Menos de 6 meses"
+      },
+      "int": {
+        "label": "Intermediário",
+        "description": "6 meses a 2 anos"
+      },
+      "adv": {
+        "label": "Avançado",
+        "description": "Mais de 2 anos"
+      },
+      "elite": {
+        "label": "Elite",
+        "description": "Atleta / 5+ anos"
+      }
     }
   },
   "days": {
@@ -92,20 +161,44 @@
     "flexibleFrequency": "Quantas vezes por semana?",
     "frequencyAccessibilityLabel": "{{count}} treinos por semana",
     "options": {
-      "2": { "label": "2 dias", "short": "2" },
-      "3": { "label": "3 dias", "short": "3" },
-      "4": { "label": "4 dias", "short": "4" },
-      "5": { "label": "5 dias", "short": "5" },
-      "6": { "label": "6 dias", "short": "6" },
-      "7": { "label": "7 dias", "short": "7" }
+      "2": {
+        "label": "2 dias",
+        "short": "2"
+      },
+      "3": {
+        "label": "3 dias",
+        "short": "3"
+      },
+      "4": {
+        "label": "4 dias",
+        "short": "4"
+      },
+      "5": {
+        "label": "5 dias",
+        "short": "5"
+      },
+      "6": {
+        "label": "6 dias",
+        "short": "6"
+      },
+      "7": {
+        "label": "7 dias",
+        "short": "7"
+      }
     }
   },
   "scheduleMode": {
     "title": "Como você prefere organizar seus treinos?",
     "sub": "Escolha a rotina que combina melhor com você.",
     "options": {
-      "fixed": { "label": "Dias fixos", "description": "Escolha os dias da semana em que pretende treinar." },
-      "flexible": { "label": "Treino livre", "description": "Treine quando quiser, seguindo a sequência do seu plano." }
+      "fixed": {
+        "label": "Dias fixos",
+        "description": "Escolha os dias da semana em que pretende treinar."
+      },
+      "flexible": {
+        "label": "Treino livre",
+        "description": "Treine quando quiser, seguindo a sequência do seu plano."
+      }
     }
   },
   "trainingDays": {
@@ -124,10 +217,22 @@
   "duration": {
     "title": "Quanto tempo você quer treinar por dia?",
     "options": {
-      "30": { "label": "Até 30 minutos", "short": "30" },
-      "45": { "label": "45 minutos", "short": "45" },
-      "60": { "label": "60 minutos", "short": "60" },
-      "90": { "label": "+60 minutos", "short": "90" }
+      "30": {
+        "label": "Até 30 minutos",
+        "short": "30"
+      },
+      "45": {
+        "label": "45 minutos",
+        "short": "45"
+      },
+      "60": {
+        "label": "60 minutos",
+        "short": "60"
+      },
+      "90": {
+        "label": "+60 minutos",
+        "short": "90"
+      }
     }
   },
   "place": {
@@ -233,7 +338,7 @@
   },
   "limits": {
     "title": "Onde você sente dor ou limitação?",
-    "sub": "Apenas colete o que afeta o treino hoje; isso não é um diagnóstico. Vamos adaptar os exercícios para as áreas selecionadas quando necessário.",
+    "sub": "Apenas colete o que afeta o treino hoje; isso não é um diagnóstico. Essa informação é apenas para seu acompanhamento pessoal.",
     "options": {
       "none": "Nenhuma",
       "knee": "Joelho",
@@ -261,29 +366,99 @@
       "medical_restriction": "Tenho alguma restrição médica para exercícios"
     }
   },
-  "pregnancyWeeks": { "title": "Quantas semanas de gestação?", "unit": "semanas" },
+  "pregnancyWeeks": {
+    "title": "Quantas semanas de gestação?",
+    "unit": "semanas"
+  },
   "pregnancyPrenatalCare": {
     "title": "Você está realizando acompanhamento pré-natal?",
-    "options": { "yes": { "label": "Sim", "short": "SIM" }, "no": { "label": "Não", "short": "NÃO" } }
+    "options": {
+      "yes": {
+        "label": "Sim",
+        "short": "SIM"
+      },
+      "no": {
+        "label": "Não",
+        "short": "NÃO"
+      }
+    }
   },
   "pregnancyExerciseRestriction": {
     "title": "Algum profissional de saúde restringiu sua prática de exercícios?",
-    "options": { "no": { "label": "Não", "short": "NÃO" }, "yes": { "label": "Sim", "short": "SIM" } }
+    "options": {
+      "no": {
+        "label": "Não",
+        "short": "NÃO"
+      },
+      "yes": {
+        "label": "Sim",
+        "short": "SIM"
+      }
+    }
   },
   "pregnancyComplication": {
     "title": "Sua gestação possui alguma complicação relevante ou você recebeu orientação especial?",
     "options": {
-      "no": { "label": "Não", "short": "NÃO" },
-      "yes": { "label": "Sim", "short": "SIM" },
-      "unsure": { "label": "Não tenho certeza", "short": "?" }
+      "no": {
+        "label": "Não",
+        "short": "NÃO"
+      },
+      "yes": {
+        "label": "Sim",
+        "short": "SIM"
+      },
+      "unsure": {
+        "label": "Não tenho certeza",
+        "short": "?"
+      }
     }
   },
   "pregnancyCare": {
     "title": "Como está o acompanhamento da gestação?",
     "fields": {
-      "prenatalCare": { "title": "Você realiza acompanhamento pré-natal?", "options": { "yes": { "label": "Sim", "short": "SIM" }, "no": { "label": "Não", "short": "NÃO" } } },
-      "exerciseRestriction": { "title": "Algum profissional restringiu seus exercícios?", "options": { "no": { "label": "Não", "short": "NÃO" }, "yes": { "label": "Sim", "short": "SIM" } } },
-      "complication": { "title": "Há complicação relevante ou orientação especial?", "options": { "no": { "label": "Não", "short": "NÃO" }, "yes": { "label": "Sim", "short": "SIM" }, "unsure": { "label": "Não tenho certeza", "short": "?" } } }
+      "prenatalCare": {
+        "title": "Você realiza acompanhamento pré-natal?",
+        "options": {
+          "yes": {
+            "label": "Sim",
+            "short": "SIM"
+          },
+          "no": {
+            "label": "Não",
+            "short": "NÃO"
+          }
+        }
+      },
+      "exerciseRestriction": {
+        "title": "Algum profissional restringiu seus exercícios?",
+        "options": {
+          "no": {
+            "label": "Não",
+            "short": "NÃO"
+          },
+          "yes": {
+            "label": "Sim",
+            "short": "SIM"
+          }
+        }
+      },
+      "complication": {
+        "title": "Há complicação relevante ou orientação especial?",
+        "options": {
+          "no": {
+            "label": "Não",
+            "short": "NÃO"
+          },
+          "yes": {
+            "label": "Sim",
+            "short": "SIM"
+          },
+          "unsure": {
+            "label": "Não tenho certeza",
+            "short": "?"
+          }
+        }
+      }
     }
   },
   "pregnancyWarningSigns": {
@@ -303,26 +478,90 @@
   "postpartumTimeSinceBirth": {
     "title": "Há quanto tempo foi o parto?",
     "options": {
-      "under_6_weeks": { "label": "Menos de 6 semanas", "description": "Parto recente" },
-      "6_12_weeks": { "label": "6–12 semanas", "description": "Entre 6 e 12 semanas" },
-      "3_6_months": { "label": "3–6 meses", "description": "Entre 3 e 6 meses" },
-      "6_12_months": { "label": "6–12 meses", "description": "Entre 6 e 12 meses" },
-      "over_1_year": { "label": "Mais de 1 ano", "description": "Há mais de um ano" }
+      "under_6_weeks": {
+        "label": "Menos de 6 semanas",
+        "description": "Parto recente"
+      },
+      "6_12_weeks": {
+        "label": "6–12 semanas",
+        "description": "Entre 6 e 12 semanas"
+      },
+      "3_6_months": {
+        "label": "3–6 meses",
+        "description": "Entre 3 e 6 meses"
+      },
+      "6_12_months": {
+        "label": "6–12 meses",
+        "description": "Entre 6 e 12 meses"
+      },
+      "over_1_year": {
+        "label": "Mais de 1 ano",
+        "description": "Há mais de um ano"
+      }
     }
   },
   "postpartumDeliveryType": {
     "title": "Como foi o parto?",
     "options": {
-      "vaginal": { "label": "Vaginal", "short": "VAG" },
-      "cesarean": { "label": "Cesárea", "short": "CES" },
-      "prefer_not_to_say": { "label": "Prefiro não informar", "short": "—" }
+      "vaginal": {
+        "label": "Vaginal",
+        "short": "VAG"
+      },
+      "cesarean": {
+        "label": "Cesárea",
+        "short": "CES"
+      },
+      "prefer_not_to_say": {
+        "label": "Prefiro não informar",
+        "short": "—"
+      }
     }
   },
   "postpartumContext": {
     "title": "Quando e como foi o parto?",
     "fields": {
-      "timeSinceBirth": { "title": "Há quanto tempo foi o parto?", "options": { "under_6_weeks": { "label": "Menos de 6 semanas", "short": "<6S" }, "6_12_weeks": { "label": "6–12 semanas", "short": "6–12S" }, "3_6_months": { "label": "3–6 meses", "short": "3–6M" }, "6_12_months": { "label": "6–12 meses", "short": "6–12M" }, "over_1_year": { "label": "Mais de 1 ano", "short": ">1A" } } },
-      "deliveryType": { "title": "Como foi o parto?", "options": { "vaginal": { "label": "Vaginal", "short": "VAG" }, "cesarean": { "label": "Cesárea", "short": "CES" }, "prefer_not_to_say": { "label": "Prefiro não informar", "short": "—" } } }
+      "timeSinceBirth": {
+        "title": "Há quanto tempo foi o parto?",
+        "options": {
+          "under_6_weeks": {
+            "label": "Menos de 6 semanas",
+            "short": "<6S"
+          },
+          "6_12_weeks": {
+            "label": "6–12 semanas",
+            "short": "6–12S"
+          },
+          "3_6_months": {
+            "label": "3–6 meses",
+            "short": "3–6M"
+          },
+          "6_12_months": {
+            "label": "6–12 meses",
+            "short": "6–12M"
+          },
+          "over_1_year": {
+            "label": "Mais de 1 ano",
+            "short": ">1A"
+          }
+        }
+      },
+      "deliveryType": {
+        "title": "Como foi o parto?",
+        "options": {
+          "vaginal": {
+            "label": "Vaginal",
+            "short": "VAG"
+          },
+          "cesarean": {
+            "label": "Cesárea",
+            "short": "CES"
+          },
+          "prefer_not_to_say": {
+            "label": "Prefiro não informar",
+            "short": "—"
+          }
+        }
+      }
     }
   },
   "postpartumSigns": {
@@ -340,9 +579,18 @@
   "postpartumReturnClearance": {
     "title": "Você recebeu liberação para se exercitar?",
     "options": {
-      "yes": { "label": "Sim", "description": "Recebi liberação/orientação" },
-      "not_yet": { "label": "Ainda não", "description": "Ainda não recebi liberação" },
-      "with_restrictions": { "label": "Fui orientada a fazer exercícios com restrições", "description": "Existem restrições que devem ser respeitadas" }
+      "yes": {
+        "label": "Sim",
+        "description": "Recebi liberação/orientação"
+      },
+      "not_yet": {
+        "label": "Ainda não",
+        "description": "Ainda não recebi liberação"
+      },
+      "with_restrictions": {
+        "label": "Fui orientada a fazer exercícios com restrições",
+        "description": "Existem restrições que devem ser respeitadas"
+      }
     }
   },
   "functionalSituations": {
@@ -361,26 +609,194 @@
   "lipedemaScreening": {
     "title": "Como o lipedema afeta seus exercícios?",
     "fields": {
-      "symptomImpact": { "title": "Impacto nos exercícios", "options": { "none": { "label": "Sem impacto atual", "short": "NENHUM" }, "mild_or_occasional": { "label": "Leve ou ocasional", "short": "LEVE" }, "interferes_with_exercises": { "label": "Interfere nos exercícios", "short": "INTERFERE" }, "unknown": { "label": "Não sei avaliar", "short": "?" } } },
-      "professionalGuidance": { "title": "Você recebeu orientação profissional específica?", "options": { "no": { "label": "Não", "short": "NÃO" }, "yes": { "label": "Sim", "short": "SIM" }, "unsure": { "label": "Não tenho certeza", "short": "?" } } }
+      "symptomImpact": {
+        "title": "Impacto nos exercícios",
+        "options": {
+          "none": {
+            "label": "Sem impacto atual",
+            "short": "NENHUM"
+          },
+          "mild_or_occasional": {
+            "label": "Leve ou ocasional",
+            "short": "LEVE"
+          },
+          "interferes_with_exercises": {
+            "label": "Interfere nos exercícios",
+            "short": "INTERFERE"
+          },
+          "unknown": {
+            "label": "Não sei avaliar",
+            "short": "?"
+          }
+        }
+      },
+      "professionalGuidance": {
+        "title": "Você recebeu orientação profissional específica?",
+        "options": {
+          "no": {
+            "label": "Não",
+            "short": "NÃO"
+          },
+          "yes": {
+            "label": "Sim",
+            "short": "SIM"
+          },
+          "unsure": {
+            "label": "Não tenho certeza",
+            "short": "?"
+          }
+        }
+      }
     }
   },
   "dizzinessScreening": {
     "title": "Como são suas tonturas ou vertigens?",
     "fields": {
-      "symptomFrequency": { "title": "Com que frequência acontece?", "options": { "history_only": { "label": "Apenas no passado", "short": "PASSADO" }, "occasional": { "label": "Ocasionalmente", "short": "ÀS VEZES" }, "frequent": { "label": "Com frequência", "short": "FREQUENTE" }, "current_or_recent": { "label": "Agora ou recentemente", "short": "RECENTE" } } },
-      "affectsBalance": { "title": "Isso afeta seu equilíbrio?", "options": { "no": { "label": "Não", "short": "NÃO" }, "yes": { "label": "Sim", "short": "SIM" }, "unknown": { "label": "Não sei", "short": "?" } } }
+      "symptomFrequency": {
+        "title": "Com que frequência acontece?",
+        "options": {
+          "history_only": {
+            "label": "Apenas no passado",
+            "short": "PASSADO"
+          },
+          "occasional": {
+            "label": "Ocasionalmente",
+            "short": "ÀS VEZES"
+          },
+          "frequent": {
+            "label": "Com frequência",
+            "short": "FREQUENTE"
+          },
+          "current_or_recent": {
+            "label": "Agora ou recentemente",
+            "short": "RECENTE"
+          }
+        }
+      },
+      "affectsBalance": {
+        "title": "Isso afeta seu equilíbrio?",
+        "options": {
+          "no": {
+            "label": "Não",
+            "short": "NÃO"
+          },
+          "yes": {
+            "label": "Sim",
+            "short": "SIM"
+          },
+          "unknown": {
+            "label": "Não sei",
+            "short": "?"
+          }
+        }
+      }
     }
   },
   "postSurgicalStatus": {
     "title": "Como está sua recuperação?",
     "fields": {
-      "recoveryStatus": { "title": "Como está a recuperação?", "options": { "completed": { "label": "Concluída", "short": "CONCLUÍDA" }, "in_progress": { "label": "Em andamento", "short": "EM CURSO" }, "unsure": { "label": "Não tenho certeza", "short": "?" } } },
-      "returnClearance": { "title": "Qual é sua liberação para exercícios?", "options": { "cleared_no_restrictions": { "label": "Liberado sem restrições", "short": "LIBERADO" }, "cleared_with_restrictions": { "label": "Liberado com restrições", "short": "RESTRIÇÕES" }, "not_yet": { "label": "Ainda não fui liberado", "short": "AINDA NÃO" }, "unsure": { "label": "Não tenho certeza", "short": "?" } } }
+      "recoveryStatus": {
+        "title": "Como está a recuperação?",
+        "options": {
+          "completed": {
+            "label": "Concluída",
+            "short": "CONCLUÍDA"
+          },
+          "in_progress": {
+            "label": "Em andamento",
+            "short": "EM CURSO"
+          },
+          "unsure": {
+            "label": "Não tenho certeza",
+            "short": "?"
+          }
+        }
+      },
+      "returnClearance": {
+        "title": "Qual é sua liberação para exercícios?",
+        "options": {
+          "cleared_no_restrictions": {
+            "label": "Liberado sem restrições",
+            "short": "LIBERADO"
+          },
+          "cleared_with_restrictions": {
+            "label": "Liberado com restrições",
+            "short": "RESTRIÇÕES"
+          },
+          "not_yet": {
+            "label": "Ainda não fui liberado",
+            "short": "AINDA NÃO"
+          },
+          "unsure": {
+            "label": "Não tenho certeza",
+            "short": "?"
+          }
+        }
+      }
     }
   },
-  "postSurgicalRegion": { "title": "Onde foi a cirurgia?", "options": { "knee": { "label": "Joelho", "description": "Região do joelho" }, "hip": { "label": "Quadril", "description": "Região do quadril" }, "back": { "label": "Coluna ou costas", "description": "Região da coluna" }, "shoulder": { "label": "Ombro", "description": "Região do ombro" }, "elbow": { "label": "Cotovelo", "description": "Região do cotovelo" }, "wrist": { "label": "Punho ou mão", "description": "Região do punho ou mão" }, "ankle_foot": { "label": "Tornozelo ou pé", "description": "Região do tornozelo ou pé" }, "abdomen": { "label": "Abdômen", "description": "Região abdominal" }, "chest": { "label": "Tórax", "description": "Região do tórax" }, "other": { "label": "Outra região", "description": "Outra região do corpo" } } },
-  "medicalRestrictionDetails": { "title": "A restrição foi indicada por um profissional?", "options": { "yes": { "label": "Sim", "short": "SIM" }, "no": { "label": "Não", "short": "NÃO" }, "unsure": { "label": "Não tenho certeza", "short": "?" } } },
+  "postSurgicalRegion": {
+    "title": "Onde foi a cirurgia?",
+    "options": {
+      "knee": {
+        "label": "Joelho",
+        "description": "Região do joelho"
+      },
+      "hip": {
+        "label": "Quadril",
+        "description": "Região do quadril"
+      },
+      "back": {
+        "label": "Coluna ou costas",
+        "description": "Região da coluna"
+      },
+      "shoulder": {
+        "label": "Ombro",
+        "description": "Região do ombro"
+      },
+      "elbow": {
+        "label": "Cotovelo",
+        "description": "Região do cotovelo"
+      },
+      "wrist": {
+        "label": "Punho ou mão",
+        "description": "Região do punho ou mão"
+      },
+      "ankle_foot": {
+        "label": "Tornozelo ou pé",
+        "description": "Região do tornozelo ou pé"
+      },
+      "abdomen": {
+        "label": "Abdômen",
+        "description": "Região abdominal"
+      },
+      "chest": {
+        "label": "Tórax",
+        "description": "Região do tórax"
+      },
+      "other": {
+        "label": "Outra região",
+        "description": "Outra região do corpo"
+      }
+    }
+  },
+  "medicalRestrictionDetails": {
+    "title": "A restrição foi indicada por um profissional?",
+    "options": {
+      "yes": {
+        "label": "Sim",
+        "short": "SIM"
+      },
+      "no": {
+        "label": "Não",
+        "short": "NÃO"
+      },
+      "unsure": {
+        "label": "Não tenho certeza",
+        "short": "?"
+      }
+    }
+  },
   "muscleFocus": {
     "title": "Músculos para priorizar",
     "sub": "Clique para selecionar os músculos que você quer priorizar, ou clique em Continuar para seguir sem priorizar.",
@@ -415,9 +831,18 @@
   "commitment": {
     "title": "Quanto você está disposto a se comprometer?",
     "options": {
-      "ownPace": { "label": "Quero começar no meu ritmo", "description": "Sem pressão, no meu tempo" },
-      "committed": { "label": "Estou comprometido", "description": "Vou seguir o plano à risca" },
-      "allIn": { "label": "Quero levar isso realmente a sério", "description": "Máximo empenho e consistência" }
+      "ownPace": {
+        "label": "Quero começar no meu ritmo",
+        "description": "Sem pressão, no meu tempo"
+      },
+      "committed": {
+        "label": "Estou comprometido",
+        "description": "Vou seguir o plano à risca"
+      },
+      "allIn": {
+        "label": "Quero levar isso realmente a sério",
+        "description": "Máximo empenho e consistência"
+      }
     }
   }
 }

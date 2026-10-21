@@ -1,11 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import { defaultQuiz, type ExperienceLevel, type PrimaryGoal, type Quiz } from '../../state/AppState';
-import { extractLeafPaths } from '../resourceParity';
+import { describe,expect,it } from 'vitest';
 import { MUSCLE_FOCUS_VISUAL_GROUPS } from '../../onboarding/muscleFocusBodyMap';
+import { defaultQuiz,type ExperienceLevel,type PrimaryGoal,type Quiz } from '../../state/AppState';
+import { extractLeafPaths } from '../resourceParity';
 
-import ptBRQuiz from '../resources/pt-BR/quiz.json';
 import enQuiz from '../resources/en/quiz.json';
 import esQuiz from '../resources/es/quiz.json';
+import ptBRQuiz from '../resources/pt-BR/quiz.json';
 
 /**
  * Phase 5 REGRESSION GUARD.

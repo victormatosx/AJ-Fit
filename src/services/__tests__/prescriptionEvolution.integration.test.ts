@@ -1,15 +1,14 @@
 /** Opt-in real Firestore Emulator coverage for the Fase 3 Prescription Evolution Engine. */
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { initializeTestEnvironment,type RulesTestEnvironment } from '@firebase/rules-unit-testing';
+import { Timestamp,collection,doc,getDocs,setDoc } from 'firebase/firestore';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
-import { collection, doc, getDocs, setDoc, Timestamp } from 'firebase/firestore';
+import { afterAll,beforeAll,beforeEach,describe,expect,it,vi } from 'vitest';
 
 import { buildSeedDocuments } from '../../../scripts/seedWorkoutTemplates';
-import { completeAnswers } from '../../workoutPrescription/__tests__/fixtures';
 import { toPersistedAnswers } from '../../lib/questionnaireAnswers';
-import { CANONICAL_LIMITATION_DATASET_HASH, CANONICAL_LIMITATION_DATASET_VERSION } from '../../workoutPrescription/limitationDataset';
 import { WEEKDAY_ORDER } from '../../state/AppState';
+import { completeAnswers } from '../../workoutPrescription/__tests__/fixtures';
 
 const PROJECT_ID = 'ajfit-rules-test';
 const UID = 'erin';
@@ -20,10 +19,10 @@ let testEnv: RulesTestEnvironment;
 const mocks = vi.hoisted(() => ({ db: undefined as unknown }));
 vi.mock('../../lib/firebase', () => ({ get db() { return mocks.db; } }));
 
-import { generateAndPersistWorkoutProgram } from '../workoutPrograms';
 import { evolvePrescription } from '../prescriptionEvolution';
+import { generateAndPersistWorkoutProgram } from '../workoutPrograms';
+import { installWorkoutLifecycleAuthorityFixture,resetWorkoutLifecycleAuthorityFixture } from './workoutLifecycleAuthorityFixture';
 import { enableWorkoutLifecycleRollout } from './workoutLifecycleRolloutFixture';
-import { installWorkoutLifecycleAuthorityFixture, resetWorkoutLifecycleAuthorityFixture } from './workoutLifecycleAuthorityFixture';
 
 const T003_SEED = buildSeedDocuments().find((t) => t.id === 'T003');
 if (!T003_SEED) throw new Error('T003 fixture missing from catalog — cannot run this integration test');
@@ -45,10 +44,6 @@ async function seedUserAndQuestionnaire() {
     });
     await setDoc(doc(rawDb, 'workoutTemplates', 'T003'), T003_SEED);
     await setDoc(doc(rawDb, 'workoutTemplates', 'T004'), T004_SEED);
-    await setDoc(doc(rawDb, 'limitationDatasetState', 'active'), {
-      datasetVersion: CANONICAL_LIMITATION_DATASET_VERSION,
-      limitationDatasetHash: CANONICAL_LIMITATION_DATASET_HASH,
-    });
     await setDoc(doc(rawDb, 'users', UID, 'questionnaires', QUESTIONNAIRE_ID), {
       answers: toPersistedAnswers(BEGINNER_ANSWERS),
       version: 1,

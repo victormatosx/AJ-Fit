@@ -7,7 +7,7 @@ import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { deleteDoc, doc, getDoc, runTransaction, serverTimestamp, setDoc, Timestamp, updateDoc, writeBatch } from 'firebase/firestore';
+import { deleteDoc, deleteField, doc, getDoc, runTransaction, serverTimestamp, setDoc, Timestamp, updateDoc, writeBatch } from 'firebase/firestore';
 
 const PROJECT_ID = 'ajfit-rules-test';
 const UID = 'alice';
@@ -84,6 +84,7 @@ beforeEach(async () => {
 });
 
 describe('users/{uid}/workoutExecutions — create', () => {
+
   it('lets the owner start an execution referencing their own program', async () => {
     const db = dbFor(UID);
     await assertSucceeds(setDoc(doc(db, 'users', UID, 'workoutExecutions', EXECUTION_ID), executionDoc()));
@@ -945,5 +946,27 @@ describe('users/{uid}/workoutExecutionState/current — mutex release tied to te
     batch.update(executionRef, { updatedAt: serverTimestamp() });
     batch.delete(stateRef);
     await assertFails(batch.commit());
+  });
+});
+
+describe('retired metadata is read-only compatibility', () => {
+  it('rejects new executions carrying a retired policy field', async () => {
+    await assertFails(setDoc(doc(dbFor(UID), 'users', UID, 'workoutExecutions', EXECUTION_ID), executionDoc({ substitutionPolicySnapshot: 'v3' })));
+  });
+  it('keeps old sessions editable while preventing policy metadata changes', async () => {
+    await testEnv.withSecurityRulesDisabled(async context => {
+      await setDoc(doc(context.firestore(), 'users', UID, 'workoutExecutions', EXECUTION_ID), executionDoc({ substitutionPolicySnapshot: 'v3' }));
+    });
+    const ref = doc(dbFor(UID), 'users', UID, 'workoutExecutions', EXECUTION_ID);
+    await assertSucceeds(updateDoc(ref, { updatedAt: serverTimestamp() }));
+    await assertFails(updateDoc(ref, { substitutionPolicySnapshot: 'legacy', updatedAt: serverTimestamp() }));
+  });
+  it('does not let a restart introduce retired metadata into a current execution', async () => {
+    await testEnv.withSecurityRulesDisabled(async context => {
+      await setDoc(doc(context.firestore(), 'users', UID, 'workoutExecutions', EXECUTION_ID), executionDoc({ status: 'ABANDONED', finishedAt: Timestamp.now() }));
+    });
+    await assertFails(updateDoc(doc(dbFor(UID), 'users', UID, 'workoutExecutions', EXECUTION_ID), {
+      status: 'IN_PROGRESS', startedAt: serverTimestamp(), finishedAt: null, updatedAt: serverTimestamp(), substitutionPolicySnapshot: 'v3',
+    }));
   });
 });

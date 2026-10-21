@@ -1,0 +1,867 @@
+{
+  "fetchedAt": "2026-10-19T22:01:14.886Z",
+  "api": "https://wger.de/api/v2/",
+  "exerciseCount": 932,
+  "videoCount": 78,
+  "licenses": [
+    {
+      "id": 1,
+      "full_name": " Creative Commons Attribution Share Alike 3",
+      "short_name": "CC-BY-SA 3",
+      "url": "https://creativecommons.org/licenses/by-sa/3.0/deed.en"
+    },
+    {
+      "id": 4,
+      "full_name": "Creative Commons Attribution 4",
+      "short_name": "CC-BY 4",
+      "url": "https://creativecommons.org/licenses/by/4.0/"
+    },
+    {
+      "id": 2,
+      "full_name": "Creative Commons Attribution Share Alike 4",
+      "short_name": "CC-BY-SA 4",
+      "url": "https://creativecommons.org/licenses/by-sa/4.0/deed.en"
+    },
+    {
+      "id": 3,
+      "full_name": "Creative Commons Public Domain 1.0",
+      "short_name": "CC0",
+      "url": "http://creativecommons.org/publicdomain/zero/1.0/"
+    },
+    {
+      "id": 5,
+      "full_name": "Open Data Commons Open Database License",
+      "short_name": "ODbL",
+      "url": "https://opendatacommons.org/licenses/odbl/"
+    }
+  ],
+  "selectedVideos": [
+    {
+      "id": 2,
+      "uuid": "307e7276-a14d-4ea0-b579-f5b0dbc6f5af",
+      "exercise": 507,
+      "exercise_uuid": "2e7ffff9-e603-4b28-98c8-31d1a6ce8cd9",
+      "video": "https://wger.de/media/exercise-video/507/307e7276-a14d-4ea0-b579-f5b0dbc6f5af.MOV",
+      "is_main": false,
+      "size": 38136083,
+      "duration": "13.00",
+      "width": 1920,
+      "height": 1080,
+      "codec": "hevc",
+      "codec_long": "H.265 / HEVC (High Efficiency Video Coding)",
+      "license": 2,
+      "license_title": "",
+      "license_object_url": "",
+      "license_author": "Goulart",
+      "license_author_url": "",
+      "license_derivative_source_url": "",
+      "author_history": [
+        "Goulart"
+      ]
+    },
+    {
+      "id": 3,
+      "uuid": "6b6054b5-9236-4a63-8392-6ea7a9010ca6",
+      "exercise": 507,
+      "exercise_uuid": "2e7ffff9-e603-4b28-98c8-31d1a6ce8cd9",
+      "video": "https://wger.de/media/exercise-video/507/6b6054b5-9236-4a63-8392-6ea7a9010ca6.MOV",
+      "is_main": false,
+      "size": 52134396,
+      "duration": "17.69",
+      "width": 1920,
+      "height": 1080,
+      "codec": "hevc",
+      "codec_long": "H.265 / HEVC (High Efficiency Video Coding)",
+      "license": 2,
+      "license_title": "",
+      "license_object_url": "",
+      "license_author": "Goulart",
+      "license_author_url": "",
+      "license_derivative_source_url": "",
+      "author_history": [
+        "Goulart"
+      ]
+    },
+    {
+      "id": 4,
+      "uuid": "e96295da-58b8-4b6f-921e-4cb1af3c6cfc",
+      "exercise": 507,
+      "exercise_uuid": "2e7ffff9-e603-4b28-98c8-31d1a6ce8cd9",
+      "video": "https://wger.de/media/exercise-video/507/e96295da-58b8-4b6f-921e-4cb1af3c6cfc.MOV",
+      "is_main": false,
+      "size": 390563423,
+      "duration": "29.50",
+      "width": 3840,
+      "height": 2160,
+      "codec": "hevc",
+      "codec_long": "H.265 / HEVC (High Efficiency Video Coding)",
+      "license": 2,
+      "license_title": "",
+      "license_object_url": "",
+      "license_author": "Goulart",
+      "license_author_url": "",
+      "license_derivative_source_url": "",
+      "author_history": [
+        "Goulart"
+      ]
+    },
+    {
+      "id": 11,
+      "uuid": "dbfd396b-1aab-4a64-a50b-2c31ff0a2cf7",
+      "exercise": 543,
+      "exercise_uuid": "5912d7ed-6a0e-4b4c-b30a-fc9f3f890fc1",
+      "video": "https://wger.de/media/exercise-video/543/dbfd396b-1aab-4a64-a50b-2c31ff0a2cf7.MOV",
+      "is_main": false,
+      "size": 23511495,
+      "duration": "12.27",
+      "width": 1920,
+      "height": 1080,
+      "codec": "hevc",
+      "codec_long": "H.265 / HEVC (High Efficiency Video Coding)",
+      "license": 2,
+      "license_title": "",
+      "license_object_url": "",
+      "license_author": "Goulart",
+      "license_author_url": "",
+      "license_derivative_source_url": "",
+      "author_history": [
+        "Goulart"
+      ]
+    },
+    {
+      "id": 12,
+      "uuid": "64f33c19-1d96-4b7c-af17-6c6a4941c614",
+      "exercise": 567,
+      "exercise_uuid": "87affa4b-395b-437c-9581-2bd20ea5aa7c",
+      "video": "https://wger.de/media/exercise-video/567/64f33c19-1d96-4b7c-af17-6c6a4941c614.MOV",
+      "is_main": false,
+      "size": 62860017,
+      "duration": "23.13",
+      "width": 1920,
+      "height": 1080,
+      "codec": "hevc",
+      "codec_long": "H.265 / HEVC (High Efficiency Video Coding)",
+      "license": 2,
+      "license_title": "",
+      "license_object_url": "",
+      "license_author": "Goulart",
+      "license_author_url": "",
+      "license_derivative_source_url": "",
+      "author_history": [
+        "Goulart"
+      ]
+    },
+    {
+      "id": 14,
+      "uuid": "35b7b625-77fd-4c09-8c57-3ad0f2f23175",
+      "exercise": 622,
+      "exercise_uuid": "7ce443b6-eb84-4f65-b05f-461c1cc8bcc0",
+      "video": "https://wger.de/media/exercise-video/622/35b7b625-77fd-4c09-8c57-3ad0f2f23175.MOV",
+      "is_main": false,
+      "size": 30336315,
+      "duration": "16.79",
+      "width": 1920,
+      "height": 1080,
+      "codec": "hevc",
+      "codec_long": "H.265 / HEVC (High Efficiency Video Coding)",
+      "license": 2,
+      "license_title": "",
+      "license_object_url": "",
+      "license_author": "Goulart",
+      "license_author_url": "",
+      "license_derivative_source_url": "",
+      "author_history": [
+        "Goulart"
+      ]
+    },
+    {
+      "id": 15,
+      "uuid": "461171e5-2b16-407d-bf27-27aeef43f105",
+      "exercise": 622,
+      "exercise_uuid": "7ce443b6-eb84-4f65-b05f-461c1cc8bcc0",
+      "video": "https://wger.de/media/exercise-video/622/461171e5-2b16-407d-bf27-27aeef43f105.MOV",
+      "is_main": false,
+      "size": 27311167,
+      "duration": "16.43",
+      "width": 1920,
+      "height": 1080,
+      "codec": "hevc",
+      "codec_long": "H.265 / HEVC (High Efficiency Video Coding)",
+      "license": 2,
+      "license_title": "",
+      "license_object_url": "",
+      "license_author": "Goulart",
+      "license_author_url": "",
+      "license_derivative_source_url": "",
+      "author_history": [
+        "Goulart"
+      ]
+    },
+    {
+      "id": 16,
+      "uuid": "4349a6f6-4cee-4c09-828b-c5e7fc2c1ff1",
+      "exercise": 538,
+      "exercise_uuid": "275fb49f-975c-4d6e-9d63-2c86ed740f40",
+      "video": "https://wger.de/media/exercise-video/538/4349a6f6-4cee-4c09-828b-c5e7fc2c1ff1.MOV",
+      "is_main": false,
+      "size": 6205424,
+      "duration": "19.92",
+      "width": 1920,
+      "height": 1080,
+      "codec": "h264",
+      "codec_long": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+      "license": 2,
+      "license_title": "",
+      "license_object_url": "",
+      "license_author": "Goulart",
+      "license_author_url": "",
+      "license_derivative_source_url": "",
+      "author_history": [
+        "Goulart"
+      ]
+    },
+    {
+      "id": 17,
+      "uuid": "080c799b-8afd-4130-8d72-9cef0cd79f54",
+      "exercise": 75,
+      "exercise_uuid": "28321cf3-70e6-48a4-ade1-d11382180cb3",
+      "video": "https://wger.de/media/exercise-video/75/080c799b-8afd-4130-8d72-9cef0cd79f54.MOV",
+      "is_main": false,
+      "size": 4543158,
+      "duration": "14.16",
+      "width": 1920,
+      "height": 1080,
+      "codec": "h264",
+      "codec_long": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+      "license": 2,
+      "license_title": "",
+      "license_object_url": "",
+      "license_author": "Goulart",
+      "license_author_url": "",
+      "license_derivative_source_url": "",
+      "author_history": [
+        "Goulart"
+      ]
+    },
+    {
+      "id": 18,
+      "uuid": "a8263fe5-3015-41e3-9781-2d255adcea63",
+      "exercise": 75,
+      "exercise_uuid": "28321cf3-70e6-48a4-ade1-d11382180cb3",
+      "video": "https://wger.de/media/exercise-video/75/a8263fe5-3015-41e3-9781-2d255adcea63.MOV",
+      "is_main": false,
+      "size": 9894638,
+      "duration": "30.09",
+      "width": 1920,
+      "height": 1080,
+      "codec": "h264",
+      "codec_long": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+      "license": 2,
+      "license_title": "",
+      "license_object_url": "",
+      "license_author": "Goulart",
+      "license_author_url": "",
+      "license_derivative_source_url": "",
+      "author_history": [
+        "Goulart"
+      ]
+    },
+    {
+      "id": 19,
+      "uuid": "9d803f97-0a48-4483-8f1c-ee5b19d6021e",
+      "exercise": 75,
+      "exercise_uuid": "28321cf3-70e6-48a4-ade1-d11382180cb3",
+      "video": "https://wger.de/media/exercise-video/75/9d803f97-0a48-4483-8f1c-ee5b19d6021e.MOV",
+      "is_main": false,
+      "size": 9938046,
+      "duration": "28.26",
+      "width": 1920,
+      "height": 1080,
+      "codec": "h264",
+      "codec_long": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+      "license": 2,
+      "license_title": "",
+      "license_object_url": "",
+      "license_author": "Goulart",
+      "license_author_url": "",
+      "license_derivative_source_url": "",
+      "author_history": [
+        "Goulart"
+      ]
+    },
+    {
+      "id": 20,
+      "uuid": "c9cbd391-1e22-4014-8794-04630c80665f",
+      "exercise": 75,
+      "exercise_uuid": "28321cf3-70e6-48a4-ade1-d11382180cb3",
+      "video": "https://wger.de/media/exercise-video/75/c9cbd391-1e22-4014-8794-04630c80665f.MOV",
+      "is_main": false,
+      "size": 4576193,
+      "duration": "11.28",
+      "width": 1920,
+      "height": 1080,
+      "codec": "h264",
+      "codec_long": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+      "license": 2,
+      "license_title": "",
+      "license_object_url": "",
+      "license_author": "Goulart",
+      "license_author_url": "",
+      "license_derivative_source_url": "",
+      "author_history": [
+        "Goulart"
+      ]
+    },
+    {
+      "id": 21,
+      "uuid": "2bdb390c-312c-4497-a722-5eed2c823e5a",
+      "exercise": 73,
+      "exercise_uuid": "3717d144-7815-4a97-9a56-956fb889c996",
+      "video": "https://wger.de/media/exercise-video/73/2bdb390c-312c-4497-a722-5eed2c823e5a.MOV",
+      "is_main": false,
+      "size": 1108545,
+      "duration": "15.93",
+      "width": 640,
+      "height": 352,
+      "codec": "h264",
+      "codec_long": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+      "license": 2,
+      "license_title": "",
+      "license_object_url": "",
+      "license_author": "Goulart",
+      "license_author_url": "",
+      "license_derivative_source_url": "",
+      "author_history": [
+        "Goulart"
+      ]
+    },
+    {
+      "id": 22,
+      "uuid": "255b3509-e454-48a6-bf66-c7ca482be21a",
+      "exercise": 73,
+      "exercise_uuid": "3717d144-7815-4a97-9a56-956fb889c996",
+      "video": "https://wger.de/media/exercise-video/73/255b3509-e454-48a6-bf66-c7ca482be21a.MOV",
+      "is_main": false,
+      "size": 1422312,
+      "duration": "20.78",
+      "width": 640,
+      "height": 352,
+      "codec": "h264",
+      "codec_long": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+      "license": 2,
+      "license_title": "",
+      "license_object_url": "",
+      "license_author": "Goulart",
+      "license_author_url": "",
+      "license_derivative_source_url": "",
+      "author_history": [
+        "Goulart"
+      ]
+    },
+    {
+      "id": 23,
+      "uuid": "cfb72002-898f-443a-a124-a0bce8a2e6ad",
+      "exercise": 73,
+      "exercise_uuid": "3717d144-7815-4a97-9a56-956fb889c996",
+      "video": "https://wger.de/media/exercise-video/73/cfb72002-898f-443a-a124-a0bce8a2e6ad.MP4",
+      "is_main": false,
+      "size": 7222857,
+      "duration": "21.04",
+      "width": 1920,
+      "height": 1080,
+      "codec": "h264",
+      "codec_long": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+      "license": 2,
+      "license_title": "",
+      "license_object_url": "",
+      "license_author": "Goulart",
+      "license_author_url": "",
+      "license_derivative_source_url": "",
+      "author_history": [
+        "Goulart"
+      ]
+    },
+    {
+      "id": 31,
+      "uuid": "c167ac34-ddbc-4e1b-8edf-1192e9d00e22",
+      "exercise": 205,
+      "exercise_uuid": "2f1a2707-e7ff-46ac-9112-3e31e6e961ee",
+      "video": "https://wger.de/media/exercise-video/205/c167ac34-ddbc-4e1b-8edf-1192e9d00e22.MOV",
+      "is_main": false,
+      "size": 49889363,
+      "duration": "17.09",
+      "width": 1920,
+      "height": 1080,
+      "codec": "hevc",
+      "codec_long": "H.265 / HEVC (High Efficiency Video Coding)",
+      "license": 2,
+      "license_title": "",
+      "license_object_url": "",
+      "license_author": "Goulart",
+      "license_author_url": "",
+      "license_derivative_source_url": "",
+      "author_history": [
+        "Goulart"
+      ]
+    },
+    {
+      "id": 32,
+      "uuid": "4cd5dc48-897f-4e0c-8c5a-639a4098ceb1",
+      "exercise": 205,
+      "exercise_uuid": "2f1a2707-e7ff-46ac-9112-3e31e6e961ee",
+      "video": "https://wger.de/media/exercise-video/205/4cd5dc48-897f-4e0c-8c5a-639a4098ceb1.MOV",
+      "is_main": false,
+      "size": 52460393,
+      "duration": "17.94",
+      "width": 1920,
+      "height": 1080,
+      "codec": "hevc",
+      "codec_long": "H.265 / HEVC (High Efficiency Video Coding)",
+      "license": 2,
+      "license_title": "",
+      "license_object_url": "",
+      "license_author": "Goulart",
+      "license_author_url": "",
+      "license_derivative_source_url": "",
+      "author_history": [
+        "Goulart"
+      ]
+    },
+    {
+      "id": 47,
+      "uuid": "af1fff93-eb58-4ba7-97a4-b38ee67853b4",
+      "exercise": 275,
+      "exercise_uuid": "04365177-e078-489b-983a-8ac61b7346f1",
+      "video": "https://wger.de/media/exercise-video/275/af1fff93-eb58-4ba7-97a4-b38ee67853b4.MOV",
+      "is_main": false,
+      "size": 38048587,
+      "duration": "11.85",
+      "width": 1920,
+      "height": 1080,
+      "codec": "hevc",
+      "codec_long": "H.265 / HEVC (High Efficiency Video Coding)",
+      "license": 2,
+      "license_title": "",
+      "license_object_url": "",
+      "license_author": "Goulart",
+      "license_author_url": "",
+      "license_derivative_source_url": "",
+      "author_history": [
+        "Goulart"
+      ]
+    },
+    {
+      "id": 60,
+      "uuid": "c253303e-9160-4f1f-b4fe-daf1e6c8661d",
+      "exercise": 245,
+      "exercise_uuid": "893c07ea-2e24-49b6-92e4-d0033eedec62",
+      "video": "https://wger.de/media/exercise-video/245/c253303e-9160-4f1f-b4fe-daf1e6c8661d.MOV",
+      "is_main": false,
+      "size": 5813842,
+      "duration": "18.72",
+      "width": 1920,
+      "height": 1080,
+      "codec": "h264",
+      "codec_long": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+      "license": 2,
+      "license_title": "",
+      "license_object_url": "",
+      "license_author": "Goulart",
+      "license_author_url": "",
+      "license_derivative_source_url": "",
+      "author_history": [
+        "Goulart"
+      ]
+    },
+    {
+      "id": 64,
+      "uuid": "d039ec90-474d-47a9-a3ad-bf0b00828c82",
+      "exercise": 194,
+      "exercise_uuid": "09dd3e3c-e53a-4e2c-a2e3-645d334f53e2",
+      "video": "https://wger.de/media/exercise-video/194/d039ec90-474d-47a9-a3ad-bf0b00828c82.MP4",
+      "is_main": false,
+      "size": 5424928,
+      "duration": "12.75",
+      "width": 1920,
+      "height": 1080,
+      "codec": "h264",
+      "codec_long": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+      "license": 2,
+      "license_title": "",
+      "license_object_url": "",
+      "license_author": "Goulart",
+      "license_author_url": "",
+      "license_derivative_source_url": "",
+      "author_history": [
+        "Goulart"
+      ]
+    },
+    {
+      "id": 65,
+      "uuid": "7a6987aa-138d-41e4-8842-5c3e3d970bd9",
+      "exercise": 194,
+      "exercise_uuid": "09dd3e3c-e53a-4e2c-a2e3-645d334f53e2",
+      "video": "https://wger.de/media/exercise-video/194/7a6987aa-138d-41e4-8842-5c3e3d970bd9.MOV",
+      "is_main": false,
+      "size": 8340144,
+      "duration": "16.37",
+      "width": 1920,
+      "height": 1080,
+      "codec": "h264",
+      "codec_long": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+      "license": 2,
+      "license_title": "",
+      "license_object_url": "",
+      "license_author": "Goulart",
+      "license_author_url": "",
+      "license_derivative_source_url": "",
+      "author_history": [
+        "Goulart"
+      ]
+    },
+    {
+      "id": 66,
+      "uuid": "dd9a663f-d8ba-4621-823b-13788ccb66bc",
+      "exercise": 194,
+      "exercise_uuid": "09dd3e3c-e53a-4e2c-a2e3-645d334f53e2",
+      "video": "https://wger.de/media/exercise-video/194/dd9a663f-d8ba-4621-823b-13788ccb66bc.MOV",
+      "is_main": false,
+      "size": 4418928,
+      "duration": "10.17",
+      "width": 1920,
+      "height": 1080,
+      "codec": "h264",
+      "codec_long": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+      "license": 2,
+      "license_title": "",
+      "license_object_url": "",
+      "license_author": "Goulart",
+      "license_author_url": "",
+      "license_derivative_source_url": "",
+      "author_history": [
+        "Goulart"
+      ]
+    },
+    {
+      "id": 68,
+      "uuid": "a7d99f2b-86fc-433a-8ab1-83144c802296",
+      "exercise": 575,
+      "exercise_uuid": "6199b3c7-3ccb-47fa-89bb-ef7fef12c0e3",
+      "video": "https://wger.de/media/exercise-video/575/a7d99f2b-86fc-433a-8ab1-83144c802296.MOV",
+      "is_main": false,
+      "size": 35270778,
+      "duration": "11.01",
+      "width": 1920,
+      "height": 1080,
+      "codec": "hevc",
+      "codec_long": "H.265 / HEVC (High Efficiency Video Coding)",
+      "license": 2,
+      "license_title": "",
+      "license_object_url": "",
+      "license_author": "Goulart",
+      "license_author_url": "",
+      "license_derivative_source_url": "",
+      "author_history": [
+        "Goulart"
+      ]
+    },
+    {
+      "id": 69,
+      "uuid": "bd1f14a3-9d2b-4ec0-b6b9-e82d739f7e60",
+      "exercise": 570,
+      "exercise_uuid": "f956977e-cc05-4db2-a387-ba6140b1ef34",
+      "video": "https://wger.de/media/exercise-video/570/bd1f14a3-9d2b-4ec0-b6b9-e82d739f7e60.MOV",
+      "is_main": false,
+      "size": 31195824,
+      "duration": "10.74",
+      "width": 1920,
+      "height": 1080,
+      "codec": "hevc",
+      "codec_long": "H.265 / HEVC (High Efficiency Video Coding)",
+      "license": 2,
+      "license_title": "",
+      "license_object_url": "",
+      "license_author": "Goulart",
+      "license_author_url": "",
+      "license_derivative_source_url": "",
+      "author_history": [
+        "Goulart"
+      ]
+    },
+    {
+      "id": 71,
+      "uuid": "83067ffe-ccb9-4e22-8507-5131b211ce74",
+      "exercise": 475,
+      "exercise_uuid": "8e420408-0682-4ab6-89f5-2681e54c7ce0",
+      "video": "https://wger.de/media/exercise-video/475/83067ffe-ccb9-4e22-8507-5131b211ce74.MOV",
+      "is_main": false,
+      "size": 57098527,
+      "duration": "18.77",
+      "width": 1920,
+      "height": 1080,
+      "codec": "hevc",
+      "codec_long": "H.265 / HEVC (High Efficiency Video Coding)",
+      "license": 2,
+      "license_title": "",
+      "license_object_url": "",
+      "license_author": "Goulart",
+      "license_author_url": "",
+      "license_derivative_source_url": "",
+      "author_history": [
+        "Goulart"
+      ]
+    },
+    {
+      "id": 75,
+      "uuid": "69e8c1e5-55b2-4da6-8166-092c24b16735",
+      "exercise": 655,
+      "exercise_uuid": "5915fabe-c941-4dac-b196-bc4e8c7ce57b",
+      "video": "https://wger.de/media/exercise-video/655/69e8c1e5-55b2-4da6-8166-092c24b16735.MOV",
+      "is_main": false,
+      "size": 4541168,
+      "duration": "12.19",
+      "width": 1920,
+      "height": 1080,
+      "codec": "h264",
+      "codec_long": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+      "license": 2,
+      "license_title": "",
+      "license_object_url": "",
+      "license_author": "Goulart",
+      "license_author_url": "",
+      "license_derivative_source_url": "",
+      "author_history": [
+        "Goulart"
+      ]
+    },
+    {
+      "id": 76,
+      "uuid": "2d88a05b-bde3-4026-bfbf-524c11068dc5",
+      "exercise": 655,
+      "exercise_uuid": "5915fabe-c941-4dac-b196-bc4e8c7ce57b",
+      "video": "https://wger.de/media/exercise-video/655/2d88a05b-bde3-4026-bfbf-524c11068dc5.MOV",
+      "is_main": false,
+      "size": 3407290,
+      "duration": "10.26",
+      "width": 1920,
+      "height": 1080,
+      "codec": "h264",
+      "codec_long": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+      "license": 2,
+      "license_title": "",
+      "license_object_url": "",
+      "license_author": "Goulart",
+      "license_author_url": "",
+      "license_derivative_source_url": "",
+      "author_history": [
+        "Goulart"
+      ]
+    },
+    {
+      "id": 77,
+      "uuid": "f1354a78-539c-4f22-a78f-b1f43f920740",
+      "exercise": 655,
+      "exercise_uuid": "5915fabe-c941-4dac-b196-bc4e8c7ce57b",
+      "video": "https://wger.de/media/exercise-video/655/f1354a78-539c-4f22-a78f-b1f43f920740.MOV",
+      "is_main": false,
+      "size": 4183378,
+      "duration": "13.19",
+      "width": 1920,
+      "height": 1080,
+      "codec": "h264",
+      "codec_long": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+      "license": 2,
+      "license_title": "",
+      "license_object_url": "",
+      "license_author": "Goulart",
+      "license_author_url": "",
+      "license_derivative_source_url": "",
+      "author_history": [
+        "Goulart"
+      ]
+    }
+  ],
+  "exerciseLabels": [
+    {
+      "id": 73,
+      "names": [
+        "Bench Press"
+      ],
+      "equipment": [
+        {
+          "id": 1,
+          "name": "Barbell"
+        },
+        {
+          "id": 8,
+          "name": "Bench"
+        }
+      ]
+    },
+    {
+      "id": 75,
+      "names": [
+        "Benchpress Dumbbells"
+      ],
+      "equipment": [
+        {
+          "id": 8,
+          "name": "Bench"
+        },
+        {
+          "id": 3,
+          "name": "Dumbbell"
+        }
+      ]
+    },
+    {
+      "id": 194,
+      "names": [
+        "Dips"
+      ],
+      "equipment": [
+        {
+          "id": 7,
+          "name": "none (bodyweight exercise)"
+        }
+      ]
+    },
+    {
+      "id": 205,
+      "names": [
+        "Dumbbell Lunges Standing"
+      ],
+      "equipment": [
+        {
+          "id": 3,
+          "name": "Dumbbell"
+        }
+      ]
+    },
+    {
+      "id": 245,
+      "names": [
+        "Skullcrusher Dumbbells"
+      ],
+      "equipment": [
+        {
+          "id": 8,
+          "name": "Bench"
+        },
+        {
+          "id": 3,
+          "name": "Dumbbell"
+        }
+      ]
+    },
+    {
+      "id": 275,
+      "names": [
+        "Hammercurls on Cable"
+      ],
+      "equipment": [
+        {
+          "id": 12,
+          "name": "Cable machine"
+        }
+      ]
+    },
+    {
+      "id": 475,
+      "names": [
+        "Pull-ups"
+      ],
+      "equipment": [
+        {
+          "id": 6,
+          "name": "Pull-up bar"
+        }
+      ]
+    },
+    {
+      "id": 507,
+      "names": [
+        "Romanian Deadlift"
+      ],
+      "equipment": [
+        {
+          "id": 1,
+          "name": "Barbell"
+        }
+      ]
+    },
+    {
+      "id": 538,
+      "names": [
+        "Incline Bench Press - Barbell"
+      ],
+      "equipment": [
+        {
+          "id": 1,
+          "name": "Barbell"
+        },
+        {
+          "id": 9,
+          "name": "Incline bench"
+        }
+      ]
+    },
+    {
+      "id": 543,
+      "names": [
+        "Shoulder Press, on Machine"
+      ],
+      "equipment": []
+    },
+    {
+      "id": 567,
+      "names": [
+        "Shoulder Press, Dumbbells"
+      ],
+      "equipment": [
+        {
+          "id": 3,
+          "name": "Dumbbell"
+        }
+      ]
+    },
+    {
+      "id": 570,
+      "names": [
+        "Shoulder Shrug"
+      ],
+      "equipment": [
+        {
+          "id": 7,
+          "name": "none (bodyweight exercise)"
+        }
+      ]
+    },
+    {
+      "id": 575,
+      "names": [
+        "Shrugs on Multipress"
+      ],
+      "equipment": []
+    },
+    {
+      "id": 622,
+      "names": [
+        "Standing Calf Raises"
+      ],
+      "equipment": []
+    },
+    {
+      "id": 655,
+      "names": [
+        "Tricep Dumbbell Kickback"
+      ],
+      "equipment": [
+        {
+          "id": 3,
+          "name": "Dumbbell"
+        }
+      ]
+    }
+  ]
+}

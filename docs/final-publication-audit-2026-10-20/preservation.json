@@ -1,0 +1,15 @@
+{
+  "trackedFilesEditedDuringAudit": [
+    "functions/src/nutrition/__tests__/catalogLinking.test.ts",
+    "functions/src/nutrition/__tests__/macroCorrection.integration.test.ts",
+    "functions/src/nutrition/ai/config.ts",
+    "functions/src/nutrition/ai/prompt.ts",
+    "functions/src/nutrition/ai/provider.ts",
+    "src/onboarding/__tests__/questionDefs.test.ts",
+    "src/screens/OnboardingFunnelScreen.tsx"
+  ],
+  "preexistingWorkoutFunctionDiffsUnchanged": true,
+  "firestoreRulesDiffUnchanged": true,
+  "rootFirestoreDebugLogDiffUnchanged": true,
+  "headUnchanged": true
+}

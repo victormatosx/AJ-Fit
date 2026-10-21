@@ -21,7 +21,6 @@
       "safety_gate",
       "special_population_stage_or_recovery",
       "functional_capacity",
-      "joint_or_spine_limitation",
       "impact_tolerance",
       "available_equipment",
       "experience_level",
@@ -38,7 +37,7 @@
         "Alta disponibilidade semanal não implica sete sessões pesadas; pelo menos um dia deve ser de descanso/recuperação.",
         "Nomes de sessão devem comunicar claramente o foco ao usuário e evitar rótulos como 'extra'.",
         "Cardio complementar deve fazer parte da prescrição, respeitando objetivo, impacto, ambiente e populações especiais.",
-        "Gates de segurança e substituições por limitações continuam tendo prioridade sobre qualquer regra de volume."
+        "Gates de segurança continuam tendo prioridade sobre qualquer regra de volume."
       ],
       "beginner_model": {
         "principle": "Adaptação = aprender padrões, aparelhos e técnica com volume por exercício menor, mantendo variedade suficiente.",

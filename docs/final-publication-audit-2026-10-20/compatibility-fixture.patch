@@ -1,0 +1,20 @@
+--- a/firestore-tests/workoutLifecycle.rules.test.ts
++++ b/firestore-tests/workoutLifecycle.rules.test.ts
+@@ -32,7 +32,7 @@
+     snapshotId: 'pis_test', schemaVersion: 1, source: 'QUESTIONNAIRE_BASELINE',
+     inputs: {
+       sex: 'm', goal: 'gain_muscle', level: 'beginner', duration: '45', days: 4,
+-      trainingDays: ['MON', 'TUE', 'THU', 'FRI'], place: 'gym', primaryPlace: null,
++      trainingDays: ['MON', 'TUE', 'THU', 'FRI'], place: 'gym',
+       equipment: [], style: [], muscleFocus: [], specialConditions: ['none'],
+       pregnancyScreening: null, postpartumScreening: null, functionalScreening: null,
+       lipedemaScreening: null, dizzinessScreening: null, postSurgicalScreening: null,
+@@ -59,7 +59,7 @@
+       programInstanceId: 'wpi_initial', cycleId: 'cyc_initial', contentIdentity: 'wpg_content',
+       prescriptionIdentity: 'wp_content', questionnaireId: 'q1',
+       prescriptionInputSnapshot: inputSnapshot, activatedAt: now,
+-      supersededAt: null, previousProgramInstanceId: null, activationReason: 'V1_MIGRATION_BASELINE',
++      supersededAt: null, previousProgramInstanceId: null, activationReason: 'INITIAL_PROGRAM',
+       schemaVersion: 2, createdAt: now, updatedAt: now,
+     });
+     transaction.set(doc(db, 'users', uid, 'trainingCycles', 'cyc_initial'), {

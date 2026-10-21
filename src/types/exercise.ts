@@ -155,8 +155,7 @@ export interface ExerciseExecution {
 export interface ExerciseSubstitution {
   group?: string;
   similarExerciseIds: string[];
-  /** Explicit cross-primary-muscle variants approved only for limitation resolution. */
-  limitationVariantIds?: string[];
+
 }
 
 export interface ExerciseAvailability {
@@ -170,46 +169,6 @@ export interface ExerciseMetadata<TTimestamp = unknown> {
   createdAt: TTimestamp;
   updatedAt: TTimestamp;
 }
-
-export const LIMITATION_REGION_IDS = [
-  'knee', 'hip', 'back', 'shoulder', 'elbow', 'wrist', 'ankle_foot',
-] as const;
-
-export type LimitationRegionId = (typeof LIMITATION_REGION_IDS)[number];
-export type PersistedLimitationStatus = 'compatible' | 'adapt' | 'avoid' | 'not_applicable';
-export type LimitationReviewBasis = 'product_policy' | 'professional_review';
-
-export type ExerciseLimitationRule =
-  | { status: 'compatible' | 'not_applicable' }
-  | { status: 'adapt'; adaptation: { kind: 'exercise_variant'; exerciseId: string } }
-  | {
-      status: 'avoid';
-      substituteExerciseIds: string[];
-      candidateStatus: 'ready' | 'missing_exercise_candidate';
-    }
-  /**
-   * No reviewed clinical/product decision exists yet for this specific
-   * region — distinct from an omitted key (which is a schema error, see
-   * `Record<LimitationRegionId, ExerciseLimitationRule>`). NEVER terminal
-   * (never treated like `compatible`/`not_applicable`) and never a source of
-   * declared substitution candidates (unlike `adapt`/`avoid`) — a region
-   * marked `pending` must fail closed for any user with that region active,
-   * exactly like a missing profile would, while leaving every OTHER
-   * already-reviewed region on the same exercise usable.
-   */
-  | { status: 'pending' };
-
-interface ExerciseLimitationProfileCore {
-  schemaVersion: 1;
-  protocolVersion: 'musculoskeletal-v1';
-  reviewStatus: 'approved';
-  regions: Record<LimitationRegionId, ExerciseLimitationRule>;
-}
-
-export type ExerciseLimitationProfile<TTimestamp = unknown> = ExerciseLimitationProfileCore & (
-  | { reviewBasis: 'product_policy'; reviewedAt?: never; reviewedBy?: never }
-  | { reviewBasis: 'professional_review'; reviewedAt: TTimestamp; reviewedBy: string }
-);
 
 export interface Exercise<TTimestamp = unknown> {
   id: string;
@@ -226,30 +185,13 @@ export interface Exercise<TTimestamp = unknown> {
   difficulty: ExerciseDifficulty;
   availability: ExerciseAvailability;
   tags?: string[];
-  limitationProfile?: ExerciseLimitationProfile<TTimestamp>;
   metadata: ExerciseMetadata<TTimestamp>;
 }
 
 /** Seed input shape: everything in `Exercise` except server-assigned metadata. */
 export type ExerciseSeedInput = Omit<Exercise, 'metadata'>;
 
-/**
- * Catalog-item family (v1.27 Fase 2 closure —
- * docs/workouts/AJ_Fit_v1_27_exercise_identity_matrix.json). `Exercise`
- * above is, and remains, the `'resistance'` shape: `target.primaryMuscle`
- * stays required there, unchanged, for the 116 pre-existing entries and the
- * v2 runtime/limitation-resolver/equipment-substitution/muscle-priority
- * machinery that reads it unconditionally. `'cardio'`/`'mobility'` items
- * are a structurally distinct, separate shape
- * (`workoutPrescription/canonicalActivities.ts`'s `CanonicalActivity`) that
- * has no `primaryMuscle` field at all — not an optional one, an absent one
- * — so a cardio/mobility item can never satisfy the resistance branch and a
- * resistance item can never omit its muscle. This is why `Exercise` itself
- * did not need to become a union: nothing that already assumes
- * `exercise.target.primaryMuscle` exists (composition, limitation
- * resolver, substitution, `usedMuscleIds`, etc.) ever iterates cardio/
- * mobility items, because those never enter `EXERCISES_SEED`.
- */
+
 export type ExerciseKind = 'resistance' | 'cardio' | 'mobility';
 
 /** Minimal structural check usable by any of the three catalog families — see `ExerciseKind`'s doc. */

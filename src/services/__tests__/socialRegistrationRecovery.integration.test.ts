@@ -10,22 +10,18 @@
  * Skipped by default — only runs when
  * `SOCIAL_REGISTRATION_RECOVERY_INTEGRATION=1` is set.
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { collection, doc, getDoc, getDocs, setDoc } from 'firebase/firestore';
 import type { User } from 'firebase/auth';
+import { collection,doc,getDoc,getDocs,setDoc } from 'firebase/firestore';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { afterAll,beforeAll,beforeEach,describe,expect,it,vi } from 'vitest';
 
 import { buildSeedDocuments } from '../../../scripts/seedWorkoutTemplates';
 import { completeAnswers } from '../../workoutPrescription/__tests__/fixtures';
-import {
-  CANONICAL_LIMITATION_DATASET_HASH,
-  CANONICAL_LIMITATION_DATASET_VERSION,
-} from '../../workoutPrescription/limitationDataset';
 
 const PROJECT_ID = 'ajfit-rules-test';
 const UID = 'orphaned-google-user';
@@ -41,18 +37,18 @@ vi.mock('../../lib/firebase', () => ({
   },
 }));
 
-import { getLatestQuestionnaire, getUserProfile, provisionNewUser } from '../userProfile';
+import { normalizeWeekdays,trainingDaysValid } from '../../lib/questionnaireSchema';
 import { resolveSocialAccountAdmission } from '../../lib/registrationEligibility';
+import { getLatestQuestionnaire,getUserProfile,provisionNewUser } from '../userProfile';
 import {
   generateAndPersistWorkoutProgramDeduped,
   loadActiveWorkoutProgram,
-  prepareWorkoutProgramLocally,
   persistPreparedWorkoutProgram,
+  prepareWorkoutProgramLocally,
 } from '../workoutPrograms';
 import { ensureScheduleConfigFromQuestionnaire } from '../workoutSchedule';
-import { normalizeWeekdays, trainingDaysValid } from '../../lib/questionnaireSchema';
+import { installWorkoutLifecycleAuthorityFixture,resetWorkoutLifecycleAuthorityFixture } from './workoutLifecycleAuthorityFixture';
 import { enableWorkoutLifecycleRollout } from './workoutLifecycleRolloutFixture';
-import { installWorkoutLifecycleAuthorityFixture, resetWorkoutLifecycleAuthorityFixture } from './workoutLifecycleAuthorityFixture';
 
 const T004_SEED = buildSeedDocuments().find((t) => t.id === 'T004');
 if (!T004_SEED) throw new Error('T004 fixture missing — cannot run this integration test');
@@ -85,10 +81,6 @@ describe.skipIf(!enabled)('Social registration recovery (incomplete identity sel
     await enableWorkoutLifecycleRollout(testEnv);
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'workoutTemplates', 'T004'), T004_SEED);
-      await setDoc(doc(ctx.firestore(), 'limitationDatasetState', 'active'), {
-        datasetVersion: CANONICAL_LIMITATION_DATASET_VERSION,
-        limitationDatasetHash: CANONICAL_LIMITATION_DATASET_HASH,
-      });
     });
   });
 

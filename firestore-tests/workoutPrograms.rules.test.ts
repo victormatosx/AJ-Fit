@@ -20,10 +20,6 @@ import { generateWorkoutPrescriptionV127 } from '../src/workoutPrescription/engi
 import type { CurrentTrainingLevel } from '../src/workoutLifecycle/types';
 import type { QuestionnaireAnswers } from '../src/workoutPrescription/types';
 import { localWorkoutTemplateDocumentV127 } from '../functions/src/workoutLifecycle/templateDocumentV127';
-import {
-  CANONICAL_LIMITATION_DATASET_HASH as V127_LIMITATION_DATASET_HASH,
-  CANONICAL_LIMITATION_DATASET_VERSION as V127_LIMITATION_DATASET_VERSION,
-} from '../src/workoutPrescription/limitationDataset';
 
 const PROJECT_ID = 'ajfit-rules-test';
 const UID = 'alice';
@@ -67,11 +63,9 @@ function programDocument(programId = 'wpg_12345678') {
     questionnaireId: 'q1', questionnaireVersion: 1, status: 'active', source: 'onboarding',
     requestedDays: 4, prescribedStructuredDays: 4, population: 'conventional', environment: 'gym',
     goalFamily: 'hypertrophy_body_composition', split: 'upper/lower',
-    limitationDatasetVersion: LIMITATION_DATASET_VERSION,
-    limitationDatasetHash: LIMITATION_DATASET_HASH,
     sessions: [{ name: 'A', type: 'strength', exercises: [{ exerciseId: 'squat', sourceExerciseId: 'squat', sets: 3, reps: '8-12' }] }],
     versions: { templateLibrary: '1.3.0', selectionEngine: '1.0.0', safetyRules: '1.0.0', modifierRules: '2.0.0', compositionEngine: '2.0.0', limitationResolver: '1.0.0' },
-    trace: { selectionReasons: [], safety: { status: 'CLEAR', reasons: [], requiredModifierIds: [], protectedConstraints: [] }, appliedModifiers: [], unresolvedModifiers: [], conflicts: [], substitutions: [], limitationResolverVersion: 1, limitationDecisions: [] as Array<Record<string, unknown>>, compositionDecisions: [], validationCodes: [] },
+    trace: { selectionReasons: [], safety: { status: 'CLEAR', reasons: [], requiredModifierIds: [], protectedConstraints: [] }, appliedModifiers: [], unresolvedModifiers: [], conflicts: [], substitutions: [], compositionDecisions: [], validationCodes: [] },
     createdAt: serverTimestamp(), activatedAt: serverTimestamp(), updatedAt: serverTimestamp(),
   };
 }
@@ -141,7 +135,7 @@ function fixedProgramDocument(programId = 'wpg_fixedmode') {
 function v127Answers(overrides: Partial<QuestionnaireAnswers> = {}): QuestionnaireAnswers {
   return {
     sex: 'm', goal: 'gain_muscle', level: 'intermediate', days: 2, duration: '60', place: 'gym',
-    trainingDays: [], equipment: [], style: [], limits: ['none'], muscleFocus: [],
+    trainingDays: [], equipment: [], style: [], muscleFocus: [],
     specialConditions: ['none'],
     pregnancyScreening: null, postpartumScreening: null, functionalScreening: null,
     lipedemaScreening: null, dizzinessScreening: null, postSurgicalScreening: null,
@@ -169,7 +163,6 @@ function v127ProgramDocument(
     prescribedTrainingFrequency: plan.prescribedTrainingFrequency,
     scheduleMode: plan.scheduleMode, availability: plan.availability, weeklySchedule: plan.weeklySchedule,
     population: plan.population, environment: plan.environment, goalFamily: plan.goalFamily, split: plan.split,
-    limitationDatasetVersion: plan.limitationDatasetVersion, limitationDatasetHash: plan.limitationDatasetHash,
     sessions: plan.sessions, versions: plan.versions, trace: plan.trace,
     createdAt: serverTimestamp(), activatedAt: serverTimestamp(), updatedAt: serverTimestamp(),
     ...overrides,
@@ -189,10 +182,6 @@ beforeEach(async () => {
     await setDoc(doc(context.firestore(), 'users', UID), userDocument(UID));
     await setDoc(doc(context.firestore(), 'users', OTHER_UID), userDocument(OTHER_UID));
     await setDoc(doc(context.firestore(), 'workoutTemplates', 'T003'), templateDocument());
-    await setDoc(doc(context.firestore(), 'limitationDatasetState', 'active'), {
-      datasetVersion: LIMITATION_DATASET_VERSION,
-      limitationDatasetHash: LIMITATION_DATASET_HASH,
-    });
     await setDoc(doc(context.firestore(), 'users', UID, 'questionnaires', 'q1'), {
       answers: { specialConditions: ['none'] }, version: 1, createdAt: Timestamp.now(),
     });
@@ -263,10 +252,6 @@ describe('workoutPrograms', () => {
   describe('v1.27 (Fase 15 — client-direct create blocked; backend-authoritative via initializeWorkoutProgramV127)', () => {
     beforeEach(async () => {
       await testEnv.withSecurityRulesDisabled(async (context) => {
-        await setDoc(doc(context.firestore(), 'limitationDatasetState', 'active'), {
-          datasetVersion: V127_LIMITATION_DATASET_VERSION,
-          limitationDatasetHash: V127_LIMITATION_DATASET_HASH,
-        });
       });
     });
 
@@ -298,7 +283,7 @@ describe('workoutPrograms', () => {
       expect(program.templateId).toBe(expectedId);
       expect(program.versions).toEqual({
         templateLibrary: '1.27.0', selectionEngine: '3.0.0', safetyRules: '1.0.0',
-        modifierRules: '3.0.0', compositionEngine: '3.0.0', limitationResolver: '2.0.0',
+        modifierRules: '3.0.0', compositionEngine: '3.0.0',
       });
       await assertFails(createAndActivate(UID, programId, program));
     });
@@ -467,7 +452,6 @@ describe('workoutPrograms', () => {
     await assertFails(createAndActivate(UID, 'wpg_missing1', { ...missing, programId: 'wpg_missing1' } as ReturnType<typeof programDocument>));
     await assertFails(createAndActivate(UID, 'wpg_mismatch', {
       ...programDocument('wpg_mismatch'),
-      limitationDatasetHash: 'b'.repeat(64),
     }));
   });
 
@@ -491,62 +475,13 @@ describe('workoutPrograms', () => {
     }));
   });
 
-  it('accepts a resolved musculoskeletal snapshot with versioned decision evidence', async () => {
+  it('ignores retired fields on a historical questionnaire', async () => {
     await testEnv.withSecurityRulesDisabled(async (context) => {
       await setDoc(doc(context.firestore(), 'users', UID, 'questionnaires', 'q1'), {
-        answers: { specialConditions: ['musculoskeletal_limitation'], limits: ['knee'] },
-        version: 1,
-        createdAt: Timestamp.now(),
+        answers: { }, version: 1, createdAt: Timestamp.now(),
       });
     });
-    const resolved = programDocument();
-    resolved.trace.safety.status = 'ADAPTED';
-    resolved.trace.limitationDecisions = [{
-      sessionIndex: 0,
-      originalExerciseId: 'squat',
-      finalExerciseId: 'chair-squat',
-      regionsEvaluated: ['knee'],
-      resolution: 'adapted',
-      reasonRegions: ['knee'],
-      protocolVersion: 'musculoskeletal-v1',
-      reviewBasis: 'product_policy',
-    }];
-    await assertSucceeds(createAndActivate(UID, resolved.programId, resolved));
-  });
-
-  it('fails closed when limitation resolution evidence is absent or unversioned', async () => {
-    await testEnv.withSecurityRulesDisabled(async (context) => {
-      await setDoc(doc(context.firestore(), 'users', UID, 'questionnaires', 'q1'), {
-        answers: { specialConditions: ['musculoskeletal_limitation'], limits: ['knee'] },
-        version: 1,
-        createdAt: Timestamp.now(),
-      });
-    });
-    const unresolved = programDocument();
-    unresolved.trace.limitationDecisions = [];
-    await assertFails(createAndActivate(UID, unresolved.programId, unresolved));
-  });
-
-  it('rejects an unmapped musculoskeletal region even with forged trace evidence', async () => {
-    await testEnv.withSecurityRulesDisabled(async (context) => {
-      await setDoc(doc(context.firestore(), 'users', UID, 'questionnaires', 'q1'), {
-        answers: { specialConditions: ['musculoskeletal_limitation'], limits: ['other'] },
-        version: 1,
-        createdAt: Timestamp.now(),
-      });
-    });
-    const forged = programDocument();
-    forged.trace.limitationDecisions = [{}];
-    await assertFails(createAndActivate(UID, forged.programId, forged));
-  });
-
-  it('fails closed for the legacy limits-only questionnaire shape', async () => {
-    await testEnv.withSecurityRulesDisabled(async (context) => {
-      await setDoc(doc(context.firestore(), 'users', UID, 'questionnaires', 'q1'), {
-        answers: { limits: ['knee'] }, version: 1, createdAt: Timestamp.now(),
-      });
-    });
-    await assertFails(createAndActivate());
+    await assertSucceeds(createAndActivate());
   });
 
   // Phase 10 (docs/workout-lifecycle/v2/decisions/

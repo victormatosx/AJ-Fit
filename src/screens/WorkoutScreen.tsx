@@ -216,14 +216,7 @@ type Props = {
   onCardioCompleted: (actualDurationSeconds: number) => Promise<{ ok: true } | { ok: false; error: unknown }>;
   /** Uses the same official finalizer, explicitly marking the user's intent to stop before every prescribed item is complete. */
   onEarlyFinish: () => Promise<{ ok: true } | { ok: false; error: unknown }>;
-  /**
-   * The user's current declared limitation regions + equipment context —
-   * exactly what the server-side manual-substitution resolver uses too
-   * (`loadManualSubstitutionUserContext`, `src/services/exerciseSubstitution.ts`).
-   * `null` while loading or when there is no usable questionnaire yet. The
-   * action remains visible and the sheet presents loading/error explicitly,
-   * without computing candidates against a fabricated default context.
-   */
+
   manualSubstitutionContext?: ManualSubstitutionUserContext | null;
   manualSubstitutionContextStatus?: ManualSubstitutionContextStatus;
   onRetryManualSubstitutionContext?: () => void;
@@ -2994,25 +2987,7 @@ function Badge({
 
 /* ───────────────────────────── CARDIO FINISHER ───────────────────────────── */
 
-/**
- * Post-strength cardio finisher — its own focused experience, not a
- * stopwatch bolted onto the exercise UI. `elapsed`/`target`/`remaining` are
- * always derived from absolute timestamps (`cardioTimer.ts`), the same
- * principle as the main workout timer and the rest timer: correct across
- * background/lock, never a tick counter.
- *
- * State lives locally (READY/RUNNING/PAUSED/FINISHED, `CardioSession`) because
- * `WorkoutScreen` itself is never unmounted while minimized to another tab
- * (AppShell keeps it mounted with `pointerEvents`/opacity toggling) — a
- * React Context mirroring `RestSessionContext` isn't needed for that case.
- * AsyncStorage persistence (`cardioSessionStorage`) is a best-effort extra
- * for a JS-runtime restart within the same app session; it cannot help
- * across a full process kill because `WorkoutScreen` itself doesn't survive
- * one today (`AppShell`'s `workoutInProgress` is plain `useState`, and the
- * exercise-by-exercise `order`/`progress` state has the same limitation —
- * see `RestSessionContext`'s own cold-mount comment). Closing that gap is a
- * separate, broader lifecycle change outside this feature's scope.
- */
+
 function CardioScreen({
   cardioFinisher,
   ownerKey,

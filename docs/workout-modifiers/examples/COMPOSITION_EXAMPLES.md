@@ -1,3 +1,5 @@
+> Registro histórico: as seções sobre limitações musculoesqueléticas estão descontinuadas. As demais regras independentes continuam sujeitas ao código atual. Ver [remoção definitiva](../../removal-physical-limitations/REPORT.md).
+
 # AJ Fit --- Exemplos de Composição de Treinos
 
 ## 1. Objetivo

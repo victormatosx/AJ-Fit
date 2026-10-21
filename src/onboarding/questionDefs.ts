@@ -1,5 +1,5 @@
 import type { Question } from '../components/onboarding/QuestionRenderer';
-import { MAX_MUSCLE_FOCUS, type OnboardingStepId } from './steps';
+import { MAX_MUSCLE_FOCUS,type OnboardingStepId } from './steps';
 
 /**
  * Question structure/config for every questionnaire step. Most ids map 1:1

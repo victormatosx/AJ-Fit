@@ -1,9 +1,9 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { deleteApp, initializeApp, type App } from 'firebase-admin/app';
-import { getFirestore, type Firestore } from 'firebase-admin/firestore';
+import { deleteApp,initializeApp,type App } from 'firebase-admin/app';
+import { getFirestore,type Firestore } from 'firebase-admin/firestore';
+import { afterAll,beforeAll,beforeEach,describe,expect,it } from 'vitest';
 
-import { installActiveWorkoutProgramHandler } from '../installActiveWorkoutProgram';
 import { ACCOUNT_DELETION_LOCKS_COLLECTION } from '../../accountDeletion/repository';
+import { installActiveWorkoutProgramHandler } from '../installActiveWorkoutProgram';
 import { seedRealPrescriptionCatalog } from './realCatalogFixture';
 
 /**
@@ -26,7 +26,7 @@ const UID = 'install-adversary';
 function completeInputs(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     sex: 'm', goal: 'gain_muscle', level: 'beginner', days: 4, duration: '60', place: 'gym',
-    trainingDays: ['MON', 'TUE', 'THU', 'FRI'], equipment: [], style: [], limits: [], muscleFocus: [],
+    trainingDays: ['MON', 'TUE', 'THU', 'FRI'], equipment: [], style: [], muscleFocus: [],
     specialConditions: ['none'],
     pregnancyScreening: null, postpartumScreening: null, functionalScreening: null,
     lipedemaScreening: null, dizzinessScreening: null, postSurgicalScreening: null,

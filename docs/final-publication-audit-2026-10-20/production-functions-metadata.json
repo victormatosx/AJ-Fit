@@ -1,0 +1,65 @@
+[
+  {
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/installActiveWorkoutProgram",
+    "state": "ACTIVE",
+    "updated": "2026-10-20T19:42:54.233721918Z",
+    "runtime": "nodejs22",
+    "catalogLinkingEnabled": "(unset)"
+  },
+  {
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/retryNutritionGenerationJobs",
+    "state": "ACTIVE",
+    "updated": "2026-10-17T15:51:39.056177643Z",
+    "runtime": "nodejs22",
+    "catalogLinkingEnabled": "(unset)"
+  },
+  {
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/requestNutritionMealAlternative",
+    "state": "ACTIVE",
+    "updated": "2026-10-17T15:51:38.101300751Z",
+    "runtime": "nodejs22",
+    "catalogLinkingEnabled": "(unset)"
+  },
+  {
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/onNutritionGenerationJobCreated",
+    "state": "ACTIVE",
+    "updated": "2026-10-17T15:51:32.660320751Z",
+    "runtime": "nodejs22",
+    "catalogLinkingEnabled": "(unset)"
+  },
+  {
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/finalizeWorkoutSession",
+    "state": "ACTIVE",
+    "updated": "2026-10-20T19:42:52.198882008Z",
+    "runtime": "nodejs22",
+    "catalogLinkingEnabled": "(unset)"
+  },
+  {
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/authorizeWorkoutLifecycleMutation",
+    "state": "ACTIVE",
+    "updated": "2026-10-20T19:42:46.620336926Z",
+    "runtime": "nodejs22",
+    "catalogLinkingEnabled": "(unset)"
+  },
+  {
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/requestNutritionPlanGeneration",
+    "state": "ACTIVE",
+    "updated": "2026-10-17T04:07:25.240887786Z",
+    "runtime": "nodejs22",
+    "catalogLinkingEnabled": "(unset)"
+  },
+  {
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/applyExerciseSubstitution",
+    "state": "ACTIVE",
+    "updated": "2026-10-20T19:42:52.694466139Z",
+    "runtime": "nodejs22",
+    "catalogLinkingEnabled": "(unset)"
+  },
+  {
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/initializeWorkoutProgramV127",
+    "state": "ACTIVE",
+    "updated": "2026-10-20T19:42:53.625792863Z",
+    "runtime": "nodejs22",
+    "catalogLinkingEnabled": "(unset)"
+  }
+]

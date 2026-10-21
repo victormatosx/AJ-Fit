@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe,expect,it } from 'vitest';
 
 import { generateWorkoutPrescriptionV127 } from '../engineV127';
 import type { QuestionnaireAnswers } from '../types';
@@ -23,7 +23,7 @@ import type { QuestionnaireAnswers } from '../types';
 function base(overrides: Partial<QuestionnaireAnswers> = {}): QuestionnaireAnswers {
   return {
     sex: 'm', goal: 'gain_muscle', level: 'intermediate', days: 4, duration: '60', place: 'gym',
-    specialConditions: ['none'], limits: ['none'],
+    specialConditions: ['none'],
     equipment: [], muscleFocus: [], style: [], trainingDays: [], scheduleMode: 'fixed',
     ...overrides,
   } as QuestionnaireAnswers;
@@ -86,19 +86,6 @@ describe('Fase 9 §12 — v1.27 safety ADAPTED truthfulness (fixed)', () => {
   ])('%s: still blocks generation via REQUIRES_CLEARANCE, unchanged by the Fase 9 §12 fix', (_label, answers) => {
     const result = generate(answers);
     expect(result.status).toBe('REQUIRES_CLEARANCE');
-  });
-
-  it('musculoskeletal_limitation ADAPTED is TRUE — the composed plan genuinely differs (real modifier exists)', () => {
-    // T025 (male/gym/strength/2d), same combo already proven in
-    // engineV127Integration.test.ts to substitute farmers-walk -> controlled-marching.
-    const withoutLimitation = sessionsOf(base({ goal: 'strength', days: 2 }));
-    const withElbow = sessionsOf(base({
-      goal: 'strength', days: 2,
-      specialConditions: ['musculoskeletal_limitation'], limits: ['elbow'],
-    } as Partial<QuestionnaireAnswers>));
-    expect(withElbow.status).toBe('ADAPTED');
-    expect(withElbow.templateId).toBe(withoutLimitation.templateId);
-    expect(withElbow.sessions).not.toEqual(withoutLimitation.sessions);
   });
 
   it('pregnancy/postpartum/frailty ADAPTED is TRUE — special-population template routing genuinely differs from conventional', () => {

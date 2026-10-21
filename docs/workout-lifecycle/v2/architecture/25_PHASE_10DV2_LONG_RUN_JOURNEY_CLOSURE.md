@@ -1,3 +1,5 @@
+> Registro histórico: o sistema musculoesquelético e as políticas clínicas V3/legacy descritos aqui foram descontinuados. Não são contratos atuais. Ver [remoção definitiva](../../../removal-physical-limitations/REPORT.md).
+
 # Phase 10D-V2 — Long-Run Journey Closure
 
 Date: 2026-09-01

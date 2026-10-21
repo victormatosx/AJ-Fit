@@ -37,7 +37,6 @@ import { PROGRESSION_V2_CONFIG } from '../progressionEngineV2/config';
 import {
   contentIdentityFor,
   loadActiveWorkoutProgram,
-  loadExerciseCatalogForLimitations,
   loadWorkoutTemplate,
   prepareWorkoutProgram,
   saveAndActivateWorkoutProgram,
@@ -1241,7 +1240,7 @@ export async function reconcileWorkoutLifecycle(input: {
 
 // ─── PROGRAM ADAPTATION ─────────────────────────────────────────────────
 
-export type ProgramAdaptationReason = 'AVAILABILITY' | 'GOAL' | 'ENVIRONMENT' | 'LIMITATION' | 'PREFERENCE';
+export type ProgramAdaptationReason = 'AVAILABILITY' | 'GOAL' | 'ENVIRONMENT' | 'PREFERENCE';
 
 export type ProgramAdaptationResult =
   | { status: 'SUCCESS'; program: WorkoutProgramSnapshot }
@@ -1251,7 +1250,7 @@ export type ProgramAdaptationResult =
  * Explicit Program Adaptation service boundary (docs prescription/06,
  * §56-74). NOT an evolution: preserves career level and TrainingCycle,
  * never increments earned-cycle credit, and always activates immediately —
- * safety-relevant changes (LIMITATION) must never wait for a deferral
+ * changes to the user profile must never wait for a deferral
  * window (docs §65/§66/§AV/§AW). Always clears any pending evolution, since
  * it was prepared against constraints that no longer apply (docs §72/§74)
  * — the EARNED fact itself survives in the immutable event ledger.
@@ -1309,8 +1308,6 @@ async function adaptWorkoutProgramAttempt(input: {
       const template = await loadWorkoutTemplate(templateId);
       return template ? fromWorkoutTemplateDocument(template) : null;
     },
-    loadLimitationDataset: loadExerciseCatalogForLimitations,
-    usedLocalLimitationCatalog: false,
   });
   if (prepared.status !== 'SUCCESS') return { status: 'FAILED', reasonCodes: prepared.reasonCodes };
   // Safety net, independent of the early guard above: no matter what

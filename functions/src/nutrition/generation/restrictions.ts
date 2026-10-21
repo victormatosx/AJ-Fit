@@ -9,7 +9,7 @@ function normalized(value: string): string {
 // common ingredients whose origin/allergens the model may have misclassified.
 const terrestrial = /\b(carne|frango|galinha|peru|pato|bovina|bovino|suina|suino|porco|bacon|presunto|linguica|salsicha|salame|costela|picanha|alcatra|patinho|acem|lombo|cordeiro|beef|chicken|pork|turkey)\b/;
 const seafood = /\b(peixe|atum|salmao|sardinha|tilapia|bacalhau|camarao|caranguejo|lagosta|lula|polvo|mexilhao|ostra|fish|shrimp|salmon|tuna)\b/;
-const dairy = /\b(leite|queijo|iogurte|requeijao|manteiga|nata|whey|caseina|ricota|mucarela|mozzarella|parmesao|milk|cheese|butter|yogurt)\b/;
+const dairy = /\b(leite|queijo|iogurte|requeijao|manteiga|nata|whey|caseina|caseinato|caseinate|casein|lactoalbumina|lactoglobulina|ricota|mucarela|mozzarella|parmesao|milk|cheese|butter|yogurt)\b/;
 const eggs = /\b(ovo|ovos|gema|clara|albumina|egg|eggs)\b/;
 const animalOther = /\b(mel|gelatina|colageno|banha|honey|gelatin|lard)\b/;
 const plantSubstitutes = /\b(leite de (coco|soja|aveia|amendoa|arroz|castanha)|manteiga de (amendoim|castanha)|carne de (soja|jaca))\b/g;
@@ -31,6 +31,20 @@ export function foodRestrictionViolation(
   const texts = [item.name, item.preparationNote, ...item.ingredients.map((ingredient) => ingredient.name)];
   const text = normalized(texts.join(' '));
   const animalText = text.replace(plantSubstitutes, '');
+  // Dietary-pattern word backstops (unlike the allergen inference above) must
+  // scan ONLY declared ingredient names, never the dish name or the free-text
+  // `preparationNote` — those are prose, and prose negates ("cozido SEM caldo
+  // de carne") or references the source animal of an already-truthful
+  // non-meat declaration ("ovo de GALINHA", origin `egg`). A plain word match
+  // on that prose reads "sem caldo de carne" as containing meat and "ovo de
+  // galinha" as containing chicken meat — both false positives that blocked
+  // essentially every realistic vegetarian meal (2026-10-21 fix). The
+  // ingredient list is the one field the prompt requires to be complete and
+  // literal, so it is the only safe surface for a word-based backstop.
+  const nonMeatAnimalOrigin = new Set(['dairy', 'egg', 'fish', 'shellfish']);
+  const ingredientTexts = (skip: Set<string> = new Set()) => item.ingredients
+    .filter((ingredient) => !skip.has(ingredient.origin))
+    .map((ingredient) => normalized(ingredient.name).replace(plantSubstitutes, ''));
   const inferred: NutritionFoodAllergen[] = [];
   const origins = item.ingredients.map((ingredient) => ingredient.origin);
   if (origins.includes('dairy')) inferred.push('milk');
@@ -50,12 +64,21 @@ export function foodRestrictionViolation(
   if (restrictions.excludedFoodNames.some((excluded) => texts.some((value) => matchesExclusion(value, excluded)))) return 'excluded_food';
   const pattern = restrictions.dietaryPattern;
   if (pattern === 'omnivore') return null;
-  if (origins.some((origin) => ['unknown', 'terrestrial_animal', 'other_animal'].includes(origin))
-    || terrestrial.test(animalText) || /\b(gelatina|banha|gelatin|lard)\b/.test(animalText)) return 'incompatible_dietary_pattern';
+  // `unknown` origin is the AI's own uncertainty, not a confirmed animal
+  // classification — it is corrigible ambiguity for the independent
+  // reviewer to resolve (it explicitly requires insufficient_information
+  // for unresolved composition under a restriction), not a deterministic
+  // pre-review block. Only confirmed animal origins/terms hard-block here.
+  // A truthfully declared egg/dairy/fish/shellfish ingredient is excluded from
+  // the meat-word scan: its own name may legitimately reference the source
+  // animal ("ovo de galinha", "leite de vaca") without containing meat.
+  const meatCandidateTexts = ingredientTexts(nonMeatAnimalOrigin);
+  if (origins.some((origin) => ['terrestrial_animal', 'other_animal'].includes(origin))
+    || meatCandidateTexts.some((t) => terrestrial.test(t) || /\b(gelatina|banha|gelatin|lard)\b/.test(t))) return 'incompatible_dietary_pattern';
   if (pattern !== 'pescatarian' && (origins.some((origin) => origin === 'fish' || origin === 'shellfish')
-    || seafood.test(text) || item.allergens.some((allergen) => ['fish', 'shellfish'].includes(allergen)))) return 'incompatible_dietary_pattern';
+    || ingredientTexts().some((t) => seafood.test(t)) || item.allergens.some((allergen) => ['fish', 'shellfish'].includes(allergen)))) return 'incompatible_dietary_pattern';
   if (pattern === 'vegan' && (origins.some((origin) => origin === 'dairy' || origin === 'egg')
-    || dairy.test(animalText) || eggs.test(animalText) || animalOther.test(animalText)
+    || ingredientTexts().some((t) => dairy.test(t) || eggs.test(t) || animalOther.test(t))
     || item.allergens.some((allergen) => ['milk', 'egg'].includes(allergen)))) return 'incompatible_dietary_pattern';
   return null;
 }

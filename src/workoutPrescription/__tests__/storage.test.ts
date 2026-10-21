@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach,describe,expect,it,vi } from 'vitest';
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: { getItem: vi.fn(), setItem: vi.fn(), getAllKeys: vi.fn(), multiRemove: vi.fn() },
@@ -6,7 +6,7 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { generateWorkoutPrescription } from '../engine';
-import { clearPrescriptionSnapshotsForUser, persistPrescriptionSnapshot, readPrescriptionSnapshot } from '../storage';
+import { clearPrescriptionSnapshotsForUser,persistPrescriptionSnapshot,readPrescriptionSnapshot } from '../storage';
 import { completeAnswers } from './fixtures';
 
 describe('prescription snapshot storage', () => {
@@ -75,8 +75,6 @@ describe('prescription snapshot storage — v1.27-shaped snapshots (Fase 8 backw
     environment: 'gym',
     goalFamily: 'hypertrophy_body_composition',
     split: 'full_body',
-    limitationDatasetVersion: 'n/a',
-    limitationDatasetHash: 'n/a',
     sessions: [{
       name: 'Sessão 1',
       displayName: 'Treino Full Body',
@@ -117,8 +115,6 @@ describe('prescription snapshot storage — v1.27-shaped snapshots (Fase 8 backw
       unresolvedModifiers: [],
       conflicts: [],
       substitutions: [],
-      limitationResolverVersion: 1,
-      limitationDecisions: [],
       compositionDecisions: [],
       validationCodes: [],
     },

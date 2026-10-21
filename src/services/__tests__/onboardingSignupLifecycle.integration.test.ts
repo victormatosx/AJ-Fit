@@ -15,22 +15,18 @@
  * `ONBOARDING_SIGNUP_LIFECYCLE_INTEGRATION=1` is set (see the
  * `test:integration:onboardingSignupLifecycle` npm script).
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { collection, doc, getDoc, getDocs, setDoc, Timestamp } from 'firebase/firestore';
 import type { User } from 'firebase/auth';
+import { Timestamp,collection,doc,getDoc,getDocs,setDoc } from 'firebase/firestore';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { afterAll,beforeAll,beforeEach,describe,expect,it,vi } from 'vitest';
 
 import { buildSeedDocuments } from '../../../scripts/seedWorkoutTemplates';
 import { completeAnswers } from '../../workoutPrescription/__tests__/fixtures';
-import {
-  CANONICAL_LIMITATION_DATASET_HASH,
-  CANONICAL_LIMITATION_DATASET_VERSION,
-} from '../../workoutPrescription/limitationDataset';
 
 const PROJECT_ID = 'ajfit-rules-test';
 const UID = 'fiona';
@@ -46,17 +42,17 @@ vi.mock('../../lib/firebase', () => ({
   },
 }));
 
+import { normalizeWeekdays,trainingDaysValid } from '../../lib/questionnaireSchema';
 import { provisionNewUser } from '../userProfile';
 import {
   generateAndPersistWorkoutProgramDeduped,
   loadActiveWorkoutProgram,
-  prepareWorkoutProgramLocally,
   persistPreparedWorkoutProgram,
+  prepareWorkoutProgramLocally,
 } from '../workoutPrograms';
-import { ensureScheduleConfigFromQuestionnaire, loadScheduleConfig } from '../workoutSchedule';
-import { normalizeWeekdays, trainingDaysValid } from '../../lib/questionnaireSchema';
+import { ensureScheduleConfigFromQuestionnaire,loadScheduleConfig } from '../workoutSchedule';
+import { installWorkoutLifecycleAuthorityFixture,resetWorkoutLifecycleAuthorityFixture } from './workoutLifecycleAuthorityFixture';
 import { enableWorkoutLifecycleRollout } from './workoutLifecycleRolloutFixture';
-import { installWorkoutLifecycleAuthorityFixture, resetWorkoutLifecycleAuthorityFixture } from './workoutLifecycleAuthorityFixture';
 
 const T003_SEED = buildSeedDocuments().find((t) => t.id === 'T003');
 if (!T003_SEED) throw new Error('T003 fixture missing — cannot run this integration test');
@@ -92,10 +88,6 @@ describe.skipIf(!enabled)('Onboarding → signup lifecycle (conceptual E2E) — 
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'workoutTemplates', 'T003'), T003_SEED);
       await setDoc(doc(ctx.firestore(), 'workoutTemplates', 'T004'), T004_SEED);
-      await setDoc(doc(ctx.firestore(), 'limitationDatasetState', 'active'), {
-        datasetVersion: CANONICAL_LIMITATION_DATASET_VERSION,
-        limitationDatasetHash: CANONICAL_LIMITATION_DATASET_HASH,
-      });
     });
   });
 

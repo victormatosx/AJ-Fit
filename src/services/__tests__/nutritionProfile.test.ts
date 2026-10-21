@@ -36,4 +36,19 @@ describe('Nutrition profile serialization', () => {
     expect(() => validateNutritionProfileAnswers({ ...answers(), preferredFoodIds: Array.from({ length: 11 }, (_, i) => `f${i}`) })).toThrow();
     expect(() => validateNutritionProfileAnswers({ ...answers(), nutritionGoalCategory: 'unknown' })).toThrow();
   });
+  it('persists lactose intolerance (excludedSubstances) distinctly from the legacy milk allergen, without aliasing or conflating the two', () => {
+    const lactoseIntolerant = { ...answers(), excludedSubstances: ['lactose' as const] };
+    expect(serializeNutritionProfileAnswers(lactoseIntolerant)).toMatchObject({ excludedSubstances: ['lactose'] });
+    const legacyMilkAllergy = { ...answers(), excludedAllergens: ['milk' as const] };
+    const serializedLegacy = serializeNutritionProfileAnswers(legacyMilkAllergy);
+    expect(serializedLegacy).toMatchObject({ excludedAllergens: ['milk'] });
+    expect(serializedLegacy.excludedSubstances).toBeUndefined();
+    const both = { ...answers(), excludedAllergens: ['milk' as const], excludedSubstances: ['lactose' as const] };
+    expect(serializeNutritionProfileAnswers(both)).toMatchObject({ excludedAllergens: ['milk'], excludedSubstances: ['lactose'] });
+  });
+  it('rejects unknown or duplicate excludedSubstances values', () => {
+    expect(() => validateNutritionProfileAnswers({ ...answers(), excludedSubstances: ['sugar'] })).toThrow();
+    expect(() => validateNutritionProfileAnswers({ ...answers(), excludedSubstances: ['lactose', 'lactose'] })).toThrow();
+    expect(() => validateNutritionProfileAnswers({ ...answers(), excludedSubstances: ['lactose', 'gluten'] })).not.toThrow();
+  });
 });

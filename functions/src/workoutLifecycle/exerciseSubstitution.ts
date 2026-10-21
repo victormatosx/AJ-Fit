@@ -4,39 +4,13 @@ import { HttpsError, type CallableRequest } from 'firebase-functions/v2/https';
 import { db as defaultDb } from '../lib/firebaseAdmin';
 import { requireAuth } from '../lib/auth';
 import { loadExerciseCatalog } from './prescriptionContext';
-import { manualSubstitutionEquipmentContext } from './prescriptionEngine/workoutPrescription/equipment';
-import {
-  mapQuestionnaireLimitations,
-  type LimitationCatalog,
-} from './prescriptionEngine/workoutPrescription/limitationResolver';
+import { isExerciseExecutable, manualSubstitutionEquipmentContext } from './prescriptionEngine/workoutPrescription/equipment';
+import type { ExerciseCatalog } from './prescriptionEngine/workoutPrescription/exerciseCatalog';
 import {
   evaluateManualSubstitutionCandidate,
   evaluateRevertToAnchor,
 } from './prescriptionEngine/workoutPrescription/manualSubstitutionResolver';
-import type { LimitationRegionId } from './prescriptionEngine/types/exercise';
 import type { QuestionnaireAnswers } from './prescriptionEngine/workoutPrescription/types';
-
-/**
- * Server-side authority for Manual Substitution (exercise-substitution
- * architecture audit, Fase 3). The client NEVER writes `exercises[].exerciseId`
- * / `prescribedExerciseId` / `substitution` directly — this callable performs
- * the entire write via the Admin SDK inside a transaction, so a compromised or
- * hand-crafted client request can never apply a candidate this resolver would
- * reject, regardless of what the client's own (possibly stale or tampered)
- * local candidate list says. Everything the resolver needs — the live
- * `exercises` catalog, the user's declared limitation regions, and their
- * current equipment/environment context — is loaded from Firestore here,
- * never taken from the request body except the plain intent (`executionId`,
- * `exerciseIndex`, `requestedExerciseId`, `scope`).
- *
- * Scope limitation (disclosed, not silently assumed): only V2 lifecycle-
- * tracked executions (`execution.programInstanceId` present) are supported.
- * A V1 legacy execution has no `programInstances` document to read a current
- * `prescriptionInputSnapshot` (limitation/equipment answers) from, and
- * reconstructing an equivalent would be actual new production logic the
- * feature spec didn't ask for — see the audit's final report for this as an
- * open item rather than an invented fallback.
- */
 
 export type ExerciseSubstitutionScope = 'SESSION' | 'PERMANENT';
 
@@ -73,7 +47,6 @@ interface ExecutionSlotContext {
   effectiveExerciseIdsInSession: ReadonlySet<string>;
 }
 
-/** Never accepts a slot with any already-COMPLETED set (Decision: substitution only allowed before any set in that slot is logged). */
 function loadSlotContext(exercises: DocumentData[], exerciseIndex: number): ExecutionSlotContext {
   if (!Array.isArray(exercises) || exerciseIndex >= exercises.length) {
     throw new HttpsError('invalid-argument', 'exercise_index_out_of_range');
@@ -97,7 +70,7 @@ async function loadSubstitutionResolutionContext(
   uid: string,
   execution: DocumentData,
   firestore: Firestore,
-): Promise<{ catalog: LimitationCatalog; regions: LimitationRegionId[]; equipmentContext: ReturnType<typeof manualSubstitutionEquipmentContext> }> {
+): Promise<{ catalog: ExerciseCatalog; equipmentContext: ReturnType<typeof manualSubstitutionEquipmentContext> }> {
   if (typeof execution.programInstanceId !== 'string') {
     throw new HttpsError('failed-precondition', 'manual_substitution_requires_v2_program');
   }
@@ -116,28 +89,17 @@ async function loadSubstitutionResolutionContext(
     ? instance.prescriptionInputSnapshot.inputs as unknown as QuestionnaireAnswers
     : null;
   if (!answers) throw new HttpsError('failed-precondition', 'prescription_inputs_missing');
-  const limitationMapping = mapQuestionnaireLimitations(answers);
-  if (limitationMapping.status !== 'MAPPED') {
-    throw new HttpsError('failed-precondition', 'unmapped_limitation_region');
-  }
-  const catalog: LimitationCatalog = new Map(catalogExercises.map((exercise) => [exercise.id, exercise]));
+  const catalog: ExerciseCatalog = new Map(catalogExercises.map((exercise) => [exercise.id, exercise]));
   return {
     catalog,
-    regions: limitationMapping.regions,
     equipmentContext: manualSubstitutionEquipmentContext(answers, program.environment, program.templateSourceVersion),
   };
 }
 
-/**
- * Pure decision: is `requestedExerciseId` an eligible substitution for
- * `anchorExerciseId` right now? Separated from all Firestore I/O so it is
- * independently unit-testable (see `__tests__/exerciseSubstitution.test.ts`).
- */
 export function isRequestedSubstitutionEligible(input: {
   anchorExerciseId: string;
   requestedExerciseId: string;
-  catalog: LimitationCatalog;
-  regions: readonly LimitationRegionId[];
+  catalog: ExerciseCatalog;
   equipmentContext: ReturnType<typeof manualSubstitutionEquipmentContext>;
   effectiveExerciseIdsInSession: ReadonlySet<string>;
 }): boolean {
@@ -145,7 +107,6 @@ export function isRequestedSubstitutionEligible(input: {
     return evaluateRevertToAnchor({
       anchorExerciseId: input.anchorExerciseId,
       catalog: input.catalog,
-      regions: input.regions,
       equipmentContext: input.equipmentContext,
       effectiveExerciseIdsInSession: input.effectiveExerciseIdsInSession,
     }).eligible;
@@ -162,7 +123,6 @@ export function isRequestedSubstitutionEligible(input: {
     source,
     candidateId: input.requestedExerciseId,
     catalog: input.catalog,
-    regions: input.regions,
     equipmentContext: input.equipmentContext,
     effectiveExerciseIdsInSession: input.effectiveExerciseIdsInSession,
   }).eligible;
@@ -179,13 +139,6 @@ export type MaterializedSubstitutionValidation =
     exerciseId: string;
   };
 
-/**
- * Re-validates the effective identity of every substituted execution slot
- * against the same server-side resolver used by applyExerciseSubstitution.
- * The prescribed anchor remains the structural link to the immutable plan;
- * this check proves that a different effective exercise is authorized, not
- * merely accompanied by a client-fabricated marker.
- */
 export async function validateMaterializedExecutionSubstitutions(
   uid: string,
   execution: DocumentData,
@@ -225,7 +178,7 @@ export async function validateMaterializedExecutionSubstitutions(
     }
   }
 
-  const { catalog, regions, equipmentContext } = await loadSubstitutionResolutionContext(uid, execution, firestore);
+  const { catalog, equipmentContext } = await loadSubstitutionResolutionContext(uid, execution, firestore);
   for (let exerciseIndex = 0; exerciseIndex < exercises.length; exerciseIndex += 1) {
     const slot = exercises[exerciseIndex];
     const prescribedExerciseId = typeof slot?.prescribedExerciseId === 'string'
@@ -242,11 +195,23 @@ export async function validateMaterializedExecutionSubstitutions(
       .filter((_, index) => index !== exerciseIndex)
       .map((other) => other?.exerciseId)
       .filter((id): id is string => typeof id === 'string'));
+    // Read-only continuity for already persisted sessions from the retired schema.
+    // Rules forbid this field on new executions. Its value never selects a policy.
+    // Keep the user's existing swap, validating operational availability, equipment
+    // and duplicates; new requests always pass the ordinary manual resolver below.
+    if (Object.prototype.hasOwnProperty.call(execution, 'substitutionPolicySnapshot')) {
+      const candidate = catalog.get(exerciseId);
+      if (!candidate || candidate.status !== 'active' || !candidate.availability.manualSelection
+        || !candidate.availability.substitution || !isExerciseExecutable(candidate, equipmentContext)
+        || effectiveExerciseIdsInSession.has(exerciseId)) {
+        return { valid: false, reason: 'substitution_not_eligible', exerciseIndex, prescribedExerciseId, exerciseId };
+      }
+      continue;
+    }
     if (!isRequestedSubstitutionEligible({
       anchorExerciseId: prescribedExerciseId,
       requestedExerciseId: exerciseId,
       catalog,
-      regions,
       equipmentContext,
       effectiveExerciseIdsInSession,
     })) {
@@ -271,14 +236,13 @@ export async function applyExerciseSubstitutionHandler(
   if (execution.status !== 'IN_PROGRESS') throw new HttpsError('failed-precondition', 'execution_not_in_progress');
 
   const { anchorExerciseId, effectiveExerciseIdsInSession } = loadSlotContext(execution.exercises, data.exerciseIndex);
-  const { catalog, regions, equipmentContext } = await loadSubstitutionResolutionContext(uid, execution, firestore);
+  const { catalog, equipmentContext } = await loadSubstitutionResolutionContext(uid, execution, firestore);
 
   if (!catalog.has(anchorExerciseId)) throw new HttpsError('failed-precondition', 'anchor_exercise_not_in_catalog');
   const eligible = isRequestedSubstitutionEligible({
     anchorExerciseId,
     requestedExerciseId: data.requestedExerciseId,
     catalog,
-    regions,
     equipmentContext,
     effectiveExerciseIdsInSession,
   });

@@ -1,0 +1,55 @@
+{
+  "logCatalogMeal": [
+    "nutrition/catalogLinking/resolver.js"
+  ],
+  "requestNutritionPlanGeneration": [
+    "nutrition/generation/request.js"
+  ],
+  "onNutritionGenerationJobCreated": [
+    "nutrition/ai/config.js",
+    "nutrition/ai/prompt.js",
+    "nutrition/ai/provider.js",
+    "nutrition/ai/review.js",
+    "nutrition/catalogLinking/resolver.js",
+    "nutrition/generation/attempts.js",
+    "nutrition/generation/callBudget.js",
+    "nutrition/generation/domain.js",
+    "nutrition/generation/operations.js",
+    "nutrition/generation/restrictions.js",
+    "nutrition/generation/reviewEvidence.js",
+    "nutrition/generation/worker.js"
+  ],
+  "retryNutritionGenerationJobs": [
+    "nutrition/ai/config.js",
+    "nutrition/ai/prompt.js",
+    "nutrition/ai/provider.js",
+    "nutrition/ai/review.js",
+    "nutrition/catalogLinking/resolver.js",
+    "nutrition/generation/attempts.js",
+    "nutrition/generation/callBudget.js",
+    "nutrition/generation/domain.js",
+    "nutrition/generation/operations.js",
+    "nutrition/generation/restrictions.js",
+    "nutrition/generation/reviewEvidence.js",
+    "nutrition/generation/worker.js"
+  ],
+  "requestNutritionMealAlternative": [
+    "nutrition/ai/config.js",
+    "nutrition/ai/prompt.js",
+    "nutrition/ai/provider.js",
+    "nutrition/ai/review.js",
+    "nutrition/catalogLinking/resolver.js",
+    "nutrition/generation/alternative.js",
+    "nutrition/generation/attempts.js",
+    "nutrition/generation/callBudget.js",
+    "nutrition/generation/domain.js",
+    "nutrition/generation/mealAlternativeRequest.js",
+    "nutrition/generation/operations.js",
+    "nutrition/generation/restrictions.js",
+    "nutrition/generation/reviewEvidence.js"
+  ],
+  "monitorNutritionAiOperations": [
+    "nutrition/observability/alerts.js",
+    "nutrition/observability/metrics.js"
+  ]
+}

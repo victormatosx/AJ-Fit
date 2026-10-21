@@ -1,11 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe,expect,it } from 'vitest';
 
 import {
+  authoritativeGenerationVersionForActiveProgram,
   generateAuthoritativePlan,
   resolveAuthoritativeGenerationVersionForNewLifecycle,
-  authoritativeGenerationVersionForActiveProgram,
 } from '../authoritativePrescription';
 import { localWorkoutTemplateDocumentV127 } from '../templateDocumentV127';
 
@@ -22,7 +22,7 @@ import { localWorkoutTemplateDocumentV127 } from '../templateDocumentV127';
  */
 const ANSWERS = {
   sex: 'm', goal: 'gain_muscle', level: 'intermediate', days: 4, duration: '60', place: 'gym',
-  trainingDays: [], equipment: [], style: [], limits: ['none'], muscleFocus: [],
+  trainingDays: [], equipment: [], style: [], muscleFocus: [],
   specialConditions: ['none'],
   pregnancyScreening: null, postpartumScreening: null, functionalScreening: null,
   lipedemaScreening: null, dizzinessScreening: null, postSurgicalScreening: null,
@@ -30,6 +30,7 @@ const ANSWERS = {
 } as unknown as Parameters<typeof generateAuthoritativePlan>[0];
 
 describe('generateAuthoritativePlan — v1.27 branch (no Firestore needed)', () => {
+
   it('produces a v1.27-versioned plan with a real 64-hex contentHash, never touching firestore', async () => {
     // `firestore` is only ever read on the v2 branch — passing `null as
     // never` here is itself part of the proof: a real Firestore instance
@@ -110,5 +111,22 @@ describe('Fase 11 §1/§5 — the backend dispatcher stays the ONE place that ch
     // shared `generatePrescription.ts` dispatcher.
     expect(source.includes("workoutPrescription/engine'")).toBe(false);
     expect(source.includes("workoutPrescription/engineV127'")).toBe(false);
+  });
+});
+
+describe('ordinary T004 generation for existing and new accounts', () => {
+  it('returns the same five normal sessions locally and authoritatively despite historical fields', async () => {
+    const { generateWorkoutPrescriptionV127 } = await import('../prescriptionEngine/workoutPrescription/engineV127');
+    const answers: typeof ANSWERS = { ...ANSWERS, days: 5, specialConditions: ['none'] };
+    const oldAnswers = { ...answers, specialConditions: ['musculoskeletal_limitation'], limits: ['knee', 'back', 'other'] } as unknown as typeof answers;
+    const local = generateWorkoutPrescriptionV127(answers, 'INTERMEDIATE');
+    const authoritative = await generateAuthoritativePlan(oldAnswers, 'INTERMEDIATE', 'v1.27', null as never);
+    expect(local.status).toBe('SUCCESS');
+    if (local.status !== 'SUCCESS') return;
+    expect(authoritative.plan).toEqual(JSON.parse(JSON.stringify(local.plan)));
+    expect(authoritative.plan.templateId).toBe('T004');
+    expect(authoritative.plan.sessions).toHaveLength(5);
+    expect(authoritative.plan.sessions[2].exercises.some(e => e.exerciseId === 'leg-press-45')).toBe(true);
+    expect(authoritative.plan.sessions[4].exercises.length).toBeGreaterThan(0);
   });
 });

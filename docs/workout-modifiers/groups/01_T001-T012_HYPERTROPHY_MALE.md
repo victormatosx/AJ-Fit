@@ -1,3 +1,5 @@
+> Registro histórico: as seções sobre limitações musculoesqueléticas estão descontinuadas. As demais regras independentes continuam sujeitas ao código atual. Ver [remoção definitiva](../../removal-physical-limitations/REPORT.md).
+
 # AJ Fit --- Hipertrofia / Composição Corporal --- Masculino
 
 ## 1. Escopo

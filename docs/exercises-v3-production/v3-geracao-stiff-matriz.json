@@ -1,0 +1,433 @@
+{
+  "policy": "v3",
+  "datasetSha256": "04894080bd3c50f3e812373b9cf51d47334fb8efc8b4f5ba0f669c1df079da37",
+  "templates": 102,
+  "environments": [
+    "gym",
+    "home"
+  ],
+  "scenariosPerTemplate": 128,
+  "composition": {
+    "noLimitations": 102,
+    "singleRegion": 258,
+    "nonempty": 470,
+    "blocked": 12484
+  },
+  "priorGreedyNonempty": 404,
+  "recoveredAssignments": [
+    {
+      "template": "T002",
+      "regions": [
+        "elbow"
+      ]
+    },
+    {
+      "template": "T002",
+      "regions": [
+        "wrist"
+      ]
+    },
+    {
+      "template": "T004",
+      "regions": [
+        "wrist"
+      ]
+    },
+    {
+      "template": "T005",
+      "regions": [
+        "wrist"
+      ]
+    },
+    {
+      "template": "T006",
+      "regions": [
+        "wrist"
+      ]
+    },
+    {
+      "template": "T011",
+      "regions": [
+        "elbow"
+      ]
+    },
+    {
+      "template": "T012",
+      "regions": [
+        "elbow"
+      ]
+    },
+    {
+      "template": "T015",
+      "regions": [
+        "elbow"
+      ]
+    },
+    {
+      "template": "T015",
+      "regions": [
+        "wrist"
+      ]
+    },
+    {
+      "template": "T016",
+      "regions": [
+        "elbow"
+      ]
+    },
+    {
+      "template": "T016",
+      "regions": [
+        "wrist"
+      ]
+    },
+    {
+      "template": "T017",
+      "regions": [
+        "wrist"
+      ]
+    },
+    {
+      "template": "T018",
+      "regions": [
+        "wrist"
+      ]
+    },
+    {
+      "template": "T021",
+      "regions": [
+        "elbow"
+      ]
+    },
+    {
+      "template": "T022",
+      "regions": [
+        "elbow"
+      ]
+    },
+    {
+      "template": "T022",
+      "regions": [
+        "wrist"
+      ]
+    },
+    {
+      "template": "T023",
+      "regions": [
+        "elbow"
+      ]
+    },
+    {
+      "template": "T023",
+      "regions": [
+        "wrist"
+      ]
+    },
+    {
+      "template": "T024",
+      "regions": [
+        "elbow"
+      ]
+    },
+    {
+      "template": "T024",
+      "regions": [
+        "wrist"
+      ]
+    },
+    {
+      "template": "T028",
+      "regions": [
+        "wrist"
+      ]
+    },
+    {
+      "template": "T029",
+      "regions": [
+        "wrist"
+      ]
+    },
+    {
+      "template": "T030",
+      "regions": [
+        "wrist"
+      ]
+    },
+    {
+      "template": "T034",
+      "regions": [
+        "elbow"
+      ]
+    },
+    {
+      "template": "T034",
+      "regions": [
+        "wrist"
+      ]
+    },
+    {
+      "template": "T035",
+      "regions": [
+        "elbow"
+      ]
+    },
+    {
+      "template": "T036",
+      "regions": [
+        "elbow"
+      ]
+    },
+    {
+      "template": "T039",
+      "regions": [
+        "elbow"
+      ]
+    },
+    {
+      "template": "T039",
+      "regions": [
+        "wrist"
+      ]
+    },
+    {
+      "template": "T040",
+      "regions": [
+        "elbow"
+      ]
+    },
+    {
+      "template": "T040",
+      "regions": [
+        "wrist"
+      ]
+    },
+    {
+      "template": "T041",
+      "regions": [
+        "wrist"
+      ]
+    },
+    {
+      "template": "T042",
+      "regions": [
+        "wrist"
+      ]
+    },
+    {
+      "template": "T045",
+      "regions": [
+        "elbow"
+      ]
+    },
+    {
+      "template": "T046",
+      "regions": [
+        "elbow"
+      ]
+    },
+    {
+      "template": "T046",
+      "regions": [
+        "wrist"
+      ]
+    },
+    {
+      "template": "T047",
+      "regions": [
+        "elbow"
+      ]
+    },
+    {
+      "template": "T047",
+      "regions": [
+        "wrist"
+      ]
+    },
+    {
+      "template": "T048",
+      "regions": [
+        "elbow"
+      ]
+    },
+    {
+      "template": "T048",
+      "regions": [
+        "wrist"
+      ]
+    },
+    {
+      "template": "T052",
+      "regions": [
+        "wrist"
+      ]
+    },
+    {
+      "template": "T053",
+      "regions": [
+        "wrist"
+      ]
+    },
+    {
+      "template": "T054",
+      "regions": [
+        "wrist"
+      ]
+    },
+    {
+      "template": "T059",
+      "regions": [
+        "shoulder"
+      ]
+    },
+    {
+      "template": "T059",
+      "regions": [
+        "elbow"
+      ]
+    },
+    {
+      "template": "T059",
+      "regions": [
+        "wrist"
+      ]
+    },
+    {
+      "template": "T060",
+      "regions": [
+        "shoulder"
+      ]
+    },
+    {
+      "template": "T060",
+      "regions": [
+        "elbow"
+      ]
+    },
+    {
+      "template": "T060",
+      "regions": [
+        "wrist"
+      ]
+    },
+    {
+      "template": "T063",
+      "regions": [
+        "elbow"
+      ]
+    },
+    {
+      "template": "T063",
+      "regions": [
+        "wrist"
+      ]
+    },
+    {
+      "template": "T064",
+      "regions": [
+        "elbow"
+      ]
+    },
+    {
+      "template": "T064",
+      "regions": [
+        "wrist"
+      ]
+    },
+    {
+      "template": "T065",
+      "regions": [
+        "wrist"
+      ]
+    },
+    {
+      "template": "T066",
+      "regions": [
+        "wrist"
+      ]
+    },
+    {
+      "template": "T069",
+      "regions": [
+        "elbow"
+      ]
+    },
+    {
+      "template": "T070",
+      "regions": [
+        "elbow"
+      ]
+    },
+    {
+      "template": "T070",
+      "regions": [
+        "wrist"
+      ]
+    },
+    {
+      "template": "T071",
+      "regions": [
+        "elbow"
+      ]
+    },
+    {
+      "template": "T071",
+      "regions": [
+        "wrist"
+      ]
+    },
+    {
+      "template": "T072",
+      "regions": [
+        "elbow"
+      ]
+    },
+    {
+      "template": "T072",
+      "regions": [
+        "wrist"
+      ]
+    },
+    {
+      "template": "T074",
+      "regions": [
+        "elbow"
+      ]
+    },
+    {
+      "template": "T075",
+      "regions": [
+        "elbow"
+      ]
+    },
+    {
+      "template": "T080",
+      "regions": [
+        "elbow"
+      ]
+    },
+    {
+      "template": "T081",
+      "regions": [
+        "elbow"
+      ]
+    }
+  ],
+  "router": {
+    "success": 572,
+    "controlledBlock": 12484,
+    "other": {},
+    "inventoryPairsEqual": 13056
+  },
+  "constrainedEquipment": {
+    "applied": 274,
+    "blocked": 12782
+  },
+  "blockedSlotCauses": {
+    "CANDIDATE_PROFILE_MISSING": 159,
+    "EDITORIAL_INTERSECTION_EMPTY_OR_CONFLICTING": 904,
+    "EDITORIAL_REGION_MISSING": 44993,
+    "EDITORIAL_REVIEW_REQUIRED": 10354
+  },
+  "selectionHasAlternateSameProfile": [],
+  "completeAssignmentOracleMatches": 13056
+}

@@ -1,0 +1,68 @@
+{
+  "date": "2026-10-20",
+  "checks": {
+    "app": {
+      "passed": 7919,
+      "failed": 44,
+      "skipped": 232
+    },
+    "backend": {
+      "passed": 2028,
+      "failed": 0,
+      "skipped": 403
+    },
+    "realInitialize": {
+      "passed": 2,
+      "failed": 0,
+      "skipped": 96
+    },
+    "baselineFailedNamesUnchanged": true,
+    "appTypecheckErrors": 0,
+    "backendTypecheckErrors": 0,
+    "lintErrors": 0,
+    "matrixAllChecksPassed": true
+  },
+  "physicalQuestionnaireConfirmed": true,
+  "exactReasonReproduced": "MUSCULOSKELETAL_NO_SUBSTITUTE:2:dumbbell-stiff-leg-deadlift",
+  "confirmedReproduction": {
+    "template": "T093",
+    "environment": "gym",
+    "level": "BEGINNER",
+    "days": 4,
+    "regions": [
+      "knee"
+    ],
+    "candidate": "stiff-leg-deadlift-machine",
+    "candidateRejection": [
+      "LIMITATION_PROFILE_MISSING"
+    ],
+    "originalStatus": "adapt",
+    "oldResult": "INVALID_CONFIGURATION",
+    "newResult": "NO_SAFE_CONFIGURATION"
+  },
+  "runtimeGlobalPolicy": "v3",
+  "datasetSha256": "04894080bd3c50f3e812373b9cf51d47334fb8efc8b4f5ba0f669c1df079da37",
+  "workbookSha256": "01ef1ba8246bbdd1dcc9041f25054729bf7998762348ccf8beeafc75ca06604a",
+  "pendingPublication": [
+    "authorizeWorkoutLifecycleMutation",
+    "initializeWorkoutProgramV127",
+    "installActiveWorkoutProgram"
+  ],
+  "deployPerformed": false,
+  "realDataWritten": false,
+  "appBuildPerformed": false,
+  "confirmedIphoneCase": {
+    "template": "T004",
+    "sex": "m",
+    "goal": "gain_muscle",
+    "level": "INTERMEDIATE",
+    "days": 5,
+    "environment": "gym",
+    "regions": [
+      "knee"
+    ],
+    "status": "NO_SAFE_CONFIGURATION",
+    "generationSucceeded": false,
+    "report": "v3-geracao-stiff-iphone-t004-relatorio.md"
+  }
+}

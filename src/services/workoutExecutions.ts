@@ -79,18 +79,7 @@ function executionsCollection(uid: string) {
   return collection(db, USERS, uid, WORKOUT_EXECUTIONS);
 }
 
-/**
- * "Todos os próximos treinos" gap fix (exercise-substitution architecture
- * audit). Only ever called right before a NEW execution's `exercises` are
- * built (fresh start or restart-after-abandon) — never on resume of an
- * existing one, since the caller (`startOrResumeWorkoutExecution`) only
- * reaches this code path there. Loads the user's stored permanent
- * preferences + current limitation/equipment context, then re-validates
- * each preference through the SAME canonical resolver Manual Substitution
- * itself uses — an invalid preference silently falls back to the prescribed
- * exercise (never a fabricated third alternative), and is left stored for
- * a future context where it might become valid again.
- */
+
 /**
  * Fail-open by design (2026-09 hotfix — real Development Build regression:
  * a `permission-denied` on the `exerciseSubstitutionPreferences` `list`
@@ -151,7 +140,6 @@ async function resolveExercisesForNewExecution(
     sessionExerciseIds: session.exercises.map((exercise) => exercise.exerciseId),
     preferences,
     catalog: MANUAL_SUBSTITUTION_CATALOG,
-    regions: userContext.regions,
     equipmentContext: userContext.equipmentContext,
   });
   if (resolved.size === 0) return buildInitialExerciseExecutions(session);
@@ -263,6 +251,10 @@ function fromDoc(executionId: string, data: Record<string, unknown>): PersistedW
     ...(data.finalizationMode === 'NORMAL' || data.finalizationMode === 'EARLY'
       ? { finalizationMode: data.finalizationMode } : {}),
     executionSchemaVersion: data.executionSchemaVersion as number,
+    // Absent on every execution written before this field existed — never
+    // defaulted here. Callers that decide a substitution for this execution
+    // must apply their OWN hardcoded `'legacy'` fallback explicitly (see
+    // read this as `'legacy'` implicitly from an `undefined` here.
     createdAt: data.createdAt as Timestamp,
     updatedAt: data.updatedAt as Timestamp,
     timestampAuthority: 'SERVER',
@@ -390,8 +382,11 @@ export async function startOrResumeWorkoutExecution(input: {
     resultCount: legacyExecutionIds.length,
     source: preparation?.legacyInProgressExecutionIds ? 'prefetch' : 'confirm-fallback',
   });
-  const resolvedExercises = await resolveExercisesForNewExecution(uid, program, session, preparation);
+  // Snapshotted once, here, at creation — never re-read from the global
+  // doc comment: a future flip of `ACTIVE_SUBSTITUTION_POLICY` must never
+  // change which rules an already-created execution is evaluated under.
 
+  const resolvedExercises = await resolveExercisesForNewExecution(uid, program, session, preparation);
   const base = {
     programId: program.programId,
     ...(program.programInstanceId ? { programInstanceId: program.programInstanceId } : {}),
@@ -416,6 +411,8 @@ export async function startOrResumeWorkoutExecution(input: {
     // comment. Never omit this; it's the only signal Rules/telemetry have
     // to distinguish this write path from a pre-P0-C client's.
     mutexProtocolVersion: WORKOUT_EXECUTION_MUTEX_PROTOCOL_VERSION,
+    // doc comment. Always stamped on every new/restarted write, exactly like
+    // `mutexProtocolVersion` above; never omitted and never re-derived later.
     finishedAt: null,
   };
   const pointerFor = (targetExecutionId: string) => ({

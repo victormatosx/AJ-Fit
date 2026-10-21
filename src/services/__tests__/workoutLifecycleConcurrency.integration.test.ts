@@ -10,18 +10,16 @@
  * persisted state must never show two cycles, two instances, two consumed
  * deferrals, or a corrupted pending doc.
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { initializeTestEnvironment,type RulesTestEnvironment } from '@firebase/rules-unit-testing';
+import { Timestamp,doc,getDoc,setDoc } from 'firebase/firestore';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
+import { afterAll,beforeAll,beforeEach,describe,expect,it,vi } from 'vitest';
 
 import { buildSeedDocuments } from '../../../scripts/seedWorkoutTemplates';
-import { completeAnswers } from '../../workoutPrescription/__tests__/fixtures';
-import { toPersistedAnswers } from '../../lib/questionnaireAnswers';
-import { CANONICAL_LIMITATION_DATASET_HASH, CANONICAL_LIMITATION_DATASET_VERSION } from '../../workoutPrescription/limitationDataset';
-import { CANONICAL_LIMITATION_PROFILES } from '../../workoutPrescription/limitationDataset';
 import { EXERCISES_SEED } from '../../data/exercisesSeedData';
+import { toPersistedAnswers } from '../../lib/questionnaireAnswers';
+import { completeAnswers } from '../../workoutPrescription/__tests__/fixtures';
 
 const PROJECT_ID = 'ajfit-rules-test';
 const UID = 'gina';
@@ -32,17 +30,16 @@ let testEnv: RulesTestEnvironment;
 const mocks = vi.hoisted(() => ({ db: undefined as unknown }));
 vi.mock('../../lib/firebase', () => ({ get db() { return mocks.db; } }));
 
-import { generateAndPersistWorkoutProgram } from '../workoutPrograms';
-import { lifecycleAt, loadWorkoutLifecycle, listTrainingCycles, listProgramInstances, loadPendingEvolution, listWorkoutLifecycleEvents } from '../workoutLifecycle';
+import { listProgramInstances,listTrainingCycles,listWorkoutLifecycleEvents,loadPendingEvolution,loadWorkoutLifecycle } from '../workoutLifecycle';
 import {
   activatePendingEvolution,
-  adaptWorkoutProgram,
   deferPendingEvolution,
   prepareEvolution,
-  reconcileWorkoutLifecycle,
+  reconcileWorkoutLifecycle
 } from '../workoutLifecycleApplication';
+import { generateAndPersistWorkoutProgram } from '../workoutPrograms';
+import { installWorkoutLifecycleAuthorityFixture,resetWorkoutLifecycleAuthorityFixture } from './workoutLifecycleAuthorityFixture';
 import { enableWorkoutLifecycleRollout } from './workoutLifecycleRolloutFixture';
-import { installWorkoutLifecycleAuthorityFixture, resetWorkoutLifecycleAuthorityFixture } from './workoutLifecycleAuthorityFixture';
 
 const T003_SEED = buildSeedDocuments().find((t) => t.id === 'T003');
 if (!T003_SEED) throw new Error('T003 fixture missing from catalog — cannot run this integration test');
@@ -64,10 +61,6 @@ async function seedBaseUser() {
       metadata: { role: 'user', createdAt: Timestamp.now(), updatedAt: Timestamp.now(), commercialGateResolvedAt: Timestamp.now() },
     });
     await setDoc(doc(rawDb, 'workoutTemplates', 'T003'), T003_SEED);
-    await setDoc(doc(rawDb, 'limitationDatasetState', 'active'), {
-      datasetVersion: CANONICAL_LIMITATION_DATASET_VERSION,
-      limitationDatasetHash: CANONICAL_LIMITATION_DATASET_HASH,
-    });
     await setDoc(doc(rawDb, 'users', UID, 'questionnaires', QUESTIONNAIRE_ID), {
       answers: toPersistedAnswers(BEGINNER_ANSWERS), version: 1, createdAt: Timestamp.now(),
     });
@@ -78,11 +71,10 @@ async function seedBaseUser() {
 }
 
 async function seedCanonicalExerciseCatalog() {
-  const profileById = new Map(CANONICAL_LIMITATION_PROFILES.map((item) => [item.exerciseId, item.limitationProfile]));
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
     const rawDb = ctx.firestore();
     await Promise.all(EXERCISES_SEED.map((exercise) => setDoc(doc(rawDb, 'exercises', exercise.id), JSON.parse(JSON.stringify({
-      ...exercise, limitationProfile: profileById.get(exercise.id),
+      ...exercise,
     })))));
   });
 }
@@ -308,174 +300,5 @@ describe.skipIf(!enabled)('Fase 6 — Lifecycle concurrency races (real Firestor
     const events = await listWorkoutLifecycleEvents(UID);
     expect(events.filter((event) => event.type === 'LEVEL_PROMOTED')).toHaveLength(1);
     expect((await listProgramInstances(UID)).filter((item) => item.supersededAt === null)).toHaveLength(1);
-  }, 30_000);
-
-  // Phase 10D-V2 (docs/workout-lifecycle/v2/architecture/
-  // 25_PHASE_10DV2_LONG_RUN_JOURNEY_CLOSURE.md §28-30 — the "unidentified
-  // integration flake" from Phase 10D-V, now reproduced and root-caused):
-  // this test's ORIGINAL assertion assumed an earned-but-not-yet-prepared
-  // evolution always survives a concurrent ADAPT and simply "re-prepares
-  // with the newest safety inputs" against the new instance. That assumption
-  // is wrong — active-time/adherence eligibility is scoped to the CURRENT
-  // ProgramInstance's own `activatedAt` (confirmed via direct instrumentation:
-  // `evaluateProgressionV2ForUser` correctly returns
-  // `PROGRESS_CONTINUES/MINIMUM_ACTIVE_TIME_NOT_REACHED` for the brand-new
-  // post-ADAPT instance, whose active-day clock legitimately just reset to
-  // ~0/1 day). This is the SAME "ADAPT resets program-period progress"
-  // contract Phase 10D-V2's VG-I long-run journey independently confirmed as
-  // correct, intentional behavior (docs/workout-lifecycle/v2/prescription/
-  // 06_PROGRAM_ADAPTATION.md) — just now observed under a race instead of a
-  // sequential flow. So when ADAPT's commit is (even partially) visible to
-  // PREPARE's retries before PREPARE's own final transaction commits, the
-  // CORRECT outcome is that the earned evolution is legitimately lost (the
-  // user must re-earn under the new instance) — NOT that it survives and
-  // "re-prepares." Both outcomes are legitimate depending on exact
-  // interleaving; this test now accepts either, while still asserting the
-  // invariants that actually matter: no unhandled rejection, no corruption,
-  // and IF a pending evolution does exist, it is correctly scoped to the
-  // CURRENT (post-ADAPT) instance with the latest safety inputs — never a
-  // stale one bound to the pre-ADAPT instance.
-  it('8B Adaptation vs Prepare: no unhandled rejection, no corruption, and any surviving pending is never stale', async () => {
-    await seedBaseUser();
-    await seedCanonicalExerciseCatalog();
-    const generated = await generateAndPersistWorkoutProgram({
-      uid: UID, questionnaireId: QUESTIONNAIRE_ID, questionnaireVersion: 1,
-      answers: BEGINNER_ANSWERS, source: 'onboarding',
-    });
-    if (generated.status !== 'SUCCESS') throw new Error('setup failed');
-    await backdateCycleWithQualifyingHistory(UID, 30, generated.program.programInstanceId!, generated.program.programId);
-    const results = await Promise.allSettled([
-      prepareEvolution({ uid: UID }),
-      adaptWorkoutProgram({
-        uid: UID, updatedFields: { limits: ['knee'] }, reason: 'LIMITATION', idempotencyKey: 'adapt-prepare-knee',
-      }),
-    ]);
-    const raceDiagnostics = results.map((result) => result.status === 'fulfilled'
-      ? `fulfilled:${result.value.status}`
-      : `rejected:${result.reason instanceof Error ? result.reason.message : String(result.reason)}`);
-    expect(results.every((result) => result.status === 'fulfilled'), raceDiagnostics.join(' | ')).toBe(true);
-    await reconcileWorkoutLifecycle({ uid: UID });
-    const lifecycle = (await loadWorkoutLifecycle(UID))!;
-    const pending = await loadPendingEvolution(UID);
-    // ADAPT must always win the ProgramInstance itself, regardless of which
-    // outcome PREPARE landed on.
-    expect(lifecycle.programInstance.prescriptionInputSnapshot?.inputs.limits).toEqual(['knee']);
-    expect((await listProgramInstances(UID)).filter((item) => item.supersededAt === null)).toHaveLength(1);
-    if (pending) {
-      // If a pending evolution survived the race, it must be scoped to the
-      // CURRENT instance with the latest safety inputs — never stale.
-      expect(pending.sourceProgramInstanceId).toBe(lifecycle.programInstance.programInstanceId);
-      expect(pending.targetPrescriptionInputSnapshot?.inputs.limits).toEqual(['knee']);
-    }
-    // Never more than one EVOLUTION_EARNED event regardless of how many
-    // times PREPARE internally retried or recomputed eligibility from scratch.
-    expect((await listWorkoutLifecycleEvents(UID)).filter((event) => event.type === 'EVOLUTION_EARNED').length)
-      .toBeLessThanOrEqual(1);
-  }, 30_000);
-
-  // Phase 10D-V (docs/workout-lifecycle/v2/architecture/
-  // 24_PHASE_10DV_VERIFICATION_CLOSURE.md §17-19): a single pass of the race
-  // above is not strong evidence either way — it's a timing-dependent race
-  // that only manifested under full-integration-suite load in Phase 10D
-  // (never reproducible in file isolation). This repeats the exact same
-  // ADAPT-vs-PREPARE race N times in a row, each against a freshly seeded
-  // account, asserting the acceptable-outcomes contract (§19 of the phase
-  // brief) after every single iteration: no unhandled rejection, no
-  // corrupted/duplicate lifecycle state, and either a real convergence or an
-  // explicit bounded fail-closed/retryable result — never candidate content
-  // becoming authoritative and never two active ProgramInstances.
-  it('VG stress: Adaptation vs Prepare race repeated N times never corrupts state or unhandled-rejects', async () => {
-    const ITERATIONS = 30;
-    const outcomes: string[] = [];
-    for (let iteration = 0; iteration < ITERATIONS; iteration += 1) {
-      await testEnv.clearFirestore();
-      await enableWorkoutLifecycleRollout(testEnv);
-      await seedBaseUser();
-      await seedCanonicalExerciseCatalog();
-      const generated = await generateAndPersistWorkoutProgram({
-        uid: UID, questionnaireId: QUESTIONNAIRE_ID, questionnaireVersion: 1,
-        answers: BEGINNER_ANSWERS, source: 'onboarding',
-      });
-      if (generated.status !== 'SUCCESS') throw new Error(`setup failed at iteration ${iteration}`);
-      await backdateCycleWithQualifyingHistory(UID, 30, generated.program.programInstanceId!, generated.program.programId);
-
-      const results = await Promise.allSettled([
-        prepareEvolution({ uid: UID }),
-        adaptWorkoutProgram({
-          uid: UID, updatedFields: { limits: ['knee'] }, reason: 'LIMITATION',
-          idempotencyKey: `adapt-prepare-stress-${iteration}`,
-        }),
-      ]);
-
-      // Acceptable outcomes only (phase brief §19): both calls resolve to
-      // SOME typed result (never an unhandled rejection reaching the
-      // caller); a bounded fail-closed/retryable typed result is fine.
-      const rejected = results.filter((result) => result.status === 'rejected');
-      const diagnostics = `iteration ${iteration}: ${results.map((result) => result.status === 'fulfilled'
-        ? `fulfilled:${result.value.status}`
-        : `rejected:${result.reason instanceof Error ? result.reason.message : String(result.reason)}`).join(' | ')}`;
-      outcomes.push(diagnostics);
-      expect(rejected, diagnostics).toHaveLength(0);
-
-      // Structural invariants regardless of which outcome won this
-      // iteration: exactly one non-superseded ProgramInstance, exactly one
-      // active TrainingCycle, and — if a pending evolution exists — it must
-      // point at the CURRENT (post-race) instance, never a stale one.
-      const activeInstances = (await listProgramInstances(UID)).filter((item) => item.supersededAt === null);
-      expect(activeInstances, diagnostics).toHaveLength(1);
-      const activeCycles = (await listTrainingCycles(UID)).filter((item) => item.status === 'ACTIVE');
-      expect(activeCycles, diagnostics).toHaveLength(1);
-      const lifecycle = (await loadWorkoutLifecycle(UID))!;
-      const pending = await loadPendingEvolution(UID);
-      if (pending) {
-        expect(pending.sourceProgramInstanceId, diagnostics).toBe(lifecycle.programInstance.programInstanceId);
-      }
-      // Never more than one EVOLUTION_EARNED event for this single earned
-      // fact, regardless of how many times PREPARE was internally retried.
-      const earnedEvents = (await listWorkoutLifecycleEvents(UID)).filter((event) => event.type === 'EVOLUTION_EARNED');
-      expect(earnedEvents.length, diagnostics).toBeLessThanOrEqual(1);
-    }
-    // Surfaced for visibility in test output — not asserted on, since a mix
-    // of PREPARED / ALREADY_PENDING / PREPARATION_FAILED outcomes across
-    // iterations is itself the expected, acceptable shape of this race.
-    // eslint-disable-next-line no-console
-    console.log(`Adaptation-vs-Prepare stress (${ITERATIONS} iterations):\n${outcomes.join('\n')}`);
-  }, 120_000);
-
-  it('§47/AI Adaptation vs Activation: a concurrent limitation-driven adaptation never lets stale pending content activate', async () => {
-    const generated = await seedReadyPending();
-    await seedCanonicalExerciseCatalog();
-    const beforeRace = Timestamp.now();
-    const [adaptResult, startResult] = await Promise.all([
-      adaptWorkoutProgram({
-        uid: UID, updatedFields: { limits: ['knee'] }, reason: 'LIMITATION',
-        idempotencyKey: 'adapt-race-1',
-      }),
-      activatePendingEvolution({ uid: UID, trigger: 'MANUAL' }),
-    ]);
-    // Whatever interleaving occurs, the persisted lifecycle must reflect a
-    // single coherent active instance — never the stale pending's content
-    // layered on top of (or racing against) the safety adaptation.
-    const lifecycle = await loadWorkoutLifecycle(UID);
-    expect(lifecycle).not.toBeNull();
-    const activeInstanceId = lifecycle!.programInstance.programInstanceId;
-    const instances = await listProgramInstances(UID);
-    const activeCount = instances.filter((i) => i.supersededAt === null).length;
-    expect(activeCount).toBe(1);
-    expect(instances.find((i) => i.programInstanceId === activeInstanceId)).toBeTruthy();
-    expect(lifecycle!.programInstance.prescriptionInputSnapshot?.inputs.limits).toEqual(['knee']);
-    // No matter which order applied, the outcome for each call is one of the
-    // documented safe statuses — never a thrown, uncategorized error.
-    expect(['SUCCESS']).toContain(adaptResult.status);
-    expect(['ACTIVATED', 'STALE_PENDING']).toContain(startResult.status);
-    const events = await listWorkoutLifecycleEvents(UID);
-    expect(events.filter((event) => event.type === 'PROGRAM_ADAPTED')).toHaveLength(1);
-    expect(events.filter((event) => event.type === 'LEVEL_PROMOTED').length).toBeLessThanOrEqual(1);
-
-    // The complex race remains reconstructable: immediately before the two
-    // commands the original instance was active; afterward history resolves
-    // to the single limitation-safe winner rather than rewriting the past.
-    expect((await lifecycleAt(UID, beforeRace))?.programInstance.contentIdentity).toBe(generated.program.programId);
-    expect((await lifecycleAt(UID, Timestamp.now()))?.programInstance.programInstanceId).toBe(activeInstanceId);
   }, 30_000);
 });

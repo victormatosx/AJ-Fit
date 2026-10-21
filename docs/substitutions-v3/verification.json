@@ -1,0 +1,281 @@
+{
+  "appFull": {
+    "passed": 7888,
+    "failed": 44,
+    "skipped": 228,
+    "files": 631,
+    "failures": [
+      {
+        "file": "src/loadProgress/__tests__/loadProgressWiring.test.ts",
+        "test": "real load-progress wiring publishes an invalidation only after the queued set write resolves"
+      },
+      {
+        "file": "src/loadProgress/__tests__/loadProgressWiring.test.ts",
+        "test": "real load-progress wiring offers the requested search, record list and four time ranges"
+      },
+      {
+        "file": "src/scheduleEngine/__tests__/scheduleRefreshState.test.ts",
+        "test": "Schedule refresh authority gates resolution, config and loading publication against the latest reload id"
+      },
+      {
+        "file": "src/state/__tests__/restLiveActivityIntegrationStructure.test.ts",
+        "test": "RestSessionContext live transition wiring keeps completed cardio visible until the final workout CTA"
+      },
+      {
+        "file": "src/theme/__tests__/sharedComponentsTheme.test.ts",
+        "test": "Phase 4 acquisition and primary app coverage keeps the Phase 4 critical screens free of Dark color literals"
+      },
+      {
+        "file": "src/screens/__tests__/editProfileFixedLayout.test.ts",
+        "test": "EditProfileScreen fixed layout keeps the form and save action in a non-scrolling safe-area layout"
+      },
+      {
+        "file": "src/screens/__tests__/editProfileFixedLayout.test.ts",
+        "test": "EditProfileScreen fixed layout anchors the footer within the available height instead of pushing it below the viewport"
+      },
+      {
+        "file": "src/screens/__tests__/healthIntegrationScreenStructure.test.ts",
+        "test": "HealthIntegrationScreen — platform isolation (no iOS copy on Android, no Android copy on iOS) only shows the iOS \"cannot verify permission\" notice behind an explicit iOS check"
+      },
+      {
+        "file": "src/screens/__tests__/healthIntegrationScreenStructure.test.ts",
+        "test": "HealthIntegrationScreen — platform isolation (no iOS copy on Android, no Android copy on iOS) never presents OS authorization as \"granted\" for iOS — permissionsRequested is treated as non-committal"
+      },
+      {
+        "file": "src/screens/__tests__/healthIntegrationScreenStructure.test.ts",
+        "test": "HealthIntegrationScreen — disconnect requires explicit confirmation never calls disconnect() directly from the disconnect row — it only opens a confirmation sheet"
+      },
+      {
+        "file": "src/screens/__tests__/migratedScreensLifecycle.test.ts",
+        "test": "EditProfileScreen — draft resets explicitly per session, not via unmount imports useScreenFocusEffect and resets every draft field on activation"
+      },
+      {
+        "file": "src/screens/__tests__/paywallRedesignStructure.test.ts",
+        "test": "Paywall redesign — i18n coverage for new copy, no new hardcoded strings entryContext-driven plan intro stays copy-only and goes through i18n"
+      },
+      {
+        "file": "src/screens/__tests__/premiumCommercialContextFase6.test.ts",
+        "test": "FASE 6 — SubscriptionCenterScreen already correctly separates access from commercial presentation (audited, not rewritten) billing_issue/grace_period route to the real subscription management flow (manageSubscription), not an invented destination"
+      },
+      {
+        "file": "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+        "test": "WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision (E) computes the next-exercise lookup exactly once, feeding both the Live Activity call site and the in-app one"
+      },
+      {
+        "file": "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+        "test": "WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision completeSet feeds the shared lookup into the Live Activity decision"
+      },
+      {
+        "file": "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+        "test": "WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision restNextAction rebuilds the same decision from the authoritative, restorable rest record (not fresh component state)"
+      },
+      {
+        "file": "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+        "test": "WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision passes the decision down to RestOverlay as a single prop, not re-derived props"
+      },
+      {
+        "file": "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+        "test": "WorkoutScreen rest overlay — button label and next-exercise indicator derives nextExerciseAction only from the shared nextAction decision, never standalone"
+      },
+      {
+        "file": "src/screens/__tests__/restOverlayNextExerciseStructure.test.ts",
+        "test": "WorkoutScreen rest overlay — button label and next-exercise indicator (B) the last set of an exercise (with another exercise left) switches the label and shows the next exercise"
+      },
+      {
+        "file": "src/lib/__tests__/iosRestActivityStructure.test.ts",
+        "test": "versioned Live Activity extension does not add storage sharing or push entitlements preemptively"
+      },
+      {
+        "file": "src/lib/__tests__/premiumEntitlementPrecedence.test.ts",
+        "test": "FASE 6 — entitlement wins over commercial status (access side) status=grace_period with an active entitlement: resolveSubscriptionCenterModel reports hasPremiumAccess=true"
+      },
+      {
+        "file": "src/lib/__tests__/workoutLogicIntact.test.ts",
+        "test": "WorkoutScreen source — 7B + 7C strings fully migrated (positive guard) raw literal \"REGISTRADO\" has been removed"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/canonicalV127SubstitutionMapUnification.test.ts",
+        "test": "v1.27 exercise_substitution_map — closed identity unifications (no allowlist) none of the unified-away ids/names appear as a map key, or as a candidate name/exercise_id, anywhere"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/canonicalV127SubstitutionMapUnification.test.ts",
+        "test": "v1.27 exercise_substitution_map — closed identity unifications (no allowlist) 1. no A/B/C candidate resolves, after canonicalization, to the canonical id of the entry it is listed under (global, zero exceptions)"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/canonicalV127SubstitutionMapUnification.test.ts",
+        "test": "v1.27 exercise_substitution_map — closed identity unifications (no allowlist) 2. no tier contains two candidates that canonicalize to the same runtime id (global, per key per tier)"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate knee composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate hip composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate spine composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate shoulder composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate elbow composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate wrist composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate ankle_foot composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate closes the complete individual 102x7 matrix (714/714)"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate knee+hip uses the safety intersection and composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate knee+spine uses the safety intersection and composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate hip+spine uses the safety intersection and composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate shoulder+elbow uses the safety intersection and composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate shoulder+wrist uses the safety intersection and composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate elbow+wrist uses the safety intersection and composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate shoulder+elbow+wrist uses the safety intersection and composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate spine+shoulder uses the safety intersection and composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate spine+hip uses the safety intersection and composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/musculoskeletalFullCoverageV127.test.ts",
+        "test": "v1.27 complete musculoskeletal coverage gate knee+ankle_foot uses the safety intersection and composes all 102 templates"
+      },
+      {
+        "file": "src/workoutPrescription/__tests__/spineHomeClosureV127.test.ts",
+        "test": "v1.27 spine/Home closure — all-template audit runs all 102 templates with no remaining spine blocker"
+      }
+    ]
+  },
+  "appTargeted": {
+    "passed": 122,
+    "failed": 0,
+    "skipped": 0,
+    "files": 8,
+    "failures": []
+  },
+  "backendFull": {
+    "passed": 2022,
+    "failed": 0,
+    "skipped": 391,
+    "files": 186,
+    "failures": []
+  },
+  "emulator": {
+    "passed": 146,
+    "failed": 5,
+    "skipped": 0,
+    "files": 4,
+    "failures": [
+      {
+        "file": "functions/src/workoutLifecycle/__tests__/authorizeMutation.integration.test.ts",
+        "test": "Workout Lifecycle authority — real Firestore Emulator INITIALIZE seals the three-day conditioning plan with typed interval cycles"
+      },
+      {
+        "file": "functions/src/workoutLifecycle/__tests__/authorizeMutation.integration.test.ts",
+        "test": "Workout Lifecycle authority — real Firestore Emulator initializeWorkoutProgramV127Handler — Fase 15 backend-authoritative v1.27 INITIALIZE preserves the existing fail-closed musculoskeletal-limitation behavior — never persists an unsafe plan"
+      },
+      {
+        "file": "functions/src/workoutLifecycle/__tests__/authorizeMutation.integration.test.ts",
+        "test": "Workout Lifecycle authority — real Firestore Emulator persistLifecycleActivationV127 — Fase 16 backend-authoritative v1.27 ADAPT/ACTIVATE v2 ADAPT is completely unaffected — still returns a grant, never the persisted shape"
+      },
+      {
+        "file": "functions/src/workoutLifecycle/__tests__/finalizeWorkoutSession.integration.test.ts",
+        "test": "finalizeWorkoutSession — real Firestore Emulator integration keeps explicit fixed calendar authority even when client-writable config claims flexible"
+      },
+      {
+        "file": "functions/src/workoutLifecycle/__tests__/finalizeWorkoutSession.integration.test.ts",
+        "test": "finalizeWorkoutSession — real Firestore Emulator integration treats a legacy program/instance without scheduleMode as fixed"
+      }
+    ]
+  },
+  "emulatorCleanHead": {
+    "passed": 144,
+    "failed": 5,
+    "skipped": 0,
+    "files": 4,
+    "failures": [
+      {
+        "file": "functions/src/workoutLifecycle/__tests__/authorizeMutation.integration.test.ts",
+        "test": "Workout Lifecycle authority — real Firestore Emulator INITIALIZE seals the three-day conditioning plan with typed interval cycles"
+      },
+      {
+        "file": "functions/src/workoutLifecycle/__tests__/authorizeMutation.integration.test.ts",
+        "test": "Workout Lifecycle authority — real Firestore Emulator initializeWorkoutProgramV127Handler — Fase 15 backend-authoritative v1.27 INITIALIZE preserves the existing fail-closed musculoskeletal-limitation behavior — never persists an unsafe plan"
+      },
+      {
+        "file": "functions/src/workoutLifecycle/__tests__/authorizeMutation.integration.test.ts",
+        "test": "Workout Lifecycle authority — real Firestore Emulator persistLifecycleActivationV127 — Fase 16 backend-authoritative v1.27 ADAPT/ACTIVATE v2 ADAPT is completely unaffected — still returns a grant, never the persisted shape"
+      },
+      {
+        "file": "functions/src/workoutLifecycle/__tests__/finalizeWorkoutSession.integration.test.ts",
+        "test": "finalizeWorkoutSession — real Firestore Emulator integration keeps explicit fixed calendar authority even when client-writable config claims flexible"
+      },
+      {
+        "file": "functions/src/workoutLifecycle/__tests__/finalizeWorkoutSession.integration.test.ts",
+        "test": "finalizeWorkoutSession — real Firestore Emulator integration treats a legacy program/instance without scheduleMode as fixed"
+      }
+    ]
+  },
+  "typeScript": {
+    "app": "passed",
+    "backend": "passed"
+  },
+  "lint": {
+    "expoLint": "failed",
+    "errors": 48,
+    "warnings": 474,
+    "sameErrorsInCleanHeadSrcAndApp": true,
+    "changedTsFiles": {
+      "errors": 0,
+      "warnings": 8
+    }
+  },
+  "comparison": {
+    "appNewFailuresAgainstPreviousRun": 0,
+    "emulatorNewFailuresAgainstCleanHead": 0,
+    "sourceLintNewErrorsAgainstCleanHead": 0
+  },
+  "limits": [
+    "No native iPhone run",
+    "No V3 activation",
+    "No offline/sync/mixed-client/session authorization protocol approval",
+    "Emulator tests cover existing disabled behavior and the direct pure V3 backend gate; not global V3 admission"
+  ]
+}

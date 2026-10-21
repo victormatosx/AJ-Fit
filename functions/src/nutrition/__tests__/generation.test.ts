@@ -1,3 +1,4 @@
+import { approveReview } from './reviewFixture';
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import * as backendLogger from '../../lib/logger';
@@ -53,7 +54,7 @@ function fakeProvider(...outputs: unknown[]): NutritionAiProvider {
     if (next instanceof Error) throw next;
     return { output: next, model: 'fake', usage: { inputTokens: 100, outputTokens: 50, cachedInputTokens: 5 }, latencyMs: 1 };
   });
-  return { generatePlan };
+  return { reviewPlan: approveReview, generatePlan };
 }
 
 describe('deterministic validator — free-form AI items, no catalog/foodId dependency (diet-quality-v3, 2026-10-10)', () => {
@@ -143,7 +144,7 @@ describe('bounded attempts and provider', () => {
     expect(OPENAI_PLAN_SCHEMA.required).toEqual(canonical.required);
     expect(OPENAI_PLAN_SCHEMA.properties.meals.items.properties.slot.enum).toEqual(canonical.properties.meals.items.properties.slot.enum);
   });
-  it('routes to Luna as primary/retry for both operations, Sol only as final fallback, Astra never used (cost pass, 2026-10-10)', async () => {
+  it('routes to Luna as primary/retry for both operations, Sol retained only for historical pricing, no escalation, Astra never used (cost pass, 2026-10-10)', async () => {
     expect(NUTRITION_AI_MODELS.fullPlan).toBe('gpt-6-luna');
     expect(NUTRITION_AI_MODELS.mealAlternative).toBe('gpt-6-luna');
     expect(NUTRITION_AI_MODELS.fallback).toBe('gpt-6.1-sol');
@@ -156,12 +157,12 @@ describe('bounded attempts and provider', () => {
     await provider.generatePlan({ profile, engine, goal, foodNames: noNames });
     expect(JSON.parse(fetcher.mock.calls[0][1].body).model).toBe('gpt-6-luna');
     await provider.generatePlan({ profile, engine, goal, foodNames: noNames, fallback: true });
-    expect(JSON.parse(fetcher.mock.calls[1][1].body).model).toBe('gpt-6.1-sol');
+    expect(JSON.parse(fetcher.mock.calls[1][1].body).model).toBe('gpt-6-luna');
     await provider.generateMealAlternative({ profile, target: engine.mealTargets[0], avoidFoodNames: [], goal, foodNames: noNames });
     expect(JSON.parse(fetcher.mock.calls[2][1].body).model).toBe('gpt-6-luna');
     expect(JSON.parse(fetcher.mock.calls[0][1].body).reasoning).toEqual({ effort: 'low' });
   });
-  it('uses first valid attempt, correction, retry and strong fallback only for selected failures', async () => {
+  it('uses first valid attempt, correction, retry and a fourth-call review without escalation', async () => {
     const immediate = fakeProvider(output());
     expect((await generateValidatedPlan(immediate, profile, engine, goal, noNames)).attempt).toBe(1);
     expect(immediate.generatePlan).toHaveBeenCalledTimes(1);
@@ -169,22 +170,34 @@ describe('bounded attempts and provider', () => {
     const retry = fakeProvider({ meals: [] }, output());
     expect((await generateValidatedPlan(retry, profile, engine, goal, noNames)).attempt).toBe(2);
     const fallback = fakeProvider({ meals: [] }, { meals: [] }, output());
-    expect((await generateValidatedPlan(fallback, profile, engine, goal, noNames)).fallback).toBe(true);
-    expect(fallback.generatePlan).toHaveBeenNthCalledWith(3, expect.objectContaining({ fallback: true }));
+    expect((await generateValidatedPlan(fallback, profile, engine, goal, noNames)).fallback).toBe(false);
+    expect(fallback.generatePlan).toHaveBeenNthCalledWith(3, expect.objectContaining({ fallback: false }));
   });
-  it('stops on safety failure and caps exhausted attempts', async () => {
-    const unsafeOutput = output();
-    unsafeOutput.meals[0].foods[0] = item('Amendoim', 400, 20, 50, 10, 10, ['peanut']);
-    const unsafeProvider = fakeProvider(unsafeOutput);
+  it('retries a one-off AI content-safety mismatch (own draft violating an excluded allergen), unlike a permanent safety block, and caps exhausted attempts', async () => {
+    // AI_CONTENT_SAFETY_MISMATCH (2026-10-20 fix, UID
+    // `2cbGGTGybdW0khZIiRreAzcBuGF3` incident): the AI's own draft failing
+    // our unweakened `assertFoodSafety` check is retryable — the SAME check
+    // re-runs on every attempt, so an unsafe plan can never be persisted,
+    // but a one-off model-compliance miss no longer permanently strands an
+    // otherwise-satisfiable profile the way `AI_SAFETY_VALIDATION_FAILED`
+    // (reserved for a true permanent/profile-level block) does.
+    const unsafeOutput = () => {
+      const plan = output();
+      plan.meals[0].foods[0] = item('Amendoim', 400, 20, 50, 10, 10, ['peanut']);
+      return plan;
+    };
+    const unsafeProvider = fakeProvider(unsafeOutput(), unsafeOutput(), unsafeOutput());
     await expect(generateValidatedPlan(unsafeProvider, { ...profile, excludedAllergens: ['peanut'] }, engine, goal, noNames))
-      .rejects.toMatchObject({ code: 'AI_SAFETY_VALIDATION_FAILED' });
-    expect(unsafeProvider.generatePlan).toHaveBeenCalledTimes(1);
+      .rejects.toMatchObject({ code: 'AI_RETRY_EXHAUSTED', lastFailureCode: 'AI_CONTENT_SAFETY_MISMATCH' });
+    expect(unsafeProvider.generatePlan).toHaveBeenCalledTimes(3);
+    const recovered = fakeProvider(unsafeOutput(), output());
+    expect((await generateValidatedPlan(recovered, { ...profile, excludedAllergens: ['peanut'] }, engine, goal, noNames)).attempt).toBe(2);
     const exhausted = fakeProvider({ meals: [] }, { meals: [] }, { meals: [] });
     await expect(generateValidatedPlan(exhausted, profile, engine, goal, noNames)).rejects.toBeInstanceOf(GenerationAttemptsExhausted);
     expect(exhausted.generatePlan).toHaveBeenCalledTimes(3);
     const resumed = fakeProvider(output());
     expect((await generateValidatedPlan(resumed, profile, engine, goal, noNames,
-      async () => {}, async () => {}, { startAttempt: 3, previousFailureCode: 'AI_SCHEMA_INVALID' })).fallback).toBe(true);
+      async () => {}, async () => {}, { startAttempt: 3, previousFailureCode: 'AI_SCHEMA_INVALID' })).fallback).toBe(false);
     expect(resumed.generatePlan).toHaveBeenCalledTimes(1);
   });
   it('parses Responses API metadata and handles schema/provider/timeout without real API', async () => {
@@ -215,9 +228,14 @@ describe('bounded attempts and provider', () => {
     const refusalResponse = () => new Response(JSON.stringify({
       status: 'completed', output: [{ content: [{ type: 'refusal', refusal: 'cannot comply' }] }],
     }), { status: 200 });
+    // An upstream model refusal is `AI_PROVIDER_REFUSAL` — opaque and
+    // retryable, distinct from `AI_SAFETY_VALIDATION_FAILED` (OUR
+    // deterministic safety checks, with a known cause). Conflating the two
+    // previously made the UI show a specific, false diagnosis (pregnancy/
+    // breastfeeding) for any unrelated refusal — see generationStage.ts.
     const refused = new OpenAiNutritionProvider('test-secret', vi.fn().mockImplementation(async () => refusalResponse()));
     await expect(generateValidatedPlan(refused, profile, engine, goal, noNames)).rejects.toMatchObject({
-      code: 'AI_SAFETY_VALIDATION_FAILED',
+      code: 'AI_RETRY_EXHAUSTED', lastFailureCode: 'AI_PROVIDER_REFUSAL',
     });
     // The model's own refusal reason is captured (bounded) and threaded
     // through to the attempt audit — the only way to diagnose a real
@@ -228,14 +246,14 @@ describe('bounded attempts and provider', () => {
     await generateValidatedPlan(refused2, profile, engine, goal, noNames,
       async (audit) => { audits.push({ code: audit.code, refusalReason: audit.refusalReason }); })
       .catch(() => {});
-    expect(audits[0]?.code).toBe('AI_SAFETY_VALIDATION_FAILED');
+    expect(audits[0]?.code).toBe('AI_PROVIDER_REFUSAL');
     expect(audits[0]?.refusalReason).toBe('cannot comply');
     const longRefusal = 'x'.repeat(500);
     const refusedLong = new OpenAiNutritionProvider('test-secret', vi.fn().mockResolvedValue(new Response(JSON.stringify({
       status: 'completed', output: [{ content: [{ type: 'refusal', refusal: longRefusal }] }],
     }), { status: 200 })));
     await expect(refusedLong.generatePlan({ profile, engine, goal, foodNames: noNames })).rejects.toMatchObject({
-      code: 'AI_SAFETY_VALIDATION_FAILED', refusalReason: 'x'.repeat(200),
+      code: 'AI_PROVIDER_REFUSAL', refusalReason: 'x'.repeat(200),
     });
   });
 });
@@ -320,7 +338,9 @@ describe('incident regression — rejected nutrient proportions', () => {
     const audits: unknown[] = [];
     await expect(generateValidatedPlan(provider, profile, engine, goal, noNames,
       async (audit) => { audits.push(audit); })).rejects.toMatchObject({
-      code: httpStatus === 429 ? 'AI_RATE_LIMIT' : 'AI_PROVIDER_ERROR',
+      ...(httpStatus === 429 || httpStatus >= 500
+        ? { code: 'AI_RETRY_EXHAUSTED', lastFailureCode: httpStatus === 429 ? 'AI_RATE_LIMIT' : 'AI_PROVIDER_ERROR' }
+        : { code: 'AI_PROVIDER_ERROR' }),
     });
     expect(fetcher).toHaveBeenCalledTimes(httpStatus === 429 || httpStatus >= 500 ? 3 : 1);
     expect(audits).toHaveLength(fetcher.mock.calls.length);
@@ -358,14 +378,43 @@ describe('dietary restrictions across generation, regeneration and meal alternat
     ['vegetarian', 'Frango', 'terrestrial_animal'], ['vegetarian', 'Tilápia', 'fish'],
     ['vegetarian', 'Camarão', 'shellfish'], ['vegan', 'Iogurte', 'dairy'], ['vegan', 'Ovo', 'egg'],
     ['vegan', 'Whey', 'dairy'], ['vegan', 'Mel', 'other_animal'], ['pescatarian', 'Carne bovina', 'terrestrial_animal'],
-    ['pescatarian', 'Caldo sem composição conhecida', 'unknown'], ['vegan', 'Queijo', 'plant'],
+    ['vegan', 'Queijo', 'plant'],
   ] as const)('blocks %s with %s even when allergens are omitted', async (dietaryPattern, name, origin) => {
-    const plan = plantPlan();
-    plan.meals[0].foods[0] = composed(name, origin) as ReturnType<typeof item>;
-    const provider = fakeProvider(plan);
+    const plan = () => {
+      const p = plantPlan();
+      p.meals[0].foods[0] = composed(name, origin) as ReturnType<typeof item>;
+      return p;
+    };
+    // AI_CONTENT_SAFETY_MISMATCH (2026-10-20 fix): the AI's own draft
+    // repeatedly violating the dietary pattern is retryable (same
+    // unweakened check re-runs every attempt — still blocked), distinct
+    // from the permanent/profile-level `AI_SAFETY_VALIDATION_FAILED`.
+    const provider = fakeProvider(plan(), plan(), plan());
     await expect(generateValidatedPlan(provider, { ...profile, dietaryPattern }, engine, goal, noNames))
-      .rejects.toMatchObject({ code: 'AI_SAFETY_VALIDATION_FAILED' });
-    expect(provider.generatePlan).toHaveBeenCalledTimes(1);
+      .rejects.toMatchObject({ code: 'AI_RETRY_EXHAUSTED', lastFailureCode: 'AI_CONTENT_SAFETY_MISMATCH' });
+    expect(provider.generatePlan).toHaveBeenCalledTimes(3);
+  });
+  it('defers an ambiguous unknown-origin ingredient to the independent reviewer instead of blocking pre-review', async () => {
+    // (2026-10-21 fix): `unknown` origin is the AI's own uncertainty, not a
+    // confirmed animal classification — it must reach the independent
+    // reviewer rather than being rejected by the deterministic check before
+    // any review call. The reviewer here explicitly rejects it, proving the
+    // relaxation does not become a silent approval path.
+    const plan = () => {
+      const p = plantPlan();
+      p.meals[0].foods[0] = composed('Caldo sem composição conhecida', 'unknown') as ReturnType<typeof item>;
+      return p;
+    };
+    const provider = fakeProvider(plan(), plan(), plan());
+    provider.reviewPlan = vi.fn(async request => ({ output: { candidateDigest: (request as { candidateDigest: string }).candidateDigest,
+      status: 'insufficient_information', checks: { allergies: true, lactose: true, gluten: true, dietaryPattern: false,
+        ingredients: false, quantities: true, macros: true, calories: true, preferences: true, evidence: false },
+      issues: [{ category: 'dietary_pattern', severity: 'high', mealIndex: 0, optionIndex: 0, foodIndex: 0,
+        reason: 'Origem do ingrediente não identificada sob restrição alimentar.', suggestedCorrection: 'Declarar origem do ingrediente.' }],
+      requiresRegeneration: true }, model: 'fake', usage: { inputTokens: 10, outputTokens: 10, cachedInputTokens: 0 }, latencyMs: 1 }));
+    await expect(generateValidatedPlan(provider, { ...profile, dietaryPattern: 'pescatarian' }, engine, goal, noNames))
+      .rejects.toMatchObject({ code: 'AI_RETRY_EXHAUSTED', lastFailureCode: 'AI_REVIEW_INSUFFICIENT_INFORMATION' });
+    expect(provider.reviewPlan).toHaveBeenCalled();
   });
   it('allows lacto-ovo vegetarian meals and seafood for pescatarians', () => {
     for (const [dietaryPattern, name, origin] of [
@@ -377,14 +426,45 @@ describe('dietary restrictions across generation, regeneration and meal alternat
       expect(() => validateAndBuildPlan(plan, profile.mealSlots, engine, [], true, { dietaryPattern, excludedFoodNames: [] })).not.toThrow();
     }
   });
+  // 2026-10-21 fix: real homologation found the deterministic word backstop
+  // scanning the dish name AND preparationNote, which false-positived on
+  // every realistic vegetarian meal (eggs named after their source animal,
+  // and recipes explicitly stating a meat ingredient was NOT used). This
+  // was the actual root cause of the 100% restricted-scenario failure rate
+  // documented in docs/nutrition/dual-ai-production-release-2026-10-20.
+  it('does not block an egg item whose own name or dish name mentions the source bird (ovo de galinha)', () => {
+    const plan = plantPlan();
+    plan.meals[0].foods[0] = composed('Ovo de galinha cozido', 'egg') as ReturnType<typeof item>;
+    expect(() => validateAndBuildPlan(plan, profile.mealSlots, engine, [], true,
+      { dietaryPattern: 'vegetarian', excludedFoodNames: [] })).not.toThrow();
+  });
+  it('does not block a preparationNote that explicitly states a meat ingredient was NOT used', () => {
+    const plan = plantPlan();
+    const food = composed('Feijão-carioca cozido', 'plant') as ReturnType<typeof item> & { preparationNote: string };
+    food.preparationNote = 'Cozido sem caldo de carne';
+    plan.meals[1].foods[0] = food;
+    expect(() => validateAndBuildPlan(plan, profile.mealSlots, engine, [], true,
+      { dietaryPattern: 'vegetarian', excludedFoodNames: [] })).not.toThrow();
+  });
+  it('still blocks meat misdeclared as plant via the ingredient-name backstop, dish name and preparationNote notwithstanding', () => {
+    const plan = plantPlan();
+    const food = composed('Prato especial', 'plant') as ReturnType<typeof item> & { preparationNote: string };
+    food.ingredients = [{ name: 'Carne bovina', origin: 'plant' }];
+    food.preparationNote = 'Sem glúten';
+    plan.meals[0].foods[0] = food;
+    expect(() => validateAndBuildPlan(plan, profile.mealSlots, engine, [], true,
+      { dietaryPattern: 'vegetarian', excludedFoodNames: [] })).toThrow();
+  });
   it('combines hard ingredient exclusions, allergies and dietary pattern, overriding preferred foods', async () => {
     const plan = plantPlan();
     const names = { preferred: ['Feijão'], usual: [], excluded: ['Feijão, cozido'] };
-    await expect(generateValidatedPlan(fakeProvider(plan), { ...profile, dietaryPattern: 'vegan' }, engine, goal, names))
-      .rejects.toMatchObject({ code: 'AI_SAFETY_VALIDATION_FAILED' });
+    // AI_CONTENT_SAFETY_MISMATCH (2026-10-20 fix): same unweakened check,
+    // now retryable — supply the same violating draft for every attempt.
+    await expect(generateValidatedPlan(fakeProvider(plan, plan, plan), { ...profile, dietaryPattern: 'vegan' }, engine, goal, names))
+      .rejects.toMatchObject({ code: 'AI_RETRY_EXHAUSTED', lastFailureCode: 'AI_CONTENT_SAFETY_MISMATCH' });
     plan.meals[0].foods[0] = composed('Leite de soja', 'plant') as ReturnType<typeof item>;
-    await expect(generateValidatedPlan(fakeProvider(plan), { ...profile, dietaryPattern: 'vegan', excludedAllergens: ['soy'] }, engine, goal, noNames))
-      .rejects.toMatchObject({ code: 'AI_SAFETY_VALIDATION_FAILED' });
+    await expect(generateValidatedPlan(fakeProvider(plan, plan, plan), { ...profile, dietaryPattern: 'vegan', excludedAllergens: ['soy'] }, engine, goal, noNames))
+      .rejects.toMatchObject({ code: 'AI_RETRY_EXHAUSTED', lastFailureCode: 'AI_CONTENT_SAFETY_MISMATCH' });
   });
   it('fails closed on missing composition metadata', () => {
     const plan = output();
