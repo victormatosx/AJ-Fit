@@ -634,7 +634,12 @@ service cloud.firestore {
         && (beforeSize <= 5 || exerciseIdentityUnchanged(before[5], after[5]))
         && (beforeSize <= 6 || exerciseIdentityUnchanged(before[6], after[6]))
         && (beforeSize <= 7 || exerciseIdentityUnchanged(before[7], after[7]))
-        && (beforeSize <= 8 || exerciseIdentityUnchanged(before[8], after[8]))
+        // Sessions of up to eight exercises need no checks for indexes 8-19.
+        // Group the existing guards to avoid evaluating twelve absent-slot
+        // expressions after adding the V3 policy pin. For larger sessions,
+        // every original identity check through the 20-slot cap still runs.
+        && (beforeSize <= 8 || (
+           (beforeSize <= 8 || exerciseIdentityUnchanged(before[8], after[8]))
         && (beforeSize <= 9 || exerciseIdentityUnchanged(before[9], after[9]))
         && (beforeSize <= 10 || exerciseIdentityUnchanged(before[10], after[10]))
         && (beforeSize <= 11 || exerciseIdentityUnchanged(before[11], after[11]))
@@ -645,7 +650,7 @@ service cloud.firestore {
         && (beforeSize <= 16 || exerciseIdentityUnchanged(before[16], after[16]))
         && (beforeSize <= 17 || exerciseIdentityUnchanged(before[17], after[17]))
         && (beforeSize <= 18 || exerciseIdentityUnchanged(before[18], after[18]))
-        && (beforeSize <= 19 || exerciseIdentityUnchanged(before[19], after[19]));
+        && (beforeSize <= 19 || exerciseIdentityUnchanged(before[19], after[19]))));
     }
     // Workout Execution & History V1 (docs/workout-lifecycle/
     // 09_WORKOUT_EXECUTION_AND_HISTORY.md). `exercises` is validated only for
@@ -667,8 +672,13 @@ service cloud.firestore {
              'scheduledLocalDate', 'status', 'startedAt', 'finishedAt',
              'exercises', 'executionSchemaVersion', 'createdAt', 'updatedAt',
              'programInstanceId', 'mutexProtocolVersion', 'cardio', 'performedLocalDate',
-             'occurrence', 'startedFromSuggestionVersion'
+             'occurrence', 'substitutionPolicySnapshot', 'startedFromSuggestionVersion'
            ])
+        // Etapa 5A/6C (V3 substitution policy pinning, src/workoutExecution/types.ts's
+        // `WorkoutExecution.substitutionPolicySnapshot`): optional so every
+        // pre-this-field execution stays valid; once present it must be one
+        // of the two real policy literals — never trusted as free text.
+        && data.get('substitutionPolicySnapshot', 'legacy') in ['legacy', 'v3']
         // P0-C protocol marker (docs/workout-lifecycle/ hardening plan) —
         // optional so a pre-hardening client omitting it is still valid;
         // once present it must be the real, current value. See
@@ -2854,7 +2864,7 @@ service cloud.firestore {
                  'scheduledLocalDate', 'status', 'startedAt', 'finishedAt',
                  'exercises', 'executionSchemaVersion', 'createdAt', 'updatedAt',
                  'programInstanceId', 'mutexProtocolVersion', 'cardio', 'performedLocalDate',
-                 'occurrence', 'finalizationMode', 'startedFromSuggestionVersion'
+                 'occurrence', 'finalizationMode', 'substitutionPolicySnapshot', 'startedFromSuggestionVersion'
                ])
             && after.programId == before.programId
             && after.templateId == before.templateId
@@ -2869,11 +2879,16 @@ service cloud.firestore {
             && ('cardio' in after) == ('cardio' in before)
             && ('performedLocalDate' in after) == ('performedLocalDate' in before)
             && ('occurrence' in after) == ('occurrence' in before)
+            // Etapa 5A/6C: the policy a session was created under can never
+            // change at terminalization either — finishing/completing never
+            // re-evaluates or rewrites it.
+            && ('substitutionPolicySnapshot' in after) == ('substitutionPolicySnapshot' in before)
             && after.get('programInstanceId', null) == before.get('programInstanceId', null)
             && after.get('mutexProtocolVersion', null) == before.get('mutexProtocolVersion', null)
             && after.get('cardio', null) == before.get('cardio', null)
             && after.get('performedLocalDate', null) == before.get('performedLocalDate', null)
             && after.get('occurrence', null) == before.get('occurrence', null)
+            && after.get('substitutionPolicySnapshot', null) == before.get('substitutionPolicySnapshot', null)
             // 2026-10 fix: `finalizationMode` records which intent (NORMAL
             // vs EARLY) actually produced this terminal status — it can only
             // ever newly appear in exactly THIS transition (IN_PROGRESS ->
@@ -2957,6 +2972,15 @@ service cloud.firestore {
               && (request.resource.data.get('cardio', null) == resource.data.get('cardio', null)
               || (resource.data.status == 'ABANDONED' && request.resource.data.status == 'IN_PROGRESS'
                   && request.resource.data.get('cardio', null) == null))
+          // Etapa 5A/6C P0: the policy a session was created under is fixed
+          // for its whole life — record/skip/finish/abandon can never change
+          // it. The ONE exception mirrors `startedAt`/`cardio` above: a
+          // restart-after-abandon is a new attempt, so it legitimately
+          // re-stamps whatever the CURRENT policy is at restart time (same
+          // `base` object path as `create`) — never a free-form value, still
+          // constrained to the two real literals by `workoutExecutionCommonValid`.
+              && (request.resource.data.get('substitutionPolicySnapshot', null) == resource.data.get('substitutionPolicySnapshot', null)
+              || (resource.data.status == 'ABANDONED' && request.resource.data.status == 'IN_PROGRESS'))
               && request.resource.data.createdAt == resource.data.createdAt
               && request.resource.data.updatedAt == request.time
               && (
