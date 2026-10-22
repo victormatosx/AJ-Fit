@@ -52,10 +52,21 @@ O guardião automático do Victor (`physicalLimitationsRemoved.test.ts`) percorr
 as duas árvores de produção e falha se qualquer um desses símbolos voltar.
 7/7 passando.
 
-**Uma nuance que vale registrar:** a pergunta de limitações ainda existe como
-estado local de onboarding, puramente informativo. Ela é descartada na
-fronteira de gravação e nunca chega ao Firestore nem ao motor de prescrição —
-exatamente o que o teste da linha 48 daquele arquivo fixa.
+**Atualização (22/10):** a pergunta foi removida também da coleta. Até então
+ela ainda existia como estado local de onboarding — `specialConditions`
+oferecia `musculoskeletal_limitation` e, ao marcá-la, o passo `limits`
+aparecia com rótulos nos três idiomas; apenas a gravação era descartada. Agora
+não existe mais passo, opção, rótulo nem `Quiz['limits']`, e a sequência do
+funil tem 48 passos (era 49). Saíram com ela duas coisas que haviam ficado
+inalcançáveis: a inferência que ressuscitava a opção a partir de um `limits`
+legado e o gate de validação `limitations_required`, que nenhuma tela restante
+poderia satisfazer.
+
+As camadas que **leem, descartam ou toleram** o dado permanecem intactas —
+`sanitizeAnswersForEngine`, `prescriptionInputs`, o `limits?: unknown`
+read-only de `PersistedQuizAnswers` e a tolerância das Rules a snapshots
+históricos. Documentos antigos seguem legíveis; novas gravações seguem
+recusadas.
 
 ## Dados históricos a preservar
 
