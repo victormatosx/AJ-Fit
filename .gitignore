@@ -2,6 +2,10 @@
 
 # dependencies
 node_modules/
+# Também na forma de symlink (os worktrees apontam para o node_modules da
+# árvore principal): `node_modules/` com barra casa só diretório, e foi assim
+# que um symlink com caminho absoluto da máquina acabou rastreado.
+node_modules
 
 # Expo
 .expo/
