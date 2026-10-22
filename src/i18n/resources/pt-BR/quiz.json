@@ -44,7 +44,6 @@
         "some_one": "Anotado. Vou te fazer {{count}} pergunta rápida para ajustar o treino com segurança.",
         "some_other": "Anotado. Vou te fazer {{count}} perguntas rápidas para ajustar o treino com segurança."
       },
-      "limits": "Vou proteger {{regions}} e trocar os exercícios que sobrecarregam.",
       "functionalSituations": "Vou priorizar exercícios com apoio e posições estáveis.",
       "allergens": "Anotado. Esses itens ficam fora de todas as refeições.",
       "variety": {
@@ -405,27 +404,11 @@
       "treadmill": "Esteira"
     }
   },
-  "limits": {
-    "title": "Onde você sente dor ou limitação?",
-    "sub": "Apenas colete o que afeta o treino hoje; isso não é um diagnóstico. Essa informação é apenas para seu acompanhamento pessoal.",
-    "options": {
-      "none": "Nenhuma",
-      "knee": "Joelho",
-      "back": "Coluna",
-      "shoulder": "Ombro",
-      "wrist": "Punho",
-      "hip": "Quadril",
-      "elbow": "Cotovelo",
-      "ankle_foot": "Tornozelo/pé",
-      "other": "Outra"
-    }
-  },
   "specialConditions": {
     "title": "Alguma condição especial?",
     "sub": "Selecione as situações que devemos considerar no seu treino.",
     "options": {
       "none": "Nenhuma",
-      "musculoskeletal_limitation": "Tenho dor ou limitação musculoesquelética",
       "pregnancy": "Estou grávida",
       "postpartum": "Estou no período pós-parto",
       "lipedema": "Tenho diagnóstico ou suspeita de lipedema",

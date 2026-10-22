@@ -13,7 +13,6 @@ const fullQuiz: Quiz = {
   goal: 'cut',
   frequency: '4x',
   level: 'int',
-  limits: ['knee'],
   duration: '45',
   days: 4,
   place: 'gym',
@@ -71,18 +70,20 @@ describe('toPersistedAnswers / fromPersistedAnswers (new shape)', () => {
   });
 
   it('never persists physical-limitation answers to Firestore — purely informational, local-state-only (see src/workoutPrescription/input.ts sanitizeAnswersForEngine for the matching read-side strip)', () => {
-    const withLimitation: Quiz = {
+    // `limits` is no longer part of `Quiz` — injected here only to prove a
+    // stray runtime value from a legacy document can never be written back.
+    const withLimitation = {
       ...fullQuiz,
       limits: ['knee', 'back'],
       specialConditions: ['musculoskeletal_limitation'],
-    };
+    } as unknown as Quiz;
     const persisted = toPersistedAnswers(withLimitation);
     expect(Object.prototype.hasOwnProperty.call(persisted, 'limits')).toBe(false);
     expect(JSON.stringify(persisted)).not.toMatch(/limits|musculoskeletal/);
     expect(persisted.specialConditions).not.toContain('musculoskeletal_limitation');
 
     const restored = fromPersistedAnswers(persisted, Timestamp.now());
-    expect(restored.limits).toEqual([]);
+    expect(Object.prototype.hasOwnProperty.call(restored, 'limits')).toBe(false);
     expect(restored.specialConditions).not.toContain('musculoskeletal_limitation');
   });
 
@@ -93,7 +94,7 @@ describe('toPersistedAnswers / fromPersistedAnswers (new shape)', () => {
       specialConditions: ['musculoskeletal_limitation'],
     };
     const restored = fromPersistedAnswers(legacyRaw as any, Timestamp.now());
-    expect(restored.limits).toEqual([]);
+    expect(Object.prototype.hasOwnProperty.call(restored, 'limits')).toBe(false);
     expect(restored.specialConditions).not.toContain('musculoskeletal_limitation');
   });
 
@@ -159,9 +160,8 @@ describe('fromPersistedAnswers — corrupted/sparse documents never throw', () =
     const restored = fromPersistedAnswers(undefined, null);
     expect(restored.birthDate).toBeNull();
     // Backfilled from defaultQuiz — array fields are real arrays, not undefined.
-    expect(Array.isArray(restored.limits)).toBe(true);
     expect(Array.isArray(restored.equipment)).toBe(true);
-    expect(() => restored.limits.includes('knee')).not.toThrow();
+    expect(() => restored.equipment.includes('none')).not.toThrow();
   });
 
   it('handles a sparse answers map missing most fields', () => {

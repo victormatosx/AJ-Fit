@@ -28,7 +28,6 @@ import ptBRQuiz from '../resources/pt-BR/quiz.json';
  *   - deprecated/legacy level aliases: 'never_or_starting' | 'beg' | 'int' | 'adv' | 'elite'
  *   - duration: '30' | '45' | '60' | '90'
  *   - place:    'gym' | 'home'
- *   - limits:   'none' | 'knee' | 'back' | 'shoulder' | 'wrist' | 'hip'
  *   - equipment: catalog ids in EquipmentPicker (unchanged, English lowercase)
  *
  * We assert the ids AT TWO LAYERS: the app's own type (Quiz union) and the
@@ -157,17 +156,6 @@ describe('quiz IDs — place', () => {
   });
 });
 
-describe('quiz IDs — limits (multi)', () => {
-  const IDS = ['none', 'knee', 'hip', 'back', 'shoulder', 'elbow', 'wrist', 'ankle_foot', 'other'] as const;
-  it.each([
-    ['pt-BR', ptBRQuiz],
-    ['en', enQuiz],
-    ['es', esQuiz],
-  ] as const)('every locale ships all limitation labels: %s', (loc, json) => {
-    assertMultiOptionsHaveLabel(loc, json, 'limits', IDS);
-  });
-});
-
 describe('quiz IDs — Body Map visual groups', () => {
   it.each([
     ['pt-BR', ptBRQuiz],
@@ -255,7 +243,8 @@ describe('quiz — no Portuguese labels are persisted as ids (regression)', () =
     expect(defaultQuiz.level).toBeNull();
     expect(defaultQuiz.duration).toBeNull();
     expect(defaultQuiz.place).toBeNull();
-    expect(defaultQuiz.limits).toEqual([]);
+    // The retired physical-limitations question leaves no default behind.
+    expect(Object.prototype.hasOwnProperty.call(defaultQuiz, 'limits')).toBe(false);
     expect(defaultQuiz.equipment).toEqual([]);
   });
 });

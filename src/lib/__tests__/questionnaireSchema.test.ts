@@ -19,7 +19,6 @@ function standardQuiz(overrides: Partial<Quiz> = {}): Quiz {
     trainingDays: ['MON', 'TUE', 'THU', 'FRI'],
     duration: '60',
     place: 'gym',
-    limits: [],
     specialConditions: ['none'],
     muscleFocus: ['none'],
     ...overrides,
@@ -31,10 +30,10 @@ describe('questionnaire schema and branching payload', () => {
     expect(questionnaireValidationErrors(standardQuiz())).toEqual([]);
   });
 
-  it('maps a pre-router limitation into the musculoskeletal branch on read', () => {
+  it('no longer infers the retired musculoskeletal branch from a pre-router limitation', () => {
     const loaded = normalizeLoadedQuiz({ limits: ['knee'], specialConditions: [] });
-    expect(loaded.specialConditions).toEqual(['musculoskeletal_limitation']);
-    expect(loaded.limits).toEqual(['knee']);
+    expect(loaded.specialConditions).toEqual([]);
+    expect(Object.prototype.hasOwnProperty.call(loaded, 'limits')).toBe(false);
   });
 
   it('accepts the home scenario with canonical equipment ids', () => {
@@ -64,11 +63,11 @@ describe('questionnaire schema and branching payload', () => {
     expect(Object.prototype.hasOwnProperty.call(loaded, 'primaryPlace')).toBe(false);
   });
 
-  it('requires only musculoskeletal regions and removes them when the router branch is deselected', () => {
-    let quiz = standardQuiz({ specialConditions: ['musculoskeletal_limitation'], limits: ['knee'] });
+  it('never demands limitation regions: a historical musculoskeletal answer still validates clean', () => {
+    // The question that collected the regions is gone, so there is no screen
+    // left on which a `limitations_required` error could ever be resolved.
+    const quiz = standardQuiz({ specialConditions: ['musculoskeletal_limitation'] });
     expect(questionnaireValidationErrors(quiz)).toEqual([]);
-    quiz = updateQuizAnswer(quiz, 'specialConditions', ['none']);
-    expect(quiz.limits).toEqual([]);
   });
 
   it('drops the removed legacy impact field while normalizing old documents', () => {
@@ -77,7 +76,7 @@ describe('questionnaire schema and branching payload', () => {
       specialConditions: ['musculoskeletal_limitation'],
       limitationImpact: 'professional_restriction',
     });
-    expect(loaded.limits).toEqual(['knee']);
+    expect(Object.prototype.hasOwnProperty.call(loaded, 'limits')).toBe(false);
     expect(Object.prototype.hasOwnProperty.call(loaded, 'limitationImpact')).toBe(false);
   });
 

@@ -42,7 +42,6 @@ export type OnboardingStepId =
   | 'place'
   | 'equipment'
   | 'interstitial_guidedWorkout'
-  | 'limits'
   | 'specialConditions'
   | 'pregnancyWeeks'
   | 'pregnancyCare'
@@ -107,7 +106,6 @@ export const ONBOARDING_STEPS: readonly OnboardingStepDef[] = [
   // the Settings screen for that.
   { id: 'healthIntegration', kind: 'healthIntegration', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'specialConditions', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
-  { id: 'limits', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'lipedemaScreening', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'dizzinessScreening', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'postSurgicalStatus', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
@@ -154,7 +152,6 @@ export const FORCED_QUESTIONNAIRE_STEP_IDS: readonly OnboardingStepId[] = [
   'interstitial_guidedWorkout',
   'muscleFocus',
   'specialConditions',
-  'limits',
   'lipedemaScreening',
   'dizzinessScreening',
   'postSurgicalStatus',
@@ -194,7 +191,6 @@ export type OnboardingFlowAnswers = {
   goal?: NutritionGoal | null;
   sex?: string | null;
   place?: string | null;
-  limits?: string[];
   specialConditions?: string[];
   days?: number | null;
 };
@@ -214,9 +210,6 @@ function isApplicableStep(id: OnboardingStepId, answers?: OnboardingFlowAnswers)
   // compatibility with already-persisted answers; only its visibility here
   // changed.
   if (id === 'equipment') return false;
-  if (id === 'limits') {
-    return !!answers?.specialConditions?.includes('musculoskeletal_limitation');
-  }
   if (id === 'lipedemaScreening') return !!answers?.specialConditions?.includes('lipedema');
   if (id === 'dizzinessScreening') return !!answers?.specialConditions?.includes('dizziness_or_vertigo');
   if (id === 'postSurgicalStatus' || id === 'postSurgicalRegion') {

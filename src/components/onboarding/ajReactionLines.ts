@@ -33,10 +33,8 @@ export interface AjReactionInput {
     /** Weekday labels, already localised and ordered by the caller. */
     trainingDayLabels?: string[] | null;
     specialConditions?: string[] | null;
-    limits?: string[] | null;
-    /** Localised region labels for the limitations worth protecting. */
-    limitLabels?: string[] | null;
-    allergens?: string[] | null;
+      /** Localised region labels for the limitations worth protecting. */
+      allergens?: string[] | null;
     varietyPreference?: string | null;
     commitment?: string | null;
   };
@@ -105,13 +103,6 @@ export function ajReactionLine(input: AjReactionInput): string | null {
       const count = input.applicableHealthStepCount ?? 0;
       if (count <= 0) return t(`${KEY}.specialConditions.none`);
       return t(`${KEY}.specialConditions.some`, { count });
-    }
-
-    case 'limits': {
-      const labels = answers.limitLabels ?? [];
-      // "None" and "other" name nothing AJ could promise to protect.
-      if (labels.length === 0) return null;
-      return t(`${KEY}.limits`, { regions: formatList(t, labels) });
     }
 
     case 'functionalSituations':

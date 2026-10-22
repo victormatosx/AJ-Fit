@@ -140,7 +140,7 @@ describe('missing/corrupted/future-versioned draft', () => {
     const restored = await readOnboardingDraft();
     const quiz = draftToQuiz(restored!);
     expect(quiz.goal).toBe('cut');
-    expect(quiz.limits).toEqual([]);
+    expect(Object.prototype.hasOwnProperty.call(quiz, 'limits')).toBe(false);
     expect(quiz.equipment).toEqual([]);
   });
 

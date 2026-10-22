@@ -137,9 +137,6 @@ describe('quiz runtime — options render for every persisted id', () => {
     ['pt-BR', 'place.options.gym.label', /academia/i],
     ['en', 'place.options.gym.label', /gym/i],
     ['es', 'place.options.gym.label', /gimnasio/i],
-    ['pt-BR', 'limits.options.knee', /joelho/i],
-    ['en', 'limits.options.knee', /knee/i],
-    ['es', 'limits.options.knee', /rodilla/i],
   ] as Array<[SupportedLanguage, string, RegExp]>)(
     '[%s] quiz:%s matches %s',
     async (lang, path, re) => {

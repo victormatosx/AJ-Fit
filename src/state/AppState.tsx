@@ -100,7 +100,6 @@ export type Quiz = {
   frequency: string | null;
   /** New writes use `ExperienceLevel`; deprecated/legacy IDs remain readable for existing questionnaires. */
   level: ExperienceLevel | DeprecatedExperienceLevel | LegacyExperienceLevel | null;
-  limits: string[];
   duration: '30' | '45' | '60' | '90' | null;
   days: number | null;
   /** Explicit schedule semantics. `null` exists only while a new draft has not answered the onboarding step. */
@@ -162,7 +161,6 @@ export const defaultQuiz: Quiz = {
   goal: null,
   frequency: null,
   level: null,
-  limits: [],
   duration: null,
   days: null,
   scheduleMode: null,

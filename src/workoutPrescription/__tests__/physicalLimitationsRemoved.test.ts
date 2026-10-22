@@ -45,15 +45,13 @@ describe('removed physical limitation system', () => {
     }
   });
 
-  it('strips retired fields from engine-facing writes/snapshots — `limits` is restored ONLY as local onboarding UI state (see physicalLimitations.test.ts), never reaching Firestore or the prescription engine', () => {
-    // `normalizeLoadedQuiz` is the pure local-state normalizer behind the
-    // restored (frontend-only) physical-limitations onboarding step — it is
-    // intentionally allowed to carry `limits`/`musculoskeletal_limitation`
-    // for in-session navigation now. The engine/Firestore boundaries below
-    // are what must stay clean, and still do.
+  it('drops retired fields at every boundary — local state, Firestore writes and engine-facing snapshots', () => {
+    // The physical-limitations question no longer exists anywhere, so
+    // `normalizeLoadedQuiz` now drops the retired fields instead of carrying
+    // them for in-session navigation. A historical document stays loadable.
     const normalized = normalizeLoadedQuiz(historical);
-    expect(normalized.limits).toEqual(['knee', 'back', 'other']);
-    expect(normalized.specialConditions).toContain('musculoskeletal_limitation');
+    expect(Object.prototype.hasOwnProperty.call(normalized, 'limits')).toBe(false);
+    expect(normalized.specialConditions).not.toContain('musculoskeletal_limitation');
     expect(Object.prototype.hasOwnProperty.call(normalized, 'limitationImpact')).toBe(false);
 
     const stored = toPersistedAnswers(historical);
@@ -68,14 +66,13 @@ describe('removed physical limitation system', () => {
     // produce) never carries `musculoskeletal_limitation` through to
     // prescription-continuity state:
     expect(questionnaireAnswersFromPrescriptionInputs(snapshot.inputs).specialConditions).not.toContain('musculoskeletal_limitation');
-    // The onboarding step sequence DOES include `limits` once the user has
-    // declared a musculoskeletal limitation — that's the restored question
-    // itself; `historical` already selects it (see the shared fixture above).
-    expect(getStepSequence('anonymous', historical)).toContain('limits');
-    expect(getStepSequence('forcedQuestionnaire', historical)).toContain('limits');
-    // With no limitation declared, the step stays hidden, same as every
-    // other conditional screening step.
-    expect(getStepSequence('anonymous', answers)).not.toContain('limits');
+    // The step is gone from every sequence, including for a historical
+    // answer set that still declares a musculoskeletal limitation — the
+    // question is no longer offered to anyone, under any entry point.
+    for (const entry of ['anonymous', 'forcedQuestionnaire'] as const) {
+      expect(getStepSequence(entry, historical)).not.toContain('limits');
+      expect(getStepSequence(entry, answers)).not.toContain('limits');
+    }
   });
 
   it('manual exercise substitution is unaffected by the restored (purely informational) limitations question', async () => {

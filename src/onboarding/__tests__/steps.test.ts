@@ -15,10 +15,10 @@ import {
 } from '../steps';
 
 describe('ONBOARDING_STEPS', () => {
-  it('has 49 unique step ids', () => {
+  it('has 48 unique step ids', () => {
     const ids = ONBOARDING_STEPS.map((s) => s.id);
-    expect(ids).toHaveLength(49);
-    expect(new Set(ids).size).toBe(49);
+    expect(ids).toHaveLength(48);
+    expect(new Set(ids).size).toBe(48);
   });
 
   it('never lets auth/paywall be dev-jumpable', () => {
@@ -202,13 +202,11 @@ describe('conditional questionnaire branches', () => {
     expect(homeProgress).toEqual(gymProgress);
   });
 
-  it('adds limitation regions directly and coexisting pregnancy/functional screening', () => {
+  it('keeps pregnancy and functional screening from colliding', () => {
     const seq = getStepSequence('anonymous', {
       place: 'gym',
-      limits: ['knee'],
-      specialConditions: ['musculoskeletal_limitation', 'pregnancy', 'functional_limitation'],
+      specialConditions: ['pregnancy', 'functional_limitation'],
     });
-    expect(seq).toContain('limits');
     expect(seq).toContain('pregnancyCare');
     expect(seq).toContain('functionalSituations');
     expect(getStepSequence('anonymous', { ...standard, specialConditions: ['postpartum'] })).toContain(
@@ -249,13 +247,12 @@ describe('conditional questionnaire branches', () => {
     expect(seq.filter((id) => phase2Ids.includes(id))).toEqual(expected);
   });
 
-  it('combines lipedema and musculoskeletal details without duplicating screens', () => {
+  it('does not duplicate the lipedema screen', () => {
     const seq = getStepSequence('anonymous', {
       ...standard,
-      limits: ['knee'],
-      specialConditions: ['lipedema', 'musculoskeletal_limitation'],
+      specialConditions: ['lipedema'],
     });
-    for (const id of ['limits', 'lipedemaScreening'] as const) {
+    for (const id of ['lipedemaScreening'] as const) {
       expect(seq.filter((stepId) => stepId === id)).toHaveLength(1);
     }
   });

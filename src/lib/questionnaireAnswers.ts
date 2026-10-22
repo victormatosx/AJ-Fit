@@ -20,7 +20,7 @@ import { cleanApplicableAnswers, normalizeLoadedQuiz } from './questionnaireSche
  * is a `Timestamp` (Firestore has no native `Date`), plus the legacy `age`
  * field kept ONLY for reading pre-migration documents — never written again.
  */
-export type PersistedQuizAnswers = Omit<Quiz, 'birthDate' | 'place' | 'limits'> & {
+export type PersistedQuizAnswers = Omit<Quiz, 'birthDate' | 'place'> & {
   birthDate?: Timestamp | null;
   place?: Quiz['place'] | 'both' | null;
   /** @deprecated removed questionnaire field — used only to resolve legacy `place: both`. */
@@ -32,12 +32,11 @@ export type PersistedQuizAnswers = Omit<Quiz, 'birthDate' | 'place' | 'limits'> 
   /** @deprecated removed questionnaire field — ignored on read, never written. */
   motivation?: unknown;
   /**
-   * `limits` (and `musculoskeletal_limitation` inside `specialConditions`)
-   * is the purely-informational, frontend-only physical-limitations
-   * question — onboarding local state ONLY (see `Quiz['limits']`). It must
-   * never be written to Firestore. Kept here read-only so a pre-removal or
-   * accidentally-written legacy document can still be loaded without
-   * throwing; `toPersistedAnswers` never sets it.
+   * The retired physical-limitations question. It no longer exists anywhere
+   * in the app — not in `Quiz`, not in onboarding — but a pre-removal or
+   * accidentally-written legacy document can still carry it, so it stays
+   * declared read-only to keep such a document loadable without throwing.
+   * `toPersistedAnswers` never sets it.
    */
   limits?: unknown;
 };
@@ -45,15 +44,19 @@ export type PersistedQuizAnswers = Omit<Quiz, 'birthDate' | 'place' | 'limits'> 
 /**
  * `Quiz` (client shape, `birthDate: Date | null`) → Firestore shape.
  *
- * `limits`/`musculoskeletal_limitation` are deliberately stripped here even
- * though `cleanApplicableAnswers` keeps them for local in-session state —
- * the physical-limitations question is purely informational (onboarding UI
- * only) and must never reach Firestore or, downstream, the prescription
- * Cloud Functions. See `src/workoutPrescription/input.ts`'s
- * `sanitizeAnswersForEngine` for the matching read-side strip.
+ * `musculoskeletal_limitation` is stripped here as defence in depth: the
+ * question that collected it is gone, so live `Quiz` cannot hold it, but a
+ * value recovered from a legacy document must never be written back. See
+ * `src/workoutPrescription/input.ts`'s `sanitizeAnswersForEngine` for the
+ * matching read-side strip.
  */
 export function toPersistedAnswers(answers: Quiz): PersistedQuizAnswers {
-  const { birthDate, limits: _limits, specialConditions, ...rest } = cleanApplicableAnswers(answers);
+  // `limits` is no longer declared in `Quiz`, so it is stripped through a
+  // cast rather than by type: a value recovered from a legacy document could
+  // still ride along at runtime, and Firestore Rules reject any questionnaire
+  // write that carries it.
+  const { birthDate, specialConditions, limits: _retiredLimits, ...rest } =
+    cleanApplicableAnswers(answers) as Quiz & { limits?: unknown };
   return {
     ...rest,
     specialConditions: specialConditions.filter((value) => value !== 'musculoskeletal_limitation'),
@@ -101,14 +104,10 @@ export function fromPersistedAnswers(
     birthDate: resolvedBirthDate,
   });
   // Mirror of the strip in `toPersistedAnswers`: never resurrect
-  // `musculoskeletal_limitation`/`limits` into live state from a Firestore
-  // document, even a legacy one written before this field was removed from
-  // persistence. This is independent from (and stricter than)
-  // `normalizeLoadedQuiz`'s own legacy-inference logic, which only governs
-  // same-session local state (draft resume via `fromDraftAnswers`).
+  // `musculoskeletal_limitation` into live state from a Firestore document,
+  // even a legacy one written before the question was removed.
   return {
     ...quiz,
-    limits: [],
     specialConditions: quiz.specialConditions.filter((value) => value !== 'musculoskeletal_limitation'),
   };
 }

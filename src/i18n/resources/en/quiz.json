@@ -44,7 +44,6 @@
         "some_one": "Noted. I'll ask {{count}} quick question so I can adjust your training safely.",
         "some_other": "Noted. I'll ask {{count}} quick questions so I can adjust your training safely."
       },
-      "limits": "I'll protect {{regions}} and swap out the exercises that overload them.",
       "functionalSituations": "I'll prioritise supported exercises and stable positions.",
       "allergens": "Noted. Those stay out of every meal.",
       "variety": {
@@ -405,27 +404,11 @@
       "treadmill": "Treadmill"
     }
   },
-  "limits": {
-    "title": "Where do you feel pain or limitations?",
-    "sub": "Only report what affects training today; this is not a diagnosis. This information is for your personal tracking only.",
-    "options": {
-      "none": "None",
-      "knee": "Knee",
-      "back": "Back",
-      "shoulder": "Shoulder",
-      "wrist": "Wrist",
-      "hip": "Hip",
-      "elbow": "Elbow",
-      "ankle_foot": "Ankle/foot",
-      "other": "Other"
-    }
-  },
   "specialConditions": {
     "title": "Any special conditions?",
     "sub": "Select the situations we should consider in your training.",
     "options": {
       "none": "None",
-      "musculoskeletal_limitation": "I have musculoskeletal pain or limitations",
       "pregnancy": "I am pregnant",
       "postpartum": "I am postpartum",
       "lipedema": "I have diagnosed or suspected lipedema",

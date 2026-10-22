@@ -229,22 +229,17 @@ export function OnboardingFunnelScreen({
    * sequence resolver, rather than from a recount.
    */
   const CONDITIONAL_HEALTH_STEP_IDS = [
-    'limits', 'lipedemaScreening', 'dizzinessScreening', 'postSurgicalStatus',
+    'lipedemaScreening', 'dizzinessScreening', 'postSurgicalStatus',
     'postSurgicalRegion', 'pregnancyWeeks', 'pregnancyCare', 'pregnancyWarningSigns',
     'postpartumContext', 'postpartumSigns', 'postpartumReturnClearance',
     'functionalSituations', 'medicalRestrictionDetails',
   ] as const;
 
   const reactionLineFor = (stepId: typeof currentStepId): string | null => {
-    const limitLabels = (quiz.limits ?? [])
-      .filter((limit) => limit !== 'none' && limit !== 'other')
-      .map((limit) => tLoose(`limits.options.${limit}`));
     const allergens = nutritionDraftAnswers(funnel.nutrition).excludedAllergens ?? [];
     const hasContent = stepId === 'nutrition_excludedAllergens'
       ? allergens.length > 0
-      : stepId === 'limits'
-        ? limitLabels.length > 0
-        : true;
+      : true;
     if (!shouldReactToStep(stepId, hasContent)) return null;
 
     const sequence = getStepSequence(mode, quiz);
@@ -265,8 +260,6 @@ export function OnboardingFunnelScreen({
         trainingDayCount: quiz.days,
         trainingDayLabels: (quiz.trainingDays ?? []).map((day) => tLoose(`trainingDays.options.${day}`)),
         specialConditions: quiz.specialConditions,
-        limits: quiz.limits,
-        limitLabels,
         allergens,
         varietyPreference: nutritionDraftAnswers(funnel.nutrition).varietyPreference,
         commitment: quiz.commitment,
@@ -567,7 +560,6 @@ export function OnboardingFunnelScreen({
     case 'interstitial_guidedWorkout':
       content = <GuidedWorkoutInterstitialScreen progress={progress} onContinue={goNext} />;
       break;
-    case 'limits':
     case 'specialConditions':
     case 'pregnancyWeeks':
     case 'pregnancyCare':

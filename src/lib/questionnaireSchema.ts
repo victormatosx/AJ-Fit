@@ -74,7 +74,6 @@ export function cleanApplicableAnswers(input: Quiz): Quiz {
         ? null
         : normalizeWeekdays(input.trainingDays ?? []),
     equipment: input.place === 'home' ? exclusiveNone(input.equipment) : [],
-    limits: has('musculoskeletal_limitation') ? exclusiveNone(input.limits) : [],
     muscleFocus: exclusiveNone(input.muscleFocus).slice(0, 2),
     specialConditions,
     pregnancyScreening: has('pregnancy')
@@ -92,6 +91,8 @@ export function cleanApplicableAnswers(input: Quiz): Quiz {
 /** Defensive read compatibility for sparse/malformed and all v1 questionnaires. */
 export function normalizeLoadedQuiz(input: Omit<Partial<Quiz>, 'place'> & {
   limitationImpact?: unknown;
+  /** @deprecated Retired physical-limitations question — dropped on read, never re-persisted. */
+  limits?: unknown;
   /** @deprecated Read-only compatibility for the removed `place: both` branch. */
   place?: Quiz['place'] | 'both';
   /** @deprecated Read-only compatibility; folded into `place` and discarded. */
@@ -102,13 +103,17 @@ export function normalizeLoadedQuiz(input: Omit<Partial<Quiz>, 'place'> & {
   // model and prescription engine can never observe or re-persist it.
   const {
     limitationImpact: _legacyLimitationImpact,
+    limits: _legacyLimits,
     primaryPlace: legacyPrimaryPlace,
     ...currentInput
   } = input;
   const merged = { ...defaultQuiz, ...currentInput };
   const strings = (value: unknown) => Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
-  const allowedConditions: string[] = ['none', 'musculoskeletal_limitation', 'pregnancy', 'postpartum', 'lipedema', 'dizziness_or_vertigo', 'post_surgical', 'functional_limitation', 'medical_restriction'];
-  const loadedLimits = strings(merged.limits);
+  // `musculoskeletal_limitation` is deliberately absent: the question that
+  // collected it was retired, so it is dropped at this boundary instead of
+  // being loaded into an editing surface that can no longer render or clear
+  // it. The stored document is untouched and stays readable.
+  const allowedConditions: string[] = ['none', 'pregnancy', 'postpartum', 'lipedema', 'dizziness_or_vertigo', 'post_surgical', 'functional_limitation', 'medical_restriction'];
   // Legacy questionnaires (pre-Schedule Engine) have no `trainingDays` at
   // all — never invent weekdays for them; the Schedule Engine treats a null
   // value as SCHEDULE_SETUP_REQUIRED rather than guessing a preference.
@@ -125,12 +130,10 @@ export function normalizeLoadedQuiz(input: Omit<Partial<Quiz>, 'place'> & {
       ? normalizeWeekdays(strings(merged.trainingDays))
       : null;
   const loadedConditions = strings(merged.specialConditions).filter((value): value is Quiz['specialConditions'][number] => allowedConditions.includes(value));
-  // Phase 1 asked `limits` before this condition existed in the router. Only
-  // infer the new branch when the old document has no router answer at all;
-  // an explicit `none` in a new document must continue to clear stale data.
-  const specialConditions = loadedConditions.length === 0 && loadedLimits.some((value) => value !== 'none')
-    ? ['musculoskeletal_limitation' as const]
-    : loadedConditions;
+  // The retired physical-limitations question is never inferred back into
+  // live state: `musculoskeletal_limitation` stays readable as historical
+  // data (see `allowedConditions`) but is no longer offered or derived.
+  const specialConditions = loadedConditions;
   const place: Quiz['place'] = currentInput.place === 'both'
     ? legacyPrimaryPlace === 'gym' || legacyPrimaryPlace === 'home' ? legacyPrimaryPlace : null
     : currentInput.place === 'gym' || currentInput.place === 'home' ? currentInput.place : null;
@@ -138,7 +141,6 @@ export function normalizeLoadedQuiz(input: Omit<Partial<Quiz>, 'place'> & {
     ...merged,
     place,
     scheduleMode,
-    limits: loadedLimits,
     trainingDays,
     equipment: strings(merged.equipment),
     style: strings(merged.style),
@@ -203,7 +205,6 @@ export function answerValueForStep(quiz: Quiz, stepId: OnboardingStepId): unknow
 
 export type QuestionnaireValidationCode =
   | 'unsupported_days' | 'too_many_muscle_priorities' | 'exclusive_none_conflict'
-  | 'limitations_required'
   | 'pregnancy_screening_incomplete' | 'postpartum_screening_incomplete' | 'functional_screening_incomplete'
   | 'lipedema_screening_incomplete' | 'dizziness_screening_incomplete'
   | 'post_surgical_screening_incomplete' | 'medical_restriction_screening_incomplete';
@@ -234,14 +235,11 @@ export function questionnaireValidationErrors(quiz: Quiz): QuestionnaireValidati
   // `QuestionnaireAnswers`/`Quiz` object without `limits` at all — that
   // field is onboarding-UI-only (purely informational physical-limitations
   // step) and deliberately never reaches the prescription engine.
-  if ([quiz.equipment, quiz.limits ?? [], quiz.muscleFocus, quiz.specialConditions, quiz.pregnancyScreening?.warningSigns ?? [], quiz.postpartumScreening?.signs ?? [], quiz.functionalScreening?.situations ?? []].some(hasNoneConflict)) errors.push('exclusive_none_conflict');
+  if ([quiz.equipment, quiz.muscleFocus, quiz.specialConditions, quiz.pregnancyScreening?.warningSigns ?? [], quiz.postpartumScreening?.signs ?? [], quiz.functionalScreening?.situations ?? []].some(hasNoneConflict)) errors.push('exclusive_none_conflict');
   // No `equipment_required` gate: the questionnaire never asks for a home
   // equipment inventory (see onboarding/steps.ts), so `quiz.equipment` is
   // structurally always `[]` for every home/both user going forward —
   // requiring it here would make the questionnaire impossible to complete.
-  if (quiz.specialConditions.includes('musculoskeletal_limitation')) {
-    if ((quiz.limits ?? []).length === 0 || quiz.limits?.includes('none')) errors.push('limitations_required');
-  }
   if (quiz.specialConditions.includes('pregnancy')) {
     const value = quiz.pregnancyScreening;
     if (!value || value.weeks == null || value.weeks < 1 || value.weeks > 42 || !value.prenatalCare || !value.exerciseRestriction || !value.complication || value.warningSigns.length === 0) errors.push('pregnancy_screening_incomplete');

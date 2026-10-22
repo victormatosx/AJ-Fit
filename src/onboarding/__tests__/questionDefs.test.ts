@@ -2,9 +2,9 @@ import { describe,expect,it } from 'vitest';
 import { FUNNEL_QUESTIONS } from '../questionDefs';
 import { readFileSync } from 'node:fs';
 
-it('renders the conditional limits step instead of leaving the onboarding screen empty', () => {
+it('renders the conditional health steps instead of leaving the onboarding screen empty', () => {
   const source = readFileSync('src/screens/OnboardingFunnelScreen.tsx', 'utf8');
-  expect(source).toMatch(/case 'limits':(?:\s*case '[^']+':)*\s*content = renderQuestion\(\);/);
+  expect(source).toMatch(/case 'lipedemaScreening':(?:\s*case '[^']+':)*\s*content = renderQuestion\(\);/);
 });
 
 describe('goal question options', () => {
@@ -62,26 +62,6 @@ describe('place question', () => {
   });
 });
 
-describe('limits question', () => {
-  it('keeps the persisted limitation ids while using the vertical list layout', () => {
-    const limits = FUNNEL_QUESTIONS.limits;
-    expect(limits?.kind).toBe('multi');
-    if (!limits || limits.kind !== 'multi') throw new Error('Limits question must expose multi options');
-    expect(limits.options.map((option) => option.v)).toEqual([
-      'knee',
-      'hip',
-      'back',
-      'shoulder',
-      'elbow',
-      'wrist',
-      'ankle_foot',
-      'other',
-    ]);
-    expect(limits.exclusiveOption).toBe('none');
-    expect(limits.layout).toBe('list');
-  });
-});
-
 describe('muscle focus question', () => {
   it('keeps the existing persisted priority ids and two-selection rule for the Body Map UI', () => {
     const muscleFocus = FUNNEL_QUESTIONS.muscleFocus;
@@ -104,7 +84,6 @@ describe('special conditions question', () => {
     if (!question || question.kind !== 'multi') throw new Error('Special conditions must expose multi options');
     expect(question.options.map((option) => option.v)).toEqual([
       'none',
-      'musculoskeletal_limitation',
       'pregnancy',
       'postpartum',
       'lipedema',

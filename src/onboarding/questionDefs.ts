@@ -65,22 +65,6 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
       { v: 'none' },
     ],
   },
-  limits: {
-    id: 'limits',
-    kind: 'multi',
-    exclusiveOption: 'none',
-    layout: 'list',
-    options: [
-      { v: 'knee' },
-      { v: 'hip' },
-      { v: 'back' },
-      { v: 'shoulder' },
-      { v: 'elbow' },
-      { v: 'wrist' },
-      { v: 'ankle_foot' },
-      { v: 'other' },
-    ],
-  },
   specialConditions: {
     id: 'specialConditions',
     kind: 'multi',
@@ -88,7 +72,6 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
     layout: 'list',
     options: [
       { v: 'none' },
-      { v: 'musculoskeletal_limitation' },
       { v: 'pregnancy' },
       { v: 'postpartum' },
       { v: 'lipedema' },
