@@ -14,7 +14,6 @@ import {
 import type { OnboardingStepId } from '../onboarding/steps';
 
 export const HOME_EQUIPMENT_IDS = ['bodyweight', 'dumbbells', 'bands', 'bench_or_box', 'barbell', 'other', 'none'] as const;
-export const LIMITATION_IDS = ['none', 'knee', 'hip', 'back', 'shoulder', 'elbow', 'wrist', 'ankle_foot', 'other'] as const;
 export const POSTPARTUM_SIGN_IDS = ['pain', 'healing_problems', 'abnormal_bleeding', 'incontinence', 'vaginal_pressure', 'dizziness_weakness', 'none'] as const;
 export const PREGNANCY_WARNING_SIGN_IDS = ['vaginal_bleeding', 'dizziness_fainting', 'chest_pain', 'unusual_shortness_of_breath', 'painful_regular_contractions', 'fluid_leakage', 'calf_pain_swelling', 'none'] as const;
 export const FUNCTIONAL_SITUATION_IDS = ['walking_difficulty', 'support_needed', 'stairs_difficulty', 'balance_problems', 'recent_fall', 'sit_to_stand_difficulty', 'daily_activities_difficulty', 'none'] as const;
@@ -48,14 +47,21 @@ const emptyMedicalRestrictionScreening = (): MedicalRestrictionScreening => ({ p
 
 /** Removes hidden branch answers after every edit and before persistence. */
 export function cleanApplicableAnswers(input: Quiz): Quiz {
-  let specialConditions = normalizeSpecialConditions(input.specialConditions);
+  // `musculoskeletal_limitation` is filtered here as defence in depth. The
+  // question that collected it was retired, so live `Quiz` cannot acquire it
+  // through the UI — but a value recovered from a legacy draft/document could
+  // still reach this function at runtime, and Firestore Rules reject any
+  // questionnaire write that carries it.
+  let specialConditions = normalizeSpecialConditions(
+    input.specialConditions.filter(value => value !== ('musculoskeletal_limitation' as string)));
   if (input.sex !== 'f') specialConditions = specialConditions.filter((value) => value !== 'pregnancy' && value !== 'postpartum');
-  // `limitationImpact` is a genuinely retired field (pre-dates, and is
-  // unrelated to, the restored `limits` question — see commit "refactor:
-  // remove limitationImpact step, activate adaptation by region alone")
-  // that must never be re-persisted even though it may still linger on an
-  // in-memory `Quiz` carried over from an old draft/document.
-  const { limitationImpact: _impact, ...activeInput } = input as Quiz & { limitationImpact?: unknown };
+  // `limits` and `limitationImpact` are both retired fields of the removed
+  // musculoskeletal system. Neither exists in `Quiz` any more, so they are
+  // stripped through a cast rather than by type: an in-memory object carried
+  // over from an old draft or document can still hold them at runtime, and
+  // they must never be re-persisted.
+  const { limits: _limits, limitationImpact: _impact, ...activeInput } =
+    input as Quiz & { limits?: unknown; limitationImpact?: unknown };
   const has = (condition: Quiz['specialConditions'][number]) => specialConditions.includes(condition);
   const postpartum = has('postpartum') ? (input.postpartumScreening ?? emptyPostpartumScreening()) : null;
   const functional = has('functional_limitation') ? (input.functionalScreening ?? emptyFunctionalScreening()) : null;

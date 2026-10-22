@@ -111,10 +111,11 @@ export function questionnaireAnswersFromPrescriptionInputs(inputs: EffectivePres
     equipment: [...inputs.equipment],
     style: [...inputs.style],
     muscleFocus: [...inputs.muscleFocus],
-    // `musculoskeletal_limitation` is purely informational onboarding-UI
-    // state (never part of `EffectivePrescriptionInputs` in practice —
-    // `effectivePrescriptionInputsFromAnswers` above already filters it
-    // out) — this is a defensive backstop against resurrecting it from a
+    // `musculoskeletal_limitation` belongs to the retired musculoskeletal
+    // system: the question that collected it no longer exists anywhere in the
+    // app, and it was never part of `EffectivePrescriptionInputs` in practice
+    // (`effectivePrescriptionInputsFromAnswers` above already filters it out).
+    // This is a defensive backstop against resurrecting it from a
     // malformed/legacy snapshot shape into live prescription-continuity state.
     specialConditions: inputs.specialConditions.filter(value => value !== ('musculoskeletal_limitation' as string)),
     pregnancyScreening: cloneNullableRecord(inputs.pregnancyScreening),

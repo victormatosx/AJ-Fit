@@ -179,3 +179,106 @@ describe('as protecoes alheias a esta mudanca seguem de pe', () => {
     await assertFails(setDoc(doc(db('inscrita'), 'users/legada/questionnaires/q9'), questionario()));
   });
 });
+
+/**
+ * Os campos `limitationDatasetVersion`/`limitationDatasetHash` do contrato
+ * clínico aposentado existem em 20 dos 21 programas reais. Recusá-los no
+ * `hasOnly` do validador compartilhado tornaria qualquer update de um
+ * documento histórico impossível — inclusive um supersede legítimo. Eles são
+ * portanto TOLERADOS na leitura/atualização e recusados em tudo o mais.
+ */
+describe('programas historicos com os campos clinicos aposentados', () => {
+  const UID = 'legada';
+
+  const programaV2 = (programId: string) => ({
+    programId, planId: 'wp_12345678', prescriptionId: 'wp_12345678',
+    templateId: 'T003', templateVersion: 2, templateSourceVersion: '2.0.0',
+    templateContentHash: 'a'.repeat(64), questionnaireId: 'q1',
+    questionnaireVersion: 1, status: 'active', source: 'onboarding',
+    requestedDays: 4, prescribedStructuredDays: 4, population: 'conventional',
+    environment: 'gym', goalFamily: 'hypertrophy_body_composition', split: 'upper/lower',
+    sessions: [{ name: 'A', type: 'strength', exercises: [{ exerciseId: 'squat', sourceExerciseId: 'squat', sets: 3, reps: '8-12' }] }],
+    versions: { templateLibrary: '2.0.0', selectionEngine: '1.0.0', safetyRules: '1.0.0',
+      modifierRules: '2.0.0', compositionEngine: '2.1.0', limitationResolver: '1.0.0' },
+    trace: { selectionReasons: [], safety: { status: 'CLEAR', reasons: [], requiredModifierIds: [], protectedConstraints: [] },
+      appliedModifiers: [], unresolvedModifiers: [], conflicts: [], substitutions: [],
+      compositionDecisions: [], validationCodes: [] },
+    createdAt: Timestamp.now(), activatedAt: Timestamp.now(), updatedAt: Timestamp.now(),
+  });
+
+  const CAMPOS = {
+    limitationDatasetVersion: 'phase3-limitation-profiles-v2',
+    limitationDatasetHash: 'a'.repeat(64),
+  };
+
+  /** Semeia o estado que existe hoje em produção: documento válido + os dois
+   *  campos aposentados, com o ponteiro `active` apontando para outro. */
+  async function semear(programId: string, extra: Record<string, unknown> = {}) {
+    await env.withSecurityRulesDisabled(async (context) => {
+      const f = context.firestore();
+      await setDoc(doc(f, 'workoutTemplates/T003'), {
+        id: 'T003', version: 2, sourceVersion: '2.0.0', libraryId: 'reformed-v2',
+        contentHash: 'a'.repeat(64), status: 'active',
+        profile: { sex: 'male', environment: 'gym', primaryGoal: 'hypertrophy_body_composition', daysPerWeek: 4 },
+        split: 'upper/lower', rationale: 'fixture',
+        sessions: [{ name: 'A', type: 'strength', exercises: [{ exerciseId: 'squat', sets: 3, reps: '8-12' }] }],
+        createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
+      });
+      await setDoc(doc(f, `users/${UID}/questionnaires/q1`), {
+        answers: { specialConditions: ['none'], level: 'intermediate' }, version: 1, createdAt: Timestamp.now(),
+      });
+      await setDoc(doc(f, `users/${UID}/workoutPrograms/${programId}`), { ...programaV2(programId), ...extra });
+      await setDoc(doc(f, `users/${UID}/workoutProgramState/active`), { programId: 'outro', updatedAt: Timestamp.now() });
+    });
+  }
+
+  const supersede = (programId: string, patch: Record<string, unknown> = {}) =>
+    updateDoc(doc(db(UID), `users/${UID}/workoutPrograms/${programId}`),
+      { status: 'superseded', updatedAt: serverTimestamp(), ...patch });
+
+  it('ATUALIZA um programa historico preservando os campos (o caso dos 3 em producao)', async () => {
+    await semear('wpg_hist2000', CAMPOS);
+    await assertSucceeds(supersede('wpg_hist2000'));
+  });
+
+  it('o mesmo programa SEM os campos tambem atualiza — a tolerancia nao e uma exigencia', async () => {
+    await semear('wpg_limpo200');
+    await assertSucceeds(supersede('wpg_limpo200'));
+  });
+
+  it('os valores historicos sao IMUTAVEIS: alterar qualquer um deles e recusado', async () => {
+    await semear('wpg_imut2000', CAMPOS);
+    await assertFails(supersede('wpg_imut2000', { limitationDatasetVersion: 'outra-versao' }));
+    await assertFails(supersede('wpg_imut2000', { limitationDatasetHash: 'b'.repeat(64) }));
+  });
+
+  it('nao se pode ACRESCENTAR os campos a um programa que nao os tinha', async () => {
+    await semear('wpg_add20000');
+    await assertFails(supersede('wpg_add20000', CAMPOS));
+  });
+
+  it('nao se pode REMOVER os campos de um programa historico', async () => {
+    await semear('wpg_rem20000', CAMPOS);
+    const { deleteField } = await import('firebase/firestore');
+    await assertFails(supersede('wpg_rem20000', {
+      limitationDatasetVersion: deleteField(), limitationDatasetHash: deleteField(),
+    }));
+  });
+
+  it('um programa NOVO nao pode ser criado carregando os campos aposentados', async () => {
+    await semear('wpg_base0000');
+    const { runTransaction } = await import('firebase/firestore');
+    const f = db(UID);
+    await assertFails(runTransaction(f, async (tx) => {
+      tx.set(doc(f, `users/${UID}/workoutPrograms/wpg_novo2000`),
+        { ...programaV2('wpg_novo2000'), ...CAMPOS,
+          createdAt: serverTimestamp(), activatedAt: serverTimestamp(), updatedAt: serverTimestamp() });
+      tx.set(doc(f, `users/${UID}/workoutProgramState/active`), { programId: 'wpg_novo2000', updatedAt: serverTimestamp() });
+    }));
+  });
+
+  it('a LEITURA de um programa historico nunca foi afetada', async () => {
+    await semear('wpg_read2000', CAMPOS);
+    await assertSucceeds(getDoc(doc(db(UID), `users/${UID}/workoutPrograms/wpg_read2000`)));
+  });
+});

@@ -461,6 +461,19 @@ service cloud.firestore {
              'goalFamily', 'split', 'adaptationStage', 'sessions', 'versions',
              'trace',
              'prescribedTrainingFrequency', 'scheduleMode', 'availability', 'weeklySchedule',
+             // Campos clinicos APOSENTADOS, tolerados aqui e em NENHUM outro
+             // lugar: 20 dos 21 programas reais os carregam, e sem esta
+             // tolerancia o `hasOnly` recusaria qualquer update de um
+             // documento historico — inclusive um supersede legitimo.
+             //
+             // Tolerar NAO e aceitar: ausentes de `hasAll` (nunca exigidos),
+             // recusados na criacao (ver `allow create`) e imutaveis na
+             // atualizacao (ver `allow update`), que tambem impede
+             // acrescenta-los a um documento que nao os tinha. Nenhuma regra
+             // deste arquivo le seus valores para decisao de autoridade ou
+             // seguranca: a validacao clinica que existia foi removida e nao
+             // foi reintroduzida.
+             'limitationDatasetVersion', 'limitationDatasetHash',
              'createdAt', 'activatedAt', 'updatedAt'
            ])
         && data.programId == programId
@@ -1702,6 +1715,12 @@ service cloud.firestore {
           // below.
           && !(request.resource.data.versions is map
                && request.resource.data.versions.templateLibrary == '1.27.0')
+          // Um programa NOVO nunca carrega os campos clinicos aposentados. A
+          // tolerancia em `workoutProgramCommonValid` existe apenas para que
+          // documentos historicos permanecam atualizaveis; na criacao a recusa
+          // e explicita, para que a tolerancia nao se torne uma porta de
+          // reintroducao do contrato que deixou de existir.
+          && !request.resource.data.keys().hasAny(['limitationDatasetVersion', 'limitationDatasetHash'])
           && workoutProgramCommonValid(userId, programId, request.resource.data)
           // Transitional rollout compatibility: the already-published app
           // may omit both fields; the new app always sends both, and any
@@ -1762,6 +1781,12 @@ service cloud.firestore {
               || resource.data.versions.templateLibrary == '1.3.0')
           && request.resource.data.diff(resource.data).affectedKeys()
                .hasOnly(['status', 'activatedAt', 'updatedAt'])
+          // Os campos aposentados sao estritamente read-only: o que o
+          // documento ja tinha permanece com o MESMO valor, e o que nao tinha
+          // nao pode passar a ter. Escrito de forma independente do
+          // `affectedKeys` acima para que a garantia nao dependa dele.
+          && request.resource.data.get('limitationDatasetVersion', null) == resource.data.get('limitationDatasetVersion', null)
+          && request.resource.data.get('limitationDatasetHash', null) == resource.data.get('limitationDatasetHash', null)
           && request.resource.data.createdAt == resource.data.createdAt
           && request.resource.data.updatedAt == request.time
           && (
