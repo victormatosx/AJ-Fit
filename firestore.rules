@@ -1640,31 +1640,19 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly(
                ['answers', 'version', 'createdAt'])
           && request.resource.data.answers is map
-          // TRANSIÇÃO ENTRE VERSÕES DO APP (sem OTA neste projeto).
-          //
-          // A remoção do sistema musculoesquelético deixou de emitir `limits`,
-          // `limitationImpact` e `musculoskeletal_limitation`: o cliente novo
-          // os descarta na fronteira de gravação. Mas o binário que está nas
-          // lojas AINDA os envia, e recusá-los aqui impediria esse usuário de
-          // concluir o onboarding — sem OTA, ele não tem como se atualizar
-          // antes de ser bloqueado.
-          //
-          // Então os campos são TOLERADOS, não reabilitados. Nada no backend
-          // os lê: os resolvedores clínicos foram removidos e a prescrição
-          // ignora o que chegar aqui. O que estas linhas fazem é apenas
-          // impedir que o espaço legado vire depósito livre enquanto a frota
-          // não migra — tipo, tamanho e domínio fechados de regiões.
-          //
-          // RETIRAR quando a adoção da versão nova tornar o bloqueio seguro
-          // (ver docs/.../compatibilidade-versoes.md).
-          && (!request.resource.data.answers.keys().hasAny(['limits'])
-               || (request.resource.data.answers.limits is list
-                   && request.resource.data.answers.limits.size() <= 8
-                   && request.resource.data.answers.limits.toSet().hasOnly([
-                        'knee', 'hip', 'back', 'shoulder', 'elbow', 'wrist', 'ankle_foot', 'other', 'none'
-                      ])))
-          && (!request.resource.data.answers.keys().hasAny(['limitationImpact'])
-               || request.resource.data.answers.limitationImpact is string)
+            // Informação clínica APOSENTADA: o sistema musculoesquelético foi
+            // removido, nenhum resolvedor o consome e o cliente atual não emite
+            // estes campos. Recusar aqui é o que impede que uma gravação nova
+            // reintroduza um contrato que deixou de existir.
+            //
+            // Não há compatibilidade a preservar com binários antigos: o
+            // produto está em pré-lançamento, sem usuários externos, e os
+            // aparelhos internos são atualizados ou reinstalados.
+            //
+            // Questionários JÁ GRAVADOS que carregam estes campos continuam
+            // legíveis e utilizáveis — a recusa vale só para escrita nova.
+            && !request.resource.data.answers.keys().hasAny(['limits', 'limitationImpact'])
+            && !request.resource.data.answers.get('specialConditions', []).hasAny(['musculoskeletal_limitation'])
           && request.resource.data.version is int
           && request.resource.data.version >= 1
           && request.resource.data.createdAt is timestamp;
