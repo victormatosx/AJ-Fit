@@ -1,0 +1,198 @@
+{
+  "task": "generation-quality-improvement",
+  "authorized": false,
+  "model": "gpt-6-luna",
+  "maxJobs": 36,
+  "maxCalls": 144,
+  "maxCallsPerJob": 4,
+  "maxReservedPerJobUsd": 0.03,
+  "proposedBudgetUsd": 1.08,
+  "priorTaskBudgetReusable": false,
+  "emulatorProject": "demo-ajfit-quality-comparison",
+  "jobs": [
+    {
+      "block": 1,
+      "scenario": "vegetarian",
+      "arm": "baseline"
+    },
+    {
+      "block": 1,
+      "scenario": "vegetarian",
+      "arm": "candidate"
+    },
+    {
+      "block": 1,
+      "scenario": "milk",
+      "arm": "candidate"
+    },
+    {
+      "block": 1,
+      "scenario": "milk",
+      "arm": "baseline"
+    },
+    {
+      "block": 1,
+      "scenario": "gluten",
+      "arm": "baseline"
+    },
+    {
+      "block": 1,
+      "scenario": "gluten",
+      "arm": "candidate"
+    },
+    {
+      "block": 1,
+      "scenario": "vegan",
+      "arm": "candidate"
+    },
+    {
+      "block": 1,
+      "scenario": "vegan",
+      "arm": "baseline"
+    },
+    {
+      "block": 1,
+      "scenario": "multiple",
+      "arm": "baseline"
+    },
+    {
+      "block": 1,
+      "scenario": "multiple",
+      "arm": "candidate"
+    },
+    {
+      "block": 1,
+      "scenario": "unrestricted",
+      "arm": "candidate"
+    },
+    {
+      "block": 1,
+      "scenario": "unrestricted",
+      "arm": "baseline"
+    },
+    {
+      "block": 2,
+      "scenario": "vegetarian",
+      "arm": "candidate"
+    },
+    {
+      "block": 2,
+      "scenario": "vegetarian",
+      "arm": "baseline"
+    },
+    {
+      "block": 2,
+      "scenario": "milk",
+      "arm": "baseline"
+    },
+    {
+      "block": 2,
+      "scenario": "milk",
+      "arm": "candidate"
+    },
+    {
+      "block": 2,
+      "scenario": "gluten",
+      "arm": "candidate"
+    },
+    {
+      "block": 2,
+      "scenario": "gluten",
+      "arm": "baseline"
+    },
+    {
+      "block": 2,
+      "scenario": "vegan",
+      "arm": "baseline"
+    },
+    {
+      "block": 2,
+      "scenario": "vegan",
+      "arm": "candidate"
+    },
+    {
+      "block": 2,
+      "scenario": "multiple",
+      "arm": "candidate"
+    },
+    {
+      "block": 2,
+      "scenario": "multiple",
+      "arm": "baseline"
+    },
+    {
+      "block": 2,
+      "scenario": "unrestricted",
+      "arm": "baseline"
+    },
+    {
+      "block": 2,
+      "scenario": "unrestricted",
+      "arm": "candidate"
+    },
+    {
+      "block": 3,
+      "scenario": "vegetarian",
+      "arm": "baseline"
+    },
+    {
+      "block": 3,
+      "scenario": "vegetarian",
+      "arm": "candidate"
+    },
+    {
+      "block": 3,
+      "scenario": "milk",
+      "arm": "candidate"
+    },
+    {
+      "block": 3,
+      "scenario": "milk",
+      "arm": "baseline"
+    },
+    {
+      "block": 3,
+      "scenario": "gluten",
+      "arm": "baseline"
+    },
+    {
+      "block": 3,
+      "scenario": "gluten",
+      "arm": "candidate"
+    },
+    {
+      "block": 3,
+      "scenario": "vegan",
+      "arm": "candidate"
+    },
+    {
+      "block": 3,
+      "scenario": "vegan",
+      "arm": "baseline"
+    },
+    {
+      "block": 3,
+      "scenario": "multiple",
+      "arm": "baseline"
+    },
+    {
+      "block": 3,
+      "scenario": "multiple",
+      "arm": "candidate"
+    },
+    {
+      "block": 3,
+      "scenario": "unrestricted",
+      "arm": "candidate"
+    },
+    {
+      "block": 3,
+      "scenario": "unrestricted",
+      "arm": "baseline"
+    }
+  ],
+  "stopOnCriticalFailure": true,
+  "stopOnUnresolvedCall": true,
+  "stopOnSuccess": false,
+  "expandSample": false
+}

@@ -1,0 +1,9 @@
+
+ RUN  v4.1.10 /private/var/folders/7c/90h26ykd7hl5sndqywr4xxdc0000gn/T/ajfit-quality-comparison-NKtDy7/baseline/functions
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  08:46:47
+   Duration  72.50s (transform 121ms, setup 0ms, import 262ms, tests 72.19s, environment 0ms)
+

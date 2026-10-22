@@ -1,0 +1,8 @@
+{
+  "recordedAt": "2026-10-22T11:46:47.702460+00:00",
+  "previousPaidCalls": 0,
+  "previousJobs": 0,
+  "changedNutritionSources": false,
+  "changedHarness": false,
+  "change": "Manifest path normalization only, /var and /private/var refer to identical inode."
+}

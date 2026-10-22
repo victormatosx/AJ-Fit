@@ -1,0 +1,12 @@
+{
+  "changedOrMissing": [
+    "lib/nutrition/ai/config.js",
+    "lib/nutrition/generation/attempts.js",
+    "lib/nutrition/generation/callBudget.js",
+    "lib/nutrition/generation/mealAlternativeRequest.js",
+    "lib/nutrition/generation/worker.js"
+  ],
+  "added": [
+    "lib/nutrition/generation/adaptiveRecovery.js"
+  ]
+}

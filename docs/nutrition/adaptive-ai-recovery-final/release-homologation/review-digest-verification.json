@@ -1,0 +1,74 @@
+[
+  {
+    "job": 1,
+    "call": 4,
+    "requestDigest": "39b79bbaf3e81b30b70dd2def8f99e9c5c8dbf15235df9e24a9e4ab763c7d215",
+    "requestDigestMatches": true,
+    "responseDigestMatches": true,
+    "status": "insufficient_information",
+    "validContract": true
+  },
+  {
+    "job": 2,
+    "call": 2,
+    "requestDigest": "336cd1f41ddec1dd15b390da4b1ebc5e735d4074612af0de5f2fa69061743f79",
+    "requestDigestMatches": true,
+    "responseDigestMatches": true,
+    "status": "insufficient_information",
+    "validContract": true
+  },
+  {
+    "job": 3,
+    "call": 3,
+    "requestDigest": "4be23ff138b68ff03e8a48fe0c69b9bf646d0676b3e8b1a06376a7e415b58b42",
+    "requestDigestMatches": true,
+    "responseDigestMatches": true,
+    "status": "approved",
+    "validContract": true
+  },
+  {
+    "job": 4,
+    "call": 3,
+    "requestDigest": "67be35f37fd7b3f1992dbcdfbacb00f159f5b5a3b6bb2ebac954e9bf3772317b",
+    "requestDigestMatches": true,
+    "responseDigestMatches": true,
+    "status": "insufficient_information",
+    "validContract": true
+  },
+  {
+    "job": 5,
+    "call": 3,
+    "requestDigest": "948fa61a8a119eb78d2daa898c8d6c23eb06ef16a93806063890f1a927448740",
+    "requestDigestMatches": true,
+    "responseDigestMatches": true,
+    "status": "approved",
+    "validContract": true
+  },
+  {
+    "job": 6,
+    "call": 2,
+    "requestDigest": "9203612ae87e4648990db26af88393f515153e1795fa17baeec90b8206c2d151",
+    "requestDigestMatches": true,
+    "responseDigestMatches": true,
+    "status": "approved",
+    "validContract": true
+  },
+  {
+    "job": 8,
+    "call": 3,
+    "requestDigest": "6330cbf23f26e83370e1ff168034ddc7391fe44c91e027438cb78f8edf710cec",
+    "requestDigestMatches": true,
+    "responseDigestMatches": true,
+    "status": "rejected",
+    "validContract": true
+  },
+  {
+    "job": 8,
+    "call": 5,
+    "requestDigest": "9408152959c229304bc3b471c553636b4983f7c85c2aeb3621c7727224fba2f3",
+    "requestDigestMatches": true,
+    "responseDigestMatches": true,
+    "status": "rejected",
+    "validContract": true
+  }
+]

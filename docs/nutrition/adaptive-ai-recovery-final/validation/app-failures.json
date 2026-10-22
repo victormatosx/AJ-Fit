@@ -1,0 +1,29 @@
+{
+  "failures": [
+    "FAIL  src/loadProgress/__tests__/loadProgressWiring.test.ts > real load-progress wiring > publishes an invalidation only after the queued set write resolves",
+    "FAIL  src/loadProgress/__tests__/loadProgressWiring.test.ts > real load-progress wiring > offers the requested search, record list and four time ranges",
+    "FAIL  src/lib/__tests__/iosRestActivityStructure.test.ts > versioned Live Activity extension > does not add storage sharing or push entitlements preemptively",
+    "FAIL  src/lib/__tests__/premiumEntitlementPrecedence.test.ts > FASE 6 — entitlement wins over commercial status (access side) > status=grace_period with an active entitlement: resolveSubscriptionCenterModel reports hasPremiumAccess=true",
+    "FAIL  src/lib/__tests__/recentAuth.test.ts > hasRecentAuth > is true exactly at the boundary of the window",
+    "FAIL  src/lib/__tests__/workoutLogicIntact.test.ts > WorkoutScreen source — 7B + 7C strings fully migrated (positive guard) > raw literal \"REGISTRADO\" has been removed",
+    "FAIL  src/scheduleEngine/__tests__/scheduleRefreshState.test.ts > Schedule refresh authority > gates resolution, config and loading publication against the latest reload id",
+    "FAIL  src/screens/__tests__/editProfileFixedLayout.test.ts > EditProfileScreen fixed layout > keeps the form and save action in a non-scrolling safe-area layout",
+    "FAIL  src/screens/__tests__/editProfileFixedLayout.test.ts > EditProfileScreen fixed layout > anchors the footer within the available height instead of pushing it below the viewport",
+    "FAIL  src/screens/__tests__/healthIntegrationScreenStructure.test.ts > HealthIntegrationScreen — platform isolation (no iOS copy on Android, no Android copy on iOS) > only shows the iOS \"cannot verify permission\" notice behind an explicit iOS check",
+    "FAIL  src/screens/__tests__/healthIntegrationScreenStructure.test.ts > HealthIntegrationScreen — platform isolation (no iOS copy on Android, no Android copy on iOS) > never presents OS authorization as \"granted\" for iOS — permissionsRequested is treated as non-committal",
+    "FAIL  src/screens/__tests__/healthIntegrationScreenStructure.test.ts > HealthIntegrationScreen — disconnect requires explicit confirmation > never calls disconnect() directly from the disconnect row — it only opens a confirmation sheet",
+    "FAIL  src/screens/__tests__/migratedScreensLifecycle.test.ts > EditProfileScreen — draft resets explicitly per session, not via unmount > imports useScreenFocusEffect and resets every draft field on activation",
+    "FAIL  src/screens/__tests__/paywallRedesignStructure.test.ts > Paywall redesign — i18n coverage for new copy, no new hardcoded strings > entryContext-driven plan intro stays copy-only and goes through i18n",
+    "FAIL  src/screens/__tests__/premiumCommercialContextFase6.test.ts > FASE 6 — SubscriptionCenterScreen already correctly separates access from commercial presentation (audited, not rewritten) > billing_issue/grace_period route to the real subscription management flow (manageSubscription), not an invented destination",
+    "FAIL  src/screens/__tests__/restOverlayNextExerciseStructure.test.ts > WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision > (E) computes the next-exercise lookup exactly once, feeding both the Live Activity call site and the in-app one",
+    "FAIL  src/screens/__tests__/restOverlayNextExerciseStructure.test.ts > WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision > completeSet feeds the shared lookup into the Live Activity decision",
+    "FAIL  src/screens/__tests__/restOverlayNextExerciseStructure.test.ts > WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision > restNextAction rebuilds the same decision from the authoritative, restorable rest record (not fresh component state)",
+    "FAIL  src/screens/__tests__/restOverlayNextExerciseStructure.test.ts > WorkoutScreen rest overlay — nextSet vs nextExercise is a single decision > passes the decision down to RestOverlay as a single prop, not re-derived props",
+    "FAIL  src/screens/__tests__/restOverlayNextExerciseStructure.test.ts > WorkoutScreen rest overlay — button label and next-exercise indicator > derives nextExerciseAction only from the shared nextAction decision, never standalone",
+    "FAIL  src/screens/__tests__/restOverlayNextExerciseStructure.test.ts > WorkoutScreen rest overlay — button label and next-exercise indicator > (B) the last set of an exercise (with another exercise left) switches the label and shows the next exercise",
+    "FAIL  src/state/__tests__/restLiveActivityIntegrationStructure.test.ts > RestSessionContext live transition wiring > keeps completed cardio visible until the final workout CTA",
+    "FAIL  src/theme/__tests__/sharedComponentsTheme.test.ts > Phase 4 acquisition and primary app coverage > keeps the Phase 4 critical screens free of Dark color literals"
+  ],
+  "sourceFilesChangedByTask": false,
+  "recentAuthPassedIsolated": true
+}

@@ -1,0 +1,188 @@
+{
+  "kind": "offline serialization, stubbed fetch, zero network",
+  "calls": 30,
+  "maxCreatorBound": 25752,
+  "maxReviewerBound": 18015,
+  "rows": [
+    {
+      "job": 1,
+      "call": 1,
+      "role": "creator",
+      "inputBoundBytes": 13441
+    },
+    {
+      "job": 1,
+      "call": 2,
+      "role": "creator",
+      "inputBoundBytes": 23501
+    },
+    {
+      "job": 1,
+      "call": 3,
+      "role": "creator",
+      "inputBoundBytes": 24691
+    },
+    {
+      "job": 1,
+      "call": 4,
+      "role": "reviewer",
+      "inputBoundBytes": 18015
+    },
+    {
+      "job": 2,
+      "call": 1,
+      "role": "creator",
+      "inputBoundBytes": 13417
+    },
+    {
+      "job": 2,
+      "call": 2,
+      "role": "reviewer",
+      "inputBoundBytes": 12464
+    },
+    {
+      "job": 2,
+      "call": 3,
+      "role": "creator",
+      "inputBoundBytes": 19232
+    },
+    {
+      "job": 3,
+      "call": 1,
+      "role": "creator",
+      "inputBoundBytes": 13451
+    },
+    {
+      "job": 3,
+      "call": 2,
+      "role": "creator",
+      "inputBoundBytes": 22237
+    },
+    {
+      "job": 3,
+      "call": 3,
+      "role": "reviewer",
+      "inputBoundBytes": 17817
+    },
+    {
+      "job": 4,
+      "call": 1,
+      "role": "creator",
+      "inputBoundBytes": 13441
+    },
+    {
+      "job": 4,
+      "call": 2,
+      "role": "creator",
+      "inputBoundBytes": 25752
+    },
+    {
+      "job": 4,
+      "call": 3,
+      "role": "reviewer",
+      "inputBoundBytes": 17546
+    },
+    {
+      "job": 4,
+      "call": 4,
+      "role": "creator",
+      "inputBoundBytes": 25228
+    },
+    {
+      "job": 5,
+      "call": 1,
+      "role": "creator",
+      "inputBoundBytes": 13417
+    },
+    {
+      "job": 5,
+      "call": 2,
+      "role": "creator",
+      "inputBoundBytes": 23014
+    },
+    {
+      "job": 5,
+      "call": 3,
+      "role": "reviewer",
+      "inputBoundBytes": 16565
+    },
+    {
+      "job": 6,
+      "call": 1,
+      "role": "creator",
+      "inputBoundBytes": 13451
+    },
+    {
+      "job": 6,
+      "call": 2,
+      "role": "reviewer",
+      "inputBoundBytes": 17578
+    },
+    {
+      "job": 7,
+      "call": 1,
+      "role": "creator",
+      "inputBoundBytes": 13441
+    },
+    {
+      "job": 7,
+      "call": 2,
+      "role": "creator",
+      "inputBoundBytes": 22123
+    },
+    {
+      "job": 7,
+      "call": 3,
+      "role": "creator",
+      "inputBoundBytes": 22231
+    },
+    {
+      "job": 8,
+      "call": 1,
+      "role": "creator",
+      "inputBoundBytes": 13417
+    },
+    {
+      "job": 8,
+      "call": 2,
+      "role": "creator",
+      "inputBoundBytes": 23099
+    },
+    {
+      "job": 8,
+      "call": 3,
+      "role": "reviewer",
+      "inputBoundBytes": 16507
+    },
+    {
+      "job": 8,
+      "call": 4,
+      "role": "creator",
+      "inputBoundBytes": 24493
+    },
+    {
+      "job": 8,
+      "call": 5,
+      "role": "reviewer",
+      "inputBoundBytes": 16783
+    },
+    {
+      "job": 9,
+      "call": 1,
+      "role": "creator",
+      "inputBoundBytes": 13451
+    },
+    {
+      "job": 9,
+      "call": 2,
+      "role": "creator",
+      "inputBoundBytes": 22527
+    },
+    {
+      "job": 9,
+      "call": 3,
+      "role": "creator",
+      "inputBoundBytes": 23125
+    }
+  ]
+}

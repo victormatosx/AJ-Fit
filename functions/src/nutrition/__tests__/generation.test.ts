@@ -6,7 +6,8 @@ import type { NutritionEngineOutput, NutritionProfile } from '../shared/types/nu
 import { OpenAiNutritionProvider, OPENAI_PLAN_SCHEMA, OPENAI_REQUEST_TIMEOUT_MS, type NutritionAiProvider } from '../ai/provider';
 import { NUTRITION_AI_MODELS } from '../ai/config';
 import { fullPlanContext, mealAlternativeContext } from '../ai/prompt';
-import { validateAndBuildPlan } from '../generation/domain';
+import { validateAndBuildPlan, type RawAiFoodItem } from '../generation/domain';
+import { foodRestrictionViolation } from '../generation/restrictions';
 import { generateValidatedPlan, GenerationAttemptsExhausted } from '../generation/attempts';
 import { resolveBackendWorkoutFrequency, resolveNutritionWeightKg } from '../generation/context';
 import { nutritionRolloutBucket } from '../generation/rollout';
@@ -445,6 +446,31 @@ describe('dietary restrictions across generation, regeneration and meal alternat
     plan.meals[1].foods[0] = food;
     expect(() => validateAndBuildPlan(plan, profile.mealSlots, engine, [], true,
       { dietaryPattern: 'vegetarian', excludedFoodNames: [] })).not.toThrow();
+  });
+  // 2026-10-21 fix (stability homologation): the allergen-inference word
+  // backstop had the IDENTICAL negated-prose exposure as the dietary-pattern
+  // backstop above, just never scoped to ingredient names — confirmed live
+  // against the real model (a milk-allergy breakfast's own preparationNote,
+  // "Assado sem manteiga ou leite", was read as containing milk and blocked
+  // on every one of 3 creator attempts). Scoping it to ingredient names,
+  // same as the dietary-pattern fix, removes the false positive.
+  it('does not block a food whose preparationNote explicitly states a dairy allergen was NOT used', () => {
+    const food = composed('Pão francês', 'plant') as ReturnType<typeof item> & { preparationNote: string };
+    food.preparationNote = 'Assado sem manteiga ou leite';
+    expect(foodRestrictionViolation(food as unknown as RawAiFoodItem, ['milk'], { dietaryPattern: 'omnivore', excludedFoodNames: [] })).toBeNull();
+  });
+  it('still blocks a truthfully declared dairy ingredient for a milk allergy regardless of preparationNote scoping', () => {
+    const food = composed('Queijo minas', 'dairy') as ReturnType<typeof item>;
+    expect(foodRestrictionViolation(food as unknown as RawAiFoodItem, ['milk'], { dietaryPattern: 'omnivore', excludedFoodNames: [] })).toBe('unsafe_allergen');
+  });
+  // Guards against a regression introduced while fixing the above: the dairy
+  // check strips "leite de soja"-style plant-milk phrases so soy/coconut/oat
+  // milk isn't misread as animal milk, but that stripping must never also
+  // erase the word "soja" before the independent SOY allergen check runs.
+  it('still blocks soy milk for a soy allergen exclusion even though the dairy backstop strips "leite de soja"', () => {
+    const food = composed('Leite de soja', 'plant') as ReturnType<typeof item>;
+    expect(foodRestrictionViolation(food as unknown as RawAiFoodItem, ['soy'], { dietaryPattern: 'omnivore', excludedFoodNames: [] })).toBe('unsafe_allergen');
+    expect(foodRestrictionViolation(food as unknown as RawAiFoodItem, ['milk'], { dietaryPattern: 'omnivore', excludedFoodNames: [] })).toBeNull();
   });
   it('still blocks meat misdeclared as plant via the ingredient-name backstop, dish name and preparationNote notwithstanding', () => {
     const plan = plantPlan();

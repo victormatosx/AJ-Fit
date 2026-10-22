@@ -1,0 +1,2144 @@
+{
+  "claudeUpperBoundUsd": 0.8191,
+  "ceilingUsd": 2,
+  "runs": [
+    {
+      "scenario": "vegetarian",
+      "uid": "synthetic-adaptive-codex-7db5359d-0c12-4327-9912-cf53a446fc4f",
+      "generationId": "51c1e1df-77cf-4380-aafe-ce35b1ab7fc6",
+      "startedAt": "2026-10-22T10:10:05.238Z",
+      "calls": [
+        {
+          "role": "creator",
+          "reservedUsd": 0.0072,
+          "state": "responded",
+          "estimatedCostUsd": 0.0014959,
+          "latencyMs": 27645
+        },
+        {
+          "role": "creator",
+          "reservedUsd": 0.0072,
+          "state": "responded",
+          "estimatedCostUsd": 0.00155992,
+          "latencyMs": 24938
+        },
+        {
+          "role": "creator",
+          "reservedUsd": 0.0072,
+          "state": "responded",
+          "estimatedCostUsd": 0.0018633200000000001,
+          "latencyMs": 27096
+        }
+      ],
+      "result": {
+        "success": false,
+        "status": "failed",
+        "failureCode": "AI_RETRY_EXHAUSTED",
+        "lastFailureCode": "AI_SCHEMA_INVALID",
+        "aiCallCount": 3,
+        "aiReservedUsd": 0.0216,
+        "creditUsed": false,
+        "history": [
+          {
+            "callNumber": 1,
+            "attempt": 1,
+            "role": "creator",
+            "code": "AI_CONTENT_SAFETY_MISMATCH",
+            "reviewStatus": null
+          },
+          {
+            "callNumber": 2,
+            "attempt": 2,
+            "role": "creator",
+            "code": "AI_MACRO_VALIDATION_FAILED",
+            "reviewStatus": null
+          },
+          {
+            "callNumber": 3,
+            "attempt": 3,
+            "role": "creator",
+            "code": "AI_SCHEMA_INVALID",
+            "reviewStatus": null
+          }
+        ],
+        "operations": [
+          {
+            "id": "51c1e1df-77cf-4380-aafe-ce35b1ab7fc6-creator-1",
+            "ownerUid": "synthetic-adaptive-codex-7db5359d-0c12-4327-9912-cf53a446fc4f",
+            "generationId": "51c1e1df-77cf-4380-aafe-ce35b1ab7fc6",
+            "operation": "full_plan",
+            "agentRole": "creator",
+            "callNumber": 1,
+            "attemptNumber": 1,
+            "reservedCostUsd": 0.0072,
+            "aiSchemaVersion": "3.1.0",
+            "failureCode": "AI_CONTENT_SAFETY_MISMATCH",
+            "estimatedCostUsd": 0.0014959,
+            "retryCount": 0,
+            "catalogMetrics": {
+              "requested": 0,
+              "failures": {},
+              "pages": 0,
+              "corrections": 0,
+              "sources": {
+                "off": 0,
+                "taco": 0
+              },
+              "rejected": 0,
+              "reads": 0,
+              "cacheHits": 0,
+              "searchMs": 0,
+              "examined": 0,
+              "matched": 0,
+              "queries": 0
+            },
+            "fallbackUsed": false,
+            "inputTokens": 2059,
+            "pricingVersion": "openai-standard-2026-10-08",
+            "resultStatus": "failed",
+            "createdAt": {
+              "_seconds": 1792663834,
+              "_nanoseconds": 652000000
+            },
+            "issueCategories": [],
+            "provider": "openai",
+            "promptVersion": "nutrition-full-plan-v4.0.0",
+            "cachedInputTokens": 0,
+            "model": "gpt-6-luna",
+            "reviewerVersion": "nutrition-independent-review-v1",
+            "reviewStatus": null,
+            "outputTokens": 2580,
+            "latencyMs": 27669,
+            "attempts": 1
+          },
+          {
+            "id": "51c1e1df-77cf-4380-aafe-ce35b1ab7fc6-creator-2",
+            "ownerUid": "synthetic-adaptive-codex-7db5359d-0c12-4327-9912-cf53a446fc4f",
+            "generationId": "51c1e1df-77cf-4380-aafe-ce35b1ab7fc6",
+            "operation": "full_plan",
+            "agentRole": "creator",
+            "callNumber": 2,
+            "attemptNumber": 2,
+            "reservedCostUsd": 0.0072,
+            "aiSchemaVersion": "3.1.0",
+            "failureCode": "AI_MACRO_VALIDATION_FAILED",
+            "estimatedCostUsd": 0.00155992,
+            "retryCount": 1,
+            "catalogMetrics": {
+              "requested": 0,
+              "failures": {},
+              "pages": 0,
+              "corrections": 0,
+              "sources": {
+                "off": 0,
+                "taco": 0
+              },
+              "rejected": 0,
+              "reads": 0,
+              "cacheHits": 0,
+              "searchMs": 0,
+              "examined": 0,
+              "matched": 0,
+              "queries": 0
+            },
+            "fallbackUsed": false,
+            "inputTokens": 4052,
+            "pricingVersion": "openai-standard-2026-10-08",
+            "resultStatus": "failed",
+            "createdAt": {
+              "_seconds": 1792663859,
+              "_nanoseconds": 677000000
+            },
+            "issueCategories": [],
+            "provider": "openai",
+            "promptVersion": "nutrition-full-plan-v4.0.0",
+            "cachedInputTokens": 1042,
+            "model": "gpt-6-luna",
+            "reviewerVersion": "nutrition-independent-review-v1",
+            "reviewStatus": null,
+            "outputTokens": 2497,
+            "latencyMs": 24983,
+            "attempts": 2
+          },
+          {
+            "id": "51c1e1df-77cf-4380-aafe-ce35b1ab7fc6-creator-3",
+            "ownerUid": "synthetic-adaptive-codex-7db5359d-0c12-4327-9912-cf53a446fc4f",
+            "generationId": "51c1e1df-77cf-4380-aafe-ce35b1ab7fc6",
+            "operation": "full_plan",
+            "agentRole": "creator",
+            "callNumber": 3,
+            "attemptNumber": 3,
+            "reservedCostUsd": 0.0072,
+            "aiSchemaVersion": "3.1.0",
+            "failureCode": "AI_SCHEMA_INVALID",
+            "estimatedCostUsd": 0.0018633200000000001,
+            "retryCount": 2,
+            "catalogMetrics": {
+              "requested": 0,
+              "failures": {},
+              "pages": 0,
+              "corrections": 0,
+              "sources": {
+                "off": 0,
+                "taco": 0
+              },
+              "rejected": 0,
+              "reads": 0,
+              "cacheHits": 0,
+              "searchMs": 0,
+              "examined": 0,
+              "matched": 0,
+              "queries": 0
+            },
+            "fallbackUsed": false,
+            "inputTokens": 4651,
+            "pricingVersion": "openai-standard-2026-10-08",
+            "resultStatus": "failed",
+            "createdAt": {
+              "_seconds": 1792663886,
+              "_nanoseconds": 814000000
+            },
+            "issueCategories": [],
+            "provider": "openai",
+            "promptVersion": "nutrition-full-plan-v4.0.0",
+            "cachedInputTokens": 1042,
+            "model": "gpt-6-luna",
+            "reviewerVersion": "nutrition-independent-review-v1",
+            "reviewStatus": null,
+            "outputTokens": 2984,
+            "latencyMs": 27109,
+            "attempts": 3
+          }
+        ],
+        "planExists": false,
+        "review": null,
+        "durationMs": 81653
+      }
+    },
+    {
+      "scenario": "milk",
+      "uid": "synthetic-adaptive-codex-dff56541-0212-4249-9df7-6d8b3a2b11cb",
+      "generationId": "d261e625-5199-4e0c-bba0-4b1a4c97b255",
+      "startedAt": "2026-10-22T10:11:38.173Z",
+      "calls": [
+        {
+          "role": "creator",
+          "reservedUsd": 0.0072,
+          "state": "responded",
+          "estimatedCostUsd": 0.00143892,
+          "latencyMs": 26000
+        },
+        {
+          "role": "reviewer",
+          "reservedUsd": 0.00715,
+          "state": "responded",
+          "estimatedCostUsd": 0.0006632000000000001,
+          "latencyMs": 6609
+        }
+      ],
+      "result": {
+        "success": true,
+        "status": "completed",
+        "failureCode": null,
+        "lastFailureCode": null,
+        "aiCallCount": 2,
+        "aiReservedUsd": 0.01435,
+        "creditUsed": false,
+        "history": [
+          {
+            "callNumber": 1,
+            "attempt": 1,
+            "role": "creator",
+            "code": null,
+            "reviewStatus": null
+          },
+          {
+            "callNumber": 2,
+            "attempt": 1,
+            "role": "reviewer",
+            "code": null,
+            "reviewStatus": "approved"
+          }
+        ],
+        "operations": [
+          {
+            "id": "d261e625-5199-4e0c-bba0-4b1a4c97b255-creator-1",
+            "ownerUid": "synthetic-adaptive-codex-dff56541-0212-4249-9df7-6d8b3a2b11cb",
+            "generationId": "d261e625-5199-4e0c-bba0-4b1a4c97b255",
+            "operation": "full_plan",
+            "agentRole": "creator",
+            "callNumber": 1,
+            "attemptNumber": 1,
+            "recoveryCreditUsed": false,
+            "recoveryPolicyVersion": 1,
+            "reservedCostUsd": 0.0072,
+            "aiSchemaVersion": "3.1.0",
+            "failureCode": null,
+            "estimatedCostUsd": 0.00143892,
+            "retryCount": 0,
+            "catalogMetrics": {
+              "requested": 0,
+              "failures": {},
+              "pages": 0,
+              "corrections": 0,
+              "sources": {
+                "off": 0,
+                "taco": 0
+              },
+              "rejected": 0,
+              "reads": 0,
+              "cacheHits": 0,
+              "searchMs": 0,
+              "examined": 0,
+              "matched": 0,
+              "queries": 0
+            },
+            "fallbackUsed": false,
+            "inputTokens": 2067,
+            "pricingVersion": "openai-standard-2026-10-08",
+            "resultStatus": "created",
+            "createdAt": {
+              "_seconds": 1792663925,
+              "_nanoseconds": 678000000
+            },
+            "issueCategories": [],
+            "provider": "openai",
+            "promptVersion": "nutrition-full-plan-v4.0.0",
+            "cachedInputTokens": 1042,
+            "model": "gpt-6-luna",
+            "reviewerVersion": "nutrition-independent-review-v1",
+            "reviewStatus": null,
+            "outputTokens": 2652,
+            "latencyMs": 26039,
+            "attempts": 1
+          },
+          {
+            "id": "d261e625-5199-4e0c-bba0-4b1a4c97b255-reviewer-2",
+            "ownerUid": "synthetic-adaptive-codex-dff56541-0212-4249-9df7-6d8b3a2b11cb",
+            "generationId": "d261e625-5199-4e0c-bba0-4b1a4c97b255",
+            "operation": "full_plan",
+            "agentRole": "reviewer",
+            "callNumber": 2,
+            "attemptNumber": 1,
+            "recoveryCreditUsed": false,
+            "recoveryPolicyVersion": 1,
+            "reservedCostUsd": 0.00715,
+            "aiSchemaVersion": "3.1.0",
+            "failureCode": null,
+            "estimatedCostUsd": 0.0006632000000000001,
+            "retryCount": 0,
+            "catalogMetrics": {
+              "requested": 0,
+              "failures": {},
+              "pages": 0,
+              "corrections": 0,
+              "sources": {
+                "off": 0,
+                "taco": 0
+              },
+              "rejected": 0,
+              "reads": 0,
+              "cacheHits": 0,
+              "searchMs": 0,
+              "examined": 0,
+              "matched": 0,
+              "queries": 0
+            },
+            "fallbackUsed": false,
+            "inputTokens": 3962,
+            "pricingVersion": "openai-standard-2026-10-08",
+            "createdAt": {
+              "_seconds": 1792663932,
+              "_nanoseconds": 319000000
+            },
+            "issueCategories": [],
+            "provider": "openai",
+            "promptVersion": "nutrition-full-plan-v4.0.0",
+            "cachedInputTokens": 0,
+            "model": "gpt-6-luna",
+            "reviewerVersion": "nutrition-independent-review-v1",
+            "reviewStatus": "approved",
+            "outputTokens": 534,
+            "latencyMs": 6612,
+            "attempts": 1,
+            "resultStatus": "validated",
+            "activatedAt": {
+              "_seconds": 1792663932,
+              "_nanoseconds": 333000000
+            }
+          }
+        ],
+        "planExists": true,
+        "review": {
+          "version": "nutrition-independent-review-v1",
+          "model": "gpt-6-luna",
+          "candidateDigest": "9c137fabe43b1611429af0098fabcee55619e6c5b03d7bd6a3a47381c3f380fb",
+          "calls": 2
+        },
+        "durationMs": 34219
+      }
+    },
+    {
+      "scenario": "gluten",
+      "uid": "synthetic-adaptive-codex-31435fd7-0113-42d8-b8ec-7f12e9f012a8",
+      "generationId": "636df12f-1a89-4eef-87fe-d345ef5e7a6c",
+      "startedAt": "2026-10-22T10:13:38.009Z",
+      "calls": [
+        {
+          "role": "creator",
+          "reservedUsd": 0.0072,
+          "state": "responded",
+          "estimatedCostUsd": 0.00141492,
+          "latencyMs": 26363
+        },
+        {
+          "role": "creator",
+          "reservedUsd": 0.0072,
+          "state": "responded",
+          "estimatedCostUsd": 0.00185982,
+          "latencyMs": 27931
+        },
+        {
+          "role": "creator",
+          "reservedUsd": 0.0072,
+          "state": "responded",
+          "estimatedCostUsd": 0.0014968200000000003,
+          "latencyMs": 19364
+        }
+      ],
+      "result": {
+        "success": false,
+        "status": "failed",
+        "failureCode": "AI_RETRY_EXHAUSTED",
+        "lastFailureCode": "AI_EVIDENCE_INSUFFICIENT",
+        "aiCallCount": 3,
+        "aiReservedUsd": 0.0216,
+        "creditUsed": false,
+        "history": [
+          {
+            "callNumber": 1,
+            "attempt": 1,
+            "role": "creator",
+            "code": "AI_EVIDENCE_INSUFFICIENT",
+            "reviewStatus": null
+          },
+          {
+            "callNumber": 2,
+            "attempt": 2,
+            "role": "creator",
+            "code": "AI_EVIDENCE_INSUFFICIENT",
+            "reviewStatus": null
+          },
+          {
+            "callNumber": 3,
+            "attempt": 3,
+            "role": "creator",
+            "code": "AI_EVIDENCE_INSUFFICIENT",
+            "reviewStatus": null
+          }
+        ],
+        "operations": [
+          {
+            "id": "636df12f-1a89-4eef-87fe-d345ef5e7a6c-creator-1",
+            "ownerUid": "synthetic-adaptive-codex-31435fd7-0113-42d8-b8ec-7f12e9f012a8",
+            "generationId": "636df12f-1a89-4eef-87fe-d345ef5e7a6c",
+            "operation": "full_plan",
+            "agentRole": "creator",
+            "callNumber": 1,
+            "attemptNumber": 1,
+            "recoveryCreditUsed": false,
+            "recoveryPolicyVersion": 1,
+            "reservedCostUsd": 0.0072,
+            "aiSchemaVersion": "3.1.0",
+            "failureCode": "AI_EVIDENCE_INSUFFICIENT",
+            "estimatedCostUsd": 0.00141492,
+            "retryCount": 0,
+            "catalogMetrics": {
+              "requested": 0,
+              "failures": {},
+              "pages": 8,
+              "corrections": 0,
+              "sources": {
+                "off": 0,
+                "taco": 0
+              },
+              "rejected": 0,
+              "reads": 8,
+              "cacheHits": 0,
+              "searchMs": 58,
+              "examined": 0,
+              "matched": 0,
+              "queries": 8
+            },
+            "fallbackUsed": false,
+            "inputTokens": 2067,
+            "pricingVersion": "openai-standard-2026-10-08",
+            "resultStatus": "failed",
+            "createdAt": {
+              "_seconds": 1792664045,
+              "_nanoseconds": 969000000
+            },
+            "issueCategories": [],
+            "provider": "openai",
+            "promptVersion": "nutrition-full-plan-v4.0.0",
+            "cachedInputTokens": 1042,
+            "model": "gpt-6-luna",
+            "reviewerVersion": "nutrition-independent-review-v1",
+            "reviewStatus": null,
+            "outputTokens": 2604,
+            "latencyMs": 26433,
+            "attempts": 1
+          },
+          {
+            "id": "636df12f-1a89-4eef-87fe-d345ef5e7a6c-creator-2",
+            "ownerUid": "synthetic-adaptive-codex-31435fd7-0113-42d8-b8ec-7f12e9f012a8",
+            "generationId": "636df12f-1a89-4eef-87fe-d345ef5e7a6c",
+            "operation": "full_plan",
+            "agentRole": "creator",
+            "callNumber": 2,
+            "attemptNumber": 2,
+            "recoveryCreditUsed": false,
+            "recoveryPolicyVersion": 1,
+            "reservedCostUsd": 0.0072,
+            "aiSchemaVersion": "3.1.0",
+            "failureCode": "AI_EVIDENCE_INSUFFICIENT",
+            "estimatedCostUsd": 0.00185982,
+            "retryCount": 1,
+            "catalogMetrics": {
+              "requested": 0,
+              "failures": {},
+              "pages": 8,
+              "corrections": 0,
+              "sources": {
+                "off": 0,
+                "taco": 0
+              },
+              "rejected": 0,
+              "reads": 8,
+              "cacheHits": 2,
+              "searchMs": 58,
+              "examined": 0,
+              "matched": 0,
+              "queries": 8
+            },
+            "fallbackUsed": false,
+            "inputTokens": 3981,
+            "pricingVersion": "openai-standard-2026-10-08",
+            "resultStatus": "failed",
+            "createdAt": {
+              "_seconds": 1792664073,
+              "_nanoseconds": 939000000
+            },
+            "issueCategories": [],
+            "provider": "openai",
+            "promptVersion": "nutrition-full-plan-v4.0.0",
+            "cachedInputTokens": 1042,
+            "model": "gpt-6-luna",
+            "reviewerVersion": "nutrition-independent-review-v1",
+            "reviewStatus": null,
+            "outputTokens": 3111,
+            "latencyMs": 27942,
+            "attempts": 2
+          },
+          {
+            "id": "636df12f-1a89-4eef-87fe-d345ef5e7a6c-creator-3",
+            "ownerUid": "synthetic-adaptive-codex-31435fd7-0113-42d8-b8ec-7f12e9f012a8",
+            "generationId": "636df12f-1a89-4eef-87fe-d345ef5e7a6c",
+            "operation": "full_plan",
+            "agentRole": "creator",
+            "callNumber": 3,
+            "attemptNumber": 3,
+            "recoveryCreditUsed": false,
+            "recoveryPolicyVersion": 1,
+            "reservedCostUsd": 0.0072,
+            "aiSchemaVersion": "3.1.0",
+            "failureCode": "AI_EVIDENCE_INSUFFICIENT",
+            "estimatedCostUsd": 0.0014968200000000003,
+            "retryCount": 2,
+            "catalogMetrics": {
+              "requested": 0,
+              "failures": {},
+              "pages": 8,
+              "corrections": 0,
+              "sources": {
+                "off": 0,
+                "taco": 0
+              },
+              "rejected": 0,
+              "reads": 8,
+              "cacheHits": 4,
+              "searchMs": 58,
+              "examined": 0,
+              "matched": 0,
+              "queries": 8
+            },
+            "fallbackUsed": false,
+            "inputTokens": 4156,
+            "pricingVersion": "openai-standard-2026-10-08",
+            "resultStatus": "failed",
+            "createdAt": {
+              "_seconds": 1792664093,
+              "_nanoseconds": 354000000
+            },
+            "issueCategories": [],
+            "provider": "openai",
+            "promptVersion": "nutrition-full-plan-v4.0.0",
+            "cachedInputTokens": 1042,
+            "model": "gpt-6-luna",
+            "reviewerVersion": "nutrition-independent-review-v1",
+            "reviewStatus": null,
+            "outputTokens": 2350,
+            "latencyMs": 19376,
+            "attempts": 3
+          }
+        ],
+        "planExists": false,
+        "review": null,
+        "durationMs": 75395
+      }
+    },
+    {
+      "scenario": "vegan",
+      "uid": "synthetic-adaptive-codex-ec346130-55a8-4e02-b259-2563314fe90f",
+      "generationId": "df77f694-c21c-4616-88c6-652150bf1b48",
+      "startedAt": "2026-10-22T10:15:14.628Z",
+      "calls": [
+        {
+          "role": "creator",
+          "reservedUsd": 0.0072,
+          "state": "responded",
+          "estimatedCostUsd": 0.00137412,
+          "latencyMs": 27750
+        },
+        {
+          "role": "creator",
+          "reservedUsd": 0.0072,
+          "state": "responded",
+          "estimatedCostUsd": 0.0017608200000000002,
+          "latencyMs": 25331
+        },
+        {
+          "role": "reviewer",
+          "reservedUsd": 0.00715,
+          "state": "responded",
+          "estimatedCostUsd": 0.0006659000000000001,
+          "latencyMs": 6491
+        }
+      ],
+      "result": {
+        "success": true,
+        "status": "completed",
+        "failureCode": null,
+        "lastFailureCode": "AI_MACRO_VALIDATION_FAILED",
+        "aiCallCount": 3,
+        "aiReservedUsd": 0.02155,
+        "creditUsed": false,
+        "history": [
+          {
+            "callNumber": 1,
+            "attempt": 1,
+            "role": "creator",
+            "code": "AI_MACRO_VALIDATION_FAILED",
+            "reviewStatus": null
+          },
+          {
+            "callNumber": 2,
+            "attempt": 2,
+            "role": "creator",
+            "code": null,
+            "reviewStatus": null
+          },
+          {
+            "callNumber": 3,
+            "attempt": 2,
+            "role": "reviewer",
+            "code": null,
+            "reviewStatus": "approved"
+          }
+        ],
+        "operations": [
+          {
+            "id": "df77f694-c21c-4616-88c6-652150bf1b48-creator-1",
+            "ownerUid": "synthetic-adaptive-codex-ec346130-55a8-4e02-b259-2563314fe90f",
+            "generationId": "df77f694-c21c-4616-88c6-652150bf1b48",
+            "operation": "full_plan",
+            "agentRole": "creator",
+            "callNumber": 1,
+            "attemptNumber": 1,
+            "recoveryCreditUsed": false,
+            "recoveryPolicyVersion": 1,
+            "reservedCostUsd": 0.0072,
+            "aiSchemaVersion": "3.1.0",
+            "failureCode": "AI_MACRO_VALIDATION_FAILED",
+            "estimatedCostUsd": 0.00137412,
+            "retryCount": 0,
+            "catalogMetrics": {
+              "requested": 0,
+              "failures": {},
+              "pages": 0,
+              "corrections": 0,
+              "sources": {
+                "off": 0,
+                "taco": 0
+              },
+              "rejected": 0,
+              "reads": 0,
+              "cacheHits": 0,
+              "searchMs": 0,
+              "examined": 0,
+              "matched": 0,
+              "queries": 0
+            },
+            "fallbackUsed": false,
+            "inputTokens": 2059,
+            "pricingVersion": "openai-standard-2026-10-08",
+            "resultStatus": "failed",
+            "createdAt": {
+              "_seconds": 1792664143,
+              "_nanoseconds": 756000000
+            },
+            "issueCategories": [],
+            "provider": "openai",
+            "promptVersion": "nutrition-full-plan-v4.0.0",
+            "cachedInputTokens": 1042,
+            "model": "gpt-6-luna",
+            "reviewerVersion": "nutrition-independent-review-v1",
+            "reviewStatus": null,
+            "outputTokens": 2524,
+            "latencyMs": 27785,
+            "attempts": 1
+          },
+          {
+            "id": "df77f694-c21c-4616-88c6-652150bf1b48-creator-2",
+            "ownerUid": "synthetic-adaptive-codex-ec346130-55a8-4e02-b259-2563314fe90f",
+            "generationId": "df77f694-c21c-4616-88c6-652150bf1b48",
+            "operation": "full_plan",
+            "agentRole": "creator",
+            "callNumber": 2,
+            "attemptNumber": 2,
+            "recoveryCreditUsed": false,
+            "recoveryPolicyVersion": 1,
+            "reservedCostUsd": 0.0072,
+            "aiSchemaVersion": "3.1.0",
+            "failureCode": null,
+            "estimatedCostUsd": 0.0017608200000000002,
+            "retryCount": 1,
+            "catalogMetrics": {
+              "requested": 0,
+              "failures": {},
+              "pages": 0,
+              "corrections": 0,
+              "sources": {
+                "off": 0,
+                "taco": 0
+              },
+              "rejected": 0,
+              "reads": 0,
+              "cacheHits": 0,
+              "searchMs": 0,
+              "examined": 0,
+              "matched": 0,
+              "queries": 0
+            },
+            "fallbackUsed": false,
+            "inputTokens": 5006,
+            "pricingVersion": "openai-standard-2026-10-08",
+            "resultStatus": "created",
+            "createdAt": {
+              "_seconds": 1792664169,
+              "_nanoseconds": 147000000
+            },
+            "issueCategories": [],
+            "provider": "openai",
+            "promptVersion": "nutrition-full-plan-v4.0.0",
+            "cachedInputTokens": 1042,
+            "model": "gpt-6-luna",
+            "reviewerVersion": "nutrition-independent-review-v1",
+            "reviewStatus": null,
+            "outputTokens": 2708,
+            "latencyMs": 25363,
+            "attempts": 2
+          },
+          {
+            "id": "df77f694-c21c-4616-88c6-652150bf1b48-reviewer-3",
+            "ownerUid": "synthetic-adaptive-codex-ec346130-55a8-4e02-b259-2563314fe90f",
+            "generationId": "df77f694-c21c-4616-88c6-652150bf1b48",
+            "operation": "full_plan",
+            "agentRole": "reviewer",
+            "callNumber": 3,
+            "attemptNumber": 2,
+            "recoveryCreditUsed": false,
+            "recoveryPolicyVersion": 1,
+            "reservedCostUsd": 0.00715,
+            "aiSchemaVersion": "3.1.0",
+            "failureCode": null,
+            "estimatedCostUsd": 0.0006659000000000001,
+            "retryCount": 1,
+            "catalogMetrics": {
+              "requested": 0,
+              "failures": {},
+              "pages": 0,
+              "corrections": 0,
+              "sources": {
+                "off": 0,
+                "taco": 0
+              },
+              "rejected": 0,
+              "reads": 0,
+              "cacheHits": 0,
+              "searchMs": 0,
+              "examined": 0,
+              "matched": 0,
+              "queries": 0
+            },
+            "fallbackUsed": false,
+            "inputTokens": 3969,
+            "pricingVersion": "openai-standard-2026-10-08",
+            "createdAt": {
+              "_seconds": 1792664175,
+              "_nanoseconds": 671000000
+            },
+            "issueCategories": [],
+            "provider": "openai",
+            "promptVersion": "nutrition-full-plan-v4.0.0",
+            "cachedInputTokens": 0,
+            "model": "gpt-6-luna",
+            "reviewerVersion": "nutrition-independent-review-v1",
+            "reviewStatus": "approved",
+            "outputTokens": 538,
+            "latencyMs": 6493,
+            "attempts": 2,
+            "resultStatus": "validated",
+            "activatedAt": {
+              "_seconds": 1792664175,
+              "_nanoseconds": 687000000
+            }
+          }
+        ],
+        "planExists": true,
+        "review": {
+          "version": "nutrition-independent-review-v1",
+          "model": "gpt-6-luna",
+          "candidateDigest": "b8f1bce61787781009ad33c684519e95a8015bdebe2f19285df4afd02e2ae1d9",
+          "calls": 3
+        },
+        "durationMs": 61108
+      }
+    },
+    {
+      "scenario": "multiple",
+      "uid": "synthetic-adaptive-codex-caa9e7ac-6333-48bb-b616-4f7bb8490546",
+      "generationId": "64c4bf9a-5ef0-411c-bdc3-b984dd2a52f4",
+      "startedAt": "2026-10-22T10:16:28.408Z",
+      "calls": [
+        {
+          "role": "creator",
+          "reservedUsd": 0.0072,
+          "state": "responded",
+          "estimatedCostUsd": 0.0015191199999999999,
+          "latencyMs": 31714
+        },
+        {
+          "role": "creator",
+          "reservedUsd": 0.0072,
+          "state": "responded",
+          "estimatedCostUsd": 0.00172762,
+          "latencyMs": 27631
+        },
+        {
+          "role": "reviewer",
+          "reservedUsd": 0.00715,
+          "state": "responded",
+          "estimatedCostUsd": 0.0007485,
+          "latencyMs": 8831
+        }
+      ],
+      "result": {
+        "success": true,
+        "status": "completed",
+        "failureCode": null,
+        "lastFailureCode": "AI_MACRO_VALIDATION_FAILED",
+        "aiCallCount": 3,
+        "aiReservedUsd": 0.02155,
+        "creditUsed": false,
+        "history": [
+          {
+            "callNumber": 1,
+            "attempt": 1,
+            "role": "creator",
+            "code": "AI_MACRO_VALIDATION_FAILED",
+            "reviewStatus": null
+          },
+          {
+            "callNumber": 2,
+            "attempt": 2,
+            "role": "creator",
+            "code": null,
+            "reviewStatus": null
+          },
+          {
+            "callNumber": 3,
+            "attempt": 2,
+            "role": "reviewer",
+            "code": null,
+            "reviewStatus": "approved"
+          }
+        ],
+        "operations": [
+          {
+            "id": "64c4bf9a-5ef0-411c-bdc3-b984dd2a52f4-creator-1",
+            "ownerUid": "synthetic-adaptive-codex-caa9e7ac-6333-48bb-b616-4f7bb8490546",
+            "generationId": "64c4bf9a-5ef0-411c-bdc3-b984dd2a52f4",
+            "operation": "full_plan",
+            "agentRole": "creator",
+            "callNumber": 1,
+            "attemptNumber": 1,
+            "recoveryCreditUsed": false,
+            "recoveryPolicyVersion": 1,
+            "reservedCostUsd": 0.0072,
+            "aiSchemaVersion": "3.1.0",
+            "failureCode": "AI_MACRO_VALIDATION_FAILED",
+            "estimatedCostUsd": 0.0015191199999999999,
+            "retryCount": 0,
+            "catalogMetrics": {
+              "requested": 0,
+              "failures": {},
+              "pages": 0,
+              "corrections": 0,
+              "sources": {
+                "off": 0,
+                "taco": 0
+              },
+              "rejected": 0,
+              "reads": 0,
+              "cacheHits": 0,
+              "searchMs": 0,
+              "examined": 0,
+              "matched": 0,
+              "queries": 0
+            },
+            "fallbackUsed": false,
+            "inputTokens": 2069,
+            "pricingVersion": "openai-standard-2026-10-08",
+            "resultStatus": "failed",
+            "createdAt": {
+              "_seconds": 1792664221,
+              "_nanoseconds": 566000000
+            },
+            "issueCategories": [],
+            "provider": "openai",
+            "promptVersion": "nutrition-full-plan-v4.0.0",
+            "cachedInputTokens": 1042,
+            "model": "gpt-6-luna",
+            "reviewerVersion": "nutrition-independent-review-v1",
+            "reviewStatus": null,
+            "outputTokens": 2812,
+            "latencyMs": 31737,
+            "attempts": 1
+          },
+          {
+            "id": "64c4bf9a-5ef0-411c-bdc3-b984dd2a52f4-creator-2",
+            "ownerUid": "synthetic-adaptive-codex-caa9e7ac-6333-48bb-b616-4f7bb8490546",
+            "generationId": "64c4bf9a-5ef0-411c-bdc3-b984dd2a52f4",
+            "operation": "full_plan",
+            "agentRole": "creator",
+            "callNumber": 2,
+            "attemptNumber": 2,
+            "recoveryCreditUsed": false,
+            "recoveryPolicyVersion": 1,
+            "reservedCostUsd": 0.0072,
+            "aiSchemaVersion": "3.1.0",
+            "failureCode": null,
+            "estimatedCostUsd": 0.00172762,
+            "retryCount": 1,
+            "catalogMetrics": {
+              "requested": 0,
+              "failures": {},
+              "pages": 0,
+              "corrections": 0,
+              "sources": {
+                "off": 0,
+                "taco": 0
+              },
+              "rejected": 0,
+              "reads": 0,
+              "cacheHits": 0,
+              "searchMs": 0,
+              "examined": 0,
+              "matched": 0,
+              "queries": 0
+            },
+            "fallbackUsed": false,
+            "inputTokens": 4689,
+            "pricingVersion": "openai-standard-2026-10-08",
+            "resultStatus": "created",
+            "createdAt": {
+              "_seconds": 1792664249,
+              "_nanoseconds": 251000000
+            },
+            "issueCategories": [],
+            "provider": "openai",
+            "promptVersion": "nutrition-full-plan-v4.0.0",
+            "cachedInputTokens": 1042,
+            "model": "gpt-6-luna",
+            "reviewerVersion": "nutrition-independent-review-v1",
+            "reviewStatus": null,
+            "outputTokens": 2705,
+            "latencyMs": 27663,
+            "attempts": 2
+          },
+          {
+            "id": "64c4bf9a-5ef0-411c-bdc3-b984dd2a52f4-reviewer-3",
+            "ownerUid": "synthetic-adaptive-codex-caa9e7ac-6333-48bb-b616-4f7bb8490546",
+            "generationId": "64c4bf9a-5ef0-411c-bdc3-b984dd2a52f4",
+            "operation": "full_plan",
+            "agentRole": "reviewer",
+            "callNumber": 3,
+            "attemptNumber": 2,
+            "recoveryCreditUsed": false,
+            "recoveryPolicyVersion": 1,
+            "reservedCostUsd": 0.00715,
+            "aiSchemaVersion": "3.1.0",
+            "failureCode": null,
+            "estimatedCostUsd": 0.0007485,
+            "retryCount": 1,
+            "catalogMetrics": {
+              "requested": 0,
+              "failures": {},
+              "pages": 0,
+              "corrections": 0,
+              "sources": {
+                "off": 0,
+                "taco": 0
+              },
+              "rejected": 0,
+              "reads": 0,
+              "cacheHits": 0,
+              "searchMs": 0,
+              "examined": 0,
+              "matched": 0,
+              "queries": 0
+            },
+            "fallbackUsed": false,
+            "inputTokens": 4095,
+            "pricingVersion": "openai-standard-2026-10-08",
+            "createdAt": {
+              "_seconds": 1792664258,
+              "_nanoseconds": 119000000
+            },
+            "issueCategories": [],
+            "provider": "openai",
+            "promptVersion": "nutrition-full-plan-v4.0.0",
+            "cachedInputTokens": 0,
+            "model": "gpt-6-luna",
+            "reviewerVersion": "nutrition-independent-review-v1",
+            "reviewStatus": "approved",
+            "outputTokens": 678,
+            "latencyMs": 8833,
+            "attempts": 2,
+            "resultStatus": "validated",
+            "activatedAt": {
+              "_seconds": 1792664258,
+              "_nanoseconds": 136000000
+            }
+          }
+        ],
+        "planExists": true,
+        "review": {
+          "version": "nutrition-independent-review-v1",
+          "model": "gpt-6-luna",
+          "candidateDigest": "61f8922d926f6d20b0a98d0312075a1f181839dab4000032e367b7a03c09bd43",
+          "calls": 3
+        },
+        "durationMs": 69791
+      }
+    },
+    {
+      "scenario": "unrestricted",
+      "uid": "synthetic-adaptive-codex-77840db8-2375-4224-b517-9ae66aded40e",
+      "generationId": "a00e9641-0643-41a6-8de7-b99b44543190",
+      "startedAt": "2026-10-22T10:17:59.133Z",
+      "calls": [
+        {
+          "role": "creator",
+          "reservedUsd": 0.0072,
+          "state": "responded",
+          "estimatedCostUsd": 0.00090512,
+          "latencyMs": 16898
+        },
+        {
+          "role": "creator",
+          "reservedUsd": 0.0072,
+          "state": "responded",
+          "estimatedCostUsd": 0.00163922,
+          "latencyMs": 30937
+        },
+        {
+          "role": "creator",
+          "reservedUsd": 0.0072,
+          "state": "responded",
+          "estimatedCostUsd": 0.00183642,
+          "latencyMs": 32623
+        },
+        {
+          "role": "reviewer",
+          "reservedUsd": 0.00715,
+          "state": "responded",
+          "estimatedCostUsd": 0.000753,
+          "latencyMs": 11204
+        }
+      ],
+      "result": {
+        "success": false,
+        "status": "failed",
+        "failureCode": "AI_RETRY_EXHAUSTED",
+        "lastFailureCode": "AI_REVIEW_REJECTED",
+        "aiCallCount": 4,
+        "aiReservedUsd": 0.02875,
+        "creditUsed": false,
+        "history": [
+          {
+            "callNumber": 1,
+            "attempt": 1,
+            "role": "creator",
+            "code": "AI_CONTENT_SAFETY_MISMATCH",
+            "reviewStatus": null
+          },
+          {
+            "callNumber": 2,
+            "attempt": 2,
+            "role": "creator",
+            "code": "AI_MACRO_VALIDATION_FAILED",
+            "reviewStatus": null
+          },
+          {
+            "callNumber": 3,
+            "attempt": 3,
+            "role": "creator",
+            "code": null,
+            "reviewStatus": null
+          },
+          {
+            "callNumber": 4,
+            "attempt": 3,
+            "role": "reviewer",
+            "code": "AI_REVIEW_REJECTED",
+            "reviewStatus": "rejected"
+          }
+        ],
+        "operations": [
+          {
+            "id": "a00e9641-0643-41a6-8de7-b99b44543190-creator-1",
+            "ownerUid": "synthetic-adaptive-codex-77840db8-2375-4224-b517-9ae66aded40e",
+            "generationId": "a00e9641-0643-41a6-8de7-b99b44543190",
+            "operation": "full_plan",
+            "agentRole": "creator",
+            "callNumber": 1,
+            "attemptNumber": 1,
+            "recoveryCreditUsed": false,
+            "recoveryPolicyVersion": 1,
+            "reservedCostUsd": 0.0072,
+            "aiSchemaVersion": "3.1.0",
+            "failureCode": "AI_CONTENT_SAFETY_MISMATCH",
+            "estimatedCostUsd": 0.00090512,
+            "retryCount": 0,
+            "catalogMetrics": {
+              "requested": 0,
+              "failures": {},
+              "pages": 0,
+              "corrections": 0,
+              "sources": {
+                "off": 0,
+                "taco": 0
+              },
+              "rejected": 0,
+              "reads": 0,
+              "cacheHits": 0,
+              "searchMs": 0,
+              "examined": 0,
+              "matched": 0,
+              "queries": 0
+            },
+            "fallbackUsed": false,
+            "inputTokens": 2059,
+            "pricingVersion": "openai-standard-2026-10-08",
+            "resultStatus": "failed",
+            "createdAt": {
+              "_seconds": 1792664297,
+              "_nanoseconds": 492000000
+            },
+            "issueCategories": [],
+            "provider": "openai",
+            "promptVersion": "nutrition-full-plan-v4.0.0",
+            "cachedInputTokens": 1042,
+            "model": "gpt-6-luna",
+            "reviewerVersion": "nutrition-independent-review-v1",
+            "reviewStatus": null,
+            "outputTokens": 1586,
+            "latencyMs": 16910,
+            "attempts": 1
+          },
+          {
+            "id": "a00e9641-0643-41a6-8de7-b99b44543190-creator-2",
+            "ownerUid": "synthetic-adaptive-codex-77840db8-2375-4224-b517-9ae66aded40e",
+            "generationId": "a00e9641-0643-41a6-8de7-b99b44543190",
+            "operation": "full_plan",
+            "agentRole": "creator",
+            "callNumber": 2,
+            "attemptNumber": 2,
+            "recoveryCreditUsed": false,
+            "recoveryPolicyVersion": 1,
+            "reservedCostUsd": 0.0072,
+            "aiSchemaVersion": "3.1.0",
+            "failureCode": "AI_MACRO_VALIDATION_FAILED",
+            "estimatedCostUsd": 0.00163922,
+            "retryCount": 1,
+            "catalogMetrics": {
+              "requested": 0,
+              "failures": {},
+              "pages": 0,
+              "corrections": 0,
+              "sources": {
+                "off": 0,
+                "taco": 0
+              },
+              "rejected": 0,
+              "reads": 0,
+              "cacheHits": 0,
+              "searchMs": 0,
+              "examined": 0,
+              "matched": 0,
+              "queries": 0
+            },
+            "fallbackUsed": false,
+            "inputTokens": 3825,
+            "pricingVersion": "openai-standard-2026-10-08",
+            "resultStatus": "failed",
+            "createdAt": {
+              "_seconds": 1792664328,
+              "_nanoseconds": 497000000
+            },
+            "issueCategories": [],
+            "provider": "openai",
+            "promptVersion": "nutrition-full-plan-v4.0.0",
+            "cachedInputTokens": 1042,
+            "model": "gpt-6-luna",
+            "reviewerVersion": "nutrition-independent-review-v1",
+            "reviewStatus": null,
+            "outputTokens": 2701,
+            "latencyMs": 30983,
+            "attempts": 2
+          },
+          {
+            "id": "a00e9641-0643-41a6-8de7-b99b44543190-creator-3",
+            "ownerUid": "synthetic-adaptive-codex-77840db8-2375-4224-b517-9ae66aded40e",
+            "generationId": "a00e9641-0643-41a6-8de7-b99b44543190",
+            "operation": "full_plan",
+            "agentRole": "creator",
+            "callNumber": 3,
+            "attemptNumber": 3,
+            "recoveryCreditUsed": false,
+            "recoveryPolicyVersion": 1,
+            "reservedCostUsd": 0.0072,
+            "aiSchemaVersion": "3.1.0",
+            "failureCode": null,
+            "estimatedCostUsd": 0.00183642,
+            "retryCount": 2,
+            "catalogMetrics": {
+              "requested": 0,
+              "failures": {},
+              "pages": 0,
+              "corrections": 0,
+              "sources": {
+                "off": 0,
+                "taco": 0
+              },
+              "rejected": 0,
+              "reads": 0,
+              "cacheHits": 0,
+              "searchMs": 0,
+              "examined": 0,
+              "matched": 0,
+              "queries": 0
+            },
+            "fallbackUsed": false,
+            "inputTokens": 4822,
+            "pricingVersion": "openai-standard-2026-10-08",
+            "resultStatus": "created",
+            "createdAt": {
+              "_seconds": 1792664361,
+              "_nanoseconds": 175000000
+            },
+            "issueCategories": [],
+            "provider": "openai",
+            "promptVersion": "nutrition-full-plan-v4.0.0",
+            "cachedInputTokens": 1042,
+            "model": "gpt-6-luna",
+            "reviewerVersion": "nutrition-independent-review-v1",
+            "reviewStatus": null,
+            "outputTokens": 2896,
+            "latencyMs": 32651,
+            "attempts": 3
+          },
+          {
+            "id": "a00e9641-0643-41a6-8de7-b99b44543190-reviewer-4",
+            "ownerUid": "synthetic-adaptive-codex-77840db8-2375-4224-b517-9ae66aded40e",
+            "generationId": "a00e9641-0643-41a6-8de7-b99b44543190",
+            "operation": "full_plan",
+            "agentRole": "reviewer",
+            "callNumber": 4,
+            "attemptNumber": 3,
+            "recoveryCreditUsed": false,
+            "recoveryPolicyVersion": 1,
+            "reservedCostUsd": 0.00715,
+            "aiSchemaVersion": "3.1.0",
+            "failureCode": "AI_REVIEW_REJECTED",
+            "estimatedCostUsd": 0.000753,
+            "retryCount": 2,
+            "catalogMetrics": {
+              "requested": 0,
+              "failures": {},
+              "pages": 0,
+              "corrections": 0,
+              "sources": {
+                "off": 0,
+                "taco": 0
+              },
+              "rejected": 0,
+              "reads": 0,
+              "cacheHits": 0,
+              "searchMs": 0,
+              "examined": 0,
+              "matched": 0,
+              "queries": 0
+            },
+            "fallbackUsed": false,
+            "inputTokens": 4065,
+            "pricingVersion": "openai-standard-2026-10-08",
+            "resultStatus": "failed",
+            "createdAt": {
+              "_seconds": 1792664372,
+              "_nanoseconds": 413000000
+            },
+            "issueCategories": [
+              "ingredients"
+            ],
+            "provider": "openai",
+            "promptVersion": "nutrition-full-plan-v4.0.0",
+            "cachedInputTokens": 0,
+            "model": "gpt-6-luna",
+            "reviewerVersion": "nutrition-independent-review-v1",
+            "reviewStatus": "rejected",
+            "outputTokens": 693,
+            "latencyMs": 11206,
+            "attempts": 3
+          }
+        ],
+        "planExists": false,
+        "review": null,
+        "durationMs": 93338
+      }
+    },
+    {
+      "scenario": "milk",
+      "uid": "synthetic-adaptive-codex-7135927e-8ce6-48f7-9d18-cf92bdcdc87d",
+      "generationId": "743558c4-9b5a-4de9-a94f-41068413c6cf",
+      "startedAt": "2026-10-22T10:19:56.808Z",
+      "calls": [
+        {
+          "role": "creator",
+          "reservedUsd": 0.0072,
+          "state": "responded",
+          "estimatedCostUsd": 0.00135294,
+          "latencyMs": 34013
+        },
+        {
+          "role": "creator",
+          "reservedUsd": 0.0072,
+          "state": "responded",
+          "estimatedCostUsd": 0.00169842,
+          "latencyMs": 33681
+        },
+        {
+          "role": "creator",
+          "reservedUsd": 0.0072,
+          "state": "responded",
+          "estimatedCostUsd": 0.00159902,
+          "latencyMs": 32346
+        }
+      ],
+      "result": {
+        "success": false,
+        "status": "failed",
+        "failureCode": "AI_RETRY_EXHAUSTED",
+        "lastFailureCode": "AI_MACRO_VALIDATION_FAILED",
+        "aiCallCount": 3,
+        "aiReservedUsd": 0.0216,
+        "creditUsed": false,
+        "history": [
+          {
+            "callNumber": 1,
+            "attempt": 1,
+            "role": "creator",
+            "code": "AI_EVIDENCE_INSUFFICIENT",
+            "reviewStatus": null
+          },
+          {
+            "callNumber": 2,
+            "attempt": 2,
+            "role": "creator",
+            "code": "AI_MACRO_VALIDATION_FAILED",
+            "reviewStatus": null
+          },
+          {
+            "callNumber": 3,
+            "attempt": 3,
+            "role": "creator",
+            "code": "AI_MACRO_VALIDATION_FAILED",
+            "reviewStatus": null
+          }
+        ],
+        "operations": [
+          {
+            "id": "743558c4-9b5a-4de9-a94f-41068413c6cf-creator-1",
+            "ownerUid": "synthetic-adaptive-codex-7135927e-8ce6-48f7-9d18-cf92bdcdc87d",
+            "generationId": "743558c4-9b5a-4de9-a94f-41068413c6cf",
+            "operation": "full_plan",
+            "agentRole": "creator",
+            "callNumber": 1,
+            "attemptNumber": 1,
+            "recoveryCreditUsed": false,
+            "recoveryPolicyVersion": 1,
+            "reservedCostUsd": 0.0072,
+            "aiSchemaVersion": "3.1.0",
+            "failureCode": "AI_EVIDENCE_INSUFFICIENT",
+            "estimatedCostUsd": 0.00135294,
+            "retryCount": 0,
+            "catalogMetrics": {
+              "requested": 0,
+              "failures": {},
+              "pages": 12,
+              "corrections": 0,
+              "sources": {
+                "off": 0,
+                "taco": 0
+              },
+              "rejected": 0,
+              "reads": 12,
+              "cacheHits": 0,
+              "searchMs": 68,
+              "examined": 0,
+              "matched": 0,
+              "queries": 12
+            },
+            "fallbackUsed": false,
+            "inputTokens": 2067,
+            "pricingVersion": "openai-standard-2026-10-08",
+            "resultStatus": "failed",
+            "createdAt": {
+              "_seconds": 1792664432,
+              "_nanoseconds": 250000000
+            },
+            "issueCategories": [],
+            "provider": "openai",
+            "promptVersion": "nutrition-full-plan-v4.0.0",
+            "cachedInputTokens": 2064,
+            "model": "gpt-6-luna",
+            "reviewerVersion": "nutrition-independent-review-v1",
+            "reviewStatus": null,
+            "outputTokens": 2664,
+            "latencyMs": 34099,
+            "attempts": 1
+          },
+          {
+            "id": "743558c4-9b5a-4de9-a94f-41068413c6cf-creator-2",
+            "ownerUid": "synthetic-adaptive-codex-7135927e-8ce6-48f7-9d18-cf92bdcdc87d",
+            "generationId": "743558c4-9b5a-4de9-a94f-41068413c6cf",
+            "operation": "full_plan",
+            "agentRole": "creator",
+            "callNumber": 2,
+            "attemptNumber": 2,
+            "recoveryCreditUsed": false,
+            "recoveryPolicyVersion": 1,
+            "reservedCostUsd": 0.0072,
+            "aiSchemaVersion": "3.1.0",
+            "failureCode": "AI_MACRO_VALIDATION_FAILED",
+            "estimatedCostUsd": 0.00169842,
+            "retryCount": 1,
+            "catalogMetrics": {
+              "requested": 0,
+              "failures": {},
+              "pages": 12,
+              "corrections": 0,
+              "sources": {
+                "off": 0,
+                "taco": 0
+              },
+              "rejected": 0,
+              "reads": 12,
+              "cacheHits": 0,
+              "searchMs": 68,
+              "examined": 0,
+              "matched": 0,
+              "queries": 12
+            },
+            "fallbackUsed": false,
+            "inputTokens": 4052,
+            "pricingVersion": "openai-standard-2026-10-08",
+            "resultStatus": "failed",
+            "createdAt": {
+              "_seconds": 1792664465,
+              "_nanoseconds": 975000000
+            },
+            "issueCategories": [],
+            "provider": "openai",
+            "promptVersion": "nutrition-full-plan-v4.0.0",
+            "cachedInputTokens": 1042,
+            "model": "gpt-6-luna",
+            "reviewerVersion": "nutrition-independent-review-v1",
+            "reviewStatus": null,
+            "outputTokens": 2774,
+            "latencyMs": 33701,
+            "attempts": 2
+          },
+          {
+            "id": "743558c4-9b5a-4de9-a94f-41068413c6cf-creator-3",
+            "ownerUid": "synthetic-adaptive-codex-7135927e-8ce6-48f7-9d18-cf92bdcdc87d",
+            "generationId": "743558c4-9b5a-4de9-a94f-41068413c6cf",
+            "operation": "full_plan",
+            "agentRole": "creator",
+            "callNumber": 3,
+            "attemptNumber": 3,
+            "recoveryCreditUsed": false,
+            "recoveryPolicyVersion": 1,
+            "reservedCostUsd": 0.0072,
+            "aiSchemaVersion": "3.1.0",
+            "failureCode": "AI_MACRO_VALIDATION_FAILED",
+            "estimatedCostUsd": 0.00159902,
+            "retryCount": 2,
+            "catalogMetrics": {
+              "requested": 0,
+              "failures": {},
+              "pages": 12,
+              "corrections": 0,
+              "sources": {
+                "off": 0,
+                "taco": 0
+              },
+              "rejected": 0,
+              "reads": 12,
+              "cacheHits": 0,
+              "searchMs": 68,
+              "examined": 0,
+              "matched": 0,
+              "queries": 12
+            },
+            "fallbackUsed": false,
+            "inputTokens": 4418,
+            "pricingVersion": "openai-standard-2026-10-08",
+            "resultStatus": "failed",
+            "createdAt": {
+              "_seconds": 1792664498,
+              "_nanoseconds": 378000000
+            },
+            "issueCategories": [],
+            "provider": "openai",
+            "promptVersion": "nutrition-full-plan-v4.0.0",
+            "cachedInputTokens": 1042,
+            "model": "gpt-6-luna",
+            "reviewerVersion": "nutrition-independent-review-v1",
+            "reviewStatus": null,
+            "outputTokens": 2502,
+            "latencyMs": 32374,
+            "attempts": 3
+          }
+        ],
+        "planExists": false,
+        "review": null,
+        "durationMs": 101619
+      }
+    },
+    {
+      "scenario": "vegetarian",
+      "uid": "synthetic-adaptive-codex-84c3aa04-c82f-4ac6-9795-174f67e55a8a",
+      "generationId": "8381f818-2ee4-4f42-889b-1855a4f23437",
+      "startedAt": "2026-10-22T10:21:49.665Z",
+      "calls": [
+        {
+          "role": "creator",
+          "reservedUsd": 0.0072,
+          "state": "responded",
+          "estimatedCostUsd": 0.00084236,
+          "latencyMs": 19168
+        },
+        {
+          "role": "creator",
+          "reservedUsd": 0.0072,
+          "state": "responded",
+          "estimatedCostUsd": 0.00162972,
+          "latencyMs": 29747
+        },
+        {
+          "role": "creator",
+          "reservedUsd": 0.0072,
+          "state": "responded",
+          "estimatedCostUsd": 0.00169132,
+          "latencyMs": 30949
+        },
+        {
+          "role": "reviewer",
+          "reservedUsd": 0.00715,
+          "state": "responded",
+          "estimatedCostUsd": 0.0006721,
+          "latencyMs": 8878
+        }
+      ],
+      "result": {
+        "success": true,
+        "status": "completed",
+        "failureCode": null,
+        "lastFailureCode": "AI_MACRO_VALIDATION_FAILED",
+        "aiCallCount": 4,
+        "aiReservedUsd": 0.02875,
+        "creditUsed": false,
+        "history": [
+          {
+            "callNumber": 1,
+            "attempt": 1,
+            "role": "creator",
+            "code": "AI_MACRO_VALIDATION_FAILED",
+            "reviewStatus": null
+          },
+          {
+            "callNumber": 2,
+            "attempt": 2,
+            "role": "creator",
+            "code": "AI_MACRO_VALIDATION_FAILED",
+            "reviewStatus": null
+          },
+          {
+            "callNumber": 3,
+            "attempt": 3,
+            "role": "creator",
+            "code": null,
+            "reviewStatus": null
+          },
+          {
+            "callNumber": 4,
+            "attempt": 3,
+            "role": "reviewer",
+            "code": null,
+            "reviewStatus": "approved"
+          }
+        ],
+        "operations": [
+          {
+            "id": "8381f818-2ee4-4f42-889b-1855a4f23437-creator-1",
+            "ownerUid": "synthetic-adaptive-codex-84c3aa04-c82f-4ac6-9795-174f67e55a8a",
+            "generationId": "8381f818-2ee4-4f42-889b-1855a4f23437",
+            "operation": "full_plan",
+            "agentRole": "creator",
+            "callNumber": 1,
+            "attemptNumber": 1,
+            "recoveryCreditUsed": false,
+            "recoveryPolicyVersion": 1,
+            "reservedCostUsd": 0.0072,
+            "aiSchemaVersion": "3.1.0",
+            "failureCode": "AI_MACRO_VALIDATION_FAILED",
+            "estimatedCostUsd": 0.00084236,
+            "retryCount": 0,
+            "catalogMetrics": {
+              "requested": 0,
+              "failures": {},
+              "pages": 0,
+              "corrections": 0,
+              "sources": {
+                "off": 0,
+                "taco": 0
+              },
+              "rejected": 0,
+              "reads": 0,
+              "cacheHits": 0,
+              "searchMs": 0,
+              "examined": 0,
+              "matched": 0,
+              "queries": 0
+            },
+            "fallbackUsed": false,
+            "inputTokens": 2059,
+            "pricingVersion": "openai-standard-2026-10-08",
+            "resultStatus": "failed",
+            "createdAt": {
+              "_seconds": 1792664530,
+              "_nanoseconds": 409000000
+            },
+            "issueCategories": [],
+            "provider": "openai",
+            "promptVersion": "nutrition-full-plan-v4.0.0",
+            "cachedInputTokens": 2056,
+            "model": "gpt-6-luna",
+            "reviewerVersion": "nutrition-independent-review-v1",
+            "reviewStatus": null,
+            "outputTokens": 1643,
+            "latencyMs": 19195,
+            "attempts": 1
+          },
+          {
+            "id": "8381f818-2ee4-4f42-889b-1855a4f23437-creator-2",
+            "ownerUid": "synthetic-adaptive-codex-84c3aa04-c82f-4ac6-9795-174f67e55a8a",
+            "generationId": "8381f818-2ee4-4f42-889b-1855a4f23437",
+            "operation": "full_plan",
+            "agentRole": "creator",
+            "callNumber": 2,
+            "attemptNumber": 2,
+            "recoveryCreditUsed": false,
+            "recoveryPolicyVersion": 1,
+            "reservedCostUsd": 0.0072,
+            "aiSchemaVersion": "3.1.0",
+            "failureCode": "AI_MACRO_VALIDATION_FAILED",
+            "estimatedCostUsd": 0.00162972,
+            "retryCount": 1,
+            "catalogMetrics": {
+              "requested": 0,
+              "failures": {},
+              "pages": 0,
+              "corrections": 0,
+              "sources": {
+                "off": 0,
+                "taco": 0
+              },
+              "rejected": 0,
+              "reads": 0,
+              "cacheHits": 0,
+              "searchMs": 0,
+              "examined": 0,
+              "matched": 0,
+              "queries": 0
+            },
+            "fallbackUsed": false,
+            "inputTokens": 4650,
+            "pricingVersion": "openai-standard-2026-10-08",
+            "resultStatus": "failed",
+            "createdAt": {
+              "_seconds": 1792664560,
+              "_nanoseconds": 207000000
+            },
+            "issueCategories": [],
+            "provider": "openai",
+            "promptVersion": "nutrition-full-plan-v4.0.0",
+            "cachedInputTokens": 1042,
+            "model": "gpt-6-luna",
+            "reviewerVersion": "nutrition-independent-review-v1",
+            "reviewStatus": null,
+            "outputTokens": 2517,
+            "latencyMs": 29770,
+            "attempts": 2
+          },
+          {
+            "id": "8381f818-2ee4-4f42-889b-1855a4f23437-creator-3",
+            "ownerUid": "synthetic-adaptive-codex-84c3aa04-c82f-4ac6-9795-174f67e55a8a",
+            "generationId": "8381f818-2ee4-4f42-889b-1855a4f23437",
+            "operation": "full_plan",
+            "agentRole": "creator",
+            "callNumber": 3,
+            "attemptNumber": 3,
+            "recoveryCreditUsed": false,
+            "recoveryPolicyVersion": 1,
+            "reservedCostUsd": 0.0072,
+            "aiSchemaVersion": "3.1.0",
+            "failureCode": null,
+            "estimatedCostUsd": 0.00169132,
+            "retryCount": 2,
+            "catalogMetrics": {
+              "requested": 0,
+              "failures": {},
+              "pages": 0,
+              "corrections": 0,
+              "sources": {
+                "off": 0,
+                "taco": 0
+              },
+              "rejected": 0,
+              "reads": 0,
+              "cacheHits": 0,
+              "searchMs": 0,
+              "examined": 0,
+              "matched": 0,
+              "queries": 0
+            },
+            "fallbackUsed": false,
+            "inputTokens": 4711,
+            "pricingVersion": "openai-standard-2026-10-08",
+            "resultStatus": "created",
+            "createdAt": {
+              "_seconds": 1792664591,
+              "_nanoseconds": 199000000
+            },
+            "issueCategories": [],
+            "provider": "openai",
+            "promptVersion": "nutrition-full-plan-v4.0.0",
+            "cachedInputTokens": 1042,
+            "model": "gpt-6-luna",
+            "reviewerVersion": "nutrition-independent-review-v1",
+            "reviewStatus": null,
+            "outputTokens": 2628,
+            "latencyMs": 30961,
+            "attempts": 3
+          },
+          {
+            "id": "8381f818-2ee4-4f42-889b-1855a4f23437-reviewer-4",
+            "ownerUid": "synthetic-adaptive-codex-84c3aa04-c82f-4ac6-9795-174f67e55a8a",
+            "generationId": "8381f818-2ee4-4f42-889b-1855a4f23437",
+            "operation": "full_plan",
+            "agentRole": "reviewer",
+            "callNumber": 4,
+            "attemptNumber": 3,
+            "recoveryCreditUsed": false,
+            "recoveryPolicyVersion": 1,
+            "reservedCostUsd": 0.00715,
+            "aiSchemaVersion": "3.1.0",
+            "failureCode": null,
+            "estimatedCostUsd": 0.0006721,
+            "retryCount": 2,
+            "catalogMetrics": {
+              "requested": 0,
+              "failures": {},
+              "pages": 0,
+              "corrections": 0,
+              "sources": {
+                "off": 0,
+                "taco": 0
+              },
+              "rejected": 0,
+              "reads": 0,
+              "cacheHits": 0,
+              "searchMs": 0,
+              "examined": 0,
+              "matched": 0,
+              "queries": 0
+            },
+            "fallbackUsed": false,
+            "inputTokens": 3776,
+            "pricingVersion": "openai-standard-2026-10-08",
+            "createdAt": {
+              "_seconds": 1792664600,
+              "_nanoseconds": 120000000
+            },
+            "issueCategories": [],
+            "provider": "openai",
+            "promptVersion": "nutrition-full-plan-v4.0.0",
+            "cachedInputTokens": 0,
+            "model": "gpt-6-luna",
+            "reviewerVersion": "nutrition-independent-review-v1",
+            "reviewStatus": "approved",
+            "outputTokens": 589,
+            "latencyMs": 8881,
+            "attempts": 3,
+            "resultStatus": "validated",
+            "activatedAt": {
+              "_seconds": 1792664600,
+              "_nanoseconds": 132000000
+            }
+          }
+        ],
+        "planExists": true,
+        "review": {
+          "version": "nutrition-independent-review-v1",
+          "model": "gpt-6-luna",
+          "candidateDigest": "d041aff9aa723bfaa3f924daff2acdf27b1f2b43f9f1b3de000cd80301680657",
+          "calls": 4
+        },
+        "durationMs": 90526
+      }
+    },
+    {
+      "scenario": "milk",
+      "uid": "synthetic-adaptive-codex-fa83a099-e55f-4658-a8a8-929f0a2198e6",
+      "generationId": "d18debdc-0b03-4d1b-85cc-1861c8b88174",
+      "startedAt": "2026-10-22T10:23:36.931Z",
+      "calls": [
+        {
+          "role": "creator",
+          "reservedUsd": 0.0072,
+          "state": "responded",
+          "estimatedCostUsd": 0.00119294,
+          "latencyMs": 29527
+        },
+        {
+          "role": "reviewer",
+          "reservedUsd": 0.00715,
+          "state": "responded",
+          "estimatedCostUsd": 0.0009121,
+          "latencyMs": 13310
+        },
+        {
+          "role": "creator",
+          "reservedUsd": 0.0072,
+          "state": "responded",
+          "estimatedCostUsd": 0.00162422,
+          "latencyMs": 30168
+        },
+        {
+          "role": "reviewer",
+          "reservedUsd": 0.00715,
+          "state": "responded",
+          "estimatedCostUsd": 0.0008102999999999999,
+          "latencyMs": 11695
+        }
+      ],
+      "result": {
+        "success": false,
+        "status": "failed",
+        "failureCode": "AI_RETRY_EXHAUSTED",
+        "lastFailureCode": "AI_REVIEW_REJECTED",
+        "aiCallCount": 4,
+        "aiReservedUsd": 0.0287,
+        "creditUsed": false,
+        "history": [
+          {
+            "callNumber": 1,
+            "attempt": 1,
+            "role": "creator",
+            "code": null,
+            "reviewStatus": null
+          },
+          {
+            "callNumber": 2,
+            "attempt": 1,
+            "role": "reviewer",
+            "code": "AI_REVIEW_INSUFFICIENT_INFORMATION",
+            "reviewStatus": "insufficient_information"
+          },
+          {
+            "callNumber": 3,
+            "attempt": 2,
+            "role": "creator",
+            "code": null,
+            "reviewStatus": null
+          },
+          {
+            "callNumber": 4,
+            "attempt": 2,
+            "role": "reviewer",
+            "code": "AI_REVIEW_REJECTED",
+            "reviewStatus": "rejected"
+          }
+        ],
+        "operations": [
+          {
+            "id": "d18debdc-0b03-4d1b-85cc-1861c8b88174-creator-1",
+            "ownerUid": "synthetic-adaptive-codex-fa83a099-e55f-4658-a8a8-929f0a2198e6",
+            "generationId": "d18debdc-0b03-4d1b-85cc-1861c8b88174",
+            "operation": "full_plan",
+            "agentRole": "creator",
+            "callNumber": 1,
+            "attemptNumber": 1,
+            "recoveryCreditUsed": false,
+            "recoveryPolicyVersion": 1,
+            "reservedCostUsd": 0.0072,
+            "aiSchemaVersion": "3.1.0",
+            "failureCode": null,
+            "estimatedCostUsd": 0.00119294,
+            "retryCount": 0,
+            "catalogMetrics": {
+              "requested": 0,
+              "failures": {},
+              "pages": 0,
+              "corrections": 0,
+              "sources": {
+                "off": 0,
+                "taco": 0
+              },
+              "rejected": 0,
+              "reads": 0,
+              "cacheHits": 0,
+              "searchMs": 0,
+              "examined": 0,
+              "matched": 0,
+              "queries": 0
+            },
+            "fallbackUsed": false,
+            "inputTokens": 2067,
+            "pricingVersion": "openai-standard-2026-10-08",
+            "resultStatus": "created",
+            "createdAt": {
+              "_seconds": 1792664648,
+              "_nanoseconds": 114000000
+            },
+            "issueCategories": [],
+            "provider": "openai",
+            "promptVersion": "nutrition-full-plan-v4.0.0",
+            "cachedInputTokens": 2064,
+            "model": "gpt-6-luna",
+            "reviewerVersion": "nutrition-independent-review-v1",
+            "reviewStatus": null,
+            "outputTokens": 2344,
+            "latencyMs": 29566,
+            "attempts": 1
+          },
+          {
+            "id": "d18debdc-0b03-4d1b-85cc-1861c8b88174-creator-3",
+            "ownerUid": "synthetic-adaptive-codex-fa83a099-e55f-4658-a8a8-929f0a2198e6",
+            "generationId": "d18debdc-0b03-4d1b-85cc-1861c8b88174",
+            "operation": "full_plan",
+            "agentRole": "creator",
+            "callNumber": 3,
+            "attemptNumber": 2,
+            "recoveryCreditUsed": false,
+            "recoveryPolicyVersion": 1,
+            "reservedCostUsd": 0.0072,
+            "aiSchemaVersion": "3.1.0",
+            "failureCode": null,
+            "estimatedCostUsd": 0.00162422,
+            "retryCount": 1,
+            "catalogMetrics": {
+              "requested": 0,
+              "failures": {},
+              "pages": 0,
+              "corrections": 0,
+              "sources": {
+                "off": 0,
+                "taco": 0
+              },
+              "rejected": 0,
+              "reads": 0,
+              "cacheHits": 0,
+              "searchMs": 0,
+              "examined": 0,
+              "matched": 0,
+              "queries": 0
+            },
+            "fallbackUsed": false,
+            "inputTokens": 4475,
+            "pricingVersion": "openai-standard-2026-10-08",
+            "resultStatus": "created",
+            "createdAt": {
+              "_seconds": 1792664691,
+              "_nanoseconds": 670000000
+            },
+            "issueCategories": [],
+            "provider": "openai",
+            "promptVersion": "nutrition-full-plan-v4.0.0",
+            "cachedInputTokens": 1042,
+            "model": "gpt-6-luna",
+            "reviewerVersion": "nutrition-independent-review-v1",
+            "reviewStatus": null,
+            "outputTokens": 2541,
+            "latencyMs": 30179,
+            "attempts": 2
+          },
+          {
+            "id": "d18debdc-0b03-4d1b-85cc-1861c8b88174-reviewer-2",
+            "ownerUid": "synthetic-adaptive-codex-fa83a099-e55f-4658-a8a8-929f0a2198e6",
+            "generationId": "d18debdc-0b03-4d1b-85cc-1861c8b88174",
+            "operation": "full_plan",
+            "agentRole": "reviewer",
+            "callNumber": 2,
+            "attemptNumber": 1,
+            "recoveryCreditUsed": false,
+            "recoveryPolicyVersion": 1,
+            "reservedCostUsd": 0.00715,
+            "aiSchemaVersion": "3.1.0",
+            "failureCode": "AI_REVIEW_INSUFFICIENT_INFORMATION",
+            "estimatedCostUsd": 0.0009121,
+            "retryCount": 0,
+            "catalogMetrics": {
+              "requested": 0,
+              "failures": {},
+              "pages": 0,
+              "corrections": 0,
+              "sources": {
+                "off": 0,
+                "taco": 0
+              },
+              "rejected": 0,
+              "reads": 0,
+              "cacheHits": 0,
+              "searchMs": 0,
+              "examined": 0,
+              "matched": 0,
+              "queries": 0
+            },
+            "fallbackUsed": false,
+            "inputTokens": 3786,
+            "pricingVersion": "openai-standard-2026-10-08",
+            "resultStatus": "failed",
+            "createdAt": {
+              "_seconds": 1792664661,
+              "_nanoseconds": 457000000
+            },
+            "issueCategories": [
+              "insufficient_information",
+              "insufficient_information"
+            ],
+            "provider": "openai",
+            "promptVersion": "nutrition-full-plan-v4.0.0",
+            "cachedInputTokens": 0,
+            "model": "gpt-6-luna",
+            "reviewerVersion": "nutrition-independent-review-v1",
+            "reviewStatus": "insufficient_information",
+            "outputTokens": 1067,
+            "latencyMs": 13312,
+            "attempts": 1
+          },
+          {
+            "id": "d18debdc-0b03-4d1b-85cc-1861c8b88174-reviewer-4",
+            "ownerUid": "synthetic-adaptive-codex-fa83a099-e55f-4658-a8a8-929f0a2198e6",
+            "generationId": "d18debdc-0b03-4d1b-85cc-1861c8b88174",
+            "operation": "full_plan",
+            "agentRole": "reviewer",
+            "callNumber": 4,
+            "attemptNumber": 2,
+            "recoveryCreditUsed": false,
+            "recoveryPolicyVersion": 1,
+            "reservedCostUsd": 0.00715,
+            "aiSchemaVersion": "3.1.0",
+            "failureCode": "AI_REVIEW_REJECTED",
+            "estimatedCostUsd": 0.0008102999999999999,
+            "retryCount": 1,
+            "catalogMetrics": {
+              "requested": 0,
+              "failures": {},
+              "pages": 0,
+              "corrections": 0,
+              "sources": {
+                "off": 0,
+                "taco": 0
+              },
+              "rejected": 0,
+              "reads": 0,
+              "cacheHits": 0,
+              "searchMs": 0,
+              "examined": 0,
+              "matched": 0,
+              "queries": 0
+            },
+            "fallbackUsed": false,
+            "inputTokens": 3798,
+            "pricingVersion": "openai-standard-2026-10-08",
+            "resultStatus": "failed",
+            "createdAt": {
+              "_seconds": 1792664703,
+              "_nanoseconds": 404000000
+            },
+            "issueCategories": [
+              "macros"
+            ],
+            "provider": "openai",
+            "promptVersion": "nutrition-full-plan-v4.0.0",
+            "cachedInputTokens": 0,
+            "model": "gpt-6-luna",
+            "reviewerVersion": "nutrition-independent-review-v1",
+            "reviewStatus": "rejected",
+            "outputTokens": 861,
+            "latencyMs": 11698,
+            "attempts": 2
+          }
+        ],
+        "planExists": false,
+        "review": null,
+        "durationMs": 86532
+      }
+    }
+  ]
+}

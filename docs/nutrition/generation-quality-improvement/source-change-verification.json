@@ -1,0 +1,23 @@
+{
+  "changedExistingFiles": [
+    "functions/src/nutrition/__tests__/prompt.test.ts",
+    "functions/src/nutrition/ai/prompt.ts",
+    "functions/src/nutrition/ai/config.ts",
+    "functions/src/nutrition/generation/reviewEvidence.ts",
+    "functions/src/nutrition/generation/attempts.ts",
+    "functions/src/nutrition/generation/domain.ts"
+  ],
+  "protectedRuntimeFilesIdentical": [
+    "ai/provider.ts",
+    "ai/review.ts",
+    "generation/adaptiveRecovery.ts",
+    "generation/callBudget.ts",
+    "generation/worker.ts",
+    "generation/mealAlternativeRequest.ts",
+    "generation/correction.ts",
+    "generation/diagnostics.ts",
+    "generation/portionOptimizer.ts",
+    "generation/restrictions.ts"
+  ],
+  "financialLimitsAndModelUnchanged": true
+}

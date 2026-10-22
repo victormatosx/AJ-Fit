@@ -1,0 +1,26 @@
+{
+  "branch": "treinos",
+  "head": "3d731c9200d3d1ba454c76a0ce0bc2bcbdc7169b",
+  "stagedFiles": [],
+  "unrelatedClientChanges": [],
+  "paidCallsThisTask": 0,
+  "paidCostThisTaskUsd": 0,
+  "deployPerformed": false,
+  "configOnlyPromptVersionChanged": true,
+  "oldTaskBudgetUsed": false,
+  "newExistingSourceChanges": [
+    "functions/src/nutrition/__tests__/prompt.test.ts",
+    "functions/src/nutrition/ai/prompt.ts",
+    "functions/src/nutrition/ai/config.ts",
+    "functions/src/nutrition/generation/reviewEvidence.ts",
+    "functions/src/nutrition/generation/attempts.ts",
+    "functions/src/nutrition/generation/domain.ts"
+  ],
+  "functionsTestsPassed": 2141,
+  "emulatorNutritionTestsPassed": 382,
+  "appNutritionTestsPassed": 490,
+  "comparisonAuthorized": false,
+  "proposedComparisonJobs": 36,
+  "proposedMaximumCalls": 144,
+  "proposedBudgetUsd": 1.08
+}

@@ -1,0 +1,8 @@
+{
+  "project": "demo-ajfit-quality-comparison",
+  "collections": [],
+  "operations": 0,
+  "users": 0,
+  "evidence": "Read-only Firebase Admin query immediately before starting the authorized runner; response captured in tool output.",
+  "oldAdaptiveProjectTouched": false
+}

@@ -2,6 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { fullPlanContext, mealAlternativeContext } from '../ai/prompt';
 import type { NutritionAiProfile } from '../ai/provider';
 import { OpenAiNutritionProvider } from '../ai/provider';
+import { FULL_PLAN_SYSTEM_PROMPT, MEAL_ALTERNATIVE_SYSTEM_PROMPT } from '../ai/prompt';
+import { CORRECTION_SCALE_MIN, CORRECTION_SCALE_MAX } from '../generation/correction';
+import { REVIEW_SYSTEM_PROMPT } from '../ai/review';
 import type { MealNutritionTarget, NutritionEngineOutput } from '../shared/types/nutrition';
 
 const names = { preferred: [], usual: [], excluded: [] };
@@ -15,6 +18,35 @@ const target = { kcal: { target: 500, min: 475, max: 525 }, proteinG: { target: 
   carbsG: { target: 50, min: 45, max: 55 }, fatG: { target: 15, min: 13, max: 17 }, fiberG: { target: 5, min: 4, max: 6 } } as MealNutritionTarget;
 
 describe('supplement selection is separate from backend verification and independent review', () => {
+  it('sends actual acceptance targets and composition guidance to both creators, leaving independent review separate', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => new Response(JSON.stringify({
+      status: 'completed', output: [{ content: [{ type: 'output_text', text: '{}' }] }], model: 'gpt-6-luna',
+    }), { status: 200 }));
+    const provider = new OpenAiNutritionProvider('test-only', fetcher);
+    const e = { ...engine, mealTargets: [target] };
+    await provider.generatePlan({ profile: baseProfile, engine: e, goal: 'health', foodNames: names });
+    await provider.generateMealAlternative({ profile: baseProfile, target, avoidFoodNames: [], goal: 'health', foodNames: names });
+    const contexts = fetcher.mock.calls.map(([, init]) => JSON.parse(String(init?.body)));
+    const data = contexts.map(body => JSON.parse(body.input.find((m: { role: string }) => m.role === 'user').content));
+    expect(data[0]).toMatchObject({ mealTargets: e.mealTargets, energy: e.energy, dailyMacros: e.macros,
+      dailyToleranceFraction: { calories: .05, protein: .1, carbohydrates: .1, fat: .1, fiber: .2 } });
+    expect(data[1].mealTarget).toEqual(target);
+    for (const ctx of data) expect(ctx.portionAdjustmentLimits).toEqual({ minMultiplier: CORRECTION_SCALE_MIN, maxMultiplier: CORRECTION_SCALE_MAX });
+    for (const prompt of [FULL_PLAN_SYSTEM_PROMPT, MEAL_ALTERNATIVE_SYSTEM_PROMPT]) {
+      expect(prompt).toContain('Represent separately served components as separate measured food items');
+      expect(prompt).toContain('never merely rename the same product');
+      expect(prompt).toContain('foodFailure.itemIndex is zero-based');
+      expect(prompt).toContain('all five supplied nutrient ranges');
+      expect(prompt).toContain('whey_lactose_claim_required');
+      expect(prompt).toContain('never remove the supplement from every other meal');
+      expect(prompt).toContain('empty_intersection or optimizer_infeasible');
+    }
+    expect(contexts.every(body => body.model === 'gpt-6-luna')).toBe(true);
+    await provider.reviewPlan({ profile: baseProfile, candidate: {}, candidateDigest: 'test', targets: {}, evidence: [], goal: 'health', foodNames: names });
+    const reviewerBody = JSON.parse(String(fetcher.mock.calls[2][1]?.body));
+    expect(reviewerBody.input.find((m: { role: string }) => m.role === 'developer').content).toBe(REVIEW_SYSTEM_PROMPT);
+    expect(reviewerBody.previous_response_id).toBeUndefined();
+  });
   it('carries the collected nutrition objective, activity, pace, target weight and supplement selection in both creator contexts', () => {
     const profile: NutritionAiProfile = { ...baseProfile, nutritionGoalCategory: 'maintenance', progressionPace: 'moderate', targetWeightKg: 68 };
     for (const raw of [fullPlanContext(profile, engine, 'health', names), mealAlternativeContext(profile, target, [], 'health', names)]) {
@@ -52,8 +84,8 @@ describe('supplement selection is separate from backend verification and indepen
       const ctx = JSON.parse(raw);
       expect(ctx.wheyAccepted).toBe(whey);
       expect(ctx.proteinSupplementAccepted).toBe(selected);
-      expect(ctx.supplementSafety).toContain('backend-verified lactose absence');
-      expect(ctx.supplementSafety).toContain('Never invent product properties');
+      expect(ctx.supplementSafety).toContain('explicit, unqualified lactose-free claim');
+      expect(ctx.supplementSafety).toContain('Never invent a product, brand, label or lactose-free claim');
     }
   });
   it('accepts whey for an unrestricted profile with the supplement selected', () => {

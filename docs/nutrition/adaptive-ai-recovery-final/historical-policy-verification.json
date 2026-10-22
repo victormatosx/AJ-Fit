@@ -1,0 +1,86 @@
+[
+  {
+    "generationId": "7faae5a4-944a-47bd-958f-d95cee97844b",
+    "status": "completed",
+    "eligibleUnderFinalPolicy": true,
+    "history": [
+      {
+        "callNumber": 1,
+        "attempt": 1,
+        "role": "creator",
+        "code": "AI_EVIDENCE_INSUFFICIENT",
+        "reviewStatus": null
+      },
+      {
+        "callNumber": 2,
+        "attempt": 2,
+        "role": "creator",
+        "code": null,
+        "reviewStatus": null
+      },
+      {
+        "callNumber": 3,
+        "attempt": 2,
+        "role": "reviewer",
+        "code": "AI_REVIEW_INSUFFICIENT_INFORMATION",
+        "reviewStatus": "insufficient_information"
+      }
+    ]
+  },
+  {
+    "generationId": "0552c0dc-2132-468f-a66a-6bb4215aa85f",
+    "status": "failed",
+    "eligibleUnderFinalPolicy": true,
+    "history": [
+      {
+        "callNumber": 1,
+        "attempt": 1,
+        "role": "creator",
+        "code": "AI_MACRO_VALIDATION_FAILED",
+        "reviewStatus": null
+      },
+      {
+        "callNumber": 2,
+        "attempt": 2,
+        "role": "creator",
+        "code": null,
+        "reviewStatus": null
+      },
+      {
+        "callNumber": 3,
+        "attempt": 2,
+        "role": "reviewer",
+        "code": "AI_REVIEW_INSUFFICIENT_INFORMATION",
+        "reviewStatus": "insufficient_information"
+      }
+    ]
+  },
+  {
+    "generationId": "11469d26-8054-4325-8c3f-a27b548519b8",
+    "status": "completed",
+    "eligibleUnderFinalPolicy": true,
+    "history": [
+      {
+        "callNumber": 1,
+        "attempt": 1,
+        "role": "creator",
+        "code": "AI_MACRO_VALIDATION_FAILED",
+        "reviewStatus": null
+      },
+      {
+        "callNumber": 2,
+        "attempt": 2,
+        "role": "creator",
+        "code": null,
+        "reviewStatus": null
+      },
+      {
+        "callNumber": 3,
+        "attempt": 2,
+        "role": "reviewer",
+        "code": "AI_REVIEW_INSUFFICIENT_INFORMATION",
+        "reviewStatus": "insufficient_information"
+      }
+    ]
+  }
+]

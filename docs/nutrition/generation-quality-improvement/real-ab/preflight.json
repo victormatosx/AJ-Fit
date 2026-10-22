@@ -1,0 +1,10 @@
+{
+  "allNutritionHashesVerified": true,
+  "candidateMatchesCurrentQualityCode": true,
+  "outsideNutritionRuntimeIdenticalBetweenArms": true,
+  "harnessHashesVerified": true,
+  "planUnchanged": true,
+  "priorPaidLedgerAbsent": true,
+  "priorTaskBudgetUsedUsd": 0,
+  "gitHead": "3d731c9200d3d1ba454c76a0ce0bc2bcbdc7169b"
+}

@@ -1,0 +1,9 @@
+
+ RUN  v4.1.10 /Users/victor/CropSight-Solutions/AJ-Fit/functions
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  07:19:56
+   Duration  102.03s (transform 126ms, setup 0ms, import 272ms, tests 101.70s, environment 0ms)
+

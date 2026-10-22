@@ -1,0 +1,14 @@
+{
+  "branch": "treinos",
+  "head": "3d731c9200d3d1ba454c76a0ce0bc2bcbdc7169b",
+  "stagedDiff": "",
+  "status": " M firestore-debug.log\n M functions/src/nutrition/__tests__/generation.test.ts\n M functions/src/nutrition/__tests__/independentReview.integration.test.ts\n M functions/src/nutrition/__tests__/independentReview.test.ts\n M functions/src/nutrition/ai/config.ts\n M functions/src/nutrition/generation/attempts.ts\n M functions/src/nutrition/generation/callBudget.ts\n M functions/src/nutrition/generation/correction.ts\n M functions/src/nutrition/generation/diagnostics.ts\n M functions/src/nutrition/generation/domain.ts\n M functions/src/nutrition/generation/mealAlternativeRequest.ts\n M functions/src/nutrition/generation/restrictions.ts\n M functions/src/nutrition/generation/worker.ts\n?? docs/nutrition/adaptive-ai-recovery-final/\n?? docs/nutrition/ai-recovery-budget-audit/\n?? docs/nutrition/final-stability-homologation/\n?? docs/nutrition/portion-optimizer-audit/\n?? functions/src/nutrition/__tests__/adaptiveRecovery.test.ts\n?? functions/src/nutrition/__tests__/adaptiveRecoveryHomologation.manual.test.ts\n?? functions/src/nutrition/__tests__/portionOptimizer.test.ts\n?? functions/src/nutrition/__tests__/stabilityHomologationRepeat.manual.test.ts\n?? functions/src/nutrition/generation/adaptiveRecovery.ts\n?? functions/src/nutrition/generation/portionOptimizer.ts\n",
+  "preservedPreexistingDiffs": {
+    "functions/src/nutrition/generation/correction.ts": true,
+    "functions/src/nutrition/generation/diagnostics.ts": true,
+    "functions/src/nutrition/generation/domain.ts": true,
+    "functions/src/nutrition/generation/restrictions.ts": true,
+    "functions/src/nutrition/__tests__/generation.test.ts": true
+  },
+  "appNativeDiff": ""
+}

@@ -8,6 +8,7 @@ import { auditFoodLogEntry } from '../shared/nutrition/foodLog/qualityAudit';
 import type { RawAiFoodItem } from '../generation/domain';
 import type { NutritionPromptFoodNames } from '../generation/foodNames';
 import { CatalogResolutionError, CatalogSearchSession, type CatalogCandidate, type CatalogFailureReason } from './search';
+import { hasExplicitZeroLactoseClaim } from './lactoseClaims';
 
 type Policy = Pick<NutritionProfile, 'dietaryPattern' | 'excludedAllergens' | 'excludedFoodIds' | 'excludedSubstances'>;
 const PREPARATIONS: Record<string, string> = { cru: 'raw', crua: 'raw', cozido: 'cooked', cozida: 'cooked',
@@ -120,8 +121,15 @@ export function restrictionFailure(candidate: CatalogCandidate, profile: Policy,
     };
     if (critical.some(a => presence[a]?.test(ingredientText))) return 'restriction';
     if ('allergens' in f && f.allergens?.some(a => critical.includes(a))) return 'restriction';
-    // A reviewed empty array is ingredient-level only, NOT proof of critical absence.
-    if (!e || critical.some(a => !e.absentSubstances.includes(a))) return 'restriction';
+    // Lactose specifically may also be confirmed by an explicit, unqualified
+    // absence claim on the catalog's own curated identity (no admin review
+    // pipeline has ever populated `safetyEvidence` for any record — see
+    // `lactoseClaims.ts`). Every OTHER critical substance (allergens,
+    // gluten/celiac) still requires real reviewed evidence; a reviewed
+    // empty array is ingredient-level only, NOT proof of critical absence.
+    const lactoseConfirmedByLabel = critical.includes('lactose') && hasExplicitZeroLactoseClaim(candidate);
+    const remainingCritical = lactoseConfirmedByLabel ? critical.filter(a => a !== 'lactose') : critical;
+    if (remainingCritical.length && (!e || remainingCritical.some(a => !e.absentSubstances.includes(a)))) return 'restriction';
   }
   if (names.excluded.length && !simplePlant(candidate) && !('allergens' in f && f.allergens !== null)
     && !e?.compositionReviewed) return 'restriction';

@@ -1,0 +1,96 @@
+{
+  "runs": 9,
+  "approved": 4,
+  "calls": 29,
+  "creditUses": 0,
+  "codexEstimatedCostUsd": 0.0387481,
+  "codexReservedUsd": 0.20845,
+  "claudeKnownEstimatedCostUsd": 0.07107356,
+  "claudeConservativeUpperUsd": 0.8191,
+  "knownCombinedEstimatedCostUsd": 0.10982165999999999,
+  "conservativeCombinedUpperUsd": 1.02755,
+  "minimumRemainingUsd": 0.9724499999999998,
+  "rows": [
+    {
+      "scenario": "vegetarian",
+      "runs": 2,
+      "approved": 1,
+      "failed": 1,
+      "calls": 7,
+      "creditUses": 0,
+      "knownEstimatedCostUsd": 0.00975464,
+      "reservedUsd": 0.05035,
+      "latencyMsTotal": 172179,
+      "failureCodes": [
+        "AI_SCHEMA_INVALID"
+      ]
+    },
+    {
+      "scenario": "milk",
+      "runs": 3,
+      "approved": 1,
+      "failed": 2,
+      "calls": 9,
+      "creditUses": 0,
+      "knownEstimatedCostUsd": 0.01129206,
+      "reservedUsd": 0.06465,
+      "latencyMsTotal": 222370,
+      "failureCodes": [
+        "AI_MACRO_VALIDATION_FAILED",
+        "AI_REVIEW_REJECTED"
+      ]
+    },
+    {
+      "scenario": "gluten",
+      "runs": 1,
+      "approved": 0,
+      "failed": 1,
+      "calls": 3,
+      "creditUses": 0,
+      "knownEstimatedCostUsd": 0.00477156,
+      "reservedUsd": 0.0216,
+      "latencyMsTotal": 75395,
+      "failureCodes": [
+        "AI_EVIDENCE_INSUFFICIENT"
+      ]
+    },
+    {
+      "scenario": "vegan",
+      "runs": 1,
+      "approved": 1,
+      "failed": 0,
+      "calls": 3,
+      "creditUses": 0,
+      "knownEstimatedCostUsd": 0.00380084,
+      "reservedUsd": 0.02155,
+      "latencyMsTotal": 61108,
+      "failureCodes": []
+    },
+    {
+      "scenario": "multiple",
+      "runs": 1,
+      "approved": 1,
+      "failed": 0,
+      "calls": 3,
+      "creditUses": 0,
+      "knownEstimatedCostUsd": 0.00399524,
+      "reservedUsd": 0.02155,
+      "latencyMsTotal": 69791,
+      "failureCodes": []
+    },
+    {
+      "scenario": "unrestricted",
+      "runs": 1,
+      "approved": 0,
+      "failed": 1,
+      "calls": 4,
+      "creditUses": 0,
+      "knownEstimatedCostUsd": 0.00513376,
+      "reservedUsd": 0.028749999999999998,
+      "latencyMsTotal": 93338,
+      "failureCodes": [
+        "AI_REVIEW_REJECTED"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+ M firestore-debug.log
+ M functions/src/nutrition/__tests__/generation.test.ts
+ M functions/src/nutrition/__tests__/independentReview.integration.test.ts
+ M functions/src/nutrition/__tests__/independentReview.test.ts
+ M functions/src/nutrition/ai/config.ts
+ M functions/src/nutrition/generation/attempts.ts
+ M functions/src/nutrition/generation/callBudget.ts
+ M functions/src/nutrition/generation/correction.ts
+ M functions/src/nutrition/generation/diagnostics.ts
+ M functions/src/nutrition/generation/domain.ts
+ M functions/src/nutrition/generation/mealAlternativeRequest.ts
+ M functions/src/nutrition/generation/restrictions.ts
+ M functions/src/nutrition/generation/worker.ts
+?? docs/nutrition/adaptive-ai-recovery-final/
+?? docs/nutrition/ai-recovery-budget-audit/
+?? docs/nutrition/final-stability-homologation/
+?? docs/nutrition/generation-quality-improvement/
+?? docs/nutrition/portion-optimizer-audit/
+?? functions/src/nutrition/__tests__/adaptiveRecovery.test.ts
+?? functions/src/nutrition/__tests__/adaptiveRecoveryHomologation.manual.test.ts
+?? functions/src/nutrition/__tests__/adaptiveRecoveryRelease.manual.test.ts
+?? functions/src/nutrition/__tests__/portionOptimizer.test.ts
+?? functions/src/nutrition/__tests__/stabilityHomologationRepeat.manual.test.ts
+?? functions/src/nutrition/generation/adaptiveRecovery.ts
+?? functions/src/nutrition/generation/portionOptimizer.ts

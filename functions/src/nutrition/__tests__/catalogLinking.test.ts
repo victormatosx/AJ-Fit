@@ -222,9 +222,26 @@ describe('lactose intolerance distinguishes whey/dairy variants and plant protei
     expect(result.validated.meals[0].options[0].foods.map(f => f.name)).toEqual(items.map(i => i.name));
     expect(provider.generatePlan.mock.calls[0][0].catalogMode).toBeUndefined();
   });
-  it('exhausts the existing budget when AI invents a lactose-free claim without catalog evidence', async () => {
+  it('links whey from an explicit, unqualified catalog zero-lactose label alone, without any safetyEvidence', async () => {
     const whey = off('Whey protein isolado sem lactose', 'Marca');
     const item = intention('Whey protein isolado sem lactose Marca');
+    item.ingredients = [{ name: item.name, origin: 'dairy' }];
+    const provider = { reviewPlan: approveReview, generatePlan: vi.fn().mockResolvedValue({ output: {
+      meals: profile.mealSlots.map(slot => ({ slot, foods: [item] })) }, model: 'fake', usage: {}, latencyMs: 1 }) };
+    const result = await generateValidatedPlan(provider, lactoseIntolerant, engine(), 'health', names,
+      undefined, undefined, { catalogSession: session([whey]) });
+    expect(result.attempt).toBe(1);
+    expect(provider.generatePlan).toHaveBeenCalledTimes(1);
+    expect(result.review.evidence.map(e => e.foodId)).toContain(whey.food.id);
+    expect(result.review.evidence.find(e => e.foodId === whey.food.id)?.absentSubstances).toContain('lactose');
+  });
+  it('exhausts the existing budget when AI invents a lactose-free claim the catalog label does not actually back', async () => {
+    // Catalog record states only an AMBIGUOUS qualifier ("pode conter leite" —
+    // a cross-contact warning, not an absence claim) — never an unqualified
+    // absence claim, so it still requires real safetyEvidence, which this
+    // record never has.
+    const whey = off('Whey protein isolado, pode conter leite', 'Marca');
+    const item = intention('Whey protein isolado, pode conter leite Marca');
     const provider = { reviewPlan: approveReview, generatePlan: vi.fn().mockResolvedValue({ output: {
       meals: profile.mealSlots.map(slot => ({ slot, foods: [item] })) }, model: 'fake', usage: {}, latencyMs: 1 }) };
     await expect(generateValidatedPlan(provider, lactoseIntolerant, engine(), 'health', names,
@@ -280,6 +297,30 @@ describe('lactose intolerance distinguishes whey/dairy variants and plant protei
     expect(restrictionFailure(peaProtein, { ...lactoseIntolerant, dietaryPattern: 'vegan' }, names)).toBeNull();
     const genericWhey = off('Whey protein concentrado', 'Marca');
     expect(restrictionFailure(genericWhey, { ...lactoseIntolerant, dietaryPattern: 'vegetarian' }, names)).toBe('restriction');
+  });
+  it('tags the retry feedback with a whey-specific hint instead of a generic ban, then recovers with a labeled zero-lactose product', async () => {
+    // Distinct TACO ids — `off()`'s source id is fixed, and two different OFF
+    // records sharing one id/collision defeats the catalog's identity check.
+    const ambiguousWhey = taco('Whey protein concentrado', 'whey-ambiguous');
+    const confirmedWhey = taco('Whey protein concentrado zero lactose', 'whey-confirmed');
+    const ambiguousItem = () => ({ ...intention('Whey protein concentrado'),
+      ingredients: [{ name: 'Whey protein concentrado', origin: 'dairy' as const }] });
+    const confirmedItem = () => ({ ...intention('Whey protein concentrado zero lactose'),
+      ingredients: [{ name: 'Whey protein concentrado zero lactose', origin: 'dairy' as const }] });
+    const provider = { reviewPlan: approveReview, generatePlan: vi.fn()
+      .mockImplementationOnce(async (req) => {
+        expect(req.feedback).toBeUndefined();
+        return { output: { meals: lactoseIntolerant.mealSlots.map(slot => ({ slot, foods: [ambiguousItem()] })) } };
+      })
+      .mockImplementationOnce(async (req) => {
+        const parsed = JSON.parse(req.feedback);
+        expect(parsed.foodFailure).toMatchObject({ reason: 'unverified_product_composition', hint: 'whey_lactose_claim_required' });
+        return { output: { meals: lactoseIntolerant.mealSlots.map(slot => ({ slot, foods: [confirmedItem()] })) }, model: 'fake', usage: {}, latencyMs: 1 };
+      }) };
+    const result = await generateValidatedPlan(provider, lactoseIntolerant, engine(), 'health', names, undefined, undefined,
+      { catalogSession: session([ambiguousWhey, confirmedWhey]), deadline: Date.now() + 20_000 });
+    expect(result.attempt).toBe(2);
+    expect(result.review.evidence.map(e => e.foodId)).toContain(confirmedWhey.food.id);
   });
   it('resolves a lactose-aware catalog plan end to end, retrying away from an unconfirmed whey toward a plant protein', async () => {
     // Distinct TACO ids — `off()`'s source id is fixed, and two different OFF

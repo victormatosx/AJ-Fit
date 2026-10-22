@@ -1,0 +1,6 @@
+{
+  "status": "stopped",
+  "reason": "predefined_job_limit_reached",
+  "jobs": 36,
+  "endedAt": "2026-10-22T12:30:57.327118+00:00"
+}

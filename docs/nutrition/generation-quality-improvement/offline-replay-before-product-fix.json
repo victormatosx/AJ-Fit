@@ -1,0 +1,1269 @@
+{
+  "kind": "offline historical replay, not new real AI",
+  "sourceSha256": "1f5bcad09382c6d4e19999fd6242cfec3c94ef2c4cb53f915444a344bad9fdc6",
+  "commonTargetsVerified": true,
+  "catalog": "no product evidence; same empty optional source as recorded harness",
+  "counts": {
+    "AI_EVIDENCE_INSUFFICIENT": 8,
+    "AI_MACRO_VALIDATION_FAILED": 5,
+    "creator_valid": 8,
+    "reviewer_insufficient_information": 3,
+    "reviewer_approved": 3,
+    "AI_CONTENT_SAFETY_MISMATCH": 1,
+    "reviewer_rejected": 2
+  },
+  "results": [
+    {
+      "job": 1,
+      "scenario": "milk",
+      "calls": [
+        {
+          "call": 1,
+          "role": "creator",
+          "originalFailure": "AI_EVIDENCE_INSUFFICIENT",
+          "replayFailure": "AI_EVIDENCE_INSUFFICIENT",
+          "reason": "unverified_product_composition",
+          "foodFailure": {
+            "scope": "flattened_food",
+            "itemIndex": 14,
+            "reason": "unverified_product_composition"
+          },
+          "item": {
+            "name": "Proteína isolada de ervilha",
+            "quantity": 25,
+            "unit": "g",
+            "preparationNote": "Misturada em água.",
+            "estimatedNutrition": {
+              "kcal": 100,
+              "proteinG": 20,
+              "carbsG": 2,
+              "fatG": 1.5,
+              "fiberG": 1
+            },
+            "ingredients": [
+              {
+                "name": "proteína isolada de ervilha",
+                "origin": "plant"
+              }
+            ],
+            "allergens": []
+          }
+        },
+        {
+          "call": 2,
+          "role": "creator",
+          "originalFailure": "AI_MACRO_VALIDATION_FAILED",
+          "replayFailure": "AI_MACRO_VALIDATION_FAILED",
+          "reason": "meal_target_deviation",
+          "diagnostics": {
+            "meals": [
+              {
+                "slot": "breakfast",
+                "optionIndex": 0,
+                "status": "passed",
+                "deviations": [],
+                "correction": {
+                  "attempted": false,
+                  "status": "not_needed",
+                  "interval": null,
+                  "factor": null,
+                  "reason": null
+                }
+              },
+              {
+                "slot": "lunch",
+                "optionIndex": 0,
+                "status": "passed",
+                "deviations": [
+                  {
+                    "nutrient": "kcal",
+                    "observed": 536,
+                    "min": 545.0236363636362,
+                    "max": 602.3945454545454,
+                    "direction": "below_min",
+                    "absolute": 9.023636363636228,
+                    "percent": 1.6556412899523711
+                  },
+                  {
+                    "nutrient": "fatG",
+                    "observed": 13.4,
+                    "min": 14.34272727272727,
+                    "max": 17.529999999999998,
+                    "direction": "below_min",
+                    "absolute": 0.9427272727272697,
+                    "percent": 6.572859225454756
+                  }
+                ],
+                "correction": {
+                  "attempted": true,
+                  "status": "applied",
+                  "interval": null,
+                  "factor": null,
+                  "reason": null,
+                  "method": "per_item"
+                }
+              },
+              {
+                "slot": "afternoon_snack",
+                "optionIndex": 0,
+                "status": "failed",
+                "deviations": [
+                  {
+                    "nutrient": "fiberG",
+                    "observed": 2.9,
+                    "min": 4.283694545454545,
+                    "max": 6.425541818181817,
+                    "direction": "below_min",
+                    "absolute": 1.3836945454545453,
+                    "percent": 32.30142884307174
+                  }
+                ],
+                "correction": {
+                  "attempted": true,
+                  "status": "rejected",
+                  "interval": null,
+                  "factor": null,
+                  "reason": "optimizer_infeasible"
+                }
+              },
+              {
+                "slot": "dinner",
+                "optionIndex": 0,
+                "status": "passed",
+                "deviations": [],
+                "correction": {
+                  "attempted": false,
+                  "status": "not_needed",
+                  "interval": null,
+                  "factor": null,
+                  "reason": null
+                }
+              }
+            ],
+            "daily": {
+              "status": "passed",
+              "deviations": []
+            }
+          }
+        },
+        {
+          "call": 3,
+          "role": "creator",
+          "originalFailure": null,
+          "replayFailure": null
+        },
+        {
+          "call": 4,
+          "role": "reviewer",
+          "status": "insufficient_information",
+          "issues": [
+            {
+              "category": "allergy",
+              "severity": "high",
+              "mealIndex": 0,
+              "optionIndex": null,
+              "foodIndex": 0,
+              "reason": "The person has a milk allergy, but the soy beverage is specified only by product type; its full commercial formulation and cross-contact status are not provided or verified.",
+              "suggestedCorrection": "Provide backend-verified milk-allergen and cross-contact information for the exact soy beverage formulation, or use a preparation with fully specified ingredients and verified allergy suitability."
+            },
+            {
+              "category": "insufficient_information",
+              "severity": "medium",
+              "mealIndex": 0,
+              "optionIndex": null,
+              "foodIndex": 0,
+              "reason": "The soy beverage is listed as a single ingredient without its constituent ingredients, so ingredient completeness cannot be assessed.",
+              "suggestedCorrection": "Supply the complete ingredient list for the exact beverage formulation."
+            }
+          ],
+          "digest": "39b79bbaf3e81b30b70dd2def8f99e9c5c8dbf15235df9e24a9e4ab763c7d215"
+        }
+      ]
+    },
+    {
+      "job": 2,
+      "scenario": "vegetarian",
+      "calls": [
+        {
+          "call": 1,
+          "role": "creator",
+          "originalFailure": null,
+          "replayFailure": null
+        },
+        {
+          "call": 2,
+          "role": "reviewer",
+          "status": "insufficient_information",
+          "issues": [
+            {
+              "category": "insufficient_information",
+              "severity": "medium",
+              "mealIndex": 0,
+              "optionIndex": null,
+              "foodIndex": 0,
+              "reason": "The meal lists ingredients but gives no amounts for the bread, eggs, oil, banana, or milk. The stated nutrition therefore cannot be independently recalculated or checked against a realistic portion.",
+              "suggestedCorrection": "Provide the amount of each ingredient and the preparation amounts, including cooking oil."
+            },
+            {
+              "category": "insufficient_information",
+              "severity": "medium",
+              "mealIndex": 1,
+              "optionIndex": null,
+              "foodIndex": 1,
+              "reason": "The meal lists ingredients but gives no amounts for the rice, beans, tofu, salad, or oil. The stated nutrition cannot be independently verified for the portion.",
+              "suggestedCorrection": "Provide the amount of each ingredient and the preparation amounts, including cooking oil."
+            },
+            {
+              "category": "insufficient_information",
+              "severity": "medium",
+              "mealIndex": 2,
+              "optionIndex": null,
+              "foodIndex": 2,
+              "reason": "The meal lists ingredients but gives no amounts for the yogurt, oats, banana, bread, or cheese. The stated nutrition cannot be independently verified for the portion.",
+              "suggestedCorrection": "Provide the amount of each ingredient."
+            },
+            {
+              "category": "insufficient_information",
+              "severity": "medium",
+              "mealIndex": 3,
+              "optionIndex": null,
+              "foodIndex": 3,
+              "reason": "The meal lists ingredients but gives no amounts for the rice, lentils, eggs, vegetables, or oil. The stated nutrition cannot be independently verified for the portion.",
+              "suggestedCorrection": "Provide the amount of each ingredient and the preparation amounts, including cooking oil."
+            }
+          ],
+          "digest": "336cd1f41ddec1dd15b390da4b1ebc5e735d4074612af0de5f2fa69061743f79"
+        },
+        {
+          "call": 3,
+          "role": "creator",
+          "originalFailure": "AI_MACRO_VALIDATION_FAILED",
+          "replayFailure": "AI_MACRO_VALIDATION_FAILED",
+          "reason": "meal_target_deviation",
+          "diagnostics": {
+            "meals": [
+              {
+                "slot": "breakfast",
+                "optionIndex": 0,
+                "status": "failed",
+                "deviations": [
+                  {
+                    "nutrient": "proteinG",
+                    "observed": 24.8,
+                    "min": 25.54434782608696,
+                    "max": 31.2208695652174,
+                    "direction": "below_min",
+                    "absolute": 0.7443478260869583,
+                    "percent": 2.9139433551198324
+                  },
+                  {
+                    "nutrient": "fiberG",
+                    "observed": 4.4,
+                    "min": 6.425541818181817,
+                    "max": 9.638312727272725,
+                    "direction": "below_min",
+                    "absolute": 2.025541818181817,
+                    "percent": 31.52328434701508
+                  }
+                ],
+                "correction": {
+                  "attempted": true,
+                  "status": "rejected",
+                  "interval": null,
+                  "factor": null,
+                  "reason": "optimizer_infeasible"
+                }
+              },
+              {
+                "slot": "lunch",
+                "optionIndex": 0,
+                "status": "passed",
+                "deviations": [
+                  {
+                    "nutrient": "fiberG",
+                    "observed": 11.9,
+                    "min": 6.425541818181817,
+                    "max": 9.638312727272725,
+                    "direction": "above_max",
+                    "absolute": 2.2616872727272757,
+                    "percent": 23.465593374321305
+                  }
+                ],
+                "correction": {
+                  "attempted": true,
+                  "status": "applied",
+                  "interval": null,
+                  "factor": null,
+                  "reason": null,
+                  "method": "per_item"
+                }
+              },
+              {
+                "slot": "afternoon_snack",
+                "optionIndex": 0,
+                "status": "failed",
+                "deviations": [
+                  {
+                    "nutrient": "kcal",
+                    "observed": 506,
+                    "min": 363.3490909090909,
+                    "max": 401.5963636363636,
+                    "direction": "above_max",
+                    "absolute": 104.4036363636364,
+                    "percent": 25.99715680149224
+                  },
+                  {
+                    "nutrient": "carbsG",
+                    "observed": 64.9,
+                    "min": 43.25531620553358,
+                    "max": 52.86760869565216,
+                    "direction": "above_max",
+                    "absolute": 12.032391304347847,
+                    "percent": 22.759477118807897
+                  },
+                  {
+                    "nutrient": "fatG",
+                    "observed": 17.3,
+                    "min": 9.56181818181818,
+                    "max": 11.686666666666666,
+                    "direction": "above_max",
+                    "absolute": 5.613333333333335,
+                    "percent": 48.03194523673704
+                  },
+                  {
+                    "nutrient": "fiberG",
+                    "observed": 7.8,
+                    "min": 4.283694545454545,
+                    "max": 6.425541818181817,
+                    "direction": "above_max",
+                    "absolute": 1.3744581818181825,
+                    "percent": 21.390541384836894
+                  }
+                ],
+                "correction": {
+                  "attempted": true,
+                  "status": "rejected",
+                  "interval": null,
+                  "factor": null,
+                  "reason": "optimizer_infeasible"
+                }
+              },
+              {
+                "slot": "dinner",
+                "optionIndex": 0,
+                "status": "passed",
+                "deviations": [
+                  {
+                    "nutrient": "carbsG",
+                    "observed": 91.2,
+                    "min": 71.26906126482213,
+                    "max": 87.1066304347826,
+                    "direction": "above_max",
+                    "absolute": 4.093369565217401,
+                    "percent": 4.699262897423334
+                  },
+                  {
+                    "nutrient": "fatG",
+                    "observed": 11.4,
+                    "min": 14.34272727272727,
+                    "max": 17.529999999999998,
+                    "direction": "below_min",
+                    "absolute": 2.9427272727272697,
+                    "percent": 20.517208594789867
+                  },
+                  {
+                    "nutrient": "fiberG",
+                    "observed": 15.4,
+                    "min": 6.425541818181817,
+                    "max": 9.638312727272725,
+                    "direction": "above_max",
+                    "absolute": 5.761687272727276,
+                    "percent": 59.77900319029816
+                  }
+                ],
+                "correction": {
+                  "attempted": true,
+                  "status": "applied",
+                  "interval": null,
+                  "factor": null,
+                  "reason": null,
+                  "method": "per_item"
+                }
+              }
+            ],
+            "daily": {
+              "status": "failed",
+              "deviations": [
+                {
+                  "nutrient": "fatG",
+                  "observed": 66.28,
+                  "min": 52.589999999999996,
+                  "max": 64.27666666666667,
+                  "direction": "above_max",
+                  "absolute": 2.0033333333333303,
+                  "percent": 3.116734947881549
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "job": 3,
+      "scenario": "gluten",
+      "calls": [
+        {
+          "call": 1,
+          "role": "creator",
+          "originalFailure": "AI_EVIDENCE_INSUFFICIENT",
+          "replayFailure": "AI_EVIDENCE_INSUFFICIENT",
+          "reason": "unverified_product_composition",
+          "foodFailure": {
+            "scope": "flattened_food",
+            "itemIndex": 0,
+            "reason": "unverified_product_composition"
+          },
+          "item": {
+            "name": "Aveia em flocos sem glúten",
+            "quantity": 40,
+            "unit": "g",
+            "preparationNote": "Cozida em água.",
+            "estimatedNutrition": {
+              "kcal": 156,
+              "proteinG": 5.2,
+              "carbsG": 26.5,
+              "fatG": 3.1,
+              "fiberG": 4.2
+            },
+            "ingredients": [
+              {
+                "name": "Aveia sem glúten",
+                "origin": "plant"
+              }
+            ],
+            "allergens": []
+          }
+        },
+        {
+          "call": 2,
+          "role": "creator",
+          "originalFailure": null,
+          "replayFailure": null
+        },
+        {
+          "call": 3,
+          "role": "reviewer",
+          "status": "approved",
+          "issues": [],
+          "digest": "4be23ff138b68ff03e8a48fe0c69b9bf646d0676b3e8b1a06376a7e415b58b42"
+        }
+      ]
+    },
+    {
+      "job": 4,
+      "scenario": "milk",
+      "calls": [
+        {
+          "call": 1,
+          "role": "creator",
+          "originalFailure": "AI_MACRO_VALIDATION_FAILED",
+          "replayFailure": "AI_MACRO_VALIDATION_FAILED",
+          "reason": "meal_target_deviation",
+          "diagnostics": {
+            "meals": [
+              {
+                "slot": "breakfast",
+                "optionIndex": 0,
+                "status": "passed",
+                "deviations": [
+                  {
+                    "nutrient": "fiberG",
+                    "observed": 9.9,
+                    "min": 6.425541818181817,
+                    "max": 9.638312727272725,
+                    "direction": "above_max",
+                    "absolute": 0.26168727272727565,
+                    "percent": 2.7150734794773896
+                  }
+                ],
+                "correction": {
+                  "attempted": true,
+                  "status": "applied",
+                  "interval": null,
+                  "factor": null,
+                  "reason": null,
+                  "method": "per_item"
+                }
+              },
+              {
+                "slot": "lunch",
+                "optionIndex": 0,
+                "status": "passed",
+                "deviations": [
+                  {
+                    "nutrient": "fatG",
+                    "observed": 11.1,
+                    "min": 14.34272727272727,
+                    "max": 17.529999999999998,
+                    "direction": "below_min",
+                    "absolute": 3.2427272727272705,
+                    "percent": 22.60886100019014
+                  },
+                  {
+                    "nutrient": "fiberG",
+                    "observed": 9.8,
+                    "min": 6.425541818181817,
+                    "max": 9.638312727272725,
+                    "direction": "above_max",
+                    "absolute": 0.161687272727276,
+                    "percent": 1.6775474847351974
+                  }
+                ],
+                "correction": {
+                  "attempted": true,
+                  "status": "applied",
+                  "interval": null,
+                  "factor": null,
+                  "reason": null,
+                  "method": "per_item"
+                }
+              },
+              {
+                "slot": "afternoon_snack",
+                "optionIndex": 0,
+                "status": "failed",
+                "deviations": [
+                  {
+                    "nutrient": "proteinG",
+                    "observed": 30.1,
+                    "min": 21.286956521739135,
+                    "max": 26.017391304347836,
+                    "direction": "above_max",
+                    "absolute": 4.082608695652166,
+                    "percent": 15.691844919786057
+                  },
+                  {
+                    "nutrient": "fatG",
+                    "observed": 7.8,
+                    "min": 9.56181818181818,
+                    "max": 11.686666666666666,
+                    "direction": "below_min",
+                    "absolute": 1.7618181818181808,
+                    "percent": 18.42555618938961
+                  },
+                  {
+                    "nutrient": "fiberG",
+                    "observed": 7.8,
+                    "min": 4.283694545454545,
+                    "max": 6.425541818181817,
+                    "direction": "above_max",
+                    "absolute": 1.3744581818181825,
+                    "percent": 21.390541384836894
+                  }
+                ],
+                "correction": {
+                  "attempted": true,
+                  "status": "rejected",
+                  "interval": null,
+                  "factor": null,
+                  "reason": "optimizer_infeasible"
+                }
+              },
+              {
+                "slot": "dinner",
+                "optionIndex": 0,
+                "status": "passed",
+                "deviations": [
+                  {
+                    "nutrient": "fatG",
+                    "observed": 11.1,
+                    "min": 14.34272727272727,
+                    "max": 17.529999999999998,
+                    "direction": "below_min",
+                    "absolute": 3.2427272727272705,
+                    "percent": 22.60886100019014
+                  },
+                  {
+                    "nutrient": "fiberG",
+                    "observed": 9.8,
+                    "min": 6.425541818181817,
+                    "max": 9.638312727272725,
+                    "direction": "above_max",
+                    "absolute": 0.161687272727276,
+                    "percent": 1.6775474847351974
+                  }
+                ],
+                "correction": {
+                  "attempted": true,
+                  "status": "applied",
+                  "interval": null,
+                  "factor": null,
+                  "reason": null,
+                  "method": "per_item"
+                }
+              }
+            ],
+            "daily": {
+              "status": "failed",
+              "deviations": [
+                {
+                  "nutrient": "proteinG",
+                  "observed": 120.16,
+                  "min": 97.92000000000002,
+                  "max": 119.68000000000002,
+                  "direction": "above_max",
+                  "absolute": 0.47999999999997556,
+                  "percent": 0.40106951871655705
+                }
+              ]
+            }
+          }
+        },
+        {
+          "call": 2,
+          "role": "creator",
+          "originalFailure": null,
+          "replayFailure": null
+        },
+        {
+          "call": 3,
+          "role": "reviewer",
+          "status": "insufficient_information",
+          "issues": [
+            {
+              "category": "insufficient_information",
+              "severity": "high",
+              "mealIndex": 0,
+              "optionIndex": null,
+              "foodIndex": 1,
+              "reason": "The profile excludes milk due to an allergy, but the commercial soy beverage's milk absence and cross-contact status are not verified by backend evidence.",
+              "suggestedCorrection": "Provide backend-verified formulation and relevant cross-contact information for this exact product."
+            },
+            {
+              "category": "insufficient_information",
+              "severity": "high",
+              "mealIndex": 0,
+              "optionIndex": null,
+              "foodIndex": 5,
+              "reason": "The commercial French bread has no backend-verified milk absence or cross-contact information for the stated milk allergy.",
+              "suggestedCorrection": "Provide backend-verified formulation and relevant cross-contact information for this exact product."
+            },
+            {
+              "category": "insufficient_information",
+              "severity": "high",
+              "mealIndex": 2,
+              "optionIndex": null,
+              "foodIndex": 6,
+              "reason": "The commercial whole-wheat bread has no backend-verified milk absence or cross-contact information for the stated milk allergy.",
+              "suggestedCorrection": "Provide backend-verified formulation and relevant cross-contact information for this exact product."
+            }
+          ],
+          "digest": "67be35f37fd7b3f1992dbcdfbacb00f159f5b5a3b6bb2ebac954e9bf3772317b"
+        },
+        {
+          "call": 4,
+          "role": "creator",
+          "originalFailure": "AI_MACRO_VALIDATION_FAILED",
+          "replayFailure": "AI_MACRO_VALIDATION_FAILED",
+          "reason": "meal_target_deviation",
+          "diagnostics": {
+            "meals": [
+              {
+                "slot": "breakfast",
+                "optionIndex": 0,
+                "status": "failed",
+                "deviations": [
+                  {
+                    "nutrient": "kcal",
+                    "observed": 542.6,
+                    "min": 545.0236363636362,
+                    "max": 602.3945454545454,
+                    "direction": "below_min",
+                    "absolute": 2.4236363636362057,
+                    "percent": 0.44468463419431803
+                  },
+                  {
+                    "nutrient": "proteinG",
+                    "observed": 25.4,
+                    "min": 25.54434782608696,
+                    "max": 31.2208695652174,
+                    "direction": "below_min",
+                    "absolute": 0.1443478260869604,
+                    "percent": 0.565087145969514
+                  },
+                  {
+                    "nutrient": "fatG",
+                    "observed": 13.1,
+                    "min": 14.34272727272727,
+                    "max": 17.529999999999998,
+                    "direction": "below_min",
+                    "absolute": 1.2427272727272705,
+                    "percent": 8.664511630855028
+                  },
+                  {
+                    "nutrient": "fiberG",
+                    "observed": 10.2,
+                    "min": 6.425541818181817,
+                    "max": 9.638312727272725,
+                    "direction": "above_max",
+                    "absolute": 0.5616872727272746,
+                    "percent": 5.827651463703966
+                  }
+                ],
+                "correction": {
+                  "attempted": true,
+                  "status": "rejected",
+                  "interval": null,
+                  "factor": null,
+                  "reason": "quantized_out_of_range"
+                }
+              },
+              {
+                "slot": "lunch",
+                "optionIndex": 0,
+                "status": "passed",
+                "deviations": [],
+                "correction": {
+                  "attempted": false,
+                  "status": "not_needed",
+                  "interval": null,
+                  "factor": null,
+                  "reason": null
+                }
+              },
+              {
+                "slot": "afternoon_snack",
+                "optionIndex": 0,
+                "status": "passed",
+                "deviations": [],
+                "correction": {
+                  "attempted": false,
+                  "status": "not_needed",
+                  "interval": null,
+                  "factor": null,
+                  "reason": null
+                }
+              },
+              {
+                "slot": "dinner",
+                "optionIndex": 0,
+                "status": "passed",
+                "deviations": [],
+                "correction": {
+                  "attempted": false,
+                  "status": "not_needed",
+                  "interval": null,
+                  "factor": null,
+                  "reason": null
+                }
+              }
+            ],
+            "daily": {
+              "status": "passed",
+              "deviations": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "job": 5,
+      "scenario": "vegetarian",
+      "calls": [
+        {
+          "call": 1,
+          "role": "creator",
+          "originalFailure": "AI_CONTENT_SAFETY_MISMATCH",
+          "replayFailure": "AI_CONTENT_SAFETY_MISMATCH",
+          "reason": "incompatible_dietary_pattern",
+          "foodFailure": {
+            "scope": "flattened_food",
+            "itemIndex": 6,
+            "reason": "restriction_violation"
+          },
+          "item": {
+            "name": "Mel",
+            "quantity": 10,
+            "unit": "g",
+            "preparationNote": "",
+            "estimatedNutrition": {
+              "kcal": 30,
+              "proteinG": 0,
+              "carbsG": 8.2,
+              "fatG": 0,
+              "fiberG": 0
+            },
+            "ingredients": [
+              {
+                "name": "mel",
+                "origin": "other_animal"
+              }
+            ],
+            "allergens": []
+          }
+        },
+        {
+          "call": 2,
+          "role": "creator",
+          "originalFailure": null,
+          "replayFailure": null
+        },
+        {
+          "call": 3,
+          "role": "reviewer",
+          "status": "approved",
+          "issues": [],
+          "digest": "948fa61a8a119eb78d2daa898c8d6c23eb06ef16a93806063890f1a927448740"
+        }
+      ]
+    },
+    {
+      "job": 6,
+      "scenario": "gluten",
+      "calls": [
+        {
+          "call": 1,
+          "role": "creator",
+          "originalFailure": null,
+          "replayFailure": null
+        },
+        {
+          "call": 2,
+          "role": "reviewer",
+          "status": "approved",
+          "issues": [],
+          "digest": "9203612ae87e4648990db26af88393f515153e1795fa17baeec90b8206c2d151"
+        }
+      ]
+    },
+    {
+      "job": 7,
+      "scenario": "milk",
+      "calls": [
+        {
+          "call": 1,
+          "role": "creator",
+          "originalFailure": "AI_EVIDENCE_INSUFFICIENT",
+          "replayFailure": "AI_EVIDENCE_INSUFFICIENT",
+          "reason": "unverified_product_composition",
+          "foodFailure": {
+            "scope": "flattened_food",
+            "itemIndex": 10,
+            "reason": "unverified_product_composition"
+          },
+          "item": {
+            "name": "Proteína isolada de ervilha",
+            "quantity": 15,
+            "unit": "g",
+            "preparationNote": "Misturada à bebida de soja.",
+            "estimatedNutrition": {
+              "kcal": 60,
+              "proteinG": 12,
+              "carbsG": 1.5,
+              "fatG": 1,
+              "fiberG": 0.5
+            },
+            "ingredients": [
+              {
+                "name": "Proteína isolada de ervilha",
+                "origin": "plant"
+              }
+            ],
+            "allergens": []
+          }
+        },
+        {
+          "call": 2,
+          "role": "creator",
+          "originalFailure": "AI_EVIDENCE_INSUFFICIENT",
+          "replayFailure": "AI_EVIDENCE_INSUFFICIENT",
+          "reason": "unverified_product_composition",
+          "foodFailure": {
+            "scope": "flattened_food",
+            "itemIndex": 10,
+            "reason": "unverified_product_composition"
+          },
+          "item": {
+            "name": "Proteína isolada de ervilha",
+            "quantity": 15,
+            "unit": "g",
+            "preparationNote": "Misturada à bebida de soja; ingrediente único.",
+            "estimatedNutrition": {
+              "kcal": 60,
+              "proteinG": 12,
+              "carbsG": 1.5,
+              "fatG": 1,
+              "fiberG": 0.5
+            },
+            "ingredients": [
+              {
+                "name": "Proteína isolada de ervilha",
+                "origin": "plant"
+              }
+            ],
+            "allergens": []
+          }
+        },
+        {
+          "call": 3,
+          "role": "creator",
+          "originalFailure": "AI_EVIDENCE_INSUFFICIENT",
+          "replayFailure": "AI_EVIDENCE_INSUFFICIENT",
+          "reason": "unverified_product_composition",
+          "foodFailure": {
+            "scope": "flattened_food",
+            "itemIndex": 10,
+            "reason": "unverified_product_composition"
+          },
+          "item": {
+            "name": "Proteína isolada de ervilha",
+            "quantity": 14,
+            "unit": "g",
+            "preparationNote": "Misturada à bebida de soja; ingrediente único.",
+            "estimatedNutrition": {
+              "kcal": 56,
+              "proteinG": 11.2,
+              "carbsG": 1.4,
+              "fatG": 0.9,
+              "fiberG": 0.5
+            },
+            "ingredients": [
+              {
+                "name": "Proteína isolada de ervilha",
+                "origin": "plant"
+              }
+            ],
+            "allergens": []
+          }
+        }
+      ]
+    },
+    {
+      "job": 8,
+      "scenario": "vegetarian",
+      "calls": [
+        {
+          "call": 1,
+          "role": "creator",
+          "originalFailure": "AI_MACRO_VALIDATION_FAILED",
+          "replayFailure": "AI_MACRO_VALIDATION_FAILED",
+          "reason": "meal_target_deviation",
+          "diagnostics": {
+            "meals": [
+              {
+                "slot": "breakfast",
+                "optionIndex": 0,
+                "status": "failed",
+                "deviations": [
+                  {
+                    "nutrient": "kcal",
+                    "observed": 493,
+                    "min": 545.0236363636362,
+                    "max": 602.3945454545454,
+                    "direction": "below_min",
+                    "absolute": 52.02363636363623,
+                    "percent": 9.545207380497237
+                  },
+                  {
+                    "nutrient": "proteinG",
+                    "observed": 20,
+                    "min": 25.54434782608696,
+                    "max": 31.2208695652174,
+                    "direction": "below_min",
+                    "absolute": 5.544347826086959,
+                    "percent": 21.70479302832245
+                  }
+                ],
+                "correction": {
+                  "attempted": true,
+                  "status": "rejected",
+                  "interval": null,
+                  "factor": null,
+                  "reason": "optimizer_infeasible"
+                }
+              },
+              {
+                "slot": "lunch",
+                "optionIndex": 0,
+                "status": "passed",
+                "deviations": [],
+                "correction": {
+                  "attempted": false,
+                  "status": "not_needed",
+                  "interval": null,
+                  "factor": null,
+                  "reason": null
+                }
+              },
+              {
+                "slot": "afternoon_snack",
+                "optionIndex": 0,
+                "status": "failed",
+                "deviations": [
+                  {
+                    "nutrient": "fatG",
+                    "observed": 7,
+                    "min": 9.56181818181818,
+                    "max": 11.686666666666666,
+                    "direction": "below_min",
+                    "absolute": 2.5618181818181807,
+                    "percent": 26.792165810990674
+                  },
+                  {
+                    "nutrient": "fiberG",
+                    "observed": 3.8,
+                    "min": 4.283694545454545,
+                    "max": 6.425541818181817,
+                    "direction": "below_min",
+                    "absolute": 0.4836945454545454,
+                    "percent": 11.29152744954228
+                  }
+                ],
+                "correction": {
+                  "attempted": true,
+                  "status": "rejected",
+                  "interval": null,
+                  "factor": null,
+                  "reason": "optimizer_infeasible"
+                }
+              },
+              {
+                "slot": "dinner",
+                "optionIndex": 0,
+                "status": "passed",
+                "deviations": [],
+                "correction": {
+                  "attempted": false,
+                  "status": "not_needed",
+                  "interval": null,
+                  "factor": null,
+                  "reason": null
+                }
+              }
+            ],
+            "daily": {
+              "status": "failed",
+              "deviations": [
+                {
+                  "nutrient": "kcal",
+                  "observed": 1961,
+                  "min": 1998.4199999999998,
+                  "max": 2208.78,
+                  "direction": "below_min",
+                  "absolute": 37.419999999999845,
+                  "percent": 1.8724792586142978
+                }
+              ]
+            }
+          }
+        },
+        {
+          "call": 2,
+          "role": "creator",
+          "originalFailure": null,
+          "replayFailure": null
+        },
+        {
+          "call": 3,
+          "role": "reviewer",
+          "status": "rejected",
+          "issues": [
+            {
+              "category": "ingredients",
+              "severity": "medium",
+              "mealIndex": 0,
+              "optionIndex": null,
+              "foodIndex": 0,
+              "reason": "The porridge lists whole milk but gives no amount, so its recipe and nutrition cannot be reliably assessed.",
+              "suggestedCorrection": "Specify the quantity of milk used and update the porridge nutrition estimate accordingly."
+            },
+            {
+              "category": "quantity",
+              "severity": "medium",
+              "mealIndex": 0,
+              "optionIndex": null,
+              "foodIndex": 0,
+              "reason": "The 50 g quantity identifies the oats, but not the amount of milk in the prepared porridge.",
+              "suggestedCorrection": "State the milk quantity separately."
+            },
+            {
+              "category": "calories",
+              "severity": "medium",
+              "mealIndex": 0,
+              "optionIndex": null,
+              "foodIndex": 0,
+              "reason": "The porridge's stated macros (10.1 g protein, 38.3 g carbohydrates, 9.8 g fat) imply approximately 281 kcal using 4/4/9, not the listed 237 kcal.",
+              "suggestedCorrection": "Recalculate the porridge calories and macros from the specified amounts of oats and milk."
+            },
+            {
+              "category": "macros",
+              "severity": "medium",
+              "mealIndex": 0,
+              "optionIndex": null,
+              "foodIndex": 0,
+              "reason": "The porridge's reported calories and macronutrients are materially inconsistent.",
+              "suggestedCorrection": "Provide internally consistent nutrition estimates based on the complete recipe."
+            },
+            {
+              "category": "insufficient_information",
+              "severity": "medium",
+              "mealIndex": null,
+              "optionIndex": null,
+              "foodIndex": null,
+              "reason": "No supporting evidence is supplied for the candidate's nutrition estimates; the porridge estimate also cannot be verified without its milk quantity.",
+              "suggestedCorrection": "Supply nutrition evidence for the estimates and specify the complete porridge recipe."
+            }
+          ],
+          "digest": "6330cbf23f26e83370e1ff168034ddc7391fe44c91e027438cb78f8edf710cec"
+        },
+        {
+          "call": 4,
+          "role": "creator",
+          "originalFailure": null,
+          "replayFailure": null
+        },
+        {
+          "call": 5,
+          "role": "reviewer",
+          "status": "rejected",
+          "issues": [
+            {
+              "category": "macros",
+              "severity": "high",
+              "mealIndex": 0,
+              "optionIndex": null,
+              "foodIndex": 0,
+              "reason": "The oatmeal entry lists 8.89 g protein, 37.81 g carbohydrate and 8.89 g fat, which imply roughly 270 kcal (before any fiber adjustment), not the stated 219.8 kcal. The preparation note also includes 200 ml whole milk, so the listed estimate does not plausibly account for the described oatmeal-and-milk serving.",
+              "suggestedCorrection": "Recalculate the oatmeal-and-milk nutrition from the stated quantities and use consistent calorie and macronutrient values."
+            },
+            {
+              "category": "calories",
+              "severity": "high",
+              "mealIndex": 0,
+              "optionIndex": null,
+              "foodIndex": 0,
+              "reason": "The oatmeal's listed energy is inconsistent with its listed macros and described ingredients; consequently, the breakfast and daily calorie totals are not reliable even though the sums of the submitted calorie entries fall within the target ranges.",
+              "suggestedCorrection": "Correct the oatmeal energy estimate and recalculate the affected meal and daily calorie totals."
+            }
+          ],
+          "digest": "9408152959c229304bc3b471c553636b4983f7c85c2aeb3621c7727224fba2f3"
+        }
+      ]
+    },
+    {
+      "job": 9,
+      "scenario": "gluten",
+      "calls": [
+        {
+          "call": 1,
+          "role": "creator",
+          "originalFailure": "AI_EVIDENCE_INSUFFICIENT",
+          "replayFailure": "AI_EVIDENCE_INSUFFICIENT",
+          "reason": "unverified_product_composition",
+          "foodFailure": {
+            "scope": "flattened_food",
+            "itemIndex": 7,
+            "reason": "unverified_product_composition"
+          },
+          "item": {
+            "name": "Feijão carioca cozido",
+            "quantity": 100,
+            "unit": "g",
+            "preparationNote": "Cozido sem caldo industrializado.",
+            "estimatedNutrition": {
+              "kcal": 76,
+              "proteinG": 4.8,
+              "carbsG": 13.6,
+              "fatG": 0.5,
+              "fiberG": 8.5
+            },
+            "ingredients": [
+              {
+                "name": "Feijão carioca",
+                "origin": "plant"
+              },
+              {
+                "name": "Água",
+                "origin": "mineral"
+              }
+            ],
+            "allergens": []
+          }
+        },
+        {
+          "call": 2,
+          "role": "creator",
+          "originalFailure": "AI_EVIDENCE_INSUFFICIENT",
+          "replayFailure": "AI_EVIDENCE_INSUFFICIENT",
+          "reason": "unverified_product_composition",
+          "foodFailure": {
+            "scope": "flattened_food",
+            "itemIndex": 8,
+            "reason": "unverified_product_composition"
+          },
+          "item": {
+            "name": "Feijão carioca cozido",
+            "quantity": 100,
+            "unit": "g",
+            "preparationNote": "Cozido em água, sem caldo industrializado.",
+            "estimatedNutrition": {
+              "kcal": 76,
+              "proteinG": 4.8,
+              "carbsG": 13.6,
+              "fatG": 0.5,
+              "fiberG": 8.5
+            },
+            "ingredients": [
+              {
+                "name": "Feijão carioca",
+                "origin": "plant"
+              },
+              {
+                "name": "Água",
+                "origin": "mineral"
+              }
+            ],
+            "allergens": []
+          }
+        },
+        {
+          "call": 3,
+          "role": "creator",
+          "originalFailure": "AI_EVIDENCE_INSUFFICIENT",
+          "replayFailure": "AI_EVIDENCE_INSUFFICIENT",
+          "reason": "unverified_product_composition",
+          "foodFailure": {
+            "scope": "flattened_food",
+            "itemIndex": 8,
+            "reason": "unverified_product_composition"
+          },
+          "item": {
+            "name": "Feijão carioca cozido",
+            "quantity": 100,
+            "unit": "g",
+            "preparationNote": "Cozido em água, sem caldo industrializado.",
+            "estimatedNutrition": {
+              "kcal": 76,
+              "proteinG": 4.8,
+              "carbsG": 13.6,
+              "fatG": 0.5,
+              "fiberG": 8.5
+            },
+            "ingredients": [
+              {
+                "name": "Feijão carioca",
+                "origin": "plant"
+              },
+              {
+                "name": "Água",
+                "origin": "mineral"
+              }
+            ],
+            "allergens": []
+          }
+        }
+      ]
+    }
+  ]
+}

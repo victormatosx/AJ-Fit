@@ -8,6 +8,7 @@ import {
 import { roundNutritionValues, sumNutritionValues, validateNutritionValues } from '../shared/nutrition/catalog/math';
 import { TOLERANCE_PERCENT } from '../shared/nutrition/engine/constants';
 import { admissibleScale, scaledPortions, scaleCandidates, validPortion } from './correction';
+import { optimizePortions } from './portionOptimizer';
 import { NUTRIENTS, nutrientDeviations, withinNutritionRange, type MealValidationDiagnostic,
   type ValidationDiagnostics } from './diagnostics';
 
@@ -22,11 +23,25 @@ export interface ValidationIssue {
   slot?: NutritionMealSlot;
   nutrients: string[];
 }
+/** Private retry data, with indices into foods flattened in meal/option order.
+ * Not an audit/log field and never a source of safety or eligibility decisions. */
+export interface FoodRepairContext {
+  scope: 'flattened_food'; itemIndex: number;
+  reason: 'restriction_violation' | 'supplement_not_selected' | 'incompatible_substance'
+    | 'incomplete_allergen_declaration' | 'unverified_product_composition';
+  /** Narrower, retry-feedback-only disambiguation of `reason` — never a
+   * separate eligibility decision. `whey_lactose_claim_required` means the
+   * rejected item matched the manufactured/whey pattern while lactose is
+   * excluded: the fix is a specific lactose-free-labeled whey product, not
+   * dropping the supplement outright (see `ai/prompt.ts`'s `supplementSafety`). */
+  hint?: 'whey_lactose_claim_required';
+}
 export class PlanValidationError extends Error {
   constructor(readonly code: FailureCode, readonly retryable: boolean, message: string,
     readonly issue?: ValidationIssue, readonly diagnostics?: ValidationDiagnostics,
     /** In-memory repair context only. Never log or persist the error object. */
-    readonly repairCandidate?: unknown) { super(message); }
+    readonly repairCandidate?: unknown,
+    readonly foodFailure?: FoodRepairContext) { super(message); }
 }
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -151,28 +166,48 @@ function evaluateMealOptions(
     const diagnostic: MealValidationDiagnostic = { slot, optionIndex, status: 'passed', deviations: nutrientDeviations(total, target),
       correction: { attempted: false, status: 'not_needed', interval: null, factor: null, reason: null } };
     if (diagnostic.deviations.length && allowCorrection) {
-      const scale = admissibleScale(total, target);
-      diagnostic.correction = { attempted: true, status: 'rejected', interval: scale.interval, factor: null, reason: scale.reason };
-      if (scale.interval) {
-        const calorieFactor = total.kcal > 0 ? target.kcal.target / total.kcal : 1;
-        const candidates = scaleCandidates(scale.interval);
-        if (preferCalories && calorieFactor >= scale.interval.min && calorieFactor <= scale.interval.max) candidates.unshift(calorieFactor);
-        for (const factor of candidates) {
-          diagnostic.correction.factor = factor;
-          const proposal = scaledPortions(items, factor);
-          if (!proposal.items || !proposal.items.every(validRawFoodItem)) {
-            diagnostic.correction.reason = proposal.reason ?? 'invalid_portion';
-            continue;
+      diagnostic.correction = { attempted: true, status: 'rejected', interval: null, factor: null, reason: null };
+      // Per-item multipliers strictly dominate a single uniform factor (uniform scaling
+      // is the special case where every multiplier is equal) — try it first. It can
+      // satisfy ratio-incoherent targets (e.g. fat/fiber off while calories/protein are
+      // fine) that NO single factor could ever reach, by construction (see portionOptimizer.ts).
+      // A single food has no per-item freedom (one fixed ratio) — skip straight to the
+      // uniform corrector so its established reason codes/behavior are unchanged for
+      // the common single-item-meal case.
+      const optimized = items.length >= 2 ? optimizePortions(items, target) : { items: null, reason: null, multipliers: null };
+      if (optimized.items && optimized.items.every(validRawFoodItem)) {
+        assertFoodSafety(optimized.items, excludedAllergens, restrictions);
+        const adjustedTotal = calculateItems(optimized.items);
+        if (validMealTotals(adjustedTotal, target)) {
+          items = optimized.items; total = adjustedTotal; corrected = true;
+          diagnostic.correction.status = 'applied'; diagnostic.correction.reason = null; diagnostic.correction.method = 'per_item';
+        }
+      }
+      if (diagnostic.correction.status !== 'applied') {
+        const scale = admissibleScale(total, target);
+        diagnostic.correction.interval = scale.interval;
+        diagnostic.correction.reason = optimized.reason ?? scale.reason;
+        if (scale.interval) {
+          const calorieFactor = total.kcal > 0 ? target.kcal.target / total.kcal : 1;
+          const candidates = scaleCandidates(scale.interval);
+          if (preferCalories && calorieFactor >= scale.interval.min && calorieFactor <= scale.interval.max) candidates.unshift(calorieFactor);
+          for (const factor of candidates) {
+            diagnostic.correction.factor = factor;
+            const proposal = scaledPortions(items, factor);
+            if (!proposal.items || !proposal.items.every(validRawFoodItem)) {
+              diagnostic.correction.reason = proposal.reason ?? 'invalid_portion';
+              continue;
+            }
+            assertFoodSafety(proposal.items, excludedAllergens, restrictions);
+            const adjustedTotal = calculateItems(proposal.items);
+            if (!validMealTotals(adjustedTotal, target)) {
+              diagnostic.correction.reason = 'quantized_out_of_range';
+              continue;
+            }
+            items = proposal.items; total = adjustedTotal; corrected = true;
+            diagnostic.correction.status = 'applied'; diagnostic.correction.reason = null; diagnostic.correction.method = 'uniform';
+            break;
           }
-          assertFoodSafety(proposal.items, excludedAllergens, restrictions);
-          const adjustedTotal = calculateItems(proposal.items);
-          if (!validMealTotals(adjustedTotal, target)) {
-            diagnostic.correction.reason = 'quantized_out_of_range';
-            continue;
-          }
-          items = proposal.items; total = adjustedTotal; corrected = true;
-          diagnostic.correction.status = 'applied'; diagnostic.correction.reason = null;
-          break;
         }
       }
     } else if (diagnostic.deviations.length) {

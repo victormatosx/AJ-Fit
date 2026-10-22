@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { assertReviewEvidenceCurrent } from './reviewEvidence';
-import { NutritionLeaseLost, reserveAiCall, operationId } from './callBudget';
+import { NutritionLeaseLost, reserveAiCall, persistAiProgress, operationId } from './callBudget';
 import { CatalogSearchSession, firestoreCatalogReader } from '../catalogLinking/search';
 import { Timestamp, type DocumentReference, type Firestore } from 'firebase-admin/firestore';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
@@ -117,7 +117,14 @@ export async function processNutritionGenerationJob(
         physicalContext: { sex: context.physical.sex, ageYears: context.physical.ageYears,
           heightCm: context.physical.heightCm, weightKg: context.physical.weightKg },
         // Legacy partial jobs cannot prove their prior spend; fail closed instead of resetting budgets.
-        initialCallCount: claimedJob.get('aiCallCount') ?? (startAttempt > 1 ? MAX_AI_CALLS : 0),
+        initialCallCount: claimedJob.get('aiCallCount') ?? (startAttempt > 1 || claimedJob.get('retryCount') > 0
+          || claimedJob.get('startedAt') instanceof Timestamp && claimedJob.get('startedAt').toMillis() < operationStartedAt
+          ? MAX_AI_CALLS : 0),
+        initialReservedUsd: claimedJob.get('aiReservedUsd'),
+        initialRecoveryHistory: claimedJob.get('aiRecoveryHistory'),
+        initialRecoveryCreditUsed: claimedJob.get('aiRecoveryCreditUsed'),
+        initialFeedback: claimedJob.get('aiRetryFeedback') ?? undefined,
+        onProgress: (history, feedback) => persistAiProgress(db, ref, leaseOwner, history, feedback),
         previousFailureCode: typeof previousFailureCode === 'string' ? previousFailureCode as AttemptCode : undefined,
         onBeforeCall: async (role, currentAttempt, callNumber) => {
           stage = role;

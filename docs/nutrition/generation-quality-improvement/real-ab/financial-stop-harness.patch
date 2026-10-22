@@ -1,0 +1,24 @@
+--- prepared-harness
++++ authorized-harness
+@@ -111,6 +111,7 @@
+         return fetch(url, init); // Exact URL, headers, payload and abort signal; no retry.
+       });
+       const call = async (role: CallFact['role'], invoke: () => Promise<AiResult>, reviewRequest?: NutritionReviewRequest) => {
++        if (ledger.stopped) throw new Error('BATCH_STOPPED_BEFORE_PROVIDER');
+         const reservedUsd = stageReservedUsd(role);
+         if (run.calls.length >= 4 || totalReserved() + reservedUsd > ledger.ceilingUsd + 1e-9
+           || run.calls.reduce((s, c) => s + c.reservedUsd, 0) + reservedUsd > .03 + 1e-9) throw new Error('TASK_OR_JOB_BUDGET_EXHAUSTED');
+@@ -125,8 +126,12 @@
+         try {
+           const response = await invoke(); fact.state = 'responded'; fact.response = response;
+           fact.estimatedCostUsd = estimateOpenAiCost({ model: response.model, ...response.usage })?.estimatedCostUsd ?? null;
++          if (fact.estimatedCostUsd === null || response.usage.inputTokens === null || response.usage.outputTokens === null) {
++            ledger.stopped = 'unresolved_provider_cost'; save();
++          }
+           return response; // Original result object, with no changes.
+-        } catch (error) { fact.state = 'failed_unknown_cost'; fact.errorCode = error instanceof Error ? error.message : 'unknown'; throw error; }
++        } catch (error) { fact.state = 'failed_unknown_cost'; fact.errorCode = error instanceof Error ? error.message : 'unknown';
++          ledger.stopped = 'unresolved_provider_cost'; save(); throw error; }
+         finally { fact.latencyMs = Date.now() - start; currentCall = undefined; save(); }
+       };
+       const success = await processNutritionGenerationJob(uid, generationId, {

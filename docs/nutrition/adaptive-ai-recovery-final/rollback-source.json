@@ -1,0 +1,19 @@
+{
+  "source": {
+    "buildConfig": {
+      "source": {
+        "storageSource": {
+          "bucket": "gcf-v2-sources-753375043967-us-central1",
+          "generation": "1792626313981990",
+          "object": "onNutritionGenerationJobCreated/function-source.zip"
+        }
+      }
+    }
+  },
+  "localArchive": "/tmp/ajfit-adaptive-rollback-source.zip",
+  "sha256": "4ec4976eb23c16fbbf3e3b4c1f8ba18f0e2dbefff2a15774318da610a4ae9b06",
+  "sizeBytes": 2940150,
+  "compiledConfigMembers": [
+    "lib/nutrition/ai/config.js"
+  ]
+}

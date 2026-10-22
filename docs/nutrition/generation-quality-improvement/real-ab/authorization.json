@@ -1,0 +1,11 @@
+{
+  "task": "generation-quality-improvement",
+  "approved": true,
+  "ceilingUsd": 1.08,
+  "planSha256": "0b19ca1c35212ed4d0e4d844ef4ce642cc06a13c1941bda99d1027aff798dec8",
+  "sourceManifestSha256": "e920cdd30b33ba90bf198fdf31763e06b45414e05b248931b9f010934dc770b2",
+  "authorizedAt": "2026-10-22T11:44:54.386616+00:00",
+  "basis": "Explicit user authorization in this conversation: 36 planned jobs, dedicated US$1.08, no prior adaptive budget reuse, no deploy/commit/push.",
+  "preflightHarnessCorrection": "Only immediate stop before subsequent provider invocation on transport/unknown usage; no quality/prompt/model/tolerance/source changes.",
+  "pathCanonicalization": "Canonical realpath /private/var for existing /var aliases, all source and harness hashes unchanged; no job or HTTP existed."
+}

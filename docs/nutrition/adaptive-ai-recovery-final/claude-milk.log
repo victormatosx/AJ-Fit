@@ -1,0 +1,66 @@
+
+ RUN  v4.1.10 /Users/victor/CropSight-Solutions/AJ-Fit/functions
+
+[stability-repeat] 7_legacy_milk_allergy#7 generatePlan FAILED (retrying once after backoff): The operation was aborted due to timeout
+stdout | src/nutrition/__tests__/stabilityHomologationRepeat.manual.test.ts > stability repeat homologation — scenarios 3, 7, 10 > Scenario 7 (legacy milk allergy) run 7/8
+{"operationId":"4fa464d9-4780-44a4-9b8d-63f4db5ccd47","stage":"authentication","severity":"INFO","message":"[nutrition.generation] request_started"}
+{"operationId":"4fa464d9-4780-44a4-9b8d-63f4db5ccd47","requestId":"dc99510a-90f0-4d04-a0c5-571d706ab901","severity":"INFO","message":"[nutrition.generation] request_authenticated"}
+
+stdout | src/nutrition/__tests__/stabilityHomologationRepeat.manual.test.ts > stability repeat homologation — scenarios 3, 7, 10 > Scenario 7 (legacy milk allergy) run 7/8
+{"operationId":"4fa464d9-4780-44a4-9b8d-63f4db5ccd47","generationId":"3f76af3c-161c-4010-b8d1-a25ec840c201","durationMs":24,"stage":"queued","severity":"INFO","message":"[nutrition.generation] request_completed"}
+
+stdout | src/nutrition/__tests__/stabilityHomologationRepeat.manual.test.ts > stability repeat homologation — scenarios 3, 7, 10 > Scenario 7 (legacy milk allergy) run 7/8
+{"generationId":"3f76af3c-161c-4010-b8d1-a25ec840c201","stage":"context","severity":"INFO","message":"[nutrition.generation] job_started"}
+
+stdout | src/nutrition/__tests__/stabilityHomologationRepeat.manual.test.ts > stability repeat homologation — scenarios 3, 7, 10 > Scenario 7 (legacy milk allergy) run 7/8
+{"generationId":"3f76af3c-161c-4010-b8d1-a25ec840c201","attempt":1,"retryFeedbackPresent":false,"repairCandidatePresent":false,"model":"gpt-6-luna","stage":"provider","severity":"INFO","message":"[nutrition.generation] ai_request_started"}
+
+[stability-repeat] 7_legacy_milk_allergy#8 generatePlan FAILED (retrying once after backoff): The operation was aborted due to timeout
+stdout | src/nutrition/__tests__/stabilityHomologationRepeat.manual.test.ts > stability repeat homologation — scenarios 3, 7, 10 > Scenario 7 (legacy milk allergy) run 8/8
+{"operationId":"868150c6-c2a0-4bd4-b865-b4621531acb4","stage":"authentication","severity":"INFO","message":"[nutrition.generation] request_started"}
+{"operationId":"868150c6-c2a0-4bd4-b865-b4621531acb4","requestId":"5bd2d39c-5f73-441f-8527-c8704c730183","severity":"INFO","message":"[nutrition.generation] request_authenticated"}
+
+stdout | src/nutrition/__tests__/stabilityHomologationRepeat.manual.test.ts > stability repeat homologation — scenarios 3, 7, 10 > Scenario 7 (legacy milk allergy) run 8/8
+{"operationId":"868150c6-c2a0-4bd4-b865-b4621531acb4","generationId":"058366a8-9c5a-4adb-a5c8-9bf512108e0e","durationMs":21,"stage":"queued","severity":"INFO","message":"[nutrition.generation] request_completed"}
+
+stdout | src/nutrition/__tests__/stabilityHomologationRepeat.manual.test.ts > stability repeat homologation — scenarios 3, 7, 10 > Scenario 7 (legacy milk allergy) run 8/8
+{"generationId":"058366a8-9c5a-4adb-a5c8-9bf512108e0e","stage":"context","severity":"INFO","message":"[nutrition.generation] job_started"}
+
+stdout | src/nutrition/__tests__/stabilityHomologationRepeat.manual.test.ts > stability repeat homologation — scenarios 3, 7, 10 > Scenario 7 (legacy milk allergy) run 8/8
+{"generationId":"058366a8-9c5a-4adb-a5c8-9bf512108e0e","attempt":1,"retryFeedbackPresent":false,"repairCandidatePresent":false,"model":"gpt-6-luna","stage":"provider","severity":"INFO","message":"[nutrition.generation] ai_request_started"}
+
+stdout | src/nutrition/__tests__/stabilityHomologationRepeat.manual.test.ts > stability repeat homologation — scenarios 3, 7, 10 > Scenario 7 (legacy milk allergy) run 8/8
+{"generationId":"3f76af3c-161c-4010-b8d1-a25ec840c201","attempt":1,"retryFeedbackPresent":false,"repairCandidatePresent":false,"model":"gpt-6-luna","stage":"provider","severity":"INFO","message":"[nutrition.generation] ai_request_started"}
+
+stderr | src/nutrition/__tests__/stabilityHomologationRepeat.manual.test.ts > stability repeat homologation — scenarios 3, 7, 10 > Scenario 7 (legacy milk allergy) run 8/8
+{"generationId":"3f76af3c-161c-4010-b8d1-a25ec840c201","stage":"creator","failureCode":"AI_TIMEOUT","durationMs":1844089,"severity":"WARNING","message":"[nutrition.generation] job_stage_failed"}
+
+stdout | src/nutrition/__tests__/stabilityHomologationRepeat.manual.test.ts
+{"stabilitySummary":true,"totalEstimatedCostUsd":0.029269,"runCount":6}
+
+ ❯ src/nutrition/__tests__/stabilityHomologationRepeat.manual.test.ts (24 tests | 2 failed | 16 skipped) 2491674ms
+     × Scenario 7 (legacy milk allergy) run 7/8 928793ms
+     × Scenario 7 (legacy milk allergy) run 8/8 923349ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/nutrition/__tests__/stabilityHomologationRepeat.manual.test.ts > stability repeat homologation — scenarios 3, 7, 10 > Scenario 7 (legacy milk allergy) run 7/8
+ FAIL  src/nutrition/__tests__/stabilityHomologationRepeat.manual.test.ts > stability repeat homologation — scenarios 3, 7, 10 > Scenario 7 (legacy milk allergy) run 8/8
+Error: Test timed out in 300000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/nutrition/__tests__/stabilityHomologationRepeat.manual.test.ts:147:5
+    145|   }
+    146|   for (let run = 1; run <= REPEATS; run++) {
+    147|     it(`Scenario 7 (legacy milk allergy) run ${run}/${REPEATS}`, async…
+       |     ^
+    148|       const { record } = await runOnce('7_legacy_milk_allergy', run,
+    149|         { dietaryPattern: 'omnivore', excludedAllergens: ['milk'], sup…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 6 passed | 16 skipped (24)
+   Start at  23:23:27
+   Duration  2492.12s (transform 131ms, setup 0ms, import 376ms, tests 2491.67s, environment 0ms)
+

@@ -1,0 +1,14 @@
+{
+  "taskCeilingUsd": 2,
+  "claudeKnownEstimatedCostUsd": 0.07107356000000001,
+  "claudeLogicalReservations": 57,
+  "claudeReservedUsd": 0.40955,
+  "claudeMaximumHttpAttempts": 114,
+  "claudeConservativeUpperUsd": 0.8191,
+  "minimumRemainingBeforeCodexUsd": 1.1809,
+  "basis": "57 synthetic job operations since task start; old withBackoff invokes provider at most twice per reservation. Every invocation bounded by role-specific token limits. No exact billing claim; charge full upper bound to task budget.",
+  "unknownUsageOperations": [
+    "3f76af3c-161c-4010-b8d1-a25ec840c201-creator-1",
+    "058366a8-9c5a-4adb-a5c8-9bf512108e0e-creator-1"
+  ]
+}

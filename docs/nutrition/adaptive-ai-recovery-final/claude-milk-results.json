@@ -1,0 +1,317 @@
+{
+  "generatedAt": "2026-10-22T03:04:59.388Z",
+  "budgetCeilingUsd": 2,
+  "totalEstimatedCostUsd": 0.029269,
+  "runs": [
+    {
+      "scenario": "7_legacy_milk_allergy",
+      "run": 1,
+      "status": "failed",
+      "failureCode": "AI_RETRY_EXHAUSTED",
+      "calls": 4,
+      "estimatedCostUsd": 0.005425,
+      "latencyMsTotal": 109211
+    },
+    {
+      "scenario": "7_legacy_milk_allergy",
+      "run": 2,
+      "status": "completed",
+      "failureCode": null,
+      "calls": 3,
+      "estimatedCostUsd": 0.003812,
+      "latencyMsTotal": 80964
+    },
+    {
+      "scenario": "7_legacy_milk_allergy",
+      "run": 3,
+      "status": "completed",
+      "failureCode": null,
+      "calls": 5,
+      "estimatedCostUsd": 0.006786,
+      "latencyMsTotal": 133330
+    },
+    {
+      "scenario": "7_legacy_milk_allergy",
+      "run": 4,
+      "status": "completed",
+      "failureCode": null,
+      "calls": 4,
+      "estimatedCostUsd": 0.005602,
+      "latencyMsTotal": 111947
+    },
+    {
+      "scenario": "7_legacy_milk_allergy",
+      "run": 5,
+      "status": "completed",
+      "failureCode": null,
+      "calls": 2,
+      "estimatedCostUsd": 0.00262,
+      "latencyMsTotal": 55882
+    },
+    {
+      "scenario": "7_legacy_milk_allergy",
+      "run": 6,
+      "status": "failed",
+      "failureCode": "AI_RETRY_EXHAUSTED",
+      "calls": 4,
+      "estimatedCostUsd": 0.005023,
+      "latencyMsTotal": 98878
+    }
+  ],
+  "attempts": [
+    {
+      "scenario": "7_legacy_milk_allergy",
+      "run": 1,
+      "attempt": 1,
+      "role": "creator",
+      "code": null,
+      "validationIssue": null,
+      "nutrientDeviations": null,
+      "reviewStatus": null,
+      "issueCategories": []
+    },
+    {
+      "scenario": "7_legacy_milk_allergy",
+      "run": 1,
+      "attempt": 2,
+      "role": "creator",
+      "code": null,
+      "validationIssue": null,
+      "nutrientDeviations": null,
+      "reviewStatus": null,
+      "issueCategories": []
+    },
+    {
+      "scenario": "7_legacy_milk_allergy",
+      "run": 1,
+      "attempt": 1,
+      "role": "reviewer",
+      "code": "AI_REVIEW_REJECTED",
+      "validationIssue": null,
+      "nutrientDeviations": null,
+      "reviewStatus": "rejected",
+      "issueCategories": [
+        "ingredients",
+        "quantity",
+        "macros"
+      ]
+    },
+    {
+      "scenario": "7_legacy_milk_allergy",
+      "run": 1,
+      "attempt": 2,
+      "role": "reviewer",
+      "code": "AI_REVIEW_INSUFFICIENT_INFORMATION",
+      "validationIssue": null,
+      "nutrientDeviations": null,
+      "reviewStatus": "insufficient_information",
+      "issueCategories": [
+        "insufficient_information",
+        "insufficient_information"
+      ]
+    },
+    {
+      "scenario": "7_legacy_milk_allergy",
+      "run": 2,
+      "attempt": 1,
+      "role": "creator",
+      "code": "AI_EVIDENCE_INSUFFICIENT",
+      "validationIssue": null,
+      "nutrientDeviations": null,
+      "reviewStatus": null,
+      "issueCategories": []
+    },
+    {
+      "scenario": "7_legacy_milk_allergy",
+      "run": 2,
+      "attempt": 2,
+      "role": "creator",
+      "code": null,
+      "validationIssue": null,
+      "nutrientDeviations": null,
+      "reviewStatus": null,
+      "issueCategories": []
+    },
+    {
+      "scenario": "7_legacy_milk_allergy",
+      "run": 2,
+      "attempt": 2,
+      "role": "reviewer",
+      "code": null,
+      "validationIssue": null,
+      "nutrientDeviations": null,
+      "reviewStatus": "approved",
+      "issueCategories": []
+    },
+    {
+      "scenario": "7_legacy_milk_allergy",
+      "run": 3,
+      "attempt": 1,
+      "role": "creator",
+      "code": "AI_EVIDENCE_INSUFFICIENT",
+      "validationIssue": null,
+      "nutrientDeviations": null,
+      "reviewStatus": null,
+      "issueCategories": []
+    },
+    {
+      "scenario": "7_legacy_milk_allergy",
+      "run": 3,
+      "attempt": 2,
+      "role": "creator",
+      "code": null,
+      "validationIssue": null,
+      "nutrientDeviations": null,
+      "reviewStatus": null,
+      "issueCategories": []
+    },
+    {
+      "scenario": "7_legacy_milk_allergy",
+      "run": 3,
+      "attempt": 3,
+      "role": "creator",
+      "code": null,
+      "validationIssue": null,
+      "nutrientDeviations": null,
+      "reviewStatus": null,
+      "issueCategories": []
+    },
+    {
+      "scenario": "7_legacy_milk_allergy",
+      "run": 3,
+      "attempt": 2,
+      "role": "reviewer",
+      "code": "AI_REVIEW_INSUFFICIENT_INFORMATION",
+      "validationIssue": null,
+      "nutrientDeviations": null,
+      "reviewStatus": "insufficient_information",
+      "issueCategories": [
+        "insufficient_information",
+        "insufficient_information"
+      ]
+    },
+    {
+      "scenario": "7_legacy_milk_allergy",
+      "run": 3,
+      "attempt": 3,
+      "role": "reviewer",
+      "code": null,
+      "validationIssue": null,
+      "nutrientDeviations": null,
+      "reviewStatus": "approved",
+      "issueCategories": []
+    },
+    {
+      "scenario": "7_legacy_milk_allergy",
+      "run": 4,
+      "attempt": 1,
+      "role": "creator",
+      "code": "AI_EVIDENCE_INSUFFICIENT",
+      "validationIssue": null,
+      "nutrientDeviations": null,
+      "reviewStatus": null,
+      "issueCategories": []
+    },
+    {
+      "scenario": "7_legacy_milk_allergy",
+      "run": 4,
+      "attempt": 2,
+      "role": "creator",
+      "code": "AI_EVIDENCE_INSUFFICIENT",
+      "validationIssue": null,
+      "nutrientDeviations": null,
+      "reviewStatus": null,
+      "issueCategories": []
+    },
+    {
+      "scenario": "7_legacy_milk_allergy",
+      "run": 4,
+      "attempt": 3,
+      "role": "creator",
+      "code": null,
+      "validationIssue": null,
+      "nutrientDeviations": null,
+      "reviewStatus": null,
+      "issueCategories": []
+    },
+    {
+      "scenario": "7_legacy_milk_allergy",
+      "run": 4,
+      "attempt": 3,
+      "role": "reviewer",
+      "code": null,
+      "validationIssue": null,
+      "nutrientDeviations": null,
+      "reviewStatus": "approved",
+      "issueCategories": []
+    },
+    {
+      "scenario": "7_legacy_milk_allergy",
+      "run": 5,
+      "attempt": 1,
+      "role": "creator",
+      "code": null,
+      "validationIssue": null,
+      "nutrientDeviations": null,
+      "reviewStatus": null,
+      "issueCategories": []
+    },
+    {
+      "scenario": "7_legacy_milk_allergy",
+      "run": 5,
+      "attempt": 1,
+      "role": "reviewer",
+      "code": null,
+      "validationIssue": null,
+      "nutrientDeviations": null,
+      "reviewStatus": "approved",
+      "issueCategories": []
+    },
+    {
+      "scenario": "7_legacy_milk_allergy",
+      "run": 6,
+      "attempt": 1,
+      "role": "creator",
+      "code": null,
+      "validationIssue": null,
+      "nutrientDeviations": null,
+      "reviewStatus": null,
+      "issueCategories": []
+    },
+    {
+      "scenario": "7_legacy_milk_allergy",
+      "run": 6,
+      "attempt": 2,
+      "role": "creator",
+      "code": "AI_EVIDENCE_INSUFFICIENT",
+      "validationIssue": null,
+      "nutrientDeviations": null,
+      "reviewStatus": null,
+      "issueCategories": []
+    },
+    {
+      "scenario": "7_legacy_milk_allergy",
+      "run": 6,
+      "attempt": 1,
+      "role": "reviewer",
+      "code": "AI_REVIEW_SCHEMA_INVALID",
+      "validationIssue": null,
+      "nutrientDeviations": null,
+      "reviewStatus": null,
+      "issueCategories": []
+    },
+    {
+      "scenario": "7_legacy_milk_allergy",
+      "run": 6,
+      "attempt": 1,
+      "role": "reviewer",
+      "code": "AI_REVIEW_INSUFFICIENT_INFORMATION",
+      "validationIssue": null,
+      "nutrientDeviations": null,
+      "reviewStatus": "insufficient_information",
+      "issueCategories": [
+        "insufficient_information"
+      ]
+    }
+  ]
+}

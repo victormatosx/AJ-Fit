@@ -1,7 +1,8 @@
+import { recoveryEligible, recoveryReviewAllowed, type RecoveryEvent } from './adaptiveRecovery';
 import type { CatalogSearchSession } from '../catalogLinking/search';
 import type { NutritionEngineOutput, NutritionGoal, NutritionProfile } from '../shared/types/nutrition';
 import { nutritionAiProfile, NutritionAiProviderError, type AiResult, type NutritionAiProvider } from '../ai/provider';
-import { AI_REVIEW_VERSION, MAX_AI_ATTEMPTS, MAX_AI_CALLS, MAX_JOB_RESERVED_USD, AI_STAGE_LIMITS, NUTRITION_AI_MODELS } from '../ai/config';
+import { AI_REVIEW_VERSION, BASE_AI_CALLS, MAX_AI_ATTEMPTS, MAX_AI_CALLS, MAX_JOB_RESERVED_USD, AI_STAGE_LIMITS, NUTRITION_AI_MODELS } from '../ai/config';
 import { estimateOpenAiCost } from '../observability/modelPricing';
 import { candidateDigest, parseNutritionReview, ReviewContractError, type NutritionReviewRequest, type NutritionReview } from '../ai/review';
 import { PlanValidationError, parseAiOutput, validateAndBuildPlan, type ValidatedPlan, type FailureCode, type ValidationIssue } from './domain';
@@ -34,6 +35,9 @@ export function classifyAttemptError(error: unknown): AttemptCode {
 export interface ReviewedGenerationOptions {
   startAttempt?: number; previousFailureCode?: AttemptCode; generationId?: string;
   catalogSession?: CatalogSearchSession; deadline?: number; physicalContext?: unknown; initialCallCount?: number;
+  initialReservedUsd?: number; initialRecoveryHistory?: RecoveryEvent[]; initialRecoveryCreditUsed?: boolean;
+  initialFeedback?: string;
+  onProgress?: (history: RecoveryEvent[], feedback: string | undefined) => Promise<void>;
   onBeforeAttempt?: (attempt: number) => Promise<void>;
   onBeforeCall?: (role: AiAgentRole, attempt: number, callNumber: number) => Promise<void>;
 }
@@ -60,19 +64,33 @@ export async function runReviewedGeneration<T>(provider: NutritionAiProvider,
   if (context.profile.excludedAllergens?.includes('other')) throw new PlanValidationError('AI_SAFETY_VALIDATION_FAILED', false, 'unspecified_allergen');
   let calls = options.initialCallCount ?? 0;
   if (!Number.isInteger(calls) || calls < 0 || calls > MAX_AI_CALLS) throw new NutritionAiProviderError('AI_COST_LIMIT_EXCEEDED', false);
-  let reserved = calls * Math.max(stageReservedUsd('creator'), stageReservedUsd('reviewer'));
+  let reserved = options.initialReservedUsd ?? calls * Math.max(stageReservedUsd('creator'), stageReservedUsd('reviewer'));
+  if (!Number.isFinite(reserved) || reserved < 0 || reserved > MAX_JOB_RESERVED_USD) throw new NutritionAiProviderError('AI_COST_LIMIT_EXCEEDED', false);
+  let history = options.initialRecoveryHistory ?? [];
+  let creditUsed = options.initialRecoveryCreditUsed === true;
+  const creatorAllowed = () => calls + 2 <= BASE_AI_CALLS || calls === 3 && !creditUsed && recoveryEligible(history);
+  const reviewerAllowed = () => calls < BASE_AI_CALLS || calls === 4 && creditUsed && recoveryReviewAllowed(history);
+  async function auditProgress(audit: AttemptAudit) {
+    await onAttempt(audit);
+    history = [...history, { callNumber: audit.callNumber!, attempt: audit.attempt, role: audit.role!,
+      code: audit.code, reviewStatus: audit.reviewStatus ?? null }];
+    await options.onProgress?.(history, feedback);
+  }
   let lastCode: AttemptCode = options.previousFailureCode ?? 'AI_RETRY_EXHAUSTED';
-  let feedback = initialFeedback;
+  let feedback = options.initialFeedback ?? initialFeedback;
   const startAttempt = options.startAttempt ?? 1;
   if (!Number.isInteger(startAttempt) || startAttempt < 1 || startAttempt > MAX_AI_ATTEMPTS + 1) throw new NutritionAiProviderError('AI_COST_LIMIT_EXCEEDED', false);
   const remainingMs = () => (options.deadline ?? Date.now() + 430_000) - Date.now() - 5_000;
   async function reserve(role: AiAgentRole, attempt: number) {
-    if (calls >= MAX_AI_CALLS || reserved + stageReservedUsd(role) > MAX_JOB_RESERVED_USD || remainingMs() <= 0) throw new GenerationAttemptsExhausted(lastCode);
+    const requiredUsd = stageReservedUsd(role) + (role === 'creator' ? stageReservedUsd('reviewer') : 0);
+    if (role === 'creator' && (calls === 3 && attempt !== 3 || !creatorAllowed()) || role === 'reviewer' && !reviewerAllowed()
+      || calls >= MAX_AI_CALLS || reserved + requiredUsd > MAX_JOB_RESERVED_USD || remainingMs() <= 0) throw new GenerationAttemptsExhausted(lastCode);
     if (role === 'creator') await options.onBeforeAttempt?.(attempt);
     await options.onBeforeCall?.(role, attempt, calls + 1);
+    if (role === 'creator' && calls === 3) creditUsed = true;
     calls++; reserved += stageReservedUsd(role);
   }
-  for (let attempt = startAttempt; attempt <= MAX_AI_ATTEMPTS && calls + 2 <= MAX_AI_CALLS; attempt++) {
+  for (let attempt = startAttempt; attempt <= MAX_AI_ATTEMPTS && creatorAllowed(); attempt++) {
     if (remainingMs() <= 0) break;
     await reserve('creator', attempt);
     const started = Date.now();
@@ -97,9 +115,10 @@ export async function runReviewedGeneration<T>(provider: NutritionAiProvider,
         let structured: Record<string, unknown>;
         try { structured = JSON.parse(prior); }
         catch { structured = { failureCode: lastCode, previousPlan: error.repairCandidate ?? result?.output }; }
-        feedback = JSON.stringify({ ...structured, constraintReason: error.message });
+        feedback = JSON.stringify({ ...structured, constraintReason: error.message,
+          ...(error.foodFailure ? { foodFailure: error.foodFailure } : {}) });
       } else feedback = lastCode;
-      await onAttempt({ attempt, fallback: false, role: 'creator', callNumber: calls,
+      await auditProgress({ attempt, fallback: false, role: 'creator', callNumber: calls,
         result: result ?? (error instanceof NutritionAiProviderError ? error.result ?? null : null),
         code: lastCode, latencyMs: Date.now() - started,
         refusalReason: error instanceof NutritionAiProviderError ? error.refusalReason : undefined,
@@ -108,9 +127,9 @@ export async function runReviewedGeneration<T>(provider: NutritionAiProvider,
       if (error instanceof NutritionAiProviderError && !error.retryable || error instanceof PlanValidationError && !error.retryable) throw error;
       continue;
     }
-    await onAttempt({ attempt, fallback: false, role: 'creator', callNumber: calls, result, code: null, latencyMs: Date.now() - started });
+    await auditProgress({ attempt, fallback: false, role: 'creator', callNumber: calls, result, code: null, latencyMs: Date.now() - started });
     const digest = candidateDigest(built.candidate);
-    while (calls < MAX_AI_CALLS && remainingMs() > 0) {
+    while (reviewerAllowed() && remainingMs() > 0) {
       await reserve('reviewer', attempt);
       await onValidating(attempt);
       const reviewStarted = Date.now();
@@ -123,20 +142,20 @@ export async function runReviewedGeneration<T>(provider: NutritionAiProvider,
       } catch (error) {
         lastCode = error instanceof ReviewContractError || error instanceof NutritionAiProviderError ? error.code
           : error instanceof Error && ['TimeoutError', 'AbortError'].includes(error.name) ? 'AI_REVIEW_TIMEOUT' : 'AI_REVIEW_UNAVAILABLE';
-        await onAttempt({ attempt, fallback: false, role: 'reviewer', callNumber: calls,
+        await auditProgress({ attempt, fallback: false, role: 'reviewer', callNumber: calls,
           result: reviewResult ?? (error instanceof NutritionAiProviderError ? error.result ?? null : null),
           code: lastCode, latencyMs: Date.now() - reviewStarted });
         if (error instanceof NutritionAiProviderError && !error.retryable) throw error;
         continue; // Retry only the failed review, not the valid creator output.
       }
       lastCode = review.status === 'insufficient_information' ? 'AI_REVIEW_INSUFFICIENT_INFORMATION' : 'AI_REVIEW_REJECTED';
-      await onAttempt({ attempt, fallback: false, role: 'reviewer', callNumber: calls, result: reviewResult,
+      if (review.status !== 'approved') feedback = JSON.stringify({ reviewer: review, previousPlan: built.candidate,
+        instruction: 'Correct the rejected candidate; preserve restrictions and targets. Never invent evidence.' });
+      await auditProgress({ attempt, fallback: false, role: 'reviewer', callNumber: calls, result: reviewResult,
         code: review.status === 'approved' ? null : lastCode, latencyMs: Date.now() - reviewStarted,
         reviewStatus: review.status, issueCategories: review.issues.map(i => i.category) });
       if (review.status === 'approved') return { validated: built.validated, result, attempt, fallback: false,
         review: { version: AI_REVIEW_VERSION, model: reviewResult!.model, candidateDigest: digest, calls, evidence: built.evidence } };
-      feedback = JSON.stringify({ reviewer: review, previousPlan: built.candidate,
-        instruction: 'Correct the rejected candidate; preserve restrictions and targets. Never invent evidence.' });
       break; // A real rejection needs a corrected candidate, never another vote.
     }
   }

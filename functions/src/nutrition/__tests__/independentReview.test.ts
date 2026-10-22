@@ -159,12 +159,52 @@ describe('creator + independently contracted reviewer', () => {
     expect(JSON.parse(p.generatePlan.mock.calls[1][0].feedback).reviewer.status).toBe('rejected');
     expect(p.generatePlan.mock.calls.every(([req]) => req.fallback === false)).toBe(true);
   });
+  it('recovers the 5-call path: a pre-review creator failure no longer forecloses a later corrected review (2026-10-21)', async () => {
+    // Path D: creator fails deterministic validation (1 call, never reaches review) ->
+    // creator corrects (call 2) -> reviewer rejects (call 3) -> creator corrects again
+    // (call 4) -> reviewer approves (call 5). This is exactly the case the adaptive
+    // 4->5 budget exists to recover — under the old MAX_AI_CALLS=4 this threw
+    // GenerationAttemptsExhausted after call 3 (no budget left for a 4th creator attempt).
+    const p = provider();
+    // Attempt 1 output fails deterministic safety validation (1 call, never reviewed);
+    // attempts 2 and 3 are compliant.
+    const attempts = [plan(food('Carne bovina', 'plant')), plan(), plan()];
+    let call = 0;
+    p.generatePlan.mockImplementation(async () => result(attempts[Math.min(call++, attempts.length - 1)]));
+    p.reviewPlan.mockImplementationOnce(async req => reject(req) as Awaited<ReturnType<typeof approveReview>>);
+    const r = await run(p);
+    expect(r.review.calls).toBe(5);
+    expect(r.attempt).toBe(3);
+    expect(p.generatePlan).toHaveBeenCalledTimes(3);
+    expect(p.reviewPlan).toHaveBeenCalledTimes(2);
+  });
+  it('still caps a double full-review rejection at 4 calls — the credit is not granted without a cheap pre-review failure', async () => {
+    // Adversarial: two full creator+reviewer round-trips (2+2=4, even parity) must NOT
+    // somehow unlock a 5th call. This is the structural guarantee that the extra credit
+    // is usable at most once per job, and only via the odd-parity (cheap-failure) path.
+    const p = provider(); p.reviewPlan.mockImplementation(async req => reject(req) as Awaited<ReturnType<typeof approveReview>>);
+    await expect(run(p)).rejects.toBeInstanceOf(GenerationAttemptsExhausted);
+    expect(p.generatePlan).toHaveBeenCalledTimes(2); expect(p.reviewPlan).toHaveBeenCalledTimes(2);
+  });
+  it('still caps two cheap pre-review failures at 4 calls — MAX_AI_ATTEMPTS bounds the credit independently of the call budget', async () => {
+    // Two cheap failures (2 calls) + one full reviewed round-trip (2 calls) = 4,
+    // using all 3 permitted creator attempts without ever reaching a 5th call.
+    const bad = plan(food('Carne bovina', 'plant'));
+    const attempts = [bad, bad, plan()];
+    let call = 0;
+    const p = provider();
+    p.generatePlan.mockImplementation(async () => result(attempts[Math.min(call++, attempts.length - 1)]));
+    const r = await run(p);
+    expect(r.review.calls).toBe(4); expect(r.attempt).toBe(3);
+    expect(p.generatePlan).toHaveBeenCalledTimes(3); expect(p.reviewPlan).toHaveBeenCalledTimes(1);
+  });
   it.each(['rejected', 'insufficient_information'])('does not approve when attempts end after reviewer status=%s', async status => {
     const p = provider(); p.reviewPlan.mockImplementation(async req => reject(req, status) as Awaited<ReturnType<typeof approveReview>>);
     await expect(run(p)).rejects.toBeInstanceOf(GenerationAttemptsExhausted);
     expect(p.generatePlan).toHaveBeenCalledTimes(2); expect(p.reviewPlan).toHaveBeenCalledTimes(2);
   });
   it('retries malformed review without paying for duplicate creation and never defaults to approval', async () => {
+    // Transport/schema retries cannot unlock adaptive credit.
     const p = provider(); p.reviewPlan.mockResolvedValue(result({ status: 'approved' }) as Awaited<ReturnType<typeof approveReview>>);
     await expect(run(p)).rejects.toMatchObject({ lastFailureCode: 'AI_REVIEW_SCHEMA_INVALID' });
     expect(p.generatePlan).toHaveBeenCalledTimes(1); expect(p.reviewPlan).toHaveBeenCalledTimes(3);
@@ -186,10 +226,21 @@ describe('creator + independently contracted reviewer', () => {
     expect(p.generatePlan).not.toHaveBeenCalled();
   });
   it('enforces a total call ceiling across resumptions and respects the cost envelope', async () => {
-    const p = provider(); await expect(run(p, {}, { initialCallCount: 3 })).rejects.toBeInstanceOf(GenerationAttemptsExhausted);
+    // A resumption cannot start a creator at call 4 or 5; call 3 additionally
+    // needs the persisted eligibility proved in the adaptive recovery tests.
+    const p = provider(); await expect(run(p, {}, { initialCallCount: 4 })).rejects.toBeInstanceOf(GenerationAttemptsExhausted);
     expect(p.generatePlan).not.toHaveBeenCalled();
     expect(MAX_AI_CALLS * Math.max(stageReservedUsd('creator'), stageReservedUsd('reviewer'))).toBeLessThan(MAX_JOB_RESERVED_USD);
     expect(AI_STAGE_LIMITS.creator.outputTokens).toBe(8000); expect(AI_STAGE_LIMITS.reviewer.outputTokens).toBe(1500);
+  });
+  it('still rejects immediately at a resumption point with room for neither attempt nor review', async () => {
+    const p = provider(); await expect(run(p, {}, { initialCallCount: 5 })).rejects.toBeInstanceOf(GenerationAttemptsExhausted);
+    expect(p.generatePlan).not.toHaveBeenCalled();
+  });
+  it('fails closed for legacy resumptions without evidence for the extra credit', async () => {
+    const p = provider();
+    await expect(run(p, {}, { initialCallCount: 3 })).rejects.toBeInstanceOf(GenerationAttemptsExhausted);
+    expect(p.generatePlan).not.toHaveBeenCalled();
   });
   it('keeps the 90s creator ceiling and reserves part of the existing alternative deadline for review', async () => {
     const p = provider(); await run(p, {}, { deadline: Date.now() + 110_000 });

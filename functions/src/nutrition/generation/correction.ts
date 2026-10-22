@@ -18,13 +18,20 @@ export function validPortion(item: RawAiFoodItem): boolean {
     && (portionStep(item.unit) !== 1 || Number.isInteger(item.quantity));
 }
 
+/** Shared per-portion multiplier budget — one uniform factor for the whole meal
+ * (this file) or one factor per food item (`portionOptimizer.ts`). Kept as a single
+ * named constant so both mechanisms are provably using the same product-approved
+ * bound, not two independently chosen numbers. */
+export const CORRECTION_SCALE_MIN = 0.5;
+export const CORRECTION_SCALE_MAX = 2;
+
 /** Intersect ALL nutrient bounds with the existing [0.5, 2] correction budget.
  * Zero nutrients impose no bound only if zero itself is allowed. Actual rounded
  * totals and quantized portions must still pass the ordinary validator. */
 export function admissibleScale(total: NutritionTotals, target: MealNutritionTarget): {
   interval: { min: number; max: number } | null; reason: CorrectionDiagnostic['reason'];
 } {
-  let min = 0.5; let max = 2;
+  let min = CORRECTION_SCALE_MIN; let max = CORRECTION_SCALE_MAX;
   for (const nutrient of NUTRIENTS) {
     const range = target[nutrient];
     if (!range) continue;

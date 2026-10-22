@@ -1,0 +1,71 @@
+{
+  "capturedAt": "2026-10-22T10:54:55.551Z",
+  "project": "demo-ajfit-dual-ai",
+  "claudeOps": 57,
+  "claudeUpper": 0.8191,
+  "priorCodexCalls": 29,
+  "priorCodexReserved": 0.20845,
+  "consumedUpper": 1.02755,
+  "remainingMinimum": 0.97245,
+  "tempLedgerMatchesArchived": true,
+  "unrecognizedLaterSyntheticJobs": [],
+  "changedKnownOperations": [],
+  "knownOperations": 86,
+  "processList": [],
+  "priorCodexJobs": [
+    {
+      "id": "51c1e1df-77cf-4380-aafe-ce35b1ab7fc6",
+      "status": "failed",
+      "calls": 3,
+      "unchanged": true
+    },
+    {
+      "id": "d261e625-5199-4e0c-bba0-4b1a4c97b255",
+      "status": "completed",
+      "calls": 2,
+      "unchanged": true
+    },
+    {
+      "id": "636df12f-1a89-4eef-87fe-d345ef5e7a6c",
+      "status": "failed",
+      "calls": 3,
+      "unchanged": true
+    },
+    {
+      "id": "df77f694-c21c-4616-88c6-652150bf1b48",
+      "status": "completed",
+      "calls": 3,
+      "unchanged": true
+    },
+    {
+      "id": "64c4bf9a-5ef0-411c-bdc3-b984dd2a52f4",
+      "status": "completed",
+      "calls": 3,
+      "unchanged": true
+    },
+    {
+      "id": "a00e9641-0643-41a6-8de7-b99b44543190",
+      "status": "failed",
+      "calls": 4,
+      "unchanged": true
+    },
+    {
+      "id": "743558c4-9b5a-4de9-a94f-41068413c6cf",
+      "status": "failed",
+      "calls": 3,
+      "unchanged": true
+    },
+    {
+      "id": "8381f818-2ee4-4f42-889b-1855a4f23437",
+      "status": "completed",
+      "calls": 4,
+      "unchanged": true
+    },
+    {
+      "id": "d18debdc-0b03-4d1b-85cc-1861c8b88174",
+      "status": "failed",
+      "calls": 4,
+      "unchanged": true
+    }
+  ]
+}

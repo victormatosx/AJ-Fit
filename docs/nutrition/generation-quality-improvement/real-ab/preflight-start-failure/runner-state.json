@@ -1,0 +1,6 @@
+{
+  "status": "stopped",
+  "reason": "test_process_failed_no_retry",
+  "jobs": 0,
+  "endedAt": "2026-10-22T11:46:23.342610+00:00"
+}

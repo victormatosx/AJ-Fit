@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { assertReviewEvidenceCurrent } from './reviewEvidence';
-import { reserveAiCall, NutritionLeaseLost, operationId } from './callBudget';
+import { reserveAiCall, persistAiProgress, NutritionLeaseLost, operationId } from './callBudget';
 import { candidateDigest } from '../ai/review';
 import { CATALOG_PLAN_SCHEMA_VERSION } from '../catalogLinking/config';
 import { CatalogSearchSession, firestoreCatalogReader } from '../catalogLinking/search';
@@ -168,7 +168,7 @@ export async function requestNutritionMealAlternativeHandler(
       mealAlternativeWindowCount: priorCount + 1,
       updatedAt: claimedAt,
     }, { merge: true });
-    return { replay: null, meal, usedCalls: budget.get('aiCallCount') ?? 0, usedAttempts: budget.get('aiAttemptCount') ?? 0, catalogPlan: plan.get('versions.planSchemaVersion') === CATALOG_PLAN_SCHEMA_VERSION,
+    return { replay: null, meal, recoveryHistory: budget.get('aiRecoveryHistory'), creditUsed: budget.get('aiRecoveryCreditUsed'), reservedUsd: budget.get('aiReservedUsd'), usedCalls: budget.get('aiCallCount') ?? 0, usedAttempts: budget.get('aiAttemptCount') ?? 0, catalogPlan: plan.get('versions.planSchemaVersion') === CATALOG_PLAN_SCHEMA_VERSION,
       storedTargets: plan.get('engineSnapshot.output.mealTargets') as import('../shared/types/nutrition').MealNutritionTarget[] | undefined };
   });
   if (claim.replay) return claim.replay;
@@ -197,7 +197,11 @@ export async function requestNutritionMealAlternativeHandler(
           attempt: audit.attempt, result: audit.result, code: audit.code, fallback: audit.fallback,
           latencyMs: audit.latencyMs, ...(catalogSession ? { catalogMetrics: { ...catalogSession.metrics } } : {}) });
       },
-      { catalogSession, deadline, initialCallCount: claim.usedCalls, startAttempt: claim.usedAttempts + 1,
+      { catalogSession, deadline, initialCallCount: claim.usedCalls,
+        initialReservedUsd: claim.reservedUsd, initialRecoveryHistory: claim.recoveryHistory,
+        initialRecoveryCreditUsed: claim.creditUsed,
+        onProgress: (history, feedback) => persistAiProgress(db, budgetRef, leaseOwner, history, feedback),
+        startAttempt: claim.usedAttempts + 1,
         physicalContext: { sex: context.physical.sex, ageYears: context.physical.ageYears,
           heightCm: context.physical.heightCm, weightKg: context.physical.weightKg },
         onBeforeCall: async (role, currentAttempt, callNumber) => reserveAiCall(db, budgetRef, uid, leaseOwner,

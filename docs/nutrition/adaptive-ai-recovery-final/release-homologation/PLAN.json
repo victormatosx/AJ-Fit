@@ -1,0 +1,29 @@
+{
+  "createdAt": "2026-10-22T10:56:19.575423+00:00",
+  "maxJobs": 9,
+  "scenarios": [
+    "milk",
+    "vegetarian",
+    "gluten",
+    "milk",
+    "vegetarian",
+    "gluten",
+    "milk",
+    "vegetarian",
+    "gluten"
+  ],
+  "taskBudgetUsd": 2,
+  "priorConsumedUpperUsd": 1.02755,
+  "remainingMinimumUsd": 0.97245,
+  "maxReservedPerJobUsd": 0.04,
+  "maximumAdditionalReservedUsd": 0.36,
+  "maximumCombinedReservedUsd": 1.38755,
+  "minimumRemainingAfterFullBatchUsd": 0.61245,
+  "stopAtFirstSuccessfulPathD": true,
+  "stopAtCriticalFailure": true,
+  "noSampleExpansion": true,
+  "profiles": "Identical to previous adaptiveRecoveryHomologation.manual.test.ts; no prompt or response changes.",
+  "model": "gpt-6-luna",
+  "emulatorProject": "demo-ajfit-dual-ai",
+  "financialBlock": "Reject each provider invocation before HTTP if aggregate worst-case reservation would exceed US$2; hard cap 5 invocations/US$0.04 per job; reserve ledger before HTTP; no retries."
+}

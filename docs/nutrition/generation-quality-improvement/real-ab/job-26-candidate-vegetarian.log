@@ -1,0 +1,9 @@
+
+ RUN  v4.1.10 /private/var/folders/7c/90h26ykd7hl5sndqywr4xxdc0000gn/T/ajfit-quality-comparison-NKtDy7/candidate/functions
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  09:13:19
+   Duration  53.57s (transform 130ms, setup 0ms, import 360ms, tests 53.15s, environment 0ms)
+

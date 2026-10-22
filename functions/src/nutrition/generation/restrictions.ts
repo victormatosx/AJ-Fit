@@ -29,9 +29,7 @@ export function foodRestrictionViolation(
   item: RawAiFoodItem, excludedAllergens: readonly NutritionFoodAllergen[], restrictions?: FoodRestrictions,
 ): string | null {
   const texts = [item.name, item.preparationNote, ...item.ingredients.map((ingredient) => ingredient.name)];
-  const text = normalized(texts.join(' '));
-  const animalText = text.replace(plantSubstitutes, '');
-  // Dietary-pattern word backstops (unlike the allergen inference above) must
+  // Every word-regex backstop below (dietary-pattern AND allergen inference) must
   // scan ONLY declared ingredient names, never the dish name or the free-text
   // `preparationNote` — those are prose, and prose negates ("cozido SEM caldo
   // de carne") or references the source animal of an already-truthful
@@ -45,20 +43,39 @@ export function foodRestrictionViolation(
   const ingredientTexts = (skip: Set<string> = new Set()) => item.ingredients
     .filter((ingredient) => !skip.has(ingredient.origin))
     .map((ingredient) => normalized(ingredient.name).replace(plantSubstitutes, ''));
+  // Allergen word backstops have exactly the same false-positive exposure the
+  // 2026-10-21 fix above already removed from the dietary-pattern backstops,
+  // and for the identical reason: `preparationNote`/dish-name prose negates
+  // ("assado SEM manteiga ou leite") or simply mentions an optional animal
+  // product ("servir com leite ou água") without the dish containing it.
+  // Scanning full text read "sem leite" as containing milk — confirmed live
+  // against the real model (2026-10-21 stability homologation), blocking a
+  // legacy-milk-allergy breakfast whose own preparationNote correctly stated
+  // the omission. Scope every word-regex allergen check to declared ingredient
+  // names only, same safe surface as the dietary-pattern backstops: the prompt
+  // already requires ingredients to be complete and literal, and `item.allergens`
+  // (checked below, unchanged) remains the primary, non-regex allergen signal.
+  // `ingredientTexts()` strips `plantSubstitutes` ("leite de soja" etc.) so the
+  // DAIRY check doesn't misread a plant milk as animal milk — but that same
+  // stripping would erase "soja" before the SOY check ever ran. Only the
+  // dairy/egg checks (the ones `plantSubstitutes` exists for) use the
+  // stripped text; every other allergen word stays on the raw ingredient names.
+  const dairyScanText = ingredientTexts().join(' ');
+  const rawIngredientText = item.ingredients.map((ingredient) => normalized(ingredient.name)).join(' ');
   const inferred: NutritionFoodAllergen[] = [];
   const origins = item.ingredients.map((ingredient) => ingredient.origin);
   if (origins.includes('dairy')) inferred.push('milk');
   if (origins.includes('egg')) inferred.push('egg');
   if (origins.includes('fish')) inferred.push('fish');
   if (origins.includes('shellfish')) inferred.push('shellfish');
-  if (/\b(peixe|atum|salmao|sardinha|tilapia|bacalhau|fish|tuna|salmon)\b/.test(text)) inferred.push('fish');
-  if (dairy.test(animalText)) inferred.push('milk');
-  if (eggs.test(animalText)) inferred.push('egg');
-  if (/\b(amendoim|peanut)\b/.test(text)) inferred.push('peanut');
-  if (/\b(soja|tofu|soy)\b/.test(text)) inferred.push('soy');
-  if (/\b(trigo|centeio|cevada|wheat|barley|rye)\b/.test(text)) inferred.push('wheat');
-  if (/\b(castanha|amendoa|noz|nozes|avela|pistache)\b/.test(text)) inferred.push('tree_nuts');
-  if (/\b(camaroes|camarao|lagosta|caranguejo)\b/.test(text)) inferred.push('shellfish');
+  if (/\b(peixe|atum|salmao|sardinha|tilapia|bacalhau|fish|tuna|salmon)\b/.test(rawIngredientText)) inferred.push('fish');
+  if (dairy.test(dairyScanText)) inferred.push('milk');
+  if (eggs.test(rawIngredientText)) inferred.push('egg');
+  if (/\b(amendoim|peanut)\b/.test(rawIngredientText)) inferred.push('peanut');
+  if (/\b(soja|tofu|soy)\b/.test(rawIngredientText)) inferred.push('soy');
+  if (/\b(trigo|centeio|cevada|wheat|barley|rye)\b/.test(rawIngredientText)) inferred.push('wheat');
+  if (/\b(castanha|amendoa|noz|nozes|avela|pistache)\b/.test(rawIngredientText)) inferred.push('tree_nuts');
+  if (/\b(camaroes|camarao|lagosta|caranguejo)\b/.test(rawIngredientText)) inferred.push('shellfish');
   if (item.allergens.concat(inferred).some((allergen) => excludedAllergens.includes(allergen as NutritionFoodAllergen))) return 'unsafe_allergen';
   if (!restrictions) return null;
   if (restrictions.excludedFoodNames.some((excluded) => texts.some((value) => matchesExclusion(value, excluded)))) return 'excluded_food';

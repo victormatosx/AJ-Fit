@@ -1,0 +1,50 @@
+START job=29/36 arm=baseline profile=gluten reserved_so_far=0.60345
+PROGRESS job=29 calls=[]
+PROGRESS job=29 calls=[('creator', 'pending')]
+PROGRESS job=29 calls=[('creator', 'responded'), ('reviewer', 'pending')]
+PROGRESS job=29 calls=[('creator', 'responded'), ('reviewer', 'responded'), ('creator', 'pending')]
+PROGRESS job=29 calls=[('creator', 'responded'), ('reviewer', 'responded'), ('creator', 'responded'), ('reviewer', 'pending')]
+DONE job=29 arm=baseline success=True first=False calls=4 cost_est=0.00469516 duration=63.6s
+START job=30/36 arm=candidate profile=gluten reserved_so_far=0.63215
+PROGRESS job=30 calls=[]
+PROGRESS job=30 calls=[('creator', 'pending')]
+PROGRESS job=30 calls=[('creator', 'responded'), ('reviewer', 'pending')]
+DONE job=30 arm=candidate success=True first=True calls=2 cost_est=0.00200903 duration=29.3s
+START job=31/36 arm=candidate profile=vegan reserved_so_far=0.64650
+PROGRESS job=31 calls=[]
+PROGRESS job=31 calls=[('creator', 'pending')]
+PROGRESS job=31 calls=[('creator', 'responded'), ('creator', 'pending')]
+PROGRESS job=31 calls=[('creator', 'responded'), ('creator', 'responded'), ('reviewer', 'pending')]
+PROGRESS job=31 calls=[('creator', 'responded'), ('creator', 'responded'), ('reviewer', 'responded')]
+DONE job=31 arm=candidate success=True first=False calls=3 cost_est=0.00378220 duration=51.9s
+START job=32/36 arm=baseline profile=vegan reserved_so_far=0.66805
+PROGRESS job=32 calls=[]
+PROGRESS job=32 calls=[('creator', 'pending')]
+PROGRESS job=32 calls=[('creator', 'responded'), ('creator', 'pending')]
+PROGRESS job=32 calls=[('creator', 'responded'), ('creator', 'responded'), ('creator', 'pending')]
+PROGRESS job=32 calls=[('creator', 'responded'), ('creator', 'responded'), ('creator', 'responded'), ('reviewer', 'pending')]
+DONE job=32 arm=baseline success=True first=False calls=4 cost_est=0.00469460 duration=59.0s
+START job=33/36 arm=baseline profile=multiple reserved_so_far=0.69680
+PROGRESS job=33 calls=[]
+PROGRESS job=33 calls=[('creator', 'pending')]
+PROGRESS job=33 calls=[('creator', 'responded'), ('creator', 'pending')]
+PROGRESS job=33 calls=[('creator', 'responded'), ('creator', 'responded'), ('reviewer', 'pending')]
+DONE job=33 arm=baseline success=True first=False calls=3 cost_est=0.00318190 duration=44.0s
+START job=34/36 arm=candidate profile=multiple reserved_so_far=0.71835
+PROGRESS job=34 calls=[]
+PROGRESS job=34 calls=[('creator', 'pending')]
+PROGRESS job=34 calls=[('creator', 'responded'), ('creator', 'pending')]
+PROGRESS job=34 calls=[('creator', 'responded'), ('creator', 'responded'), ('creator', 'pending')]
+DONE job=34 arm=candidate success=False first=False calls=3 cost_est=0.00452497 duration=60.2s
+START job=35/36 arm=candidate profile=unrestricted reserved_so_far=0.73995
+PROGRESS job=35 calls=[]
+PROGRESS job=35 calls=[('creator', 'pending')]
+PROGRESS job=35 calls=[('creator', 'responded'), ('creator', 'pending')]
+PROGRESS job=35 calls=[('creator', 'responded'), ('creator', 'responded'), ('reviewer', 'pending')]
+DONE job=35 arm=candidate success=True first=False calls=3 cost_est=0.00361790 duration=53.6s
+START job=36/36 arm=baseline profile=unrestricted reserved_so_far=0.76150
+PROGRESS job=36 calls=[]
+PROGRESS job=36 calls=[('creator', 'pending')]
+PROGRESS job=36 calls=[('creator', 'responded'), ('reviewer', 'pending')]
+DONE job=36 arm=baseline success=True first=True calls=2 cost_est=0.00214296 duration=35.9s
+STOP predefined_job_limit_reached

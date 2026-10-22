@@ -1,0 +1,1623 @@
+[
+  {
+    "index": 1,
+    "generationId": "f804692f-872d-45ee-990c-e45349419074",
+    "job": {
+      "status": "failed",
+      "calls": 4,
+      "reservedUsd": 0.02875,
+      "history": [
+        {
+          "callNumber": 1,
+          "attempt": 1,
+          "role": "creator",
+          "code": "AI_EVIDENCE_INSUFFICIENT",
+          "reviewStatus": null
+        },
+        {
+          "callNumber": 2,
+          "attempt": 2,
+          "role": "creator",
+          "code": "AI_MACRO_VALIDATION_FAILED",
+          "reviewStatus": null
+        },
+        {
+          "callNumber": 3,
+          "attempt": 3,
+          "role": "creator",
+          "code": null,
+          "reviewStatus": null
+        },
+        {
+          "callNumber": 4,
+          "attempt": 3,
+          "role": "reviewer",
+          "code": "AI_REVIEW_INSUFFICIENT_INFORMATION",
+          "reviewStatus": "insufficient_information"
+        }
+      ],
+      "creditUsed": false,
+      "grantedAtCall": null,
+      "policyVersion": 1
+    },
+    "plan": null,
+    "priorPlan": {
+      "planId": "synthetic-prior",
+      "status": "active",
+      "marker": "release-preservation-fixture"
+    },
+    "rate": {
+      "activePlanId": "synthetic-prior",
+      "activeGenerationId": null
+    }
+  },
+  {
+    "index": 2,
+    "generationId": "35700835-0def-4659-a0a2-a0c4cf4c897e",
+    "job": {
+      "status": "failed",
+      "calls": 3,
+      "reservedUsd": 0.02155,
+      "history": [
+        {
+          "callNumber": 1,
+          "attempt": 1,
+          "role": "creator",
+          "code": null,
+          "reviewStatus": null
+        },
+        {
+          "callNumber": 2,
+          "attempt": 1,
+          "role": "reviewer",
+          "code": "AI_REVIEW_INSUFFICIENT_INFORMATION",
+          "reviewStatus": "insufficient_information"
+        },
+        {
+          "callNumber": 3,
+          "attempt": 2,
+          "role": "creator",
+          "code": "AI_MACRO_VALIDATION_FAILED",
+          "reviewStatus": null
+        }
+      ],
+      "creditUsed": false,
+      "grantedAtCall": null,
+      "policyVersion": 1
+    },
+    "plan": null,
+    "priorPlan": {
+      "planId": "synthetic-prior",
+      "status": "active",
+      "marker": "release-preservation-fixture"
+    },
+    "rate": {
+      "activePlanId": "synthetic-prior",
+      "activeGenerationId": null
+    }
+  },
+  {
+    "index": 3,
+    "generationId": "457e43ef-74ff-4702-8fd3-cdb1ab1e3a0f",
+    "job": {
+      "status": "completed",
+      "calls": 3,
+      "reservedUsd": 0.02155,
+      "history": [
+        {
+          "callNumber": 1,
+          "attempt": 1,
+          "role": "creator",
+          "code": "AI_EVIDENCE_INSUFFICIENT",
+          "reviewStatus": null
+        },
+        {
+          "callNumber": 2,
+          "attempt": 2,
+          "role": "creator",
+          "code": null,
+          "reviewStatus": null
+        },
+        {
+          "callNumber": 3,
+          "attempt": 2,
+          "role": "reviewer",
+          "code": null,
+          "reviewStatus": "approved"
+        }
+      ],
+      "creditUsed": false,
+      "grantedAtCall": null,
+      "policyVersion": 1
+    },
+    "plan": {
+      "status": "active",
+      "meals": [
+        {
+          "slot": "breakfast",
+          "recommendedOptionId": "breakfast-1",
+          "options": [
+            {
+              "id": "breakfast-1",
+              "foods": [
+                {
+                  "name": "Goma de tapioca hidratada",
+                  "quantity": 75,
+                  "unit": "g",
+                  "preparationNote": "Preparada em frigideira antiaderente, sem óleo.",
+                  "estimatedNutrition": {
+                    "kcal": 174,
+                    "proteinG": 0.3,
+                    "carbsG": 43.2,
+                    "fatG": 0,
+                    "fiberG": 0
+                  },
+                  "allergens": []
+                },
+                {
+                  "name": "Ovo inteiro",
+                  "quantity": 1,
+                  "unit": "unidade",
+                  "preparationNote": "Cozido, sem óleo.",
+                  "estimatedNutrition": {
+                    "kcal": 72,
+                    "proteinG": 6.3,
+                    "carbsG": 0.4,
+                    "fatG": 4.8,
+                    "fiberG": 0
+                  },
+                  "allergens": [
+                    "egg"
+                  ]
+                },
+                {
+                  "name": "Claras de ovo",
+                  "quantity": 100,
+                  "unit": "g",
+                  "preparationNote": "Cozidas, sem óleo.",
+                  "estimatedNutrition": {
+                    "kcal": 52,
+                    "proteinG": 10.9,
+                    "carbsG": 0.7,
+                    "fatG": 0.2,
+                    "fiberG": 0
+                  },
+                  "allergens": [
+                    "egg"
+                  ]
+                },
+                {
+                  "name": "Iogurte natural integral",
+                  "quantity": 200,
+                  "unit": "g",
+                  "preparationNote": "Sem açúcar.",
+                  "estimatedNutrition": {
+                    "kcal": 122,
+                    "proteinG": 7,
+                    "carbsG": 9.4,
+                    "fatG": 6.6,
+                    "fiberG": 0
+                  },
+                  "allergens": [
+                    "milk"
+                  ]
+                },
+                {
+                  "name": "Banana",
+                  "quantity": 100,
+                  "unit": "g",
+                  "preparationNote": "In natura.",
+                  "estimatedNutrition": {
+                    "kcal": 89,
+                    "proteinG": 1.1,
+                    "carbsG": 22.8,
+                    "fatG": 0.3,
+                    "fiberG": 2.6
+                  },
+                  "allergens": []
+                },
+                {
+                  "name": "Semente de chia",
+                  "quantity": 15,
+                  "unit": "g",
+                  "preparationNote": "Misturada ao iogurte.",
+                  "estimatedNutrition": {
+                    "kcal": 73,
+                    "proteinG": 2.5,
+                    "carbsG": 6.3,
+                    "fatG": 4.6,
+                    "fiberG": 5.2
+                  },
+                  "allergens": []
+                }
+              ],
+              "totals": {
+                "kcal": 582,
+                "proteinG": 28.1,
+                "carbsG": 82.8,
+                "fatG": 16.5,
+                "fiberG": 7.8
+              }
+            }
+          ]
+        },
+        {
+          "slot": "lunch",
+          "recommendedOptionId": "lunch-1",
+          "options": [
+            {
+              "id": "lunch-1",
+              "foods": [
+                {
+                  "name": "Arroz branco cozido",
+                  "quantity": 201.28,
+                  "unit": "g",
+                  "preparationNote": "Cozido em água, sem óleo.",
+                  "estimatedNutrition": {
+                    "kcal": 261.664,
+                    "proteinG": 5.479288888888889,
+                    "carbsG": 56.80568888888889,
+                    "fatG": 0.5591111111111111,
+                    "fiberG": 0.7827555555555555
+                  },
+                  "allergens": []
+                },
+                {
+                  "name": "Feijão carioca cozido",
+                  "quantity": 72.06,
+                  "unit": "g",
+                  "preparationNote": "Cozido em água, sem caldo de carne.",
+                  "estimatedNutrition": {
+                    "kcal": 54.7656,
+                    "proteinG": 3.45888,
+                    "carbsG": 9.80016,
+                    "fatG": 0.3603,
+                    "fiberG": 6.1251
+                  },
+                  "allergens": []
+                },
+                {
+                  "name": "Peito de frango grelhado",
+                  "quantity": 60.74,
+                  "unit": "g",
+                  "preparationNote": "Temperado com sal e grelhado sem óleo.",
+                  "estimatedNutrition": {
+                    "kcal": 100.221,
+                    "proteinG": 18.8294,
+                    "carbsG": 0,
+                    "fatG": 2.1259,
+                    "fiberG": 0
+                  },
+                  "allergens": []
+                },
+                {
+                  "name": "Abobrinha e cenoura cozidas",
+                  "quantity": 97.77,
+                  "unit": "g",
+                  "preparationNote": "Cozidas em água, sem molho.",
+                  "estimatedNutrition": {
+                    "kcal": 34.219500000000004,
+                    "proteinG": 1.27101,
+                    "carbsG": 7.03944,
+                    "fatG": 0.29331,
+                    "fiberG": 2.24871
+                  },
+                  "allergens": []
+                },
+                {
+                  "name": "Azeite de oliva",
+                  "quantity": 12.16,
+                  "unit": "g",
+                  "preparationNote": "Adicionado aos legumes.",
+                  "estimatedNutrition": {
+                    "kcal": 107.41333333333334,
+                    "proteinG": 0,
+                    "carbsG": 0,
+                    "fatG": 12.16,
+                    "fiberG": 0
+                  },
+                  "allergens": []
+                }
+              ],
+              "totals": {
+                "kcal": 558.28,
+                "proteinG": 29.04,
+                "carbsG": 73.65,
+                "fatG": 15.5,
+                "fiberG": 9.16
+              }
+            }
+          ]
+        },
+        {
+          "slot": "afternoon_snack",
+          "recommendedOptionId": "afternoon_snack-1",
+          "options": [
+            {
+              "id": "afternoon_snack-1",
+              "foods": [
+                {
+                  "name": "Peito de frango cozido desfiado",
+                  "quantity": 54.19,
+                  "unit": "g",
+                  "preparationNote": "Cozido em água com sal, sem temperos industrializados.",
+                  "estimatedNutrition": {
+                    "kcal": 89.65981818181817,
+                    "proteinG": 16.848163636363637,
+                    "carbsG": 0,
+                    "fatG": 1.9705454545454544,
+                    "fiberG": 0
+                  },
+                  "allergens": []
+                },
+                {
+                  "name": "Goma de tapioca hidratada",
+                  "quantity": 44.28,
+                  "unit": "g",
+                  "preparationNote": "Preparada em frigideira antiaderente, sem óleo.",
+                  "estimatedNutrition": {
+                    "kcal": 102.47657142857143,
+                    "proteinG": 0.12651428571428572,
+                    "carbsG": 25.55588571428571,
+                    "fatG": 0,
+                    "fiberG": 0
+                  },
+                  "allergens": []
+                },
+                {
+                  "name": "Banana",
+                  "quantity": 66.86,
+                  "unit": "g",
+                  "preparationNote": "In natura.",
+                  "estimatedNutrition": {
+                    "kcal": 59.33825,
+                    "proteinG": 0.752175,
+                    "carbsG": 15.21065,
+                    "fatG": 0.16715000000000002,
+                    "fiberG": 1.7550750000000002
+                  },
+                  "allergens": []
+                },
+                {
+                  "name": "Abacate",
+                  "quantity": 43.13,
+                  "unit": "g",
+                  "preparationNote": "In natura, amassado.",
+                  "estimatedNutrition": {
+                    "kcal": 69.00800000000001,
+                    "proteinG": 0.8626,
+                    "carbsG": 3.70918,
+                    "fatG": 6.383240000000001,
+                    "fiberG": 2.93284
+                  },
+                  "allergens": []
+                },
+                {
+                  "name": "Claras de ovo",
+                  "quantity": 55.01,
+                  "unit": "g",
+                  "preparationNote": "Cozidas, sem óleo.",
+                  "estimatedNutrition": {
+                    "kcal": 28.605200000000004,
+                    "proteinG": 6.0511,
+                    "carbsG": 0.44008,
+                    "fatG": 0.11002,
+                    "fiberG": 0
+                  },
+                  "allergens": [
+                    "egg"
+                  ]
+                },
+                {
+                  "name": "Semente de chia",
+                  "quantity": 4.17,
+                  "unit": "g",
+                  "preparationNote": "Misturada ao abacate.",
+                  "estimatedNutrition": {
+                    "kcal": 20.016,
+                    "proteinG": 0.6672,
+                    "carbsG": 1.7514,
+                    "fatG": 1.251,
+                    "fiberG": 1.4178
+                  },
+                  "allergens": []
+                }
+              ],
+              "totals": {
+                "kcal": 369.1,
+                "proteinG": 25.31,
+                "carbsG": 46.67,
+                "fatG": 9.88,
+                "fiberG": 6.11
+              }
+            }
+          ]
+        },
+        {
+          "slot": "dinner",
+          "recommendedOptionId": "dinner-1",
+          "options": [
+            {
+              "id": "dinner-1",
+              "foods": [
+                {
+                  "name": "Arroz branco cozido",
+                  "quantity": 204.64,
+                  "unit": "g",
+                  "preparationNote": "Cozido em água, sem óleo.",
+                  "estimatedNutrition": {
+                    "kcal": 266.032,
+                    "proteinG": 5.5707555555555555,
+                    "carbsG": 57.75395555555555,
+                    "fatG": 0.5684444444444444,
+                    "fiberG": 0.7958222222222221
+                  },
+                  "allergens": []
+                },
+                {
+                  "name": "Feijão preto cozido",
+                  "quantity": 78.15,
+                  "unit": "g",
+                  "preparationNote": "Cozido em água, sem caldo de carne.",
+                  "estimatedNutrition": {
+                    "kcal": 59.915000000000006,
+                    "proteinG": 4.081166666666667,
+                    "carbsG": 10.767333333333335,
+                    "fatG": 0.4341666666666667,
+                    "fiberG": 6.686166666666668
+                  },
+                  "allergens": []
+                },
+                {
+                  "name": "Peito de frango grelhado",
+                  "quantity": 60.76,
+                  "unit": "g",
+                  "preparationNote": "Temperado com sal e grelhado sem óleo.",
+                  "estimatedNutrition": {
+                    "kcal": 100.25399999999999,
+                    "proteinG": 18.8356,
+                    "carbsG": 0,
+                    "fatG": 2.1266,
+                    "fiberG": 0
+                  },
+                  "allergens": []
+                },
+                {
+                  "name": "Chuchu e tomate cozidos",
+                  "quantity": 98.51,
+                  "unit": "g",
+                  "preparationNote": "Cozidos em água, sem molho.",
+                  "estimatedNutrition": {
+                    "kcal": 24.6275,
+                    "proteinG": 1.18212,
+                    "carbsG": 5.122520000000001,
+                    "fatG": 0.19702000000000003,
+                    "fiberG": 1.67467
+                  },
+                  "allergens": []
+                },
+                {
+                  "name": "Azeite de oliva",
+                  "quantity": 12.16,
+                  "unit": "g",
+                  "preparationNote": "Adicionado aos legumes.",
+                  "estimatedNutrition": {
+                    "kcal": 107.41333333333334,
+                    "proteinG": 0,
+                    "carbsG": 0,
+                    "fatG": 12.16,
+                    "fiberG": 0
+                  },
+                  "allergens": []
+                }
+              ],
+              "totals": {
+                "kcal": 558.24,
+                "proteinG": 29.67,
+                "carbsG": 73.64,
+                "fatG": 15.49,
+                "fiberG": 9.16
+              }
+            }
+          ]
+        }
+      ],
+      "dailyTotals": {
+        "kcal": 2067.62,
+        "proteinG": 112.12,
+        "carbsG": 276.76,
+        "fatG": 57.37,
+        "fiberG": 32.23
+      },
+      "review": {
+        "version": "nutrition-independent-review-v1",
+        "model": "gpt-6-luna",
+        "candidateDigest": "4be23ff138b68ff03e8a48fe0c69b9bf646d0676b3e8b1a06376a7e415b58b42",
+        "calls": 3
+      },
+      "activatedAt": {
+        "_seconds": 1792667024,
+        "_nanoseconds": 108000000
+      }
+    },
+    "priorPlan": {
+      "planId": "synthetic-prior",
+      "marker": "release-preservation-fixture",
+      "archivedAt": {
+        "_seconds": 1792667024,
+        "_nanoseconds": 108000000
+      },
+      "status": "archived"
+    },
+    "rate": {
+      "activePlanId": "457e43ef-74ff-4702-8fd3-cdb1ab1e3a0f",
+      "activeGenerationId": null
+    }
+  },
+  {
+    "index": 4,
+    "generationId": "1acc03e5-ce9f-4be2-bda6-e541187a3485",
+    "job": {
+      "status": "failed",
+      "calls": 4,
+      "reservedUsd": 0.028749999999999998,
+      "history": [
+        {
+          "callNumber": 1,
+          "attempt": 1,
+          "role": "creator",
+          "code": "AI_MACRO_VALIDATION_FAILED",
+          "reviewStatus": null
+        },
+        {
+          "callNumber": 2,
+          "attempt": 2,
+          "role": "creator",
+          "code": null,
+          "reviewStatus": null
+        },
+        {
+          "callNumber": 3,
+          "attempt": 2,
+          "role": "reviewer",
+          "code": "AI_REVIEW_INSUFFICIENT_INFORMATION",
+          "reviewStatus": "insufficient_information"
+        },
+        {
+          "callNumber": 4,
+          "attempt": 3,
+          "role": "creator",
+          "code": "AI_MACRO_VALIDATION_FAILED",
+          "reviewStatus": null
+        }
+      ],
+      "creditUsed": true,
+      "grantedAtCall": 4,
+      "policyVersion": 1
+    },
+    "plan": null,
+    "priorPlan": {
+      "planId": "synthetic-prior",
+      "status": "active",
+      "marker": "release-preservation-fixture"
+    },
+    "rate": {
+      "activePlanId": "synthetic-prior",
+      "activeGenerationId": null
+    }
+  },
+  {
+    "index": 5,
+    "generationId": "02fe9e32-7b16-4770-93e5-c874a4467cbf",
+    "job": {
+      "status": "completed",
+      "calls": 3,
+      "reservedUsd": 0.02155,
+      "history": [
+        {
+          "callNumber": 1,
+          "attempt": 1,
+          "role": "creator",
+          "code": "AI_CONTENT_SAFETY_MISMATCH",
+          "reviewStatus": null
+        },
+        {
+          "callNumber": 2,
+          "attempt": 2,
+          "role": "creator",
+          "code": null,
+          "reviewStatus": null
+        },
+        {
+          "callNumber": 3,
+          "attempt": 2,
+          "role": "reviewer",
+          "code": null,
+          "reviewStatus": "approved"
+        }
+      ],
+      "creditUsed": false,
+      "grantedAtCall": null,
+      "policyVersion": 1
+    },
+    "plan": {
+      "status": "active",
+      "meals": [
+        {
+          "slot": "breakfast",
+          "recommendedOptionId": "breakfast-1",
+          "options": [
+            {
+              "id": "breakfast-1",
+              "foods": [
+                {
+                  "name": "Aveia em flocos",
+                  "quantity": 40,
+                  "unit": "g",
+                  "preparationNote": "Preparada como mingau com leite.",
+                  "estimatedNutrition": {
+                    "kcal": 156,
+                    "proteinG": 6.8,
+                    "carbsG": 26.5,
+                    "fatG": 2.8,
+                    "fiberG": 4.2
+                  },
+                  "allergens": []
+                },
+                {
+                  "name": "Leite semidesnatado",
+                  "quantity": 200,
+                  "unit": "ml",
+                  "preparationNote": "",
+                  "estimatedNutrition": {
+                    "kcal": 92,
+                    "proteinG": 6.4,
+                    "carbsG": 9.6,
+                    "fatG": 3.2,
+                    "fiberG": 0
+                  },
+                  "allergens": [
+                    "milk"
+                  ]
+                },
+                {
+                  "name": "Banana",
+                  "quantity": 80,
+                  "unit": "g",
+                  "preparationNote": "",
+                  "estimatedNutrition": {
+                    "kcal": 71,
+                    "proteinG": 0.9,
+                    "carbsG": 18.2,
+                    "fatG": 0.2,
+                    "fiberG": 2.1
+                  },
+                  "allergens": []
+                },
+                {
+                  "name": "Pão francês",
+                  "quantity": 50,
+                  "unit": "g",
+                  "preparationNote": "",
+                  "estimatedNutrition": {
+                    "kcal": 135,
+                    "proteinG": 4.5,
+                    "carbsG": 28,
+                    "fatG": 1.5,
+                    "fiberG": 1.3
+                  },
+                  "allergens": [
+                    "wheat"
+                  ]
+                },
+                {
+                  "name": "Ovo cozido",
+                  "quantity": 2,
+                  "unit": "unidade",
+                  "preparationNote": "",
+                  "estimatedNutrition": {
+                    "kcal": 144,
+                    "proteinG": 12.6,
+                    "carbsG": 0.8,
+                    "fatG": 9.6,
+                    "fiberG": 0
+                  },
+                  "allergens": [
+                    "egg"
+                  ]
+                }
+              ],
+              "totals": {
+                "kcal": 598,
+                "proteinG": 31.2,
+                "carbsG": 83.1,
+                "fatG": 17.3,
+                "fiberG": 7.6
+              }
+            }
+          ]
+        },
+        {
+          "slot": "lunch",
+          "recommendedOptionId": "lunch-1",
+          "options": [
+            {
+              "id": "lunch-1",
+              "foods": [
+                {
+                  "name": "Arroz branco cozido",
+                  "quantity": 214.66,
+                  "unit": "g",
+                  "preparationNote": "Cozido em água e sal.",
+                  "estimatedNutrition": {
+                    "kcal": 279.058,
+                    "proteinG": 5.79582,
+                    "carbsG": 60.534119999999994,
+                    "fatG": 0.6439799999999999,
+                    "fiberG": 0.85864
+                  },
+                  "allergens": []
+                },
+                {
+                  "name": "Feijão carioca cozido",
+                  "quantity": 68.44,
+                  "unit": "g",
+                  "preparationNote": "Cozido em água e sal, sem caldo de origem animal.",
+                  "estimatedNutrition": {
+                    "kcal": 52.0144,
+                    "proteinG": 3.28512,
+                    "carbsG": 9.307839999999999,
+                    "fatG": 0.36501333333333336,
+                    "fiberG": 5.840213333333334
+                  },
+                  "allergens": []
+                },
+                {
+                  "name": "Tofu grelhado",
+                  "quantity": 102.62,
+                  "unit": "g",
+                  "preparationNote": "Grelhado sem óleo adicional.",
+                  "estimatedNutrition": {
+                    "kcal": 147.7728,
+                    "proteinG": 15.393,
+                    "carbsG": 3.0786,
+                    "fatG": 9.2358,
+                    "fiberG": 0.5131
+                  },
+                  "allergens": [
+                    "soy"
+                  ]
+                },
+                {
+                  "name": "Salada de tomate e alface",
+                  "quantity": 97.2,
+                  "unit": "g",
+                  "preparationNote": "Crua, sem molho.",
+                  "estimatedNutrition": {
+                    "kcal": 29.16,
+                    "proteinG": 1.944,
+                    "carbsG": 5.832,
+                    "fatG": 0.19440000000000002,
+                    "fiberG": 1.944
+                  },
+                  "allergens": []
+                },
+                {
+                  "name": "Azeite de oliva",
+                  "quantity": 5.07,
+                  "unit": "g",
+                  "preparationNote": "Usado no preparo do tofu.",
+                  "estimatedNutrition": {
+                    "kcal": 45.63,
+                    "proteinG": 0,
+                    "carbsG": 0,
+                    "fatG": 5.07,
+                    "fiberG": 0
+                  },
+                  "allergens": []
+                }
+              ],
+              "totals": {
+                "kcal": 553.64,
+                "proteinG": 26.42,
+                "carbsG": 78.75,
+                "fatG": 15.51,
+                "fiberG": 9.16
+              }
+            }
+          ]
+        },
+        {
+          "slot": "afternoon_snack",
+          "recommendedOptionId": "afternoon_snack-1",
+          "options": [
+            {
+              "id": "afternoon_snack-1",
+              "foods": [
+                {
+                  "name": "Iogurte natural integral",
+                  "quantity": 170,
+                  "unit": "g",
+                  "preparationNote": "",
+                  "estimatedNutrition": {
+                    "kcal": 105,
+                    "proteinG": 6,
+                    "carbsG": 8,
+                    "fatG": 5.5,
+                    "fiberG": 0
+                  },
+                  "allergens": [
+                    "milk"
+                  ]
+                },
+                {
+                  "name": "Banana",
+                  "quantity": 100,
+                  "unit": "g",
+                  "preparationNote": "",
+                  "estimatedNutrition": {
+                    "kcal": 89,
+                    "proteinG": 1.1,
+                    "carbsG": 22.8,
+                    "fatG": 0.3,
+                    "fiberG": 2.6
+                  },
+                  "allergens": []
+                },
+                {
+                  "name": "Aveia em flocos",
+                  "quantity": 20,
+                  "unit": "g",
+                  "preparationNote": "Misturada ao iogurte.",
+                  "estimatedNutrition": {
+                    "kcal": 78,
+                    "proteinG": 3.4,
+                    "carbsG": 13.3,
+                    "fatG": 1.4,
+                    "fiberG": 2.1
+                  },
+                  "allergens": []
+                },
+                {
+                  "name": "Queijo cottage",
+                  "quantity": 100,
+                  "unit": "g",
+                  "preparationNote": "",
+                  "estimatedNutrition": {
+                    "kcal": 98,
+                    "proteinG": 11.1,
+                    "carbsG": 3.4,
+                    "fatG": 4.3,
+                    "fiberG": 0
+                  },
+                  "allergens": [
+                    "milk"
+                  ]
+                }
+              ],
+              "totals": {
+                "kcal": 370,
+                "proteinG": 21.6,
+                "carbsG": 47.5,
+                "fatG": 11.5,
+                "fiberG": 4.7
+              }
+            }
+          ]
+        },
+        {
+          "slot": "dinner",
+          "recommendedOptionId": "dinner-1",
+          "options": [
+            {
+              "id": "dinner-1",
+              "foods": [
+                {
+                  "name": "Arroz branco cozido",
+                  "quantity": 214.66,
+                  "unit": "g",
+                  "preparationNote": "Cozido em água e sal.",
+                  "estimatedNutrition": {
+                    "kcal": 279.058,
+                    "proteinG": 5.79582,
+                    "carbsG": 60.534119999999994,
+                    "fatG": 0.6439799999999999,
+                    "fiberG": 0.85864
+                  },
+                  "allergens": []
+                },
+                {
+                  "name": "Feijão carioca cozido",
+                  "quantity": 68.44,
+                  "unit": "g",
+                  "preparationNote": "Cozido em água e sal, sem caldo de origem animal.",
+                  "estimatedNutrition": {
+                    "kcal": 52.0144,
+                    "proteinG": 3.28512,
+                    "carbsG": 9.307839999999999,
+                    "fatG": 0.36501333333333336,
+                    "fiberG": 5.840213333333334
+                  },
+                  "allergens": []
+                },
+                {
+                  "name": "Tofu grelhado",
+                  "quantity": 102.62,
+                  "unit": "g",
+                  "preparationNote": "Grelhado sem óleo adicional.",
+                  "estimatedNutrition": {
+                    "kcal": 147.7728,
+                    "proteinG": 15.393,
+                    "carbsG": 3.0786,
+                    "fatG": 9.2358,
+                    "fiberG": 0.5131
+                  },
+                  "allergens": [
+                    "soy"
+                  ]
+                },
+                {
+                  "name": "Salada de tomate e alface",
+                  "quantity": 97.2,
+                  "unit": "g",
+                  "preparationNote": "Crua, sem molho.",
+                  "estimatedNutrition": {
+                    "kcal": 29.16,
+                    "proteinG": 1.944,
+                    "carbsG": 5.832,
+                    "fatG": 0.19440000000000002,
+                    "fiberG": 1.944
+                  },
+                  "allergens": []
+                },
+                {
+                  "name": "Azeite de oliva",
+                  "quantity": 5.07,
+                  "unit": "g",
+                  "preparationNote": "Usado no preparo do tofu.",
+                  "estimatedNutrition": {
+                    "kcal": 45.63,
+                    "proteinG": 0,
+                    "carbsG": 0,
+                    "fatG": 5.07,
+                    "fiberG": 0
+                  },
+                  "allergens": []
+                }
+              ],
+              "totals": {
+                "kcal": 553.64,
+                "proteinG": 26.42,
+                "carbsG": 78.75,
+                "fatG": 15.51,
+                "fiberG": 9.16
+              }
+            }
+          ]
+        }
+      ],
+      "dailyTotals": {
+        "kcal": 2075.28,
+        "proteinG": 105.64,
+        "carbsG": 288.1,
+        "fatG": 59.82,
+        "fiberG": 30.62
+      },
+      "review": {
+        "version": "nutrition-independent-review-v1",
+        "model": "gpt-6-luna",
+        "candidateDigest": "948fa61a8a119eb78d2daa898c8d6c23eb06ef16a93806063890f1a927448740",
+        "calls": 3
+      },
+      "activatedAt": {
+        "_seconds": 1792667288,
+        "_nanoseconds": 136000000
+      }
+    },
+    "priorPlan": {
+      "planId": "synthetic-prior",
+      "marker": "release-preservation-fixture",
+      "archivedAt": {
+        "_seconds": 1792667288,
+        "_nanoseconds": 136000000
+      },
+      "status": "archived"
+    },
+    "rate": {
+      "activePlanId": "02fe9e32-7b16-4770-93e5-c874a4467cbf",
+      "activeGenerationId": null
+    }
+  },
+  {
+    "index": 6,
+    "generationId": "f3c52df9-a3a7-4c45-8f9f-e34ab08a64e6",
+    "job": {
+      "status": "completed",
+      "calls": 2,
+      "reservedUsd": 0.01435,
+      "history": [
+        {
+          "callNumber": 1,
+          "attempt": 1,
+          "role": "creator",
+          "code": null,
+          "reviewStatus": null
+        },
+        {
+          "callNumber": 2,
+          "attempt": 1,
+          "role": "reviewer",
+          "code": null,
+          "reviewStatus": "approved"
+        }
+      ],
+      "creditUsed": false,
+      "grantedAtCall": null,
+      "policyVersion": 1
+    },
+    "plan": {
+      "status": "active",
+      "meals": [
+        {
+          "slot": "breakfast",
+          "recommendedOptionId": "breakfast-1",
+          "options": [
+            {
+              "id": "breakfast-1",
+              "foods": [
+                {
+                  "name": "Tapioca de goma hidratada",
+                  "quantity": 51.66,
+                  "unit": "g",
+                  "preparationNote": "Preparada sem óleo",
+                  "estimatedNutrition": {
+                    "kcal": 170.94763636363635,
+                    "proteinG": 0.18785454545454547,
+                    "carbsG": 42.267272727272726,
+                    "fatG": 0.09392727272727273,
+                    "fiberG": 0.18785454545454547
+                  },
+                  "allergens": []
+                },
+                {
+                  "name": "Ovo inteiro cozido",
+                  "quantity": 2,
+                  "unit": "unidade",
+                  "preparationNote": "Cozido",
+                  "estimatedNutrition": {
+                    "kcal": 144,
+                    "proteinG": 12.6,
+                    "carbsG": 0.8,
+                    "fatG": 9.6,
+                    "fiberG": 0
+                  },
+                  "allergens": [
+                    "egg"
+                  ]
+                },
+                {
+                  "name": "Claras de ovo cozidas",
+                  "quantity": 1,
+                  "unit": "unidade",
+                  "preparationNote": "Cozidas",
+                  "estimatedNutrition": {
+                    "kcal": 17,
+                    "proteinG": 3.6,
+                    "carbsG": 0.25,
+                    "fatG": 0.05,
+                    "fiberG": 0
+                  },
+                  "allergens": [
+                    "egg"
+                  ]
+                },
+                {
+                  "name": "Iogurte natural desnatado",
+                  "quantity": 241.76,
+                  "unit": "g",
+                  "preparationNote": "Sem açúcar",
+                  "estimatedNutrition": {
+                    "kcal": 101.53920000000001,
+                    "proteinG": 8.70336,
+                    "carbsG": 11.60448,
+                    "fatG": 0.48352,
+                    "fiberG": 0
+                  },
+                  "allergens": [
+                    "milk"
+                  ]
+                },
+                {
+                  "name": "Goiaba vermelha",
+                  "quantity": 76.33,
+                  "unit": "g",
+                  "preparationNote": "Crua",
+                  "estimatedNutrition": {
+                    "kcal": 52.34057142857142,
+                    "proteinG": 1.0904285714285713,
+                    "carbsG": 10.904285714285713,
+                    "fatG": 0.43617142857142854,
+                    "fiberG": 3.925542857142857
+                  },
+                  "allergens": []
+                },
+                {
+                  "name": "Semente de chia",
+                  "quantity": 13.22,
+                  "unit": "g",
+                  "preparationNote": "Misturada ao iogurte",
+                  "estimatedNutrition": {
+                    "kcal": 64.4475,
+                    "proteinG": 2.14825,
+                    "carbsG": 5.6185,
+                    "fatG": 4.1312500000000005,
+                    "fiberG": 4.46175
+                  },
+                  "allergens": []
+                }
+              ],
+              "totals": {
+                "kcal": 550.27,
+                "proteinG": 28.33,
+                "carbsG": 71.44,
+                "fatG": 14.79,
+                "fiberG": 8.58
+              }
+            }
+          ]
+        },
+        {
+          "slot": "lunch",
+          "recommendedOptionId": "lunch-1",
+          "options": [
+            {
+              "id": "lunch-1",
+              "foods": [
+                {
+                  "name": "Arroz branco cozido",
+                  "quantity": 202.19,
+                  "unit": "g",
+                  "preparationNote": "Cozido em água, sem óleo",
+                  "estimatedNutrition": {
+                    "kcal": 262.84700000000004,
+                    "proteinG": 5.427205263157894,
+                    "carbsG": 56.93244736842106,
+                    "fatG": 0.5320789473684211,
+                    "fiberG": 0.8513263157894738
+                  },
+                  "allergens": []
+                },
+                {
+                  "name": "Feijão carioca cozido",
+                  "quantity": 73.28,
+                  "unit": "g",
+                  "preparationNote": "Cozido sem caldo de carne",
+                  "estimatedNutrition": {
+                    "kcal": 55.6928,
+                    "proteinG": 3.51744,
+                    "carbsG": 9.96608,
+                    "fatG": 0.3664,
+                    "fiberG": 6.2288
+                  },
+                  "allergens": []
+                },
+                {
+                  "name": "Peito de frango grelhado",
+                  "quantity": 64.93,
+                  "unit": "g",
+                  "preparationNote": "Temperado com sal e alho",
+                  "estimatedNutrition": {
+                    "kcal": 106.88476923076924,
+                    "proteinG": 20.178246153846157,
+                    "carbsG": 0,
+                    "fatG": 2.297523076923077,
+                    "fiberG": 0
+                  },
+                  "allergens": []
+                },
+                {
+                  "name": "Abobrinha e cenoura cozidas",
+                  "quantity": 103.8,
+                  "unit": "g",
+                  "preparationNote": "Sem óleo",
+                  "estimatedNutrition": {
+                    "kcal": 33.216,
+                    "proteinG": 1.2456,
+                    "carbsG": 6.747,
+                    "fatG": 0.3114,
+                    "fiberG": 2.076
+                  },
+                  "allergens": []
+                },
+                {
+                  "name": "Azeite de oliva",
+                  "quantity": 12,
+                  "unit": "g",
+                  "preparationNote": "Adicionado aos vegetais",
+                  "estimatedNutrition": {
+                    "kcal": 106,
+                    "proteinG": 0,
+                    "carbsG": 0,
+                    "fatG": 12,
+                    "fiberG": 0
+                  },
+                  "allergens": []
+                }
+              ],
+              "totals": {
+                "kcal": 564.64,
+                "proteinG": 30.37,
+                "carbsG": 73.65,
+                "fatG": 15.51,
+                "fiberG": 9.16
+              }
+            }
+          ]
+        },
+        {
+          "slot": "afternoon_snack",
+          "recommendedOptionId": "afternoon_snack-1",
+          "options": [
+            {
+              "id": "afternoon_snack-1",
+              "foods": [
+                {
+                  "name": "Cuscuz de milho cozido",
+                  "quantity": 125.58,
+                  "unit": "g",
+                  "preparationNote": "Cozido no vapor, sem manteiga",
+                  "estimatedNutrition": {
+                    "kcal": 142.324,
+                    "proteinG": 3.3488,
+                    "carbsG": 30.3485,
+                    "fatG": 0.8372,
+                    "fiberG": 2.3023000000000002
+                  },
+                  "allergens": []
+                },
+                {
+                  "name": "Ovo inteiro cozido",
+                  "quantity": 2,
+                  "unit": "unidade",
+                  "preparationNote": "Cozido",
+                  "estimatedNutrition": {
+                    "kcal": 144,
+                    "proteinG": 12.6,
+                    "carbsG": 0.8,
+                    "fatG": 9.6,
+                    "fiberG": 0
+                  },
+                  "allergens": [
+                    "egg"
+                  ]
+                },
+                {
+                  "name": "Claras de ovo cozidas",
+                  "quantity": 1,
+                  "unit": "unidade",
+                  "preparationNote": "Cozidas",
+                  "estimatedNutrition": {
+                    "kcal": 17,
+                    "proteinG": 3.6,
+                    "carbsG": 0.25,
+                    "fatG": 0.05,
+                    "fiberG": 0
+                  },
+                  "allergens": [
+                    "egg"
+                  ]
+                },
+                {
+                  "name": "Iogurte natural desnatado",
+                  "quantity": 128.98,
+                  "unit": "g",
+                  "preparationNote": "Sem açúcar",
+                  "estimatedNutrition": {
+                    "kcal": 53.86811764705882,
+                    "proteinG": 4.628105882352941,
+                    "carbsG": 6.221388235294117,
+                    "fatG": 0.22761176470588232,
+                    "fiberG": 0
+                  },
+                  "allergens": [
+                    "milk"
+                  ]
+                },
+                {
+                  "name": "Laranja",
+                  "quantity": 90.5,
+                  "unit": "g",
+                  "preparationNote": "Descascada",
+                  "estimatedNutrition": {
+                    "kcal": 42.535000000000004,
+                    "proteinG": 0.8145,
+                    "carbsG": 10.679,
+                    "fatG": 0.09050000000000001,
+                    "fiberG": 2.172
+                  },
+                  "allergens": []
+                }
+              ],
+              "totals": {
+                "kcal": 399.73,
+                "proteinG": 24.99,
+                "carbsG": 48.3,
+                "fatG": 10.81,
+                "fiberG": 4.47
+              }
+            }
+          ]
+        },
+        {
+          "slot": "dinner",
+          "recommendedOptionId": "dinner-1",
+          "options": [
+            {
+              "id": "dinner-1",
+              "foods": [
+                {
+                  "name": "Arroz branco cozido",
+                  "quantity": 198.13,
+                  "unit": "g",
+                  "preparationNote": "Cozido em água, sem óleo",
+                  "estimatedNutrition": {
+                    "kcal": 257.56899999999996,
+                    "proteinG": 5.2834666666666665,
+                    "carbsG": 55.80661666666666,
+                    "fatG": 0.5503611111111111,
+                    "fiberG": 0.7705055555555554
+                  },
+                  "allergens": []
+                },
+                {
+                  "name": "Feijão preto cozido",
+                  "quantity": 70.99,
+                  "unit": "g",
+                  "preparationNote": "Cozido sem caldo de carne",
+                  "estimatedNutrition": {
+                    "kcal": 54.662299999999995,
+                    "proteinG": 3.19455,
+                    "carbsG": 9.9386,
+                    "fatG": 0.35495,
+                    "fiberG": 5.96316
+                  },
+                  "allergens": []
+                },
+                {
+                  "name": "Filé de tilápia grelhado",
+                  "quantity": 78.12,
+                  "unit": "g",
+                  "preparationNote": "Grelhado sem empanar",
+                  "estimatedNutrition": {
+                    "kcal": 99.60300000000001,
+                    "proteinG": 20.311200000000003,
+                    "carbsG": 0,
+                    "fatG": 2.05065,
+                    "fiberG": 0
+                  },
+                  "allergens": [
+                    "fish"
+                  ]
+                },
+                {
+                  "name": "Chuchu e tomate cozidos",
+                  "quantity": 158.01,
+                  "unit": "g",
+                  "preparationNote": "Cozidos sem óleo",
+                  "estimatedNutrition": {
+                    "kcal": 37.922399999999996,
+                    "proteinG": 1.5800999999999998,
+                    "carbsG": 7.900499999999999,
+                    "fatG": 0.31601999999999997,
+                    "fiberG": 2.4228199999999998
+                  },
+                  "allergens": []
+                },
+                {
+                  "name": "Azeite de oliva",
+                  "quantity": 12.14,
+                  "unit": "g",
+                  "preparationNote": "Adicionado aos vegetais",
+                  "estimatedNutrition": {
+                    "kcal": 107.23666666666668,
+                    "proteinG": 0,
+                    "carbsG": 0,
+                    "fatG": 12.14,
+                    "fiberG": 0
+                  },
+                  "allergens": []
+                }
+              ],
+              "totals": {
+                "kcal": 556.99,
+                "proteinG": 30.37,
+                "carbsG": 73.65,
+                "fatG": 15.41,
+                "fiberG": 9.16
+              }
+            }
+          ]
+        }
+      ],
+      "dailyTotals": {
+        "kcal": 2071.63,
+        "proteinG": 114.06,
+        "carbsG": 267.04,
+        "fatG": 56.52,
+        "fiberG": 31.37
+      },
+      "review": {
+        "version": "nutrition-independent-review-v1",
+        "model": "gpt-6-luna",
+        "candidateDigest": "9203612ae87e4648990db26af88393f515153e1795fa17baeec90b8206c2d151",
+        "calls": 2
+      },
+      "activatedAt": {
+        "_seconds": 1792667416,
+        "_nanoseconds": 8000000
+      }
+    },
+    "priorPlan": {
+      "planId": "synthetic-prior",
+      "marker": "release-preservation-fixture",
+      "archivedAt": {
+        "_seconds": 1792667416,
+        "_nanoseconds": 8000000
+      },
+      "status": "archived"
+    },
+    "rate": {
+      "activePlanId": "f3c52df9-a3a7-4c45-8f9f-e34ab08a64e6",
+      "activeGenerationId": null
+    }
+  },
+  {
+    "index": 7,
+    "generationId": "47a29311-0c6e-41f9-9d93-0af65439d490",
+    "job": {
+      "status": "failed",
+      "calls": 3,
+      "reservedUsd": 0.0216,
+      "history": [
+        {
+          "callNumber": 1,
+          "attempt": 1,
+          "role": "creator",
+          "code": "AI_EVIDENCE_INSUFFICIENT",
+          "reviewStatus": null
+        },
+        {
+          "callNumber": 2,
+          "attempt": 2,
+          "role": "creator",
+          "code": "AI_EVIDENCE_INSUFFICIENT",
+          "reviewStatus": null
+        },
+        {
+          "callNumber": 3,
+          "attempt": 3,
+          "role": "creator",
+          "code": "AI_EVIDENCE_INSUFFICIENT",
+          "reviewStatus": null
+        }
+      ],
+      "creditUsed": false,
+      "grantedAtCall": null,
+      "policyVersion": 1
+    },
+    "plan": null,
+    "priorPlan": {
+      "planId": "synthetic-prior",
+      "status": "active",
+      "marker": "release-preservation-fixture"
+    },
+    "rate": {
+      "activePlanId": "synthetic-prior",
+      "activeGenerationId": null
+    }
+  },
+  {
+    "index": 8,
+    "generationId": "b77ec563-b632-44a3-8c19-62406b908d05",
+    "job": {
+      "status": "failed",
+      "calls": 5,
+      "reservedUsd": 0.0359,
+      "history": [
+        {
+          "callNumber": 1,
+          "attempt": 1,
+          "role": "creator",
+          "code": "AI_MACRO_VALIDATION_FAILED",
+          "reviewStatus": null
+        },
+        {
+          "callNumber": 2,
+          "attempt": 2,
+          "role": "creator",
+          "code": null,
+          "reviewStatus": null
+        },
+        {
+          "callNumber": 3,
+          "attempt": 2,
+          "role": "reviewer",
+          "code": "AI_REVIEW_REJECTED",
+          "reviewStatus": "rejected"
+        },
+        {
+          "callNumber": 4,
+          "attempt": 3,
+          "role": "creator",
+          "code": null,
+          "reviewStatus": null
+        },
+        {
+          "callNumber": 5,
+          "attempt": 3,
+          "role": "reviewer",
+          "code": "AI_REVIEW_REJECTED",
+          "reviewStatus": "rejected"
+        }
+      ],
+      "creditUsed": true,
+      "grantedAtCall": 4,
+      "policyVersion": 1
+    },
+    "plan": null,
+    "priorPlan": {
+      "planId": "synthetic-prior",
+      "status": "active",
+      "marker": "release-preservation-fixture"
+    },
+    "rate": {
+      "activePlanId": "synthetic-prior",
+      "activeGenerationId": null
+    }
+  },
+  {
+    "index": 9,
+    "generationId": "952f087e-acf6-4d72-91dd-299986dd4578",
+    "job": {
+      "status": "failed",
+      "calls": 3,
+      "reservedUsd": 0.0216,
+      "history": [
+        {
+          "callNumber": 1,
+          "attempt": 1,
+          "role": "creator",
+          "code": "AI_EVIDENCE_INSUFFICIENT",
+          "reviewStatus": null
+        },
+        {
+          "callNumber": 2,
+          "attempt": 2,
+          "role": "creator",
+          "code": "AI_EVIDENCE_INSUFFICIENT",
+          "reviewStatus": null
+        },
+        {
+          "callNumber": 3,
+          "attempt": 3,
+          "role": "creator",
+          "code": "AI_EVIDENCE_INSUFFICIENT",
+          "reviewStatus": null
+        }
+      ],
+      "creditUsed": false,
+      "grantedAtCall": null,
+      "policyVersion": 1
+    },
+    "plan": null,
+    "priorPlan": {
+      "planId": "synthetic-prior",
+      "status": "active",
+      "marker": "release-preservation-fixture"
+    },
+    "rate": {
+      "activePlanId": "synthetic-prior",
+      "activeGenerationId": null
+    }
+  }
+]

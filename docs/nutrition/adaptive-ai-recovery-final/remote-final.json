@@ -1,0 +1,914 @@
+[
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/confirmCommercialGate",
+    "serviceConfig": {
+      "revision": "confirmcommercialgate-00004-van",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/confirmcommercialgate"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-08-21T20:36:07.005313964Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/onNutritionGenerationCompleted",
+    "serviceConfig": {
+      "revision": "onnutritiongenerationcompleted-00003-fey",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/onnutritiongenerationcompleted"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-10-17T04:07:28.164146131Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/restoreNutritionPlan",
+    "serviceConfig": {
+      "revision": "restorenutritionplan-00001-lip",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/restorenutritionplan"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-10-09T03:23:09.938623127Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/adminScheduleCampaign",
+    "serviceConfig": {
+      "revision": "adminschedulecampaign-00001-jer",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/adminschedulecampaign"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-10-07T20:33:18.262871816Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/installActiveWorkoutProgram",
+    "serviceConfig": {
+      "revision": "installactiveworkoutprogram-00004-qin",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/installactiveworkoutprogram"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-10-20T19:42:54.233721918Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/retryNutritionGenerationJobs",
+    "serviceConfig": {
+      "revision": "retrynutritiongenerationjobs-00025-juq",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/retrynutritiongenerationjobs"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-10-21T23:45:25.700912428Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/adminGetCoupon",
+    "serviceConfig": {
+      "revision": "admingetcoupon-00004-fid",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/admingetcoupon"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-28T16:33:48.468230933Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs20"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/backendHealth",
+    "serviceConfig": {
+      "revision": "backendhealth-00001-yat",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/backendhealth"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-08-11T23:14:31.893461947Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/requestNutritionMealAlternative",
+    "serviceConfig": {
+      "revision": "requestnutritionmealalternative-00025-yep",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/requestnutritionmealalternative"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-10-21T23:45:29.199431252Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/searchExternalFoodFatSecret",
+    "serviceConfig": {
+      "revision": "searchexternalfoodfatsecret-00001-cob",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/searchexternalfoodfatsecret"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-10-10T19:32:40.635595088Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/onNutritionGenerationJobCreated",
+    "serviceConfig": {
+      "revision": "onnutritiongenerationjobcreated-00029-saw",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/onnutritiongenerationjobcreated"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-10-21T23:45:27.925116959Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/adminTestCampaign",
+    "serviceConfig": {
+      "revision": "admintestcampaign-00001-moh",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/admintestcampaign"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-10-07T20:33:18.132321429Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/adminSaveCampaign",
+    "serviceConfig": {
+      "revision": "adminsavecampaign-00001-buz",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/adminsavecampaign"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-10-07T20:33:17.831283201Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/adminEstimateCampaign",
+    "serviceConfig": {
+      "revision": "adminestimatecampaign-00001-cux",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/adminestimatecampaign"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-10-07T20:33:19.903661080Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/cleanupPendingAccountDeletions",
+    "serviceConfig": {
+      "revision": "cleanuppendingaccountdeletions-00013-loz",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/cleanuppendingaccountdeletions"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-10-19T01:51:19.370285135Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/adminListCampaigns",
+    "serviceConfig": {
+      "revision": "adminlistcampaigns-00001-tuc",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/adminlistcampaigns"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-10-07T20:33:17.761586190Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/adminReplyAndCloseSupportCase",
+    "serviceConfig": {
+      "revision": "adminreplyandclosesupportcase-00003-gev",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/adminreplyandclosesupportcase"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-18T12:15:35.296854053Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/evaluateDailyWorkoutNotifications",
+    "serviceConfig": {
+      "revision": "evaluatedailyworkoutnotifications-00009-now",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/evaluatedailyworkoutnotifications"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-10-06T20:56:55.807313119Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/onSupportAdminMessageCreated",
+    "serviceConfig": {
+      "revision": "onsupportadminmessagecreated-00002-pup",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/onsupportadminmessagecreated"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-28T14:52:43.732565585Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/revenueCatWebhook",
+    "serviceConfig": {
+      "revision": "revenuecatwebhook-00026-fim",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/revenuecatwebhook"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-28T16:36:43.054453999Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/reconcileNotificationReceipts",
+    "serviceConfig": {
+      "revision": "reconcilenotificationreceipts-00001-xom",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/reconcilenotificationreceipts"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-08T17:50:08.142285550Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/releasePushDevice",
+    "serviceConfig": {
+      "revision": "releasepushdevice-00001-gab",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/releasepushdevice"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-08T17:50:08.010560430Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/adminStartSupportChat",
+    "serviceConfig": {
+      "revision": "adminstartsupportchat-00001-ras",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/adminstartsupportchat"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-17T22:32:17.528252786Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/dispatchTestNotification",
+    "serviceConfig": {
+      "revision": "dispatchtestnotification-00007-ruq",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/dispatchtestnotification"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-10-17T04:07:26.400402583Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/adminGrantFreeAccess",
+    "serviceConfig": {
+      "revision": "admingrantfreeaccess-00002-paj",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/admingrantfreeaccess"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-16T17:00:45.054487937Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/finalizeWorkoutSession",
+    "serviceConfig": {
+      "revision": "finalizeworkoutsession-00016-kab",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/finalizeworkoutsession"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-10-20T19:42:52.198882008Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/adminListSupportAgents",
+    "serviceConfig": {
+      "revision": "adminlistsupportagents-00001-qin",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/adminlistsupportagents"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-28T17:40:20.806577621Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/adminCloseSupportChat",
+    "serviceConfig": {
+      "revision": "adminclosesupportchat-00001-kec",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/adminclosesupportchat"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-17T22:32:17.591713018Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/adminGetUser",
+    "serviceConfig": {
+      "revision": "admingetuser-00005-dum",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/admingetuser"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-28T16:29:22.634403077Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/monitorNutritionAiOperations",
+    "serviceConfig": {
+      "revision": "monitornutritionaioperations-00004-qok",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/monitornutritionaioperations"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-10-21T15:17:36.238293988Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/adminGetSupportAttachmentAccess",
+    "serviceConfig": {
+      "revision": "admingetsupportattachmentaccess-00001-bav",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/admingetsupportattachmentaccess"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-17T22:32:17.225618114Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/recordWorkoutLifecycleTelemetry",
+    "serviceConfig": {
+      "revision": "recordworkoutlifecycletelemetry-00003-tiq",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/recordworkoutlifecycletelemetry"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-06T16:53:17.366947809Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/validatePromoCode",
+    "serviceConfig": {
+      "revision": "validatepromocode-00010-tew",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/validatepromocode"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-15T20:17:59.149967029Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/adminListPromoCodes",
+    "serviceConfig": {
+      "revision": "adminlistpromocodes-00002-jik",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/adminlistpromocodes"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-15T03:50:40.857819484Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/markSupportMessageRead",
+    "serviceConfig": {
+      "revision": "marksupportmessageread-00001-vop",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/marksupportmessageread"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-17T22:32:17.426319807Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/adminSendSupportChatMessage",
+    "serviceConfig": {
+      "revision": "adminsendsupportchatmessage-00003-yec",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/adminsendsupportchatmessage"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-18T12:15:38.797950948Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/adminListUsers",
+    "serviceConfig": {
+      "revision": "adminlistusers-00003-vig",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/adminlistusers"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-28T16:26:54.340409590Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/adminCampaignAction",
+    "serviceConfig": {
+      "revision": "admincampaignaction-00001-mah",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/admincampaignaction"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-10-07T20:33:18.216853376Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/adminGetCampaign",
+    "serviceConfig": {
+      "revision": "admingetcampaign-00001-xev",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/admingetcampaign"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-10-07T20:33:22.234697487Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/mutateNutritionDiaryV1",
+    "serviceConfig": {
+      "revision": "mutatenutritiondiaryv1-00003-pab",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/mutatenutritiondiaryv1"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-10-19T13:05:56.530287050Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/sendSupportChatMessage",
+    "serviceConfig": {
+      "revision": "sendsupportchatmessage-00003-piy",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/sendsupportchatmessage"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-18T12:15:35.224709689Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/adminGetCampaignRun",
+    "serviceConfig": {
+      "revision": "admingetcampaignrun-00001-ziy",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/admingetcampaignrun"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-10-07T20:33:19.659956395Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/requestAccountDeletion",
+    "serviceConfig": {
+      "revision": "requestaccountdeletion-00003-lij",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/requestaccountdeletion"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-08-21T17:38:44.331745023Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/syncPushDevice",
+    "serviceConfig": {
+      "revision": "syncpushdevice-00001-huq",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/syncpushdevice"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-08T17:50:07.156333903Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/externalWorkoutAction",
+    "serviceConfig": {
+      "revision": "externalworkoutaction-00001-xex",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/externalworkoutaction"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-10-03T15:38:53.892689842Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/authorizeWorkoutLifecycleMutation",
+    "serviceConfig": {
+      "revision": "authorizeworkoutlifecyclemutation-00020-mem",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/authorizeworkoutlifecyclemutation"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-10-20T19:42:46.620336926Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/retryNotificationDispatches",
+    "serviceConfig": {
+      "revision": "retrynotificationdispatches-00011-caj",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/retrynotificationdispatches"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-10-17T04:07:27.996199362Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/getSupportAttachmentAccess",
+    "serviceConfig": {
+      "revision": "getsupportattachmentaccess-00001-ret",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/getsupportattachmentaccess"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-17T22:32:18.283486330Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/adminReleaseSupportCase",
+    "serviceConfig": {
+      "revision": "adminreleasesupportcase-00001-seb",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/adminreleasesupportcase"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-28T17:35:33.945633208Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/recordCampaignOpen",
+    "serviceConfig": {
+      "revision": "recordcampaignopen-00001-won",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/recordcampaignopen"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-10-07T20:33:19.098045159Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/createVault",
+    "serviceConfig": {
+      "revision": "createvault-00003-deq",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/createvault"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-08-21T20:36:06.818372500Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/processNotificationCampaigns",
+    "serviceConfig": {
+      "revision": "processnotificationcampaigns-00001-xec",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/processnotificationcampaigns"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-10-07T20:33:18.245429950Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/adminDuplicateCampaign",
+    "serviceConfig": {
+      "revision": "adminduplicatecampaign-00001-mel",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/adminduplicatecampaign"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-10-07T20:33:22.113073523Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/prepareSupportAttachmentUpload",
+    "serviceConfig": {
+      "revision": "preparesupportattachmentupload-00001-tim",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/preparesupportattachmentupload"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-17T22:32:13.885288473Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/logCatalogMeal",
+    "serviceConfig": {
+      "revision": "logcatalogmeal-00001-rek",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/logcatalogmeal"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-10-21T15:17:29.834942510Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/adminPrepareSupportAttachmentUpload",
+    "serviceConfig": {
+      "revision": "adminpreparesupportattachmentupload-00001-kur",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/adminpreparesupportattachmentupload"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-18T00:27:27.237095074Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/onUserProvisioned",
+    "serviceConfig": {
+      "revision": "onuserprovisioned-00001-lay",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/onuserprovisioned"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-28T16:22:09.630268199Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/adminUpdatePromoCode",
+    "serviceConfig": {
+      "revision": "adminupdatepromocode-00004-joz",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/adminupdatepromocode"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-15T03:50:42.653556936Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/requestNutritionPlanGeneration",
+    "serviceConfig": {
+      "revision": "requestnutritionplangeneration-00011-zij",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/requestnutritionplangeneration"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-10-21T23:45:17.046552828Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/adminRevokeFreeAccess",
+    "serviceConfig": {
+      "revision": "adminrevokefreeaccess-00002-lak",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/adminrevokefreeaccess"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-16T17:01:06.467280974Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/onAccountDeletionRequested",
+    "serviceConfig": {
+      "revision": "onaccountdeletionrequested-00013-tec",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/onaccountdeletionrequested"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-10-19T01:51:19.832883314Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/createSupportCase",
+    "serviceConfig": {
+      "revision": "createsupportcase-00001-rig",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/createsupportcase"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-17T22:32:17.527459519Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/authorizePromoPurchase",
+    "serviceConfig": {
+      "revision": "authorizepromopurchase-00003-gip",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/authorizepromopurchase"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-08-21T20:36:07.181991994Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/adminSetAccountClass",
+    "serviceConfig": {
+      "revision": "adminsetaccountclass-00001-yiv",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/adminsetaccountclass"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-28T16:24:22.298365217Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/adminListCoupons",
+    "serviceConfig": {
+      "revision": "adminlistcoupons-00004-kev",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/adminlistcoupons"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-28T16:31:32.051863649Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/recoverVaultKey",
+    "serviceConfig": {
+      "revision": "recovervaultkey-00003-waj",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/recovervaultkey"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-08-21T20:36:06.943898251Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/applyExerciseSubstitution",
+    "serviceConfig": {
+      "revision": "applyexercisesubstitution-00005-rub",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/applyexercisesubstitution"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-10-20T19:42:52.694466139Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/initializeWorkoutProgramV127",
+    "serviceConfig": {
+      "revision": "initializeworkoutprogramv127-00008-bef",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/initializeworkoutprogramv127"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-10-20T19:42:53.625792863Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/adminSetPromoCodeActive",
+    "serviceConfig": {
+      "revision": "adminsetpromocodeactive-00002-tic",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/adminsetpromocodeactive"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-15T03:50:40.943704855Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/adminClaimSupportCase",
+    "serviceConfig": {
+      "revision": "adminclaimsupportcase-00001-fiq",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/adminclaimsupportcase"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-28T17:32:37.011235325Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/adminTransferSupportCase",
+    "serviceConfig": {
+      "revision": "admintransfersupportcase-00001-hiw",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/admintransfersupportcase"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-28T17:37:28.972826453Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/issueWorkoutActionCapability",
+    "serviceConfig": {
+      "revision": "issueworkoutactioncapability-00001-bom",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/issueworkoutactioncapability"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-10-03T15:38:54.907113820Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/completeWorkoutCardio",
+    "serviceConfig": {
+      "revision": "completeworkoutcardio-00001-sin",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/completeworkoutcardio"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-11T14:13:02.507192267Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/onTrustedWorkoutLifecycleEventCreated",
+    "serviceConfig": {
+      "revision": "ontrustedworkoutlifecycleeventcreated-00004-jah",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/ontrustedworkoutlifecycleeventcreated"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-08T17:53:35.853864403Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/adminCreatePromoCode",
+    "serviceConfig": {
+      "revision": "admincreatepromocode-00002-hiw",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/admincreatepromocode"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-15T03:50:42.791607519Z"
+  },
+  {
+    "buildConfig": {
+      "runtime": "nodejs22"
+    },
+    "name": "projects/ajfit-2f321/locations/us-central1/functions/cleanupSupportV2",
+    "serviceConfig": {
+      "revision": "cleanupsupportv2-00002-pin",
+      "service": "projects/ajfit-2f321/locations/us-central1/services/cleanupsupportv2"
+    },
+    "state": "ACTIVE",
+    "updateTime": "2026-09-28T14:46:35.072809822Z"
+  }
+]

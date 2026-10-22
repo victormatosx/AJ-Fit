@@ -1,0 +1,11 @@
+{
+  "allNineJobsTerminal": true,
+  "thirtyRealHttpResponsesAccounted": true,
+  "operationNumbersAndReservedCostsMatch": true,
+  "allProductionSourceHashesUnchanged": true,
+  "allRemoteRevisionsUnchanged": true,
+  "activeTestProcesses": [],
+  "totalReservedUpperUsd": 1.24315,
+  "remainingMinimumUsd": 0.75685,
+  "noDeploy": true
+}
