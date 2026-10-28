@@ -59,10 +59,17 @@ export const AJ_CYCLE_PAUSED_DELAY_MS = 1400;
 export const AJ_TYPING_MS_PER_CHAR = {
   /** Question titles, and the reaction lines that follow a key answer. */
   question: 18,
-  reaction: 18,
+  reaction: 10,
+  /** Explanations between questionnaire steps. */
+  explanation: 14,
   /** The oversized first line of an interstitial. */
   headline: 24,
-  plan: 22,
+  /**
+   * Plan narration, tuned for a dynamic hands-off pace (a user who taps
+   * through the lines isn't bound by this at all — see `AjSpeechText`'s
+   * tap-to-reveal / tap-to-advance behaviour).
+   */
+  plan: 16,
   auth: 21,
   paywall: 21,
 } as const;
@@ -73,8 +80,21 @@ export const AJ_TYPING_QUESTION_DELAY_MS = 420;
 /** Pause between one line finishing and the next starting, for chained speech. */
 export const AJ_TYPING_CHAIN_GAP_MS = 600;
 
-/** Plan narration pauses a beat longer than Auth/Paywall between its five lines. */
-export const AJ_TYPING_PLAN_CHAIN_GAP_MS = 650;
+/**
+ * Pause between one Plan narration line and the next starting to type,
+ * for the normal hands-off chain. Shorter than it used to be (was 650) so a
+ * user who isn't tapping through still sees the whole sequence settle
+ * before the CTA appears without it reading as sluggish.
+ */
+export const AJ_TYPING_PLAN_CHAIN_GAP_MS = 420;
+
+/**
+ * A tap that advances a Plan line manually (see `AJ_PLAN` below) skips this
+ * gap entirely — the next line starts typing with no pause at all, which is
+ * what "advance immediately" means for a user who is actively driving the
+ * pace rather than reading at the narration's own rhythm.
+ */
+export const AJ_TYPING_PLAN_MANUAL_ADVANCE_GAP_MS = 0;
 
 /**
  * Mounting a question step. `travelTo` fires immediately because the stage
@@ -176,14 +196,20 @@ export const AJ_GATE = {
 export const AJ_PLAN = {
   travelAtMs: 120,
   sheetRiseAtMs: 400,
-  hopAtMs: 1000,
-  firstLineAtMs: 1000,
-  /** Gap after a line finishes before the nod/glance that precedes the next. */
-  lineSettleMs: 500,
+  hopAtMs: 800,
   /** Gap from that nod to the next line starting. */
   nextLineAtMs: 900,
-  /** The narration switches to the Diet tab as its fourth line begins. */
-  dietLineIndex: 3,
+  /**
+   * How long the Workout-context line (the one that narrates the now-open
+   * card — "Organizei sua rotina para X vezes por semana") stays up before
+   * the narration hands off to Diet, once that line has finished typing.
+   * This is the one deliberately longer beat in the sequence: a moment to
+   * actually look at the card again after hearing it described, not silent
+   * dead air (the card itself has already been fully visible, with no
+   * narration over it, since before this line even started — see
+   * `revealWorkoutBodyIfReady` in `PlanReadyScreen`).
+   */
+  workoutContextSettleMs: 1400,
   tabCrossFadeMs: 350,
   tabCrossFadeTranslateX: 14,
   /** CTA tap: AJ bounces, leaves, and only then is `onContinue` called. */

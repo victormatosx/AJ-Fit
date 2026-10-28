@@ -90,7 +90,7 @@ describe('Diet panel content', () => {
 
   it('only shows calories and macros when the engine actually produced them', () => {
     expect(code).toContain('{diet.targets ? (');
-    expect(code).toContain('diet.targets ? [{ value: t(\'plan:dietPanel.kcalPerDay\'');
+    expect(code).toContain('{diet.targets.kcal}');
     expect(code).toContain('trailing: mealKcal ? t(\'plan:dietPanel.mealKcal\'');
   });
 });

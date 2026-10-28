@@ -8,8 +8,9 @@ import React, {
   useState,
 } from 'react';
 import { View, useWindowDimensions } from 'react-native';
+import Animated, { useAnimatedRef } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AjBotStage } from '../aj/AjBotStage';
+import { AjBotStage, type AjStageOrbit } from '../aj/AjBotStage';
 import type { AjBotMood } from '../aj/AjBot';
 import {
   AJ_BOT_HOP,
@@ -54,7 +55,8 @@ export interface AjFunnelDirector {
   /** Screen box the pose helpers in `ajFunnelChoreography` need. */
   layout: AjFunnelLayout;
   /** Move AJ. Travel is automatic; passing the current pose costs nothing. */
-  direct: (next: AjStagePose) => void;
+  direct: (next: AjStagePose, options?: { immediate?: boolean }) => void;
+  followOrbit: (orbit: AjStageOrbit | null) => void;
   setMood: (mood: AjBotMood) => void;
   setLook: (look: readonly [number, number]) => void;
   /** Drives the mouth. Callers pair this with their own typed line. */
@@ -77,6 +79,7 @@ const INERT_DIRECTOR: AjFunnelDirector = {
   reduceMotion: true,
   layout: { width: 0, height: 0, safeTop: 0, safeBottom: 0 },
   direct: () => {},
+  followOrbit: () => {},
   setMood: () => {},
   setLook: () => {},
   setTalking: () => {},
@@ -135,6 +138,7 @@ export function AjFunnelStage({ children }: { children: React.ReactNode }) {
   const reduceMotion = useReducedMotionPreference();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const rootRef = useAnimatedRef<View>();
 
   const layout = useMemo<AjFunnelLayout>(
     () => ({ width, height, safeTop: insets.top, safeBottom: insets.bottom }),
@@ -146,6 +150,15 @@ export function AjFunnelStage({ children }: { children: React.ReactNode }) {
   // jump), and AJ sliding in from nowhere on that mount would announce a
   // transition the user never made.
   const [pose, setPose] = useState<AjStagePose>(() => questionPose(width, insets.top));
+  const [immediate, setImmediate] = useState(false);
+  const [orbit, setOrbit] = useState<AjStageOrbit | null>(null);
+  const followOrbit = useCallback((next: AjStageOrbit | null) => {
+    setOrbit((current) => {
+      if (!current || !next) return next;
+      return current.anchor === next.anchor && current.progress === next.progress
+        && current.size === next.size && current.onArrived === next.onArrived ? current : next;
+    });
+  }, []);
   const [mood, setMoodState] = useState<AjBotMood>('idle');
   const [look, setLookState] = useState<readonly [number, number]>(AJ_BOT_LOOK_NEUTRAL);
   const [talking, setTalkingState] = useState(false);
@@ -153,7 +166,9 @@ export function AjFunnelStage({ children }: { children: React.ReactNode }) {
   const [phase, setPhase] = useState<'idle' | 'hop' | 'nod'>('idle');
   const phaseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const direct = useCallback((next: AjStagePose) => {
+  const direct = useCallback((next: AjStagePose, options?: { immediate?: boolean }) => {
+    setOrbit(null);
+    setImmediate(Boolean(options?.immediate));
     // Pose identity, not object identity: steps rebuild their pose on every
     // render, and handing `AjBotStage` a new-but-equal object would restart
     // the travel animation each time.
@@ -199,27 +214,34 @@ export function AjFunnelStage({ children }: { children: React.ReactNode }) {
   );
 
   const director = useMemo<AjFunnelDirector>(
-    () => ({ reduceMotion, layout, direct, setMood, setLook, setTalking, play, setVisible }),
-    [reduceMotion, layout, direct, setMood, setLook, setTalking, play, setVisible],
+    () => ({ reduceMotion, layout, direct, followOrbit, setMood, setLook, setTalking, play, setVisible }),
+    [reduceMotion, layout, direct, followOrbit, setMood, setLook, setTalking, play, setVisible],
   );
 
   return (
     <AjFunnelStageContext.Provider value={director}>
-      <View style={{ flex: 1 }}>
+      <Animated.View ref={rootRef} collapsable={false} style={{ flex: 1 }}>
         {children}
-        {visible ? (
-          <View pointerEvents="none" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}>
-            <AjBotStage
-              pose={pose}
-              mood={mood}
-              phase={phase}
-              look={look}
-              talking={talking}
-              reduceMotion={reduceMotion}
-            />
-          </View>
-        ) : null}
-      </View>
+        {/* Always mounted, even while `visible` is false — see `AjBotStage`'s
+            `visible` prop. Unmounting here (as this used to do) meant every
+            hidden-to-shown step (e.g. the presentation's "Montar meu plano"
+            into `name`) remounted the stage fresh and snapped straight to
+            position instead of fading/travelling in. */}
+        <View pointerEvents="none" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}>
+          <AjBotStage
+            pose={pose}
+            mood={mood}
+            phase={phase}
+            look={look}
+            talking={talking}
+            reduceMotion={reduceMotion}
+            visible={visible}
+            travel={immediate ? 'instant' : 'default'}
+            orbit={orbit}
+            coordinateRef={rootRef}
+          />
+        </View>
+      </Animated.View>
     </AjFunnelStageContext.Provider>
   );
 }

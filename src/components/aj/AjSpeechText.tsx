@@ -1,6 +1,11 @@
-import { memo, useCallback, useEffect, useRef } from 'react';
+import { forwardRef, memo, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
 import { Text, type StyleProp, type TextStyle } from 'react-native';
 import { useAjTypedText, type AjSpeechRole } from './useAjTypedText';
+
+/** Imperative handle a caller can use to force this line's full text into view. */
+export type AjSpeechTextHandle = {
+  skip: () => void;
+};
 
 /**
  * One line AJ speaks, typed out character by character.
@@ -21,20 +26,7 @@ import { useAjTypedText, type AjSpeechRole } from './useAjTypedText';
  * accessible label from the first frame, so a screen reader announces a
  * sentence rather than a stuttering prefix.
  */
-export const AjSpeechText = memo(function AjSpeechText({
-  text,
-  msPerChar,
-  role = 'context',
-  enabled = true,
-  startDelayMs = 0,
-  reduceMotion = false,
-  style,
-  /** Called when the first character appears — callers drive the mouth with it. */
-  onStart,
-  onDone,
-  /** `alert` for validation copy that must interrupt a screen reader. */
-  accessibilityRole,
-}: {
+export const AjSpeechText = memo(forwardRef<AjSpeechTextHandle, {
   text: string;
   msPerChar?: number;
   role?: AjSpeechRole;
@@ -42,10 +34,33 @@ export const AjSpeechText = memo(function AjSpeechText({
   startDelayMs?: number;
   reduceMotion?: boolean;
   style?: StyleProp<TextStyle>;
+  emphasis?: { text: string | string[]; color: string };
   onStart?: () => void;
   onDone?: () => void;
   accessibilityRole?: 'alert' | 'text';
-}) {
+  /**
+   * False when a caller wraps this line in its own accessible control (the
+   * Plan screen's tap-to-advance region) and would otherwise end up with two
+   * overlapping accessible nodes announcing the same text. Every other
+   * caller leaves this at its default.
+   */
+  accessible?: boolean;
+}>(function AjSpeechText({
+  text,
+  msPerChar,
+  role = 'context',
+  enabled = true,
+  startDelayMs = 0,
+  reduceMotion = false,
+  style,
+  emphasis,
+  /** Called when the first character appears — callers drive the mouth with it. */
+  onStart,
+  onDone,
+  /** `alert` for validation copy that must interrupt a screen reader. */
+  accessibilityRole,
+  accessible = true,
+}, ref) {
   // Kept in refs so a caller passing inline arrows never restarts the line,
   // which would retype it from scratch on every render.
   const onStartRef = useRef(onStart);
@@ -54,7 +69,7 @@ export const AjSpeechText = memo(function AjSpeechText({
   onDoneRef.current = onDone;
 
   const handleDone = useCallback(() => onDoneRef.current?.(), []);
-  const { revealed } = useAjTypedText({
+  const { revealed, skip } = useAjTypedText({
     text,
     role,
     enabled,
@@ -63,6 +78,8 @@ export const AjSpeechText = memo(function AjSpeechText({
     msPerChar,
     onDone: handleDone,
   });
+
+  useImperativeHandle(ref, () => ({ skip }), [skip]);
 
   useEffect(() => {
     if (!enabled) return () => undefined;
@@ -74,15 +91,34 @@ export const AjSpeechText = memo(function AjSpeechText({
     return () => clearTimeout(timer);
   }, [text, enabled, startDelayMs, reduceMotion]);
 
+  const renderRange = (start: number, end: number) => {
+    if (!emphasis) return text.slice(start, end);
+    const words = Array.isArray(emphasis.text) ? emphasis.text : [emphasis.text];
+    const ranges = words.map((word) => ({ start: text.indexOf(word), length: word.length }))
+      .filter((range) => range.start >= 0).sort((a, b) => a.start - b.start);
+    const parts = [];
+    let cursor = start;
+    for (const range of ranges) {
+      const from = Math.max(cursor, range.start);
+      const to = Math.min(end, range.start + range.length);
+      if (to <= from) continue;
+      parts.push(text.slice(cursor, from));
+      parts.push(<Text key={range.start} style={{ color: emphasis.color }}>{text.slice(from, to)}</Text>);
+      cursor = to;
+    }
+    parts.push(text.slice(cursor, end));
+    return parts;
+  };
+
   return (
     <Text
-      accessible
+      accessible={accessible}
       accessibilityLabel={text}
       accessibilityRole={accessibilityRole}
       style={style}
     >
-      <Text style={style}>{text.slice(0, revealed)}</Text>
-      <Text style={[style, { opacity: 0 }]}>{text.slice(revealed)}</Text>
+      <Text style={style}>{renderRange(0, revealed)}</Text>
+      <Text style={[style, { opacity: 0 }]}>{renderRange(revealed, text.length)}</Text>
     </Text>
   );
-});
+}));
