@@ -1,12 +1,18 @@
-import { useEffect } from 'react';
-import { StyleSheet } from 'react-native';
+import { useCallback, useEffect } from 'react';
+import { Platform, StyleSheet, type View } from 'react-native';
 import Animated, {
   Easing,
   cancelAnimation,
   useAnimatedStyle,
+  useFrameCallback,
+  measure,
   useSharedValue,
   withTiming,
+  type SharedValue,
+  type AnimatedRef,
 } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
+import { interpolateMascotArrival, measuredCircularProgressTip } from '../ui/circularProgressGeometry';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 import { AjBot, type AjBotMood, type AjBotPhase } from './AjBot';
 import {
@@ -15,6 +21,27 @@ import {
   AJ_TRAVEL_FAST,
   type AjStagePose,
 } from './ajBotMotion';
+
+export type AjStageOrbit = {
+  anchor: AnimatedRef<View>;
+  size: number;
+  progress: SharedValue<number>;
+  onArrived: () => void;
+};
+
+const IS_WEB = Platform.OS === 'web';
+
+function measureOrbitAnchor(ref: AnimatedRef<View>) {
+  'worklet';
+  if (!IS_WEB) return measure(ref);
+  // Reanimated's native measure API is unavailable on web. Animated.View's
+  // DOM rectangle includes the same live entrance transform there.
+  const node = ref.current as unknown as {
+    getBoundingClientRect?: () => { left: number; top: number; width: number };
+  } | null;
+  const rect = node?.getBoundingClientRect?.();
+  return rect ? { pageX: rect.left, pageY: rect.top, width: rect.width } : null;
+}
 
 /**
  * A positionable container for the ONE `AjBot` a screen owns.
@@ -66,6 +93,18 @@ export function AjBotStage({
    * previous screen's pose.
    */
   snapOnMount = true,
+  /**
+   * Whether AJ should currently be shown. A prop rather than the caller
+   * conditionally rendering this component, so hiding him never unmounts the
+   * shared position/scale state — see the `fade` + `settled` comment below.
+   * Toggling this crossfades instead of popping, and the FIRST time it turns
+   * true after having been false, he arrives already travelling toward
+   * `pose` (the fade and the travel run together) rather than appearing
+   * already standing there.
+   */
+  visible = true,
+  orbit = null,
+  coordinateRef,
 }: {
   pose: AjStagePose;
   baseSize?: number;
@@ -74,8 +113,11 @@ export function AjBotStage({
   look?: readonly [number, number];
   talking?: boolean;
   reduceMotion?: boolean;
-  travel?: 'default' | 'fast';
+  travel?: 'default' | 'fast' | 'instant';
   snapOnMount?: boolean;
+  visible?: boolean;
+  orbit?: AjStageOrbit | null;
+  coordinateRef?: AnimatedRef<View>;
 }) {
   const spec = travel === 'fast' ? AJ_TRAVEL_FAST : AJ_TRAVEL;
 
@@ -90,13 +132,97 @@ export function AjBotStage({
   // place; this only decides whether the SECOND pose animates.
   const settled = useSharedValue(!snapOnMount);
 
+  // Separate from `fade`: `fade` is Reduce Motion's travel stand-in, this is
+  // the show/hide crossfade. Starts wherever `visible` already says — only a
+  // later CHANGE animates, same "don't animate the first value" rule as
+  // `settled` above, so a screen that mounts already visible doesn't fade in
+  // from nothing.
+  const shown = useSharedValue(visible ? 1 : 0);
+  const shownSettled = useSharedValue(false);
+
+  useEffect(() => {
+    const target = visible ? 1 : 0;
+    // Only the REVEAL animates (and only once AJ has appeared at least once
+    // before). Hiding stays an instant snap — nothing was ever shown fading
+    // out before this change, and animating that too would risk a lingering
+    // flash on steps that hide him immediately after a visible one (e.g.
+    // `presentation` right after app launch).
+    const shouldAnimateIn = target === 1 && shownSettled.value && !reduceMotion && travel !== 'instant';
+    shownSettled.value = true;
+    if (!shouldAnimateIn) {
+      cancelAnimation(shown);
+      shown.value = target;
+      return;
+    }
+    // Same duration/curve as the travel below, so arriving somewhere new
+    // (the common case — a step that shows AJ also gives him a fresh pose)
+    // fades and travels in as one motion instead of two out-of-sync ones.
+    const [c1, c2, c3, c4] = spec.bezier;
+    shown.value = withTiming(target, { duration: spec.durationMs, easing: Easing.bezier(c1, c2, c3, c4) });
+  }, [visible, reduceMotion, shown, shownSettled, spec, travel]);
+
   const targetX = pose.x;
   const targetY = pose.y;
   const targetScale = pose.size / baseSize;
   const targetRotate = pose.rotate ?? 0;
 
+  const orbitStarted = useSharedValue(false);
+  const arrival = useSharedValue(0);
+  const arrivalFrom = useSharedValue({ x: pose.x, y: pose.y, size: pose.size, rotate: pose.rotate ?? 0 });
+  const updateOrbitFrame = useCallback(() => {
+    'worklet';
+    if (!orbit || !coordinateRef) return;
+    const ring = measureOrbitAnchor(orbit.anchor);
+    const stage = measureOrbitAnchor(coordinateRef);
+    // Native views can be missing on the first commit. Retry on the next
+    // frame, without moving AJ or declaring that the arrival has completed.
+    if (!ring || !stage || ring.width <= 0) return;
+    if (!orbitStarted.value) {
+      // A tap on the previous step may still be animating these channels.
+      // Stop that travel before the orbit becomes their sole writer.
+      cancelAnimation(x);
+      cancelAnimation(y);
+      cancelAnimation(scale);
+      cancelAnimation(rotate);
+      arrivalFrom.set({ x: x.value, y: y.value, size: scale.value * baseSize, rotate: rotate.value });
+      orbitStarted.set(true);
+      const onArrived = orbit.onArrived;
+      arrival.set(withTiming(1, {
+        duration: reduceMotion ? 0 : AJ_TRAVEL.durationMs,
+        easing: Easing.bezier(0.22, 1, 0.36, 1),
+      }, (finished) => {
+        if (finished) scheduleOnRN(onArrived);
+      }));
+    }
+    const destination = measuredCircularProgressTip(ring, stage, orbit.progress.value, orbit.size);
+    const next = interpolateMascotArrival(arrivalFrom.value, destination, arrival.value);
+    x.set(next.x);
+    y.set(next.y);
+    scale.set(next.size / baseSize);
+    rotate.set(next.rotate);
+  }, [orbit, coordinateRef, orbitStarted, arrivalFrom, arrival,
+    x, y, scale, rotate, baseSize, reduceMotion]);
+  const frame = useFrameCallback(updateOrbitFrame, false);
+
   useEffect(() => {
-    const animate = !reduceMotion && settled.value;
+    orbitStarted.set(false);
+    arrival.set(0);
+    frame.setActive(Boolean(orbit));
+    return () => {
+      frame.setActive(false);
+      cancelAnimation(arrival);
+    };
+  }, [orbit, frame, orbitStarted, arrival]);
+
+  useEffect(() => {
+    if (orbit) {
+      // Reduce Motion can leave its entrance fade in flight when ownership
+      // changes. The orbit handles arrival and must remain fully visible.
+      cancelAnimation(fade);
+      fade.value = 1;
+      return;
+    }
+    const animate = !reduceMotion && settled.value && travel !== 'instant';
     settled.value = true;
 
     if (!animate) {
@@ -104,10 +230,10 @@ export function AjBotStage({
       cancelAnimation(y);
       cancelAnimation(scale);
       cancelAnimation(rotate);
-      x.value = targetX;
-      y.value = targetY;
-      scale.value = targetScale;
-      rotate.value = targetRotate;
+      x.set(targetX);
+      y.set(targetY);
+      scale.set(targetScale);
+      rotate.set(targetRotate);
       if (fade.value !== 1) {
         fade.value = withTiming(1, { duration: AJ_STAGE_REDUCED_FADE_MS });
       }
@@ -122,16 +248,18 @@ export function AjBotStage({
       easing: Easing.bezier(c1, c2, c3, c4),
     };
     fade.value = 1;
-    x.value = withTiming(targetX, config);
-    y.value = withTiming(targetY, config);
-    scale.value = withTiming(targetScale, config);
-    rotate.value = withTiming(targetRotate, config);
+    x.set(withTiming(targetX, config));
+    y.set(withTiming(targetY, config));
+    scale.set(withTiming(targetScale, config));
+    rotate.set(withTiming(targetRotate, config));
   }, [
     targetX,
     targetY,
     targetScale,
     targetRotate,
     reduceMotion,
+    travel,
+    orbit,
     spec,
     x,
     y,
@@ -148,12 +276,13 @@ export function AjBotStage({
       cancelAnimation(scale);
       cancelAnimation(rotate);
       cancelAnimation(fade);
+      cancelAnimation(shown);
     },
-    [x, y, scale, rotate, fade],
+    [x, y, scale, rotate, fade, shown],
   );
 
   const stageStyle = useAnimatedStyle(() => ({
-    opacity: fade.value,
+    opacity: fade.value * shown.value,
     transform: [
       { translateX: x.value },
       { translateY: y.value },
@@ -199,6 +328,7 @@ export function AjBotStage({
         look={look}
         talking={talking}
         reduceMotion={reduceMotion}
+        floatEnabled={!orbit}
       />
     </Animated.View>
   );

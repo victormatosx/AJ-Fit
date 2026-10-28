@@ -1,5 +1,8 @@
 {
   "kicker": "TU PLAN",
+  "banner": {
+    "frequency": "{{count}}X POR SEMANA"
+  },
   "tabs": {
     "workout": "Entrenamiento",
     "diet": "Dieta",
@@ -13,14 +16,16 @@
     "statsDuration": "{{minutes}} min por sesión",
     "flexibleSlot": "{{index}}º",
     "lockedRow": "Sesión {{index}}",
-    "lockedFooter": "Ejercicios, series y cargas se liberan con la suscripción"
+    "exerciseRow": "Ejercicio {{index}}",
+    "lockedFooter": "Ejercicios, series y cargas se liberan con la suscripción",
+    "sessionCard": "Entreno {{letter}} · {{day}}",
+    "sessionCardFlexible": "Entreno {{letter}} · {{slot}}",
+    "durationUnit": "min"
   },
   "dietPanel": {
-    "title": "Dieta AJ",
-    "subtitle": "{{category}}",
-    "subtitleWithPace": "{{category}} · ritmo {{pace}}",
-    "meals_one": "{{count}} comida al día",
-    "meals_other": "{{count}} comidas al día",
+    "title": "Tu dieta fue armada.",
+    "frequencyBadge": "{{count}}x/DÍA",
+    "kcalLabel": "kcal al día",
     "withoutAllergens": "Sin {{allergens}}",
     "allergenCount_one": "{{count}} alérgeno",
     "allergenCount_other": "{{count}} alérgenos",
@@ -28,7 +33,6 @@
     "carbs": "Carbohidratos",
     "fat": "Grasas",
     "gramsSuffix": "g",
-    "kcalPerDay": "{{kcal}} kcal al día",
     "mealKcal": "{{kcal}} kcal",
     "lockedFooter": "Menú, cantidades y sustituciones se liberan con la suscripción"
   },
@@ -38,18 +42,25 @@
     "strategy": "Tu plan se enfoca en {{goal}}, en nivel {{level}}.",
     "volume_one": "{{count}} sesión por semana, {{minutes}} minutos.",
     "volume_other": "{{count}} sesiones por semana, {{minutes}} minutos cada una.",
+    "workoutContext_one": "Organicé tu rutina para {{count}} sesión por semana — échale un vistazo.",
+    "workoutContext_other": "Organicé tu rutina para {{count}} sesiones por semana — échale un vistazo.",
     "volumeFlexible_one": "Entrenamiento libre: {{count}} sesión por semana de {{minutes}} minutos.",
     "volumeFlexible_other": "Entrenamiento libre: {{count}} sesiones por semana de {{minutes}} minutos.",
     "diet_one": "En la dieta: {{category}}, en {{count}} comida al día.",
     "diet_other": "En la dieta: {{category}}, en {{count}} comidas al día.",
     "dietWithMacros_one": "En la dieta: {{category}}, en {{count}} comida al día, {{kcal}} kcal y {{protein}} g de proteína.",
     "dietWithMacros_other": "En la dieta: {{category}}, en {{count}} comidas al día, {{kcal}} kcal y {{protein}} g de proteína.",
-    "closing": "Entrenamiento y menú ya están listos. Se liberan cuando te suscribas."
+    "closing": "Entrenamiento y menú ya están listos. Se liberan cuando te suscribas.",
+    "tapHint": "Toca para continuar",
+    "tapHintVisible": "Toca para continuar"
   },
   "header": {
     "eyebrow": "Tu primera fase",
     "titleWithName": "{{name}}, tu primera fase está lista.",
     "titleNoName": "Tu primera fase está lista.",
+    "titleLine1WithName": "{{name}}, tu plan",
+    "titleLine1NoName": "Tu plan",
+    "titleLine2": "está listo.",
     "reviewTitle": "Revisemos tu próximo paso."
   },
   "summary": {
@@ -63,18 +74,28 @@
   },
   "schedule": {
     "title": "Semana",
+    "yourWeek": "TU SEMANA",
     "flexibleTitle": "Entrenamiento libre",
     "flexibleBody": "{{count}} entrenamientos por semana. Entrena los días que prefieras siguiendo la secuencia.",
     "trainLabel": "Entreno",
     "restLabel": "Descanso",
-    "dayLabels": { "mon": "L", "tue": "M", "wed": "X", "thu": "J", "fri": "V", "sat": "S", "sun": "D" }
+    "dayLabels": { "mon": "L", "tue": "M", "wed": "X", "thu": "J", "fri": "V", "sat": "S", "sun": "D" },
+    "dayNames": {
+      "mon": "Lunes",
+      "tue": "Martes",
+      "wed": "Miércoles",
+      "thu": "Jueves",
+      "fri": "Viernes",
+      "sat": "Sábado",
+      "sun": "Domingo"
+    }
   },
   "journey": {
     "title": "Esta es tu primera fase.",
     "body": "Tu camino continúa a medida que registras tus entrenos y evolucionas."
   },
   "prescription": {
-    "success": { "title": "Tu base fue seleccionada.", "body": "{{templateId}} · {{split}}. Tus sesiones finales están versionadas y listas." },
+    "success": { "title": "Tu entrenamiento fue armado.", "body": "{{templateId}} · {{split}}. Tus sesiones finales están versionadas y listas." },
     "requiresClearance": { "title": "Necesitamos más información", "body": "Identificamos una condición que requiere más cuidado antes de una personalización segura. Sigue la orientación del profesional responsable y actualiza tus respuestas cuando no existan restricciones que la app no pueda representar." },
     "blocked": { "title": "Entrenamiento pausado por seguridad", "body": "Tus respuestas actuales activan una interrupción de seguridad documentada. AJ Fit no prescribe un entrenamiento en este estado." },
     "needsQuestionnaireUpdate": { "title": "Actualiza tu información", "body": "Faltan respuestas necesarias para una selección segura, o tu cuestionario contiene datos antiguos insuficientes." },
@@ -83,6 +104,6 @@
   },
   "cta": {
     "label": "Quiero empezar",
-    "footer": "Mira las opciones disponibles en el siguiente paso."
+    "adjustAnswers": "Ajustar mis respuestas"
   }
 }

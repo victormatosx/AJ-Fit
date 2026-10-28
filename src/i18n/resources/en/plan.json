@@ -1,5 +1,8 @@
 {
   "kicker": "YOUR PLAN",
+  "banner": {
+    "frequency": "{{count}}X A WEEK"
+  },
   "tabs": {
     "workout": "Training",
     "diet": "Diet",
@@ -13,14 +16,16 @@
     "statsDuration": "{{minutes}} min per session",
     "flexibleSlot": "{{index}}",
     "lockedRow": "Session {{index}}",
-    "lockedFooter": "Exercises, sets and loads unlock with your subscription"
+    "exerciseRow": "Exercise {{index}}",
+    "lockedFooter": "Exercises, sets and loads unlock with your subscription",
+    "sessionCard": "Workout {{letter}} · {{day}}",
+    "sessionCardFlexible": "Workout {{letter}} · {{slot}}",
+    "durationUnit": "min"
   },
   "dietPanel": {
-    "title": "AJ Diet",
-    "subtitle": "{{category}}",
-    "subtitleWithPace": "{{category}} · {{pace}} pace",
-    "meals_one": "{{count}} meal a day",
-    "meals_other": "{{count}} meals a day",
+    "title": "Your diet is built.",
+    "frequencyBadge": "{{count}}x/DAY",
+    "kcalLabel": "kcal a day",
     "withoutAllergens": "No {{allergens}}",
     "allergenCount_one": "{{count}} allergen",
     "allergenCount_other": "{{count}} allergens",
@@ -28,28 +33,16 @@
     "carbs": "Carbs",
     "fat": "Fat",
     "gramsSuffix": "g",
-    "kcalPerDay": "{{kcal}} kcal a day",
     "mealKcal": "{{kcal}} kcal",
     "lockedFooter": "Menu, portions and swaps unlock with your subscription"
-  },
-  "aj": {
-    "intro": "Done, {{name}}. This is the plan I built for you.",
-    "introNoName": "Done. This is the plan I built for you.",
-    "strategy": "Your plan is focused on {{goal}}, at {{level}} level.",
-    "volume_one": "{{count}} session a week, {{minutes}} minutes each.",
-    "volume_other": "{{count}} sessions a week, {{minutes}} minutes each.",
-    "volumeFlexible_one": "Flexible training: {{count}} session a week, {{minutes}} minutes.",
-    "volumeFlexible_other": "Flexible training: {{count}} sessions a week, {{minutes}} minutes each.",
-    "diet_one": "On the diet: {{category}}, across {{count}} meal a day.",
-    "diet_other": "On the diet: {{category}}, across {{count}} meals a day.",
-    "dietWithMacros_one": "On the diet: {{category}}, across {{count}} meal a day, {{kcal}} kcal and {{protein}} g of protein.",
-    "dietWithMacros_other": "On the diet: {{category}}, across {{count}} meals a day, {{kcal}} kcal and {{protein}} g of protein.",
-    "closing": "Training and menu are both ready. They unlock when you subscribe."
   },
   "header": {
     "eyebrow": "Your first phase",
     "titleWithName": "{{name}}, your first phase is ready.",
     "titleNoName": "Your first phase is ready.",
+    "titleLine1WithName": "{{name}}, your plan",
+    "titleLine1NoName": "Your plan",
+    "titleLine2": "is ready.",
     "reviewTitle": "Let's review your next step."
   },
   "summary": {
@@ -63,18 +56,28 @@
   },
   "schedule": {
     "title": "Week",
+    "yourWeek": "YOUR WEEK",
     "flexibleTitle": "Flexible training",
     "flexibleBody": "{{count}} workouts per week. Train on the days you prefer while following the sequence.",
     "trainLabel": "Train",
     "restLabel": "Rest",
-    "dayLabels": { "mon": "M", "tue": "T", "wed": "W", "thu": "T", "fri": "F", "sat": "S", "sun": "S" }
+    "dayLabels": { "mon": "M", "tue": "T", "wed": "W", "thu": "T", "fri": "F", "sat": "S", "sun": "S" },
+    "dayNames": {
+      "mon": "Monday",
+      "tue": "Tuesday",
+      "wed": "Wednesday",
+      "thu": "Thursday",
+      "fri": "Friday",
+      "sat": "Saturday",
+      "sun": "Sunday"
+    }
   },
   "journey": {
     "title": "This is your first phase.",
     "body": "Your journey continues as you log your workouts and progress."
   },
   "prescription": {
-    "success": { "title": "Your base is selected.", "body": "{{templateId}} · {{split}}. Your final sessions are versioned and ready." },
+    "success": { "title": "Your workout is built.", "body": "{{templateId}} · {{split}}. Your final sessions are versioned and ready." },
     "requiresClearance": { "title": "More information is needed", "body": "We identified a condition that needs extra care before safe personalization. Follow your responsible professional's guidance and update your answers when no unrepresented restrictions remain." },
     "blocked": { "title": "Workout paused for safety", "body": "Your current answers activate a documented safety stop. AJ Fit will not prescribe a workout in this state." },
     "needsQuestionnaireUpdate": { "title": "Update your information", "body": "Some answers required for safe selection are missing or come from an older questionnaire." },
@@ -83,6 +86,6 @@
   },
   "cta": {
     "label": "I want to start",
-    "footer": "See the available options in the next step."
+    "adjustAnswers": "Adjust my answers"
   }
 }

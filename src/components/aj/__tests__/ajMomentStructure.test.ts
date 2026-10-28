@@ -141,7 +141,7 @@ describe('AjMoment — presentation only', () => {
     expect(ajMoment).toMatch(/reduceMotion \? 0 : AJ_BACKDROP_FADE_IN_MS/);
     expect(ajMoment).toMatch(/reduceMotion \? 0 : AJ_BACKDROP_FADE_OUT_MS/);
     expect(ajMoment).toContain('reduceMotion={reduceMotion}');
-    expect(ajBot).toContain('const floating = phase === \'idle\' && !reduceMotion;');
+    expect(ajBot).toContain('const floating = phase === \'idle\' && !reduceMotion && floatEnabled;');
     expect(ajBot).toContain('const mouthMoving = talking && !reduceMotion;');
   });
 
@@ -298,7 +298,7 @@ describe('AJ entrance sequence', () => {
     expect(ajMoment).toContain("advanceTo(reduceMotion ? 'speaking' : 'settling'");
     expect(ajMoment).toContain("if (stage === 'settling') {");
     expect(ajMoment).toContain("advanceTo('speaking', AJ_BOT_HOP.durationMs);");
-    expect(ajBot).toContain("const floating = phase === 'idle' && !reduceMotion;");
+    expect(ajBot).toContain("const floating = phase === 'idle' && !reduceMotion && floatEnabled;");
   });
 
   it('holds AJ off screen and silent until the sequence starts', () => {

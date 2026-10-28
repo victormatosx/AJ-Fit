@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 /**
  * Letter-by-letter reveal for one of AJ's spoken lines.
@@ -69,20 +69,33 @@ export function useAjTypedText({
   reduceMotion?: boolean;
   msPerChar?: number;
   onDone?: () => void;
-}): { revealed: number; typing: boolean } {
+}): { revealed: number; typing: boolean; skip: () => void } {
   const [revealed, setRevealed] = useState(0);
   // Kept in a ref so a caller passing an inline arrow never restarts the
   // sequence (which would retype the line from scratch on every render).
   const onDoneRef = useRef(onDone);
   onDoneRef.current = onDone;
+  const textRef = useRef(text);
+  textRef.current = text;
+  // The running timer handles, lifted out of the effect's closure so `skip`
+  // (a tap mid-line) can reach and clear exactly the ones the effect itself
+  // would have cleared on cleanup — never a stale pair from an earlier line.
+  const startTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // True once this line's reveal has concluded (naturally or via `skip`), so
+  // a second tap — or Reduce Motion re-firing the effect — never calls
+  // `onDone` twice for the same line.
+  const concludedRef = useRef(false);
 
   useEffect(() => {
+    concludedRef.current = false;
     if (!enabled) {
       setRevealed(0);
       return () => undefined;
     }
     if (reduceMotion || text.length === 0) {
       setRevealed(text.length);
+      concludedRef.current = true;
       onDoneRef.current?.();
       return () => undefined;
     }
@@ -95,21 +108,46 @@ export function useAjTypedText({
       interval = setInterval(() => {
         count += 1;
         setRevealed(count);
+        intervalRef.current = interval;
         if (count >= text.length) {
           if (interval) clearInterval(interval);
           interval = null;
+          intervalRef.current = null;
+          concludedRef.current = true;
           onDoneRef.current?.();
         }
       }, cadence);
+      intervalRef.current = interval;
     }, startDelayMs);
+    startTimerRef.current = start;
 
     // Backgrounding, rotation, a tab switch or an unmount mid-type all land
     // here: both handles are always cleared, so no timer outlives the line.
     return () => {
       clearTimeout(start);
       if (interval) clearInterval(interval);
+      startTimerRef.current = null;
+      intervalRef.current = null;
     };
   }, [text, role, enabled, startDelayMs, reduceMotion, msPerChar]);
 
-  return { revealed, typing: enabled && revealed < text.length };
+  /**
+   * Forces this line's full text into view right now — a tap while it is
+   * still typing. Idempotent: calling it again once the line has already
+   * concluded (naturally or from an earlier `skip`) does nothing, so a
+   * caller does not need to track typing state itself just to avoid a
+   * duplicate `onDone`.
+   */
+  const skip = useCallback(() => {
+    if (!enabled || concludedRef.current) return;
+    if (startTimerRef.current) clearTimeout(startTimerRef.current);
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    startTimerRef.current = null;
+    intervalRef.current = null;
+    concludedRef.current = true;
+    setRevealed(textRef.current.length);
+    onDoneRef.current?.();
+  }, [enabled]);
+
+  return { revealed, typing: enabled && revealed < text.length, skip };
 }

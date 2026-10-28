@@ -38,6 +38,8 @@ export function AqPrimaryButton({
   supportLabel,
   /** The Plan and Paywall CTAs carry an accent glow; the questionnaire's does not. */
   glow,
+  /** Trailing glyph beside the label — the Plan CTA's arrow. Omit for the plain label-only button. */
+  icon,
   style,
   textStyle,
   accessibilityLabel,
@@ -48,6 +50,7 @@ export function AqPrimaryButton({
   disabled?: boolean;
   supportLabel?: string | null;
   glow?: boolean;
+  icon?: React.ReactNode;
   style?: StyleProp<ViewStyle>;
   textStyle?: StyleProp<TextStyle>;
   accessibilityLabel?: string;
@@ -85,18 +88,21 @@ export function AqPrimaryButton({
         style,
       ]}
     >
-      <Text
-        style={[
-          {
-            fontFamily: theme.fonts.uiSemi,
-            fontSize: 15.5,
-            color: theme.colors.primaryForeground,
-          },
-          textStyle,
-        ]}
-      >
-        {label}
-      </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <Text
+          style={[
+            {
+              fontFamily: theme.fonts.uiSemi,
+              fontSize: 15.5,
+              color: theme.colors.primaryForeground,
+            },
+            textStyle,
+          ]}
+        >
+          {label}
+        </Text>
+        {icon}
+      </View>
       {supportLabel ? (
         <Text
           style={{
@@ -238,6 +244,16 @@ export function AqSegmented({
   trackRadius,
   /** Thumb corner radius — follows the track unless the design insets it (14 → 10). */
   thumbRadius,
+  /** Gap between the track's own edge and the thumb. Default `4` (the Paywall's inset pill); `0` makes the thumb a solid, edge-to-edge fill of its slot. */
+  trackPadding = 4,
+  /** Thumb fill. Defaults to `theme.colors.primary`. */
+  thumbColor,
+  /** Thumb drop-shadow color, paired with `thumbColor`. Defaults to `theme.colors.primaryGlowSoft`; pass `'transparent'` to drop the glow entirely. */
+  thumbGlowColor,
+  /** Track background, behind the thumb. Defaults to `theme.colors.surfaceMuted`. */
+  trackBackgroundColor,
+  /** Selected label color, paired with `thumbColor`. Defaults to `theme.colors.primaryForeground`. */
+  selectedLabelColor,
   style,
 }: {
   options: { id: string; label: string; badge?: string | null }[];
@@ -249,12 +265,17 @@ export function AqSegmented({
   badgeVariant?: 'stacked' | 'chip';
   trackRadius?: number;
   thumbRadius?: number;
+  trackPadding?: number;
+  thumbColor?: string;
+  thumbGlowColor?: string;
+  trackBackgroundColor?: string;
+  selectedLabelColor?: string;
   style?: StyleProp<ViewStyle>;
 }) {
   const { theme } = useTheme();
   const [trackWidth, setTrackWidth] = useState(0);
   const selectedIndex = Math.max(0, options.findIndex((option) => option.id === selectedId));
-  const slot = options.length > 0 ? (trackWidth - 8) / options.length : 0;
+  const slot = options.length > 0 ? (trackWidth - trackPadding * 2) / options.length : 0;
   const thumb = useRef(new Animated.Value(selectedIndex)).current;
 
   useEffect(() => {
@@ -277,9 +298,9 @@ export function AqSegmented({
       style={[
         {
           flexDirection: 'row',
-          padding: 4,
+          padding: trackPadding,
           borderRadius: trackRadius ?? theme.radii.pill,
-          backgroundColor: theme.colors.surfaceMuted,
+          backgroundColor: trackBackgroundColor ?? theme.colors.surfaceMuted,
           borderWidth: 1,
           borderColor: theme.colors.divider,
           overflow: 'hidden',
@@ -292,13 +313,13 @@ export function AqSegmented({
           pointerEvents="none"
           style={{
             position: 'absolute',
-            top: 4,
-            bottom: 4,
-            left: 4,
+            top: trackPadding,
+            bottom: trackPadding,
+            left: trackPadding,
             width: slot,
             borderRadius: thumbRadius ?? trackRadius ?? theme.radii.pill,
-            backgroundColor: theme.colors.primary,
-            shadowColor: theme.colors.primaryGlowSoft,
+            backgroundColor: thumbColor ?? theme.colors.primary,
+            shadowColor: thumbGlowColor ?? theme.colors.primaryGlowSoft,
             shadowOpacity: 1,
             shadowRadius: 16,
             shadowOffset: { width: 0, height: 0 },
@@ -341,7 +362,7 @@ export function AqSegmented({
                 fontFamily: mono ? theme.fonts.mono : theme.fonts.uiSemi,
                 fontSize: mono ? 10.5 : chip ? 14.5 : 14,
                 letterSpacing: mono ? 1 : 0,
-                color: selected ? theme.colors.primaryForeground : theme.colors.textMuted,
+                color: selected ? selectedLabelColor ?? theme.colors.primaryForeground : theme.colors.textMuted,
               }}
             >
               {option.label}

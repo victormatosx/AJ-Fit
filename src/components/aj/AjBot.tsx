@@ -105,6 +105,7 @@ export function AjBot({
   enterStartTranslateY = AJ_BOT_ENTER_START.translateY,
   /** OS "Reduce Motion": the arc becomes a 250ms fade at the resting pose; no hop, no float, no blink. */
   reduceMotion = false,
+  floatEnabled = true,
 }: {
   size?: number;
   mood?: AjBotMood;
@@ -113,6 +114,7 @@ export function AjBot({
   talking?: boolean;
   enterStartTranslateY?: number;
   reduceMotion?: boolean;
+  floatEnabled?: boolean;
 }) {
   // One shared value per concern, all driven natively. `phaseProgress` runs
   // the current keyframed phase 0 -> 1; the loops below are independent so a
@@ -182,11 +184,11 @@ export function AjBot({
 
   // Idle float — only while genuinely idle, so it never fights the
   // entrance/exit arcs or a hop.
-  const floating = phase === 'idle' && !reduceMotion;
+  const floating = phase === 'idle' && !reduceMotion && floatEnabled;
   useEffect(() => {
     if (!floating) {
       cancelAnimation(float);
-      float.value = withTiming(0, { duration: 200 });
+      float.value = floatEnabled ? withTiming(0, { duration: 200 }) : 0;
       return () => cancelAnimation(float);
     }
     float.value = withRepeat(
@@ -197,7 +199,7 @@ export function AjBot({
       -1,
     );
     return () => cancelAnimation(float);
-  }, [floating, float]);
+  }, [floating, float, floatEnabled]);
 
   // No blinking while AJ is still flying in — he is already in motion, and a
   // lid flick mid-arc reads as a glitch.
