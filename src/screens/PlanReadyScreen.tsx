@@ -44,6 +44,13 @@ const DAY_ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
 const MIN_LOCKED_ROW_COUNT = 1;
 const MAX_LOCKED_ROW_COUNT = 7;
 
+// Hysteresis band for Jotinha's header-scroll visibility: hide once the
+// scroll has clearly left the top, but only re-show once it's nearly back
+// there — a single shared threshold would flicker him in and out around
+// that one pixel value on a bouncy scroll.
+const JOTINHA_HIDE_SCROLL_Y = 24;
+const JOTINHA_SHOW_SCROLL_Y = 4;
+
 /**
  * Every value on this screen must trace back to a real answer — see
  * docs/onboarding_funnel_architecture.md §Plan Ready. It still intentionally
@@ -65,9 +72,11 @@ const MAX_LOCKED_ROW_COUNT = 7;
  *
  * Layout: a single vertical scroll, with a Workout/Diet tab switcher
  * (`AqSegmented`) choosing which of the two panels is visible below the
- * ribbon. Jotinha (`JotinhaPlanDropdown`) is a silent, fixed presence
- * top-right for the whole screen — no narration, no bubble — so he never
- * gates the plan or the CTA below it.
+ * ribbon. Jotinha (`JotinhaPlanDropdown`) is a silent presence anchored
+ * top-right in the header — no narration, no bubble — so he never gates the
+ * plan or the CTA below it. He lives in the header, not as a floating
+ * overlay: scrolling away from the top hides him, same as any other header
+ * content, and he reappears once the scroll returns near the top.
  *
  * The Workout tab's previewed day (letter, session name, exercises with
  * their sets/reps) is real: `FinalWorkoutPlan.sessions`/`weeklySchedule`,
@@ -239,6 +248,19 @@ export function PlanReadyScreen({
     ...sessionCards.filter((card) => card.index !== previewSessionIndex),
   ];
 
+  // Jotinha lives in the header, not as a floating overlay: he's visible
+  // only while the scroll is still at (or returning to) the top, and hides
+  // once the user scrolls the header out of view.
+  const [jotinhaVisible, setJotinhaVisible] = useState(true);
+  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const y = event.nativeEvent.contentOffset.y;
+    setJotinhaVisible((current) => {
+      if (current && y > JOTINHA_HIDE_SCROLL_Y) return false;
+      if (!current && y <= JOTINHA_SHOW_SCROLL_Y) return true;
+      return current;
+    });
+  }, []);
+
   const [activeTab, setActiveTab] = useState<'workout' | 'diet'>('workout');
   // The CTA footer sits fixed below the scroll, not inside it — the
   // scroll's own bottom padding has to clear it by its real measured
@@ -276,6 +298,8 @@ export function PlanReadyScreen({
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <ScrollView
           showsVerticalScrollIndicator={false}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
           contentContainerStyle={{
             paddingHorizontal: 22,
             paddingTop: 18,
@@ -595,7 +619,7 @@ export function PlanReadyScreen({
         ) : null}
       </View>
 
-      <JotinhaPlanDropdown aj={aj} reduceMotion={reduceMotion} />
+      <JotinhaPlanDropdown aj={aj} reduceMotion={reduceMotion} visible={jotinhaVisible} />
     </View>
   );
 }

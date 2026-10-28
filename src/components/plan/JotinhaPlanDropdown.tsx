@@ -7,14 +7,19 @@ import type { AjFunnelDirector } from '../onboarding/AjFunnelStage';
 const AVATAR_SLOT_SIZE = 56;
 
 /**
- * Jotinha's presentation on the Plan screen: just the mascot, fixed
- * top-right for the screen's whole lifetime — no speech bubble, no typed
- * lines. His own built-in idle animation (float + blink — see `AjBot`) is
- * what gives him "reactions and movements"; this component only measures
- * where he should render and asks the funnel's shared overlay to draw him
- * there (`aj.direct` — see `AjFunnelStage`), rather than rendering a second
- * AJ, plus a single greeting hop on arrival that mirrors the hop
+ * Jotinha's presentation on the Plan screen: just the mascot, anchored
+ * top-right in the header area — no speech bubble, no typed lines. His own
+ * built-in idle animation (float + blink — see `AjBot`) is what gives him
+ * "reactions and movements"; this component only measures where he should
+ * render and asks the funnel's shared overlay to draw him there (`aj.direct`
+ * — see `AjFunnelStage`), rather than rendering a second AJ, plus a single
+ * greeting hop on arrival that mirrors the hop
  * `PlanReadyScreen.handleContinue` already plays on the way out.
+ *
+ * `visible` is the caller's "is the header still in view" signal (derived
+ * from scroll position): he's only ever shown parked at the top, and scrolls
+ * away with the rest of the header rather than floating over the content
+ * underneath it.
  *
  * Under Reduce Motion this renders nothing and hides the mascot entirely,
  * same as every other AJ moment in the funnel.
@@ -22,17 +27,20 @@ const AVATAR_SLOT_SIZE = 56;
 export function JotinhaPlanDropdown({
   aj,
   reduceMotion,
+  visible,
 }: {
   aj: AjFunnelDirector;
   reduceMotion: boolean;
+  /** Whether the header is currently scrolled into view. */
+  visible: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const slotRef = useRef<View>(null);
   const anim = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
 
   useEffect(() => {
-    aj.setVisible(!reduceMotion);
-  }, [reduceMotion, aj]);
+    aj.setVisible(!reduceMotion && visible);
+  }, [reduceMotion, visible, aj]);
 
   useEffect(() => {
     if (reduceMotion) return () => undefined;

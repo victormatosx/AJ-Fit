@@ -9,9 +9,11 @@ import { describe, expect, it } from 'vitest';
  *
  * Covers the redesigned Plan screen: a single continuous scroll (no staged
  * reveal) switching between Workout and Diet via the shared `AqSegmented`
- * tab control, with Jotinha (`JotinhaPlanDropdown`) reduced to a silent,
- * fixed mascot — no speech bubble, no typed narration, no tap-to-open
- * panel — so he never gates the plan or the CTA beneath it.
+ * tab control, with Jotinha (`JotinhaPlanDropdown`) reduced to a silent
+ * mascot anchored in the header — no speech bubble, no typed narration, no
+ * tap-to-open panel — so he never gates the plan or the CTA beneath it. He
+ * hides on scroll like the rest of the header, instead of floating over the
+ * content below it.
  */
 const planReady = readFileSync(new URL('../PlanReadyScreen.tsx', import.meta.url), 'utf8');
 const dropdown = readFileSync(new URL('../../components/plan/JotinhaPlanDropdown.tsx', import.meta.url), 'utf8');
@@ -66,14 +68,19 @@ describe('Plan — the CTA is never gated behind the narration', () => {
 });
 
 describe('Plan — Jotinha is a silent, fixed presence, never narration', () => {
-  it('the screen mounts the dropdown once, outside the scroll, passing it only the director and the Reduce Motion flag', () => {
-    expect(code).toContain('<JotinhaPlanDropdown aj={aj} reduceMotion={reduceMotion} />');
+  it('the screen mounts the dropdown once, outside the scroll, passing it the director, the Reduce Motion flag, and a scroll-derived visibility flag', () => {
+    expect(code).toContain('<JotinhaPlanDropdown aj={aj} reduceMotion={reduceMotion} visible={jotinhaVisible} />');
     // It is a sibling of the SafeAreaView/ScrollView tree, not nested inside
     // the scroll — it must never affect scroll content.
     const safeAreaEnd = code.indexOf('</SafeAreaView>');
     const dropdownAt = code.indexOf('<JotinhaPlanDropdown');
     expect(safeAreaEnd).toBeGreaterThan(0);
     expect(dropdownAt).toBeGreaterThan(safeAreaEnd);
+  });
+
+  it('hides Jotinha once the scroll leaves the top, and only shows him again near the top', () => {
+    expect(code).toContain('onScroll={handleScroll}');
+    expect(code).toContain('setJotinhaVisible');
   });
 
   it('never reintroduces narration lines, a speech component, or a dropdown "entries" prop', () => {
@@ -105,12 +112,12 @@ describe('JotinhaPlanDropdown — presentation only, no speech', () => {
     expect(dropdownCode).not.toMatch(/top:\s*Math\.max\(insets\.top/);
   });
 
-  it('hides the shared mascot under Reduce Motion instead of leaving him unpositioned on screen', () => {
-    expect(dropdownCode).toContain('aj.setVisible(!reduceMotion);');
+  it('hides the shared mascot under Reduce Motion or once scrolled out of the header, never leaving him unpositioned on screen', () => {
+    expect(dropdownCode).toContain('aj.setVisible(!reduceMotion && visible);');
     expect(dropdownCode).toContain('if (reduceMotion) return null;');
   });
 
-  it('the only call to aj.setVisible is the Reduce Motion one — nothing else ever hides him again', () => {
+  it('the only call to aj.setVisible combines Reduce Motion with the header-scroll visibility flag', () => {
     const setVisibleCalls = dropdownCode.match(/aj\.setVisible\(/g) ?? [];
     expect(setVisibleCalls).toHaveLength(1);
   });
