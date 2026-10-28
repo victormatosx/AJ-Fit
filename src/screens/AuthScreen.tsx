@@ -1310,7 +1310,7 @@ function AuthInput({
         alignItems: 'center',
         gap: 12,
         paddingHorizontal: 16,
-        paddingVertical: 15,
+        paddingVertical: 11,
         borderRadius: 12,
         backgroundColor: theme.colors.surfaceMuted,
         borderWidth: 1,
@@ -1352,7 +1352,7 @@ function AuthInput({
           hitSlop={10}
           accessibilityRole="button"
           accessibilityLabel={trailingAccessibilityLabel}
-          style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
+          style={{ width: 32, height: 32, alignItems: 'center', justifyContent: 'center' }}
         >
           <Icon name={trailing} size={18} color={theme.colors.authInputIcon} />
         </Pressable>
