@@ -347,7 +347,7 @@ export function TreinoScreen({
           </View>
 
           {weekOverview && (
-            <View style={{ marginTop: 24 }}>
+            <View style={{ marginTop: 12 }}>
               <TreinoWeekStrip
                 days={weekStripDays}
                 disabled={workoutInProgress}
