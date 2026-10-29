@@ -148,6 +148,7 @@ import { useWidgetSnapshotSync } from '../widgets/useWidgetSnapshotSync';
 import { deriveHomeInitialReadiness } from '../home/homeInitialReadiness';
 import { useHomeInitialVisualReady } from '../home/useHomeInitialVisualReady';
 import { canUseTodayActions, canWriteHomePresentationSnapshot, chooseHomeFrequencyPresentation, shouldUseSnapshotPlaceholders } from '../home/homePresentationPolicy';
+import { maxWeeklyDaysForTrainingLevel } from '../onboarding/weeklyDayAllowance';
 import { adaptWorkoutProgram, processWorkoutLifecycleAfterSession } from '../services/workoutLifecycleApplication';
 import {
   applyExerciseSubstitution,
@@ -2512,6 +2513,10 @@ function AppShellContent({
             initialScheduleMode={schedule.config?.scheduleMode ?? 'fixed'}
             initialTrainingDays={schedule.config?.trainingDays ?? []}
             currentFrequency={activeProgram.prescribedTrainingFrequency ?? activeProgram.prescribedStructuredDays ?? activeProgram.sessions.length}
+            // Keyed on the LIFECYCLE's current level, never the (possibly
+            // years-old) questionnaire answer: a promotion lifts the ceiling
+            // the moment `currentTrainingLevel` moves, with nothing to migrate.
+            maxDays={maxWeeklyDaysForTrainingLevel(evolution.currentTrainingLevel)}
             // Same week, same letters and same "próximo treino" the faixa da
             // semana (`TreinoScreen`) is already showing behind the sheet —
             // the inputs, not a second reading of them.

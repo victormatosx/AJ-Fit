@@ -55,6 +55,7 @@
     "sheetHeading": "Schedule",
     "sheetInstruction": "Tap the days you train.",
     "liveInvalidRange": "Pick between {{min}} and {{max}} days",
+    "liveMaximumReached": "Up to {{max}} days per week for your level.",
     "liveSameFrequencyNext": "{{count}} days per week · next workout {{when}}",
     "liveFlexible": "No fixed days · the {{sequence}} sequence advances when you train",
     "freeModeLink": "Train without fixed days",

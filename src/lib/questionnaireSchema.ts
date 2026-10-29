@@ -12,6 +12,7 @@ import {
   type Weekday,
 } from '../state/AppState';
 import type { OnboardingStepId } from '../onboarding/steps';
+import { maxWeeklyDaysForLevel } from '../onboarding/weeklyDayAllowance';
 
 export const HOME_EQUIPMENT_IDS = ['bodyweight', 'dumbbells', 'bands', 'bench_or_box', 'barbell', 'other', 'none'] as const;
 export const POSTPARTUM_SIGN_IDS = ['pain', 'healing_problems', 'abnormal_bleeding', 'incontinence', 'vaginal_pressure', 'dizziness_weakness', 'none'] as const;
@@ -65,20 +66,35 @@ export function cleanApplicableAnswers(input: Quiz): Quiz {
   const has = (condition: Quiz['specialConditions'][number]) => specialConditions.includes(condition);
   const postpartum = has('postpartum') ? (input.postpartumScreening ?? emptyPostpartumScreening()) : null;
   const functional = has('functional_limitation') ? (input.functionalScreening ?? emptyFunctionalScreening()) : null;
+  // Flexible schedules never persist fixed weekdays. For a fixed seven-day
+  // schedule every weekday is implied; for 2-6, keep the subset picked so
+  // far. Completion is enforced by the unified schedule screen and the
+  // Schedule Engine's `trainingDaysValid` gate, never by silently
+  // truncating a partial selection here.
+  const pickedTrainingDays = input.scheduleMode === 'flexible'
+    ? null
+    : input.days === 7
+    ? [...WEEKDAY_ORDER]
+    : input.days == null
+      ? null
+      : normalizeWeekdays(input.trainingDays ?? []);
+  // THE enforcement point for the per-level weekly-day ceiling. Running here
+  // — after every edit and before every persistence — is what makes the rule
+  // depend on the level alone rather than on which control the user touched:
+  // changing the level to beginner with 5 days already picked lands here and
+  // trims, instead of leaving `days`/`trainingDays` in a state the beginner
+  // route cannot honour. For intermediate/advanced the ceiling is 7, so both
+  // expressions below are exact no-ops and their behaviour is untouched.
+  const maxWeeklyDays = maxWeeklyDaysForLevel(input.level);
+  const trainingDays = pickedTrainingDays == null
+    ? null
+    // Keeps the EARLIEST days of the user's own week-ordered selection, so a
+    // trim is deterministic and never invents a weekday they did not pick.
+    : pickedTrainingDays.slice(0, maxWeeklyDays);
   return {
     ...activeInput,
-    // Flexible schedules never persist fixed weekdays. For a fixed seven-day
-    // schedule every weekday is implied; for 2-6, keep the subset picked so
-    // far. Completion is enforced by the unified schedule screen and the
-    // Schedule Engine's `trainingDaysValid` gate, never by silently
-    // truncating a partial selection here.
-    trainingDays: input.scheduleMode === 'flexible'
-      ? null
-      : input.days === 7
-      ? [...WEEKDAY_ORDER]
-      : input.days == null
-        ? null
-        : normalizeWeekdays(input.trainingDays ?? []),
+    days: input.days != null && input.days > maxWeeklyDays ? maxWeeklyDays : input.days,
+    trainingDays,
     equipment: input.place === 'home' ? exclusiveNone(input.equipment) : [],
     muscleFocus: exclusiveNone(input.muscleFocus).slice(0, 2),
     specialConditions,

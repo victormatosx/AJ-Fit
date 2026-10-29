@@ -35,6 +35,26 @@ export function canonicalIanaTimezone(value: unknown): string | null {
   }
 }
 
+/**
+ * THE timezone a progression evaluation runs in.
+ *
+ * Client and authority must resolve the same one or they disagree about what
+ * "today" is, which shifts `countedDates` by a day, shifts a week's target by
+ * one, and used to make the EARN authority reject the client's figures. The
+ * client used to fall back to the DEVICE timezone here while the authority
+ * fell back to `'UTC'`, so any account whose `scheduleConfig.timezone` was
+ * missing or malformed was evaluated against two different calendars.
+ *
+ * `'UTC'` is the single fallback, chosen because it is what the authority
+ * already used: this moves the client ONTO the authority's answer and never
+ * the reverse, so no account's authoritative evaluation changes.
+ */
+export const PROGRESSION_FALLBACK_TIMEZONE = 'UTC';
+
+export function progressionTimezone(configuredTimezone: unknown): string {
+  return canonicalIanaTimezone(configuredTimezone) ?? PROGRESSION_FALLBACK_TIMEZONE;
+}
+
 export function localDateTimeInTimezone(instant: Date, timezone: string): LocalDateTimeParts {
   const values = Object.fromEntries(
     formatterFor(timezone).formatToParts(instant).map((part) => [part.type, part.value]),

@@ -28,7 +28,7 @@ import {
   reconcileWorkoutLifecycle,
 } from '../services/workoutLifecycleApplication';
 import type { ProgressionDecision } from '../progressionEngineV2/types';
-import type { PendingEvolution } from '../workoutLifecycle/types';
+import type { CurrentTrainingLevel, PendingEvolution } from '../workoutLifecycle/types';
 import type { FinalWorkoutPlan } from '../workoutPrescription/types';
 import { computePrescriptionDiff, type PrescriptionDiffSummary } from './diff';
 import { buildEvolutionViewModel, buildProvisionalEvolutionViewModel, type LifecycleContext } from './viewModel';
@@ -76,6 +76,16 @@ export interface WorkoutEvolutionController {
   refresh: () => Promise<void>;
   /** Refreshes the React projection only; caller already ran the canonical reconciler. */
   refreshProjection: () => Promise<void>;
+  /**
+   * The lifecycle's own `workoutLifecycleState/current.currentTrainingLevel`,
+   * surfaced verbatim — the SAME field `authorizeMutation` reads to regenerate
+   * an ADAPT, so a UI keyed on it can never offer the authority something it
+   * will refuse. `null` until the lifecycle has loaded (or when the account
+   * has none). Deliberately not `summary.activeLevel`/`earnedLevel`: those are
+   * presentation values (cycle level, and a pending promotion's TARGET), and
+   * neither is guaranteed to equal `currentTrainingLevel`.
+   */
+  currentTrainingLevel: CurrentTrainingLevel | null;
 }
 
 /**
@@ -96,6 +106,7 @@ export function useWorkoutEvolution(activeProgramInstanceId: string | null = nul
   const [actionPending, setActionPending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [diff, setDiff] = useState<PrescriptionDiffSummary | null>(null);
+  const [currentTrainingLevel, setCurrentTrainingLevel] = useState<CurrentTrainingLevel | null>(null);
   const [pendingPlan, setPendingPlan] = useState<FinalWorkoutPlan | null>(null);
   const hasLoadedOnce = useRef(false);
   const actionInFlight = useRef(false);
@@ -221,11 +232,13 @@ export function useWorkoutEvolution(activeProgramInstanceId: string | null = nul
           visibleProgramInstanceIdRef.current = null;
           commitViewModel({ kind: 'UNAVAILABLE' });
           setDiff(null);
+          setCurrentTrainingLevel(null);
           recordPerfMark('evolution_state_commit');
           recordPerfMark('evolution_authoritative_ready');
         }
         return;
       }
+      if (isCurrent()) setCurrentTrainingLevel(lifecycle.lifecycle.currentTrainingLevel);
       const lifecycleContext: LifecycleContext = {
         // The active lifecycle level stays cycle-coherent until activation.
         // A pending promotion's immutable earned fact is presented from the
@@ -559,6 +572,6 @@ export function useWorkoutEvolution(activeProgramInstanceId: string | null = nul
 
   return {
     viewModel: displayedViewModel, loading, actionPending, actionError, diff, pendingPlan, start, defer,
-    acknowledgeAutoActivation, refresh: load, refreshProjection,
+    acknowledgeAutoActivation, refresh: load, refreshProjection, currentTrainingLevel,
   };
 }

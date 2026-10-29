@@ -2,19 +2,12 @@ import { createHash } from 'node:crypto';
 
 import { Timestamp, type DocumentData, type Firestore } from 'firebase-admin/firestore';
 
-import { computeActiveTimeTrace } from '../workoutLifecycle/prescriptionEngine/progressionEngineV2/activeTime';
-import { computeAdherence } from '../workoutLifecycle/prescriptionEngine/progressionEngineV2/adherence';
 import { PROGRESSION_V2_CONFIG } from '../workoutLifecycle/prescriptionEngine/progressionEngineV2/config';
-import {
-  buildPrescribedOpportunities,
-  buildFlexibleWeeklyTargets,
-  countFulfilledFlexibleWeeklyTargets,
-  countFulfilledPrescribedOpportunities,
-} from '../workoutLifecycle/prescriptionEngine/progressionEngineV2/prescribedOpportunities';
+import { computeCycleProgression } from '../workoutLifecycle/prescriptionEngine/progressionEngineV2/cycleProgression';
+import { loadCycleProgressionWindow } from '../workoutLifecycle/cycleProgressionWindow';
 import { evaluateProgressionV2 } from '../workoutLifecycle/prescriptionEngine/progressionEngineV2/resolver';
 import type { ProgressionSnapshotV2 } from '../workoutLifecycle/prescriptionEngine/progressionEngineV2/types';
 import { canonicalIanaTimezone } from '../workoutLifecycle/prescriptionEngine/scheduleEngine/localDate';
-import type { Weekday } from '../workoutLifecycle/prescriptionEngine/state/AppState';
 import { dailyLocalClock } from './dailyTime';
 
 export const APPROACHING_ACTIVE_DAYS = 3;
@@ -131,75 +124,50 @@ export async function readApproachingContext(db: Firestore, uid: string, now: Ti
     if (lifecycleEvents.docs.some((event) => [
       'EVOLUTION_EARNED', 'MOTIVATIONAL_RENEWAL_OFFERED',
     ].includes(event.data().type))) return deny('EVOLUTION_ALREADY_EARNED_OR_OFFERED');
-    const executions = await tx.get(root.collection('workoutExecutions')
-      .where('programInstanceId', '==', state.activeProgramInstanceId).limit(APPROACHING_HISTORY_LIMIT + 1));
-    const events = await tx.get(root.collection('workoutPrograms').doc(state.activeContentIdentity)
-      .collection('scheduleEvents').where('programInstanceId', '==', state.activeProgramInstanceId)
-      .limit(APPROACHING_HISTORY_LIMIT + 1));
-    if (executions.size > APPROACHING_HISTORY_LIMIT || events.size > APPROACHING_HISTORY_LIMIT) return deny('HISTORY_LIMIT');
-    const executionData = executions.docs.map((document) => document.data());
+    // The SAME cycle-scoped window the EARN authority reads, via the SAME
+    // loader (`loadCycleProgressionWindow`). It used to read only the active
+    // ProgramInstance, which after an ADAPT meant every execution belonged to
+    // the superseded instance: the observer reported 0% adherence and denied
+    // a user the authority was simultaneously promoting.
+    const cycleWindow = await loadCycleProgressionWindow({
+      reader: {
+        root,
+        readDoc: (ref) => tx.get(ref),
+        readQuery: (query) => tx.get(query),
+      },
+      currentCycleId: state.currentCycleId,
+      activeProgramInstanceId: state.activeProgramInstanceId,
+      activeContentIdentity: state.activeContentIdentity,
+      activeInstance: instanceData,
+      activeProgram: programData,
+      timezone: clock.timezone,
+    });
+    if (cycleWindow.status === 'TOO_LARGE' || cycleWindow.status === 'HISTORY_LIMIT') {
+      return deny('HISTORY_LIMIT');
+    }
+    if (cycleWindow.status === 'UNAVAILABLE') return deny('PROGRAM_UNAVAILABLE');
+    const executionData = cycleWindow.executions;
     if (executionData.some((execution) => !Array.isArray(execution.exercises)
       || typeof execution.scheduledLocalDate !== 'string'
       || execution.exercises.some((exercise: DocumentData) => !exercise || !Array.isArray(exercise.sets)))) {
       return deny('HISTORY_UNAVAILABLE');
     }
-    if (!Array.isArray(programData.sessions) || !programData.sessions.length
-      || programData.sessions.some((session: DocumentData) => !session || !Array.isArray(session.exercises)
-        || !session.exercises.length || session.exercises.some((exercise: DocumentData) => !exercise
-          || typeof exercise.exerciseId !== 'string'
-          || (Number.isInteger(exercise.sets) && exercise.sets < 1)))) return deny('PROGRAM_UNAVAILABLE');
-    const trace = computeActiveTimeTrace({
-      startDateInclusive: startClock.localDate,
+    const progression = computeCycleProgression({
+      windows: cycleWindow.windows,
       todayLocalDate: clock.localDate,
-      trainingDays: trainingDays as Weekday[],
-      scheduleMode,
-      executionDates: new Set(executionData.map((execution) => execution.scheduledLocalDate as string)),
+      executions: executionData as unknown as Parameters<typeof computeCycleProgression>[0]['executions'],
+      scheduleEvents: cycleWindow.scheduleEvents as unknown as Parameters<typeof computeCycleProgression>[0]['scheduleEvents'],
     });
-    const prescribedSessions = programData.sessions.map((session: DocumentData) => ({
-        exercises: session.exercises.map((exercise: DocumentData) => ({
-          exerciseId: exercise.exerciseId,
-          setCount: Number.isInteger(exercise.sets) ? exercise.sets : 1,
-        })),
-      }));
-    const flexibleTargets = scheduleMode === 'flexible'
-      ? buildFlexibleWeeklyTargets({
-          countedActiveDates: trace.countedDates,
-          prescribedTrainingFrequency: programData.prescribedTrainingFrequency ?? programData.prescribedStructuredDays,
-        })
-      : null;
-    const opportunities = scheduleMode === 'fixed' ? buildPrescribedOpportunities({
-      programInstanceId: state.activeProgramInstanceId,
-      trainingDays: trainingDays as Weekday[],
-      countedActiveDates: trace.countedDates,
-    }) : [];
-    const validSessionCount = flexibleTargets
-      ? countFulfilledFlexibleWeeklyTargets({
-          programInstanceId: state.activeProgramInstanceId,
-          executions: executionData as unknown as Parameters<typeof countFulfilledFlexibleWeeklyTargets>[0]['executions'],
-          scheduleEvents: events.docs.map((event) => event.data()) as unknown as Parameters<typeof countFulfilledFlexibleWeeklyTargets>[0]['scheduleEvents'],
-          prescribedSessions,
-          weeklyTargets: flexibleTargets,
-        })
-      : countFulfilledPrescribedOpportunities({
-          programInstanceId: state.activeProgramInstanceId,
-          executions: executionData as unknown as Parameters<typeof countFulfilledPrescribedOpportunities>[0]['executions'],
-          scheduleEvents: events.docs.map((event) => event.data()) as unknown as Parameters<typeof countFulfilledPrescribedOpportunities>[0]['scheduleEvents'],
-          prescribedOpportunities: opportunities,
-          prescribedSessions,
-          trainingDays: trainingDays as Weekday[],
-        });
-    const expectedSessions = flexibleTargets
-      ? [...flexibleTargets.values()].reduce((sum, count) => sum + count, 0)
-      : opportunities.length;
+    if (!progression) return deny('PROGRAM_UNAVAILABLE');
     const reason = approachingReason({
       level: state.currentTrainingLevel,
-      activeTime: trace.activeTime,
-      adherence: computeAdherence(validSessionCount, expectedSessions),
+      activeTime: progression.activeTime,
+      adherence: progression.adherence,
       // At the approaching gate the current cycle is never earned. The number
       // of older earned cycles cannot change PROGRESS_CONTINUES; no history scan.
       earnedIntermediateCycleCount: 0,
       hasInProgressExecution: executionData.some((execution) => execution.status === 'IN_PROGRESS'),
-      validSessionCount,
+      validSessionCount: progression.validSessionCount,
     });
     if (reason) return { allowed: false, reason, timezone: clock.timezone, localDate: clock.localDate };
     return {

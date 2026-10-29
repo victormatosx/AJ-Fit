@@ -55,6 +55,7 @@
     "sheetHeading": "Agenda",
     "sheetInstruction": "Toque nos dias em que você treina.",
     "liveInvalidRange": "Escolha entre {{min}} e {{max}} dias",
+    "liveMaximumReached": "Máximo de {{max}} dias por semana para o seu nível.",
     "liveSameFrequencyNext": "{{count}} dias por semana · próximo treino {{when}}",
     "liveFlexible": "Sem dias fixos · a sequência {{sequence}} avança quando você treinar",
     "freeModeLink": "Treinar sem dias fixos",

@@ -36,7 +36,11 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
   days: {
     id: 'days',
     kind: 'choice',
-    options: [{ v: '2' }, { v: '3' }, { v: '4' }, { v: '5' }, { v: '6' }, { v: '7' }],
+    // 7 is absent by policy — see `onboarding/weeklyDayAllowance.ts`. The
+    // step itself renders `WeeklySchedulePicker`, which derives its own
+    // options from `AVAILABLE_FREQUENCIES`; this list is kept in step so the
+    // two can never describe different questions.
+    options: [{ v: '2' }, { v: '3' }, { v: '4' }, { v: '5' }, { v: '6' }],
   },
   duration: {
     id: 'duration',

@@ -3,7 +3,6 @@ import { db } from '../lib/firebase';
 import { logWarn } from '../lib/logger';
 import { recordPerfMark, recordPerfTrace, startPerfTimer } from '../lib/perf';
 import {
-  evolutionIdempotencyKey,
   lifecycleEventId,
   pendingEvolutionIdForOperation,
   programInstanceIdForOperation,
@@ -18,10 +17,11 @@ import {
 } from '../workoutLifecycle/types';
 import type { QuestionnaireAnswers, TemplateId } from '../workoutPrescription/types';
 import type { LevelPromotionTarget } from '../prescriptionEvolution/levelPromotion';
+import { MIN_WEEKLY_DAYS, maxWeeklyDaysForTrainingLevel } from '../onboarding/weeklyDayAllowance';
 import { buildPrescriptionInputSnapshot, questionnaireAnswersFromPrescriptionInputs } from '../workoutLifecycle/prescriptionInputs';
 import { evolvePrescription } from './prescriptionEvolution';
 import { loadAuthoritativePrescriptionInputs } from './prescriptionInputs';
-import { evaluateProgressionV2ForUser, evaluateProgressionV2ForUserFull } from './workoutProgressionV2';
+import { evaluateProgressionV2ForUser } from './workoutProgressionV2';
 import type { ProgressionDecision } from '../progressionEngineV2/types';
 import {
   lifecycleRef,
@@ -240,37 +240,47 @@ async function loadOutstandingEarnedFact(uid: string): Promise<EarnedEvolutionFa
   }
 }
 
+/**
+ * Persists the EARNED EVOLUTION FACT the AUTHORITY computed.
+ *
+ * `type` is the only thing the caller contributes, and only as the name of
+ * the transition it is asking about. Every figure that lands in the immutable
+ * ledger — levels, quality, session count, adherence in basis points — comes
+ * from the authority grant, and `firestore.rules` refuses any payload that
+ * disagrees with that grant. A client can therefore neither grant itself an
+ * evolution nor record a flattering number for one it legitimately earned.
+ */
 async function persistEarnedFact(input: {
   uid: string;
   lifecycle: NonNullable<Awaited<ReturnType<typeof loadWorkoutLifecycle>>>;
-  fact: Omit<EarnedEvolutionFact, 'earnedAt' | 'deferralCount' | 'nextPromptAt' | 'autoActivateAt'>;
+  type: PendingEvolutionType;
 }): Promise<EarnedEvolutionFact> {
-  const eventType = input.fact.type === 'MOTIVATIONAL_RENEWAL'
-    ? 'MOTIVATIONAL_RENEWAL_OFFERED'
-    : 'EVOLUTION_EARNED';
-  const targetEventRef = eventRef(input.uid, lifecycleEventId(eventType, input.fact.idempotencyKey));
-  await authorizeWorkoutLifecycleMutation({
+  // The local decision is the TRIGGER for asking, never the answer. Only the
+  // transition's identity is claimed — `type`, so the authority can refuse a
+  // request for a transition the account has not earned — and no counters at
+  // all. Sending our own `sessionsCompletedAtEarn`/`adherenceAtEarnBp` is
+  // exactly what used to make two honest app builds mutually exclusive: the
+  // authority compared them byte-for-byte and rejected a legitimate EARN as
+  // forged over a one-basis-point rounding difference. The authority
+  // recomputes everything and hands back the figures AND the event identity;
+  // `firestore.rules` then refuses any ledger payload that disagrees with the
+  // grant, so these are the only values that can ever be persisted.
+  const grant = await authorizeWorkoutLifecycleMutation({
     operation: 'EARN',
     sourceProgramInstanceId: input.lifecycle.programInstance.programInstanceId,
     sourceCycleId: input.lifecycle.cycle.cycleId,
     sourcePrescriptionInputSnapshotId: input.lifecycle.programInstance.prescriptionInputSnapshot?.snapshotId
       ?? `legacy:${input.lifecycle.programInstance.programInstanceId}`,
-    eventId: lifecycleEventId(eventType, input.fact.idempotencyKey),
-    eventType,
-    idempotencyKey: input.fact.idempotencyKey,
-    earnedFact: {
-      type: input.fact.type,
-      fromLevel: input.fact.fromLevel,
-      toLevel: input.fact.toLevel,
-      quality: input.fact.quality,
-      sessionsCompletedAtEarn: input.fact.sessionsCompletedAtEarn,
-      adherenceAtEarnBp: input.fact.adherenceAtEarnBp,
-      // Only present for a QA_TRANSITION-forced fact — must match the
-      // backend's own `authoritativeEarnedFact` output exactly (canonical()
-      // comparison) or the EARN authorization fails closed as a forged fact.
-      ...(input.fact.qaForced ? { qaForced: true, triggerSource: input.fact.triggerSource } : {}),
-    },
+    earnedFact: { type: input.type },
   });
+  const earned = grant?.earned;
+  if (!earned) throw new Error('WORKOUT_LIFECYCLE_EARNED_FACT_NOT_GRANTED');
+  const eventType = earned.eventType;
+  const targetEventRef = eventRef(input.uid, earned.eventId);
+  // Everything written below comes from `earned.fact` — the server's own
+  // recomputation — so a client build whose local arithmetic differs still
+  // persists the authoritative numbers.
+  const authoritativeFact = earned.fact;
   try {
     await runTransaction(db, async (transaction) => {
       const [stateSnapshot, existingEvent] = await Promise.all([
@@ -289,19 +299,19 @@ async function persistEarnedFact(input: {
       ) throw new Error('WORKOUT_LIFECYCLE_STALE_EARN_BASE');
       const nowTs = serverTimestamp();
       transaction.set(targetEventRef, {
-        eventId: lifecycleEventId(eventType, input.fact.idempotencyKey),
+        eventId: earned.eventId,
         type: eventType,
         occurredAt: nowTs,
         cycleId: input.lifecycle.cycle.cycleId,
         programInstanceId: input.lifecycle.programInstance.programInstanceId,
-        idempotencyKey: input.fact.idempotencyKey,
+        idempotencyKey: earned.idempotencyKey,
         payload: {
-          evolutionType: input.fact.type,
-          quality: input.fact.quality,
-          fromLevel: input.fact.fromLevel,
-          toLevel: input.fact.toLevel,
-          sessionsCompletedAtEarn: input.fact.sessionsCompletedAtEarn,
-          adherenceAtEarnBp: input.fact.adherenceAtEarnBp,
+          evolutionType: authoritativeFact.type,
+          quality: authoritativeFact.quality,
+          fromLevel: authoritativeFact.fromLevel,
+          toLevel: authoritativeFact.toLevel,
+          sessionsCompletedAtEarn: authoritativeFact.sessionsCompletedAtEarn,
+          adherenceAtEarnBp: authoritativeFact.adherenceAtEarnBp,
         },
         schemaVersion: WORKOUT_LIFECYCLE_SCHEMA_VERSION,
       });
@@ -314,11 +324,11 @@ async function persistEarnedFact(input: {
     });
   } catch (error) {
     const converged = await loadOutstandingEarnedFact(input.uid).catch(() => null);
-    if (!converged || converged.idempotencyKey !== input.fact.idempotencyKey) throw error;
+    if (!converged || converged.idempotencyKey !== earned.idempotencyKey) throw error;
     return converged;
   }
   const persisted = await loadOutstandingEarnedFact(input.uid);
-  if (!persisted || persisted.idempotencyKey !== input.fact.idempotencyKey) {
+  if (!persisted || persisted.idempotencyKey !== earned.idempotencyKey) {
     throw new Error('WORKOUT_LIFECYCLE_EARNED_FACT_PERSIST_FAILED');
   }
   return persisted;
@@ -372,33 +382,19 @@ async function prepareEvolutionAttempt(input: { uid: string; now?: Date }): Prom
       );
       if (!lifecycleAtEarn) return { status: 'NO_LIFECYCLE' };
       const stopEarnedFactLocal = startPerfTimer('evolution_prepare.earned_fact_local');
-      let type: PendingEvolutionType;
-      let fromLevel = lifecycleAtEarn.lifecycle.currentTrainingLevel;
-      let toLevel = lifecycleAtEarn.lifecycle.currentTrainingLevel;
-      let quality = decision.adherence.quality;
-      if (decision.type === 'LEVEL_PROMOTION_ELIGIBLE') {
-        type = 'LEVEL_PROMOTION'; fromLevel = decision.from; toLevel = decision.to; quality = decision.quality;
-      } else if (decision.type === 'EVOLUTION_ELIGIBLE') {
-        type = 'CYCLE_EVOLUTION'; quality = decision.quality;
-      } else {
-        type = 'MOTIVATIONAL_RENEWAL';
-      }
-      const idempotencyKey = evolutionIdempotencyKey({
-        sourceProgramInstanceId: lifecycleAtEarn.programInstance.programInstanceId,
-        type,
-      });
+      // Only the TRANSITION TYPE is derived locally, and only so the request
+      // can name which transition it is asking about — the authority refuses
+      // a request for anything it did not itself compute as earned. Levels,
+      // quality, session count and adherence are deliberately NOT derived
+      // here: they come back from the authority and are the only values
+      // `persistEarnedFact` is allowed to write (see its doc comment).
+      const type: PendingEvolutionType = decision.type === 'LEVEL_PROMOTION_ELIGIBLE'
+        ? 'LEVEL_PROMOTION'
+        : decision.type === 'EVOLUTION_ELIGIBLE' ? 'CYCLE_EVOLUTION' : 'MOTIVATIONAL_RENEWAL';
       stopEarnedFactLocal();
       earnedFact = await measurePrepareStep(
         'evolution_prepare.persist_earned_fact',
-        () => persistEarnedFact({
-          uid: input.uid,
-          lifecycle: lifecycleAtEarn,
-          fact: {
-            idempotencyKey, type, fromLevel, toLevel, quality,
-            sessionsCompletedAtEarn: decision.validSessionCount,
-            adherenceAtEarnBp: Math.round(decision.adherence.ratio * 10000),
-          },
-        }),
+        () => persistEarnedFact({ uid: input.uid, lifecycle: lifecycleAtEarn, type }),
       );
     }
 
@@ -732,26 +728,12 @@ export async function prepareQaTransitionEvolution(input: { uid: string; now?: D
     if (!lifecycle) return { status: 'NO_LIFECYCLE' };
     const preview = await previewQaTransition(input.uid);
     if (!preview) return { status: 'NO_LIFECYCLE' };
-    const full = await evaluateProgressionV2ForUserFull(input.uid, input.now);
-    const idempotencyKey = evolutionIdempotencyKey({
-      sourceProgramInstanceId: lifecycle.programInstance.programInstanceId,
-      type: preview.targetType,
-    });
-    await persistEarnedFact({
-      uid: input.uid,
-      lifecycle,
-      fact: {
-        idempotencyKey,
-        type: preview.targetType,
-        fromLevel: preview.currentLevel,
-        toLevel: preview.targetLevel,
-        quality: full?.snapshot.adherence.quality ?? 'BELOW_TARGET',
-        sessionsCompletedAtEarn: full?.snapshot.validSessionCount ?? 0,
-        adherenceAtEarnBp: full ? Math.round(full.snapshot.adherence.ratio * 10_000) : 0,
-        qaForced: true,
-        triggerSource: 'QA_TRANSITION',
-      },
-    });
+    // Identical to the real path: only the transition TYPE is named, and the
+    // authority supplies every figure — including the `qaForced`/
+    // `triggerSource` markers, which it adds itself when the account really
+    // is in `QA_TRANSITION` mode. A non-QA account asking for this still
+    // fails closed inside `authoritativeEarnedFact`.
+    await persistEarnedFact({ uid: input.uid, lifecycle, type: preview.targetType });
   }
 
   return prepareEvolution({ uid: input.uid, now: input.now });
@@ -1293,6 +1275,16 @@ async function adaptWorkoutProgramAttempt(input: {
       : effectiveTrainingDays.length === input.updatedFields.days;
     if (!frequencyTrainingDaysConsistent) {
       return { status: 'FAILED', reasonCodes: ['FREQUENCY_TRAINING_DAYS_INCONSISTENT'] };
+    }
+    // Per-level weekly bounds (`onboarding/weeklyDayAllowance.ts`), checked
+    // against the LIFECYCLE's `currentTrainingLevel` rather than the
+    // questionnaire's stored `level` answer — the agenda sheet is keyed on
+    // the same field, so this only ever fires for a caller that bypassed it.
+    // Not the authority: `authorizeWorkoutLifecycleMutation` re-checks both
+    // bounds server-side; this is the fast, diagnosable client-side failure.
+    const maxWeeklyDays = maxWeeklyDaysForTrainingLevel(lifecycle.lifecycle.currentTrainingLevel);
+    if (input.updatedFields.days > maxWeeklyDays || input.updatedFields.days < MIN_WEEKLY_DAYS) {
+      return { status: 'FAILED', reasonCodes: ['WEEKLY_DAYS_OUTSIDE_LEVEL_BOUNDS'] };
     }
   }
 

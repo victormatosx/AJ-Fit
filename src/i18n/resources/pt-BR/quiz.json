@@ -222,6 +222,7 @@
     "selectedCount_one": "{{count}} dia selecionado",
     "selectedCount_other": "{{count}} dias selecionados",
     "minimumSelectionHint": "Selecione pelo menos 2 dias.",
+    "maximumSelectionHint": "Você pode treinar no máximo {{max}} dias por semana.",
     "flexible": {
       "label": "Quero treinar de forma livre"
     },

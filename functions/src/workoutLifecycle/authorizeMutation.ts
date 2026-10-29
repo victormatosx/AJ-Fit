@@ -19,8 +19,8 @@ import { buildRecentSlotHistory, evolveCycle } from './prescriptionEngine/prescr
 import { PRESCRIPTION_EVOLUTION_CONFIG } from './prescriptionEngine/prescriptionEvolution/config';
 import { countEarnedIntermediateCycles } from './prescriptionEngine/progressionEngineV2/earnedCycles';
 import { PROGRESSION_V2_CONFIG, resolveProgressionV2Config } from './prescriptionEngine/progressionEngineV2/config';
-import { buildFlexibleWeeklyTargets } from './prescriptionEngine/progressionEngineV2/prescribedOpportunities';
-import { WORKOUT_PILOT_ENROLLMENT_COLLECTION, isWorkoutPilotEnrolled } from './scheduleEngine/workoutPilot';
+import { computeCycleProgression } from './prescriptionEngine/progressionEngineV2/cycleProgression';
+import { loadCycleProgressionWindow } from './cycleProgressionWindow';
 import type { TrainingCycle, CurrentTrainingLevel } from './prescriptionEngine/workoutLifecycle/types';
 import type { PrescriptionGenerationVersion } from './prescriptionEngine/workoutPrescription/generationVersion';
 import {
@@ -185,6 +185,55 @@ function currentLevelInput(level: string): string {
   throw new HttpsError('failed-precondition', 'invalid_authoritative_training_level');
 }
 
+/**
+ * Weekly training-day bounds per lifecycle level, server side: 2-3 for
+ * BEGINNER, 2-6 for everyone else, 7 for nobody. Mirrors
+ * `BEGINNER_MAX_WEEKLY_DAYS`/`STANDARD_MAX_WEEKLY_DAYS`/`MIN_WEEKLY_DAYS` and
+ * `maxWeeklyDaysForTrainingLevel` in src/onboarding/weeklyDayAllowance.ts —
+ * restated rather than imported because this file is not part of the mirrored
+ * prescription-engine tree; `weeklyDayCeilingParity.test.ts` fails if the two
+ * ever disagree.
+ */
+export const BEGINNER_MAX_WEEKLY_DAYS_SERVER = 3;
+export const STANDARD_MAX_WEEKLY_DAYS_SERVER = 6;
+export const MIN_WEEKLY_DAYS_SERVER = 2;
+
+export function maxWeeklyDaysForTrainingLevelServer(level: CurrentTrainingLevel): number {
+  return level === 'BEGINNER' ? BEGINNER_MAX_WEEKLY_DAYS_SERVER : STANDARD_MAX_WEEKLY_DAYS_SERVER;
+}
+
+/**
+ * Rejects an ADAPT whose resulting availability falls outside what the
+ * account's current level allows. Reads `days`/`trainingDays` off the inputs
+ * the SERVER itself derived, never off `request.updatedFields`, so a client
+ * that reshapes the schedule without declaring `days` is covered too. Both
+ * bounds are enforced: the floor keeps a 0/1-day schedule from being sealed,
+ * the ceiling keeps availability and prescribed frequency from diverging.
+ */
+function assertWeeklyDaysWithinLevelCeiling(
+  expectedInputs: Record<string, unknown>,
+  currentTrainingLevel: CurrentTrainingLevel,
+): void {
+  const days = expectedInputs.days;
+  if (!Number.isInteger(days)) return;
+  const trainingDays = expectedInputs.trainingDays;
+  const flexible = expectedInputs.scheduleMode === 'flexible';
+  // A flexible schedule legitimately carries no weekdays; only a fixed one
+  // has a count to bound here.
+  const scheduledCount = Array.isArray(trainingDays) ? trainingDays.length : 0;
+  const ceiling = maxWeeklyDaysForTrainingLevelServer(currentTrainingLevel);
+  const floor = MIN_WEEKLY_DAYS_SERVER;
+  const outOfBounds = (days as number) > ceiling
+    || (days as number) < floor
+    || scheduledCount > ceiling
+    || (!flexible && scheduledCount < floor);
+  if (outOfBounds) {
+    throw new HttpsError('invalid-argument', 'weekly_days_outside_level_bounds', {
+      level: currentTrainingLevel, floor, ceiling, days, scheduledCount,
+    });
+  }
+}
+
 function assertSource(request: AuthorityRequest, state: LifecycleState): void {
   if (
     (request.sourceProgramInstanceId != null && request.sourceProgramInstanceId !== state.activeProgramInstanceId)
@@ -232,11 +281,6 @@ function addDays(date: string, amount: number): string {
   return value.toISOString().slice(0, 10);
 }
 
-function weekday(date: string): string {
-  const [year, month, day] = date.split('-').map(Number);
-  return ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'][new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
-}
-
 /**
  * Realistic offline-sync slack (docs/workout-lifecycle/v2/decisions/
  * ADR-016_BACKEND_AUTHORITATIVE_PRESCRIPTION.md §Backdating): a session
@@ -271,12 +315,6 @@ async function loadScheduleAuthorityContext(
   });
 }
 
-function qualifyingExecution(execution: DocumentData, session: DocumentData, expectedInstanceId: string): boolean {
-  if (!['COMPLETED', 'PARTIALLY_COMPLETED'].includes(execution.status)) return false;
-  const counts = prescribedExecutionCounts(execution, session, expectedInstanceId);
-  return counts !== null && counts.completed * 100 >= counts.prescribed * 70;
-}
-
 // Exported for tests only (docs/workout-lifecycle/v2/qa/) — lets QA_TRANSITION
 // test coverage use this function's own real output as the oracle for what
 // the EARN handler should accept, instead of hand-computing activeDays/
@@ -289,11 +327,9 @@ async function authoritativeEarnedFactWithCycleHistory(
 ): Promise<Record<string, unknown>> {
   const { state, instance, program } = await activeBundle(uid, firestore);
   const root = firestore.collection('users').doc(uid);
-  const [qaMode, scheduleConfigSnapshot, executionsSnapshot, scheduleEventsSnapshot, cyclesSnapshot, pilotEnrolled] = await Promise.all([
+  const [qaMode, scheduleConfigSnapshot, cyclesSnapshot] = await Promise.all([
     resolveWorkoutLifecycleQaMode(uid, firestore),
     root.collection('workoutProgramState').doc('scheduleConfig').get(),
-    root.collection('workoutExecutions').where('programInstanceId', '==', state.activeProgramInstanceId).get(),
-    root.collection('workoutPrograms').doc(state.activeContentIdentity).collection('scheduleEvents').get(),
     cycleHistory === 'FULL_SCAN_ORACLE'
       ? root.collection('trainingCycles').get()
       : state.currentTrainingLevel === 'INTERMEDIATE'
@@ -303,125 +339,87 @@ async function authoritativeEarnedFactWithCycleHistory(
         .limit(PROGRESSION_V2_CONFIG.intermediateCyclesForPromotion)
         .get()
       : Promise.resolve(null),
-    // Keyed by the SERVER-AUTHENTICATED uid — nothing the request carries can
-    // influence it. Unreadable always means NOT enrolled, so an outage can
-    // only ever leave an account on the adherence rule it already had.
-    firestore.collection(WORKOUT_PILOT_ENROLLMENT_COLLECTION).doc(uid).get()
-      .then((snapshot) => isWorkoutPilotEnrolled(snapshot.exists ? snapshot.data() : null))
-      .catch(() => false),
   ]);
   const config = resolveProgressionV2Config(progressionPolicyModeFor(qaMode));
   const scheduleConfig = scheduleConfigSnapshot.data() ?? {};
   // Same calendar authority as every other reader (docs §Agenda
-  // configurável): ScheduleConfig wins when present and structurally
-  // consistent with the program's prescribed frequency; the sealed
-  // program/snapshot is only a migration-safety fallback. Single source of
-  // truth — reuses `buildScheduleAuthorityContext` instead of a second,
-  // independently drifting derivation.
+  // configurável). Only the TIMEZONE is read from it here: recommended
+  // weekdays stopped being an input to progression — see
+  // `computeCycleProgression` — so `scheduleMode`/`trainingDays` can no
+  // longer change an adherence figure or an inactivity pause.
   const scheduleAuthority = buildScheduleAuthorityContext({
     scheduleConfigData: scheduleConfig,
     stateData: null,
     instance,
     program,
   });
-  const scheduleMode = scheduleAuthority.config.scheduleMode;
-  const trainingDays = new Set<string>(scheduleAuthority.config.trainingDays);
   const timezone = scheduleAuthority.config.timezone;
-  const start = localDate((instance.activatedAt as Timestamp).toDate(), timezone);
   const today = localDate(now, timezone);
-  const executions = executionsSnapshot.docs.map((item) => item.data());
+  // The progression window is the whole TrainingCycle, not the active
+  // ProgramInstance: an ADAPT supersedes one instance and activates another
+  // inside the same cycle, and reading only the active one is what used to
+  // reset Active Time and adherence after a frequency change.
+  const cycleWindow = await loadCycleProgressionWindow({
+    reader: {
+      root,
+      readDoc: (ref) => ref.get(),
+      readQuery: (query) => query.get(),
+    },
+    currentCycleId: state.currentCycleId,
+    activeProgramInstanceId: state.activeProgramInstanceId,
+    activeContentIdentity: state.activeContentIdentity,
+    activeInstance: instance,
+    activeProgram: program,
+    timezone,
+  });
+  if (cycleWindow.status === 'TOO_LARGE') {
+    throw new HttpsError('failed-precondition', 'progression_cycle_history_too_large');
+  }
+  if (cycleWindow.status === 'HISTORY_LIMIT') {
+    throw new HttpsError('failed-precondition', 'progression_cycle_history_limit');
+  }
+  if (cycleWindow.status === 'UNAVAILABLE') {
+    throw new HttpsError('failed-precondition', 'progression_cycle_window_unavailable');
+  }
+  const executions = cycleWindow.executions;
   // P0 integrity fix (2026-09, docs/workout-lifecycle/): parity with the
   // client resolver (`src/progressionEngineV2/resolver.ts`'s
-  // `hasInProgressExecution` check) — an IN_PROGRESS execution for the
-  // active instance always blocks a progression decision (docs §9/§42), and
-  // that rule must not depend solely on the client honoring it. Without this,
-  // a modified/old client (or a client racing a real IN_PROGRESS session)
-  // could call EARN directly and the backend would authorize a decision the
-  // client itself would have refused to compute.
-  if (executions.some((item) => item.status === 'IN_PROGRESS')) {
+  // `hasInProgressExecution` check) — an IN_PROGRESS execution always blocks
+  // a progression decision (docs §9/§42), and that rule must not depend
+  // solely on the client honoring it. Without this, a modified/old client
+  // (or a client racing a real IN_PROGRESS session) could call EARN directly
+  // and the backend would authorize a decision the client itself would have
+  // refused to compute.
+  //
+  // Scoped to the ACTIVE instance even though the counting window is now the
+  // whole cycle: only a session of the active program can actually be
+  // running, and superseding an instance (ADAPT, evolution) does not
+  // terminalize its executions. A cycle-wide check would let one stale
+  // IN_PROGRESS document on a superseded instance block progression forever.
+  if (executions.some((item) =>
+    item.status === 'IN_PROGRESS' && item.programInstanceId === state.activeProgramInstanceId)) {
     throw new HttpsError('failed-precondition', 'progression_blocked_by_in_progress_execution');
   }
-  const executionDates = new Set(executions.map((item) => item.scheduledLocalDate).filter((item): item is string => typeof item === 'string'));
-  const countedDates = new Set<string>();
-  let activeDays = 0;
-  let missed = 0;
-  let paused = false;
-  for (let cursor = start, guard = 0; cursor <= today && guard < 3660; cursor = addDays(cursor, 1), guard += 1) {
-    const hasExecution = executionDates.has(cursor);
-    if (hasExecution) { missed = 0; paused = false; }
-    if (!paused) { activeDays += 1; countedDates.add(cursor); }
-    if (scheduleMode === 'fixed' && !hasExecution && trainingDays.has(weekday(cursor)) && cursor < today) {
-      missed += 1;
-      if (missed >= config.inactivityMissedOpportunityThreshold) paused = true;
-    }
-  }
-  const opportunityDates = new Set(scheduleMode === 'fixed'
-    ? [...countedDates].filter((date) => trainingDays.has(weekday(date)))
-    : []);
-  const completedLedger = new Set(scheduleEventsSnapshot.docs.map((item) => item.data())
-    .filter((event) => event.type === 'COMPLETED' && event.programInstanceId === state.activeProgramInstanceId)
-    .map((event) => `${event.scheduledDate}:${event.sessionIndex}`));
-  const fulfilled = new Set<string>();
-  /** Fulfilled opportunity key -> the local day the effort actually happened. */
-  const trainedDayByKey = new Map<string, string>();
-  for (const execution of executions) {
-    // PILOT: the recommended-weekday filter is what discards a workout done
-    // on a day the calendar did not name. For an account whose calendar is a
-    // suggestion, that filter is the defect — it scores weekday identity, not
-    // training. Skipped for enrolled accounts; byte-identical for every other.
-    if (scheduleMode === 'fixed' && !pilotEnrolled && !opportunityDates.has(execution.scheduledLocalDate)) continue;
-    const session = Array.isArray(program.sessions) ? program.sessions[execution.sessionIndex] : null;
-    const key = `${execution.scheduledLocalDate}:${execution.sessionIndex}`;
-    if (completedLedger.has(key) && qualifyingExecution(execution, session, state.activeProgramInstanceId)) {
-      fulfilled.add(key);
-      trainedDayByKey.set(key, typeof execution.performedLocalDate === 'string'
-        ? execution.performedLocalDate
-        : execution.scheduledLocalDate);
-    }
-  }
-  const prescribedFrequency = Number.isInteger(program.prescribedTrainingFrequency)
-    ? program.prescribedTrainingFrequency
-    : program.prescribedStructuredDays;
-  // One definition of the weekly goal, imported from the same module the
-  // client reads (`src/progressionEngineV2/prescribedOpportunities.ts`,
-  // synced). Replaces the hand-inlined copy this file used to carry, so the
-  // displayed indicator and the EARN decision can no longer drift apart.
-  //
-  // Enrolled accounts use it regardless of `scheduleMode`: the pilot's
-  // premise — any day counts — is the same whether the calendar was authored
-  // as fixed or flexible.
-  const weeklyGoalByWeek = scheduleMode === 'flexible' || pilotEnrolled
-    ? buildFlexibleWeeklyTargets({
-        countedActiveDates: countedDates,
-        prescribedTrainingFrequency: prescribedFrequency,
-      })
-    : null;
-  const expected = weeklyGoalByWeek
-    ? [...weeklyGoalByWeek.values()].reduce((sum, count) => sum + count, 0)
-    : opportunityDates.size;
-  let fulfilledCount = fulfilled.size;
-  if (weeklyGoalByWeek) {
-    const weekdayOffset: Record<string, number> = { MON: 0, TUE: 1, WED: 2, THU: 3, FRI: 4, SAT: 5, SUN: 6 };
-    const mondayOf = (date: string) => addDays(date, -(weekdayOffset[weekday(date)] ?? 0));
-    const countedByWeek = new Map<string, Set<string>>();
-    for (const key of fulfilled) {
-      const scheduledDay = key.slice(0, 10);
-      const trainedDay = trainedDayByKey.get(key) ?? scheduledDay;
-      // PILOT counts DISTINCT DAYS, by the day trained — two qualifying
-      // sessions in one day are one day. Legacy flexible keeps counting
-      // `(date, session)` opportunities, keyed on the scheduled day.
-      const week = mondayOf(pilotEnrolled ? trainedDay : scheduledDay);
-      if (!weeklyGoalByWeek.has(week)) continue;
-      const unit = pilotEnrolled ? trainedDay : key;
-      const units = countedByWeek.get(week) ?? new Set<string>();
-      units.add(unit);
-      countedByWeek.set(week, units);
-    }
-    fulfilledCount = [...weeklyGoalByWeek.entries()].reduce(
-      (sum, [week, target]) => sum + Math.min(target, countedByWeek.get(week)?.size ?? 0), 0,
-    );
-  }
-  const ratioBp = expected === 0 ? 0 : Math.min(10_000, Math.floor(fulfilledCount * 10_000 / expected));
+  // THE rule, imported from the module the client reads (synced by
+  // scripts/syncPrescriptionEngineToFunctions.cjs): distinct local days
+  // trained over the weekly goal in force that week, across every instance of
+  // the cycle. Nothing is reimplemented here, so the displayed adherence and
+  // the EARN decision cannot drift apart, and no percentage sent by a client
+  // is ever consulted.
+  const progression = computeCycleProgression({
+    windows: cycleWindow.windows,
+    todayLocalDate: today,
+    executions: executions as unknown as Parameters<typeof computeCycleProgression>[0]['executions'],
+    scheduleEvents: cycleWindow.scheduleEvents as unknown as Parameters<typeof computeCycleProgression>[0]['scheduleEvents'],
+  }, config);
+  if (!progression) throw new HttpsError('failed-precondition', 'progression_cycle_window_unavailable');
+  const activeDays = progression.activeTime.activeDays;
+  const fulfilledCount = progression.validSessionCount;
+  // The SAME shared integer function the client's displayed figure comes from
+  // (`progressionEngineV2/adherence.ts`, synced): one rounding mode, no float
+  // division, so the authority and the client can never differ by a basis
+  // point — which is what used to reject a legitimate EARN as forged.
+  const ratioBp = progression.adherenceAtEarnBp;
   const quality = ratioBp >= config.adherenceHighThresholdBp ? 'HIGH'
     : ratioBp >= config.adherenceEarnedThresholdBp ? 'GOOD' : 'BELOW_TARGET';
   const minDays = state.currentTrainingLevel === 'BEGINNER'
@@ -1004,18 +1002,58 @@ export async function validateRequest(uid: string, request: AuthorityRequest, fi
     throw new HttpsError('aborted', 'stale_prescription_inputs');
   }
   if (request.operation === 'EARN') {
+    // The server RECOMPUTES the whole fact from authoritative documents only:
+    // the cycle's ProgramInstances, their sealed prescriptions, the real
+    // executions and the COMPLETED schedule ledger. `authoritativeEarnedFact`
+    // throws `progression_not_eligible` when no transition is earned, so a
+    // request can never create merit on its own.
     const authoritative = await authoritativeEarnedFact(uid, firestore, new Date());
-    if (!plainObject(request.earnedFact) || canonical(request.earnedFact) !== canonical(authoritative)) {
-      throw new HttpsError('permission-denied', 'forged_earned_fact');
+    // A submitted `earnedFact` is a CLAIM about which transition the caller
+    // believes it earned — never evidence. Only the SEMANTIC IDENTITY is
+    // checked, because that is what determines the event type, the
+    // idempotency key and the event id that Firestore Rules bind the
+    // persisted ledger entry to. The COUNTERS and the ADHERENCE the caller
+    // sent are deliberately ignored and never compared: requiring them to
+    // match byte-for-byte is what made two app builds with different (but
+    // both honest) local arithmetic mutually exclusive, rejecting legitimate
+    // evolutions as forged. The grant below carries the SERVER's numbers, and
+    // `firestore.rules` already refuses any ledger payload that disagrees
+    // with the grant — so the authoritative figures are the only ones that
+    // can ever be persisted, whatever the caller asked for.
+    if (request.earnedFact !== undefined) {
+      if (!plainObject(request.earnedFact)) {
+        throw new HttpsError('invalid-argument', 'invalid_earned_fact');
+      }
+      for (const field of ['type', 'fromLevel', 'toLevel'] as const) {
+        const claimed = request.earnedFact[field];
+        if (claimed !== undefined && claimed !== authoritative[field]) {
+          // A caller asking for a DIFFERENT transition than the one actually
+          // earned is refused outright — this is not version skew, it is a
+          // request for something the account has not earned.
+          throw new HttpsError('permission-denied', 'earned_fact_transition_mismatch');
+        }
+      }
     }
     const expectedEventType = authoritative.type === 'MOTIVATIONAL_RENEWAL'
       ? 'MOTIVATIONAL_RENEWAL_OFFERED' : 'EVOLUTION_EARNED';
     const expectedKey = `evolution:${bundle.state.activeProgramInstanceId}:${authoritative.type}`;
-    if (request.eventType !== expectedEventType || request.idempotencyKey !== expectedKey
-      || request.eventId !== lifecycleEventId(expectedEventType, expectedKey)) {
+    const expectedEventId = lifecycleEventId(expectedEventType, expectedKey);
+    // Identity stays strictly validated when the caller supplies it (older
+    // builds derive it locally). A caller that supplies none gets the
+    // server's — which is what makes the ledger identity server-authored for
+    // every build that no longer guesses the transition type up front.
+    if ((request.eventType !== undefined && request.eventType !== expectedEventType)
+      || (request.idempotencyKey !== undefined && request.idempotencyKey !== expectedKey)
+      || (request.eventId !== undefined && request.eventId !== expectedEventId)) {
       throw new HttpsError('permission-denied', 'forged_earned_event_identity');
     }
-    return { ...authoritativeBase, authoritativeEarnedFact: authoritative };
+    return {
+      ...authoritativeBase,
+      authoritativeEarnedFact: authoritative,
+      eventType: expectedEventType,
+      idempotencyKey: expectedKey,
+      eventId: expectedEventId,
+    };
   }
   let contentCanonical: { plan: FinalWorkoutPlan; templateMetadata: { version: number; sourceVersion: string; contentHash: string } } | null = null;
   let preparedInputs: Record<string, unknown> | null = null;
@@ -1032,6 +1070,17 @@ export async function validateRequest(uid: string, request: AuthorityRequest, fi
       // Fase 11 §4 — ADAPT never changes level or library version; both are
       // read straight from the CURRENT authoritative program/lifecycle
       // state (`bundle`, server-read), never re-derived or defaulted.
+      //
+      // Per-level weekly ceiling — THE authority for the rule the
+      // questionnaire and the agenda sheet both present
+      // (src/onboarding/weeklyDayAllowance.ts; parity asserted by
+      // src/onboarding/__tests__/weeklyDayCeilingParity.test.ts). Keyed on
+      // the server-read `currentTrainingLevel`, so neither a stale
+      // questionnaire answer nor a modified client can widen it, and a
+      // promotion lifts it with nothing to migrate. Checked BEFORE
+      // generation: an availability this level cannot honour must never
+      // reach the engine or get sealed.
+      assertWeeklyDaysWithinLevelCeiling(expectedInputs, bundle.state.currentTrainingLevel as CurrentTrainingLevel);
       contentCanonical = await generateCanonicalPlan(
         expectedInputs as unknown as QuestionnaireAnswers,
         firestore,
@@ -1810,6 +1859,20 @@ export async function authorizeWorkoutLifecycleMutationHandler(
    */
   canonical?: AuthorityCanonicalContent;
   /**
+   * EARN only — the earned evolution fact the server RECOMPUTED, plus the
+   * ledger identity derived from it. The caller must persist exactly these:
+   * `firestore.rules` binds the `workoutLifecycleEvents` payload and the
+   * event id to the grant, so nothing else can be written. Returning them is
+   * what lets a client stop deriving (and transporting) its own figures,
+   * which is what used to make two honest app builds mutually exclusive.
+   */
+  earned?: {
+    fact: Record<string, unknown>;
+    eventId: string;
+    eventType: string;
+    idempotencyKey: string;
+  };
+  /**
    * Fase 16 — present exclusively for v1.27 ADAPT/ACTIVATE: the entire
    * lifecycle transition (see `persistLifecycleActivationV127` above) has
    * already been persisted via Admin SDK. No grant is issued in this case —
@@ -1948,6 +2011,21 @@ export async function authorizeWorkoutLifecycleMutationHandler(
     grantId: WORKOUT_LIFECYCLE_AUTHORITY_GRANT_ID,
     expiresAtMs: expiresAt.toMillis(),
     ...(canonicalContent ? { canonical: canonicalContent } : {}),
+    // EARN only. The caller must persist THESE values: `firestore.rules`
+    // binds the ledger payload and the event identity to the grant, so
+    // anything else is rejected at the Rules layer. Returning them removes
+    // the caller's need to guess the transition — and with it the entire
+    // class of "two honest builds disagree by a basis point" rejections.
+    ...(plainObject(grant.authoritativeEarnedFact)
+      ? {
+        earned: {
+          fact: grant.authoritativeEarnedFact as Record<string, unknown>,
+          eventId: grant.eventId as string,
+          eventType: grant.eventType as string,
+          idempotencyKey: grant.idempotencyKey as string,
+        },
+      }
+      : {}),
   };
 }
 

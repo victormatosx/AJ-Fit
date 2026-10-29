@@ -3,8 +3,9 @@ import { Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { WEEKDAY_ORDER } from '../../state/AppState';
 import { useTheme } from '../../theme';
+import { STANDARD_MAX_WEEKLY_DAYS } from '../../onboarding/weeklyDayAllowance';
 import {
-  AVAILABLE_FREQUENCIES,
+  frequenciesWithin,
   selectFixedSchedule,
   selectFlexibleFrequency,
   selectFlexibleSchedule,
@@ -21,9 +22,11 @@ const DAY_CIRCLE = 42;
 export function ScheduleModeLink({
   value,
   onChange,
+  maxDays = STANDARD_MAX_WEEKLY_DAYS,
 }: {
   value: WeeklyScheduleValue;
   onChange: (value: WeeklyScheduleValue) => void;
+  maxDays?: number;
 }) {
   const { theme } = useTheme();
   const { t } = useTranslation('quiz');
@@ -37,7 +40,7 @@ export function ScheduleModeLink({
       // Clearing whatever the other mode had recorded is `selectFixedSchedule`
       // / `selectFlexibleSchedule`'s job, unchanged — this only flips which
       // one runs.
-      onPress={() => onChange(selected ? selectFixedSchedule() : selectFlexibleSchedule(value))}
+      onPress={() => onChange(selected ? selectFixedSchedule() : selectFlexibleSchedule(value, maxDays))}
       style={{ alignSelf: 'center', paddingHorizontal: 12, paddingVertical: 8 }}
     >
       <Text
@@ -130,9 +133,12 @@ function DayCircle({
 export function WeeklySchedulePicker({
   value,
   onChange,
+  maxDays = STANDARD_MAX_WEEKLY_DAYS,
 }: {
   value: WeeklyScheduleValue;
   onChange: (value: WeeklyScheduleValue) => void;
+  /** Per-level weekly ceiling (`weeklyDayAllowance.ts`); 7 means uncapped. */
+  maxDays?: number;
 }) {
   const { theme } = useTheme();
   // The funnel's persistent mascot, reached directly rather than through a
@@ -151,6 +157,11 @@ export function WeeklySchedulePicker({
   // colour — the CTA's own disabled state still comes from
   // `isWeeklyScheduleComplete`, untouched.
   const belowMinimum = !flexible && selectedDays.length > 0 && selectedDays.length < 2;
+  // Same status line, same slot, same style — only the message differs, the
+  // way `belowMinimum` already works. Every weekday stays tappable; this just
+  // explains why the next one does not latch. Shown at EVERY level's own
+  // ceiling (3 for beginners, 6 for the rest), never only the beginner one.
+  const atMaximum = !flexible && selectedDays.length >= maxDays;
 
   const statusStyle = {
     fontFamily: theme.fonts.ui,
@@ -177,7 +188,7 @@ export function WeeklySchedulePicker({
             {tLoose('days.flexibleFrequency')}
           </Text>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            {AVAILABLE_FREQUENCIES.map((frequency) => (
+            {frequenciesWithin(maxDays).map((frequency) => (
               <DayCircle
                 key={frequency}
                 label={String(frequency)}
@@ -185,7 +196,7 @@ export function WeeklySchedulePicker({
                 accessibilityRole="radio"
                 accessibilityLabel={tLoose('days.frequencyAccessibilityLabel', { count: frequency })}
                 onPress={() => {
-                  onChange(selectFlexibleFrequency(frequency));
+                  onChange(selectFlexibleFrequency(frequency, maxDays));
                   onToggled(true);
                 }}
               />
@@ -211,7 +222,7 @@ export function WeeklySchedulePicker({
                   accessibilityRole="checkbox"
                   accessibilityLabel={tLoose(`trainingDays.options.${day}`)}
                   onPress={() => {
-                    onChange(toggleFixedTrainingDay(value, day));
+                    onChange(toggleFixedTrainingDay(value, day, maxDays));
                     onToggled(!selected);
                   }}
                 />
@@ -223,6 +234,10 @@ export function WeeklySchedulePicker({
             {belowMinimum ? (
               <Text accessibilityRole="alert" style={statusStyle}>
                 {tLoose('days.minimumSelectionHint')}
+              </Text>
+            ) : atMaximum ? (
+              <Text style={statusStyle}>
+                {tLoose('days.maximumSelectionHint', { max: maxDays })}
               </Text>
             ) : selectedDays.length > 1 ? (
               <Text style={statusStyle}>

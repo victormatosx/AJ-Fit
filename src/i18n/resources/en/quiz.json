@@ -222,6 +222,7 @@
     "selectedCount_one": "{{count}} day selected",
     "selectedCount_other": "{{count}} days selected",
     "minimumSelectionHint": "Select at least 2 days.",
+    "maximumSelectionHint": "You can train at most {{max}} days per week.",
     "flexible": {
       "label": "I want to train freely"
     },

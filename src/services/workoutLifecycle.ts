@@ -777,6 +777,36 @@ export async function listProgramInstances(uid: string): Promise<ProgramInstance
   });
 }
 
+/**
+ * Every ProgramInstance that belonged to one TrainingCycle, oldest activation
+ * first — the real window set the cycle's progression must be reconstructed
+ * from (an ADAPT supersedes one instance and activates another inside the
+ * SAME cycle, so a single-instance read loses the progress already earned).
+ *
+ * Bounded by an explicit cap instead of reading the whole collection. A cycle
+ * with more instances than `maximumInstances` is reported as truncated rather
+ * than silently cut, so no caller can mistake a partial window set for a
+ * complete one.
+ */
+export async function listProgramInstancesForCycle(
+  uid: string,
+  cycleId: string,
+  maximumInstances: number,
+): Promise<{ instances: ProgramInstance<Timestamp>[]; truncated: boolean }> {
+  countFirestoreRead('workout_lifecycle.cycle_program_instances');
+  const snapshot = await getDocs(query(
+    collection(db, USERS, uid, PROGRAM_INSTANCES),
+    where('cycleId', '==', cycleId),
+    limit(maximumInstances + 1),
+  ));
+  const instances = snapshot.docs.slice(0, maximumInstances).map((item) => {
+    if (!isProgramInstance(item.data())) throw new Error(`PROGRAM_INSTANCE_INVALID:${item.id}`);
+    return item.data() as ProgramInstance<Timestamp>;
+  });
+  instances.sort((left, right) => left.activatedAt.toMillis() - right.activatedAt.toMillis());
+  return { instances, truncated: snapshot.docs.length > maximumInstances };
+}
+
 export async function listWorkoutLifecycleEvents(uid: string): Promise<WorkoutLifecycleEvent<Timestamp>[]> {
   const snapshot = await getDocs(collection(db, USERS, uid, WORKOUT_LIFECYCLE_EVENTS));
   return snapshot.docs.map((item) => {

@@ -1233,6 +1233,45 @@ export async function listExecutionsForProgramInstance(uid: string, programInsta
 }
 
 /**
+ * Firestore caps an `in` filter at 30 values; chunking keeps a cycle-wide read
+ * a bounded, index-free set of equality queries instead of a collection scan.
+ */
+const EXECUTION_INSTANCE_IN_CHUNK = 30;
+
+/**
+ * Executions of SEVERAL ProgramInstances — the cycle-wide progression window.
+ *
+ * Still strictly instance-scoped (every id is passed explicitly), so content
+ * reused by a different cycle can never leak into this cycle's counts. The
+ * caller is responsible for passing only instances of one TrainingCycle.
+ */
+export async function listExecutionsForProgramInstances(
+  uid: string,
+  programInstanceIds: readonly string[],
+): Promise<PersistedWorkoutExecution[]> {
+  if (programInstanceIds.length === 0) return [];
+  const unique = [...new Set(programInstanceIds)];
+  const chunks: string[][] = [];
+  for (let index = 0; index < unique.length; index += EXECUTION_INSTANCE_IN_CHUNK) {
+    chunks.push(unique.slice(index, index + EXECUTION_INSTANCE_IN_CHUNK));
+  }
+  const results = await Promise.all(chunks.map(async (chunk) => {
+    countFirestoreRead('workout_executions.program_instance');
+    const snapshot = await getDocs(query(
+      executionsCollection(uid),
+      where('programInstanceId', 'in', chunk),
+    ));
+    return snapshot.docs.map((item) => fromDoc(item.id, item.data()));
+  }));
+  // One document can only carry one `programInstanceId`, so chunks are
+  // disjoint by construction; the id guard is belt-and-braces against a
+  // malformed document matching two chunks.
+  const byId = new Map<string, PersistedWorkoutExecution>();
+  for (const execution of results.flat()) byId.set(execution.executionId, execution);
+  return [...byId.values()];
+}
+
+/**
  * Distinct real activity dates (`performedLocalDate ?? scheduledLocalDate`)
  * with a COMPLETED or
  * PARTIALLY_COMPLETED execution within `[fromLocalDate, toLocalDate]`
