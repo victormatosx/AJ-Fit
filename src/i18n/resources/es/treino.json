@@ -112,5 +112,40 @@
     "title": "Ejercicios",
     "showAll": "Ver todos los {{count}}",
     "showLess": "Mostrar menos"
+  },
+  "swapPresentation": {
+    "kicker": "TU NUEVO PLAN",
+    "panelTitle": "Entrenamiento actualizado",
+    "panelSubtitle": "División {{split}}",
+    "frequencyBadge_one": "{{count}}X/SEMANA",
+    "frequencyBadge_other": "{{count}}X/SEMANA",
+    "statsSessions_one": "{{count}} entrenamiento",
+    "statsSessions_other": "{{count}} entrenamientos",
+    "statsExercises_one": "{{count}} ejercicio",
+    "statsExercises_other": "{{count}} ejercicios",
+    "cta": "Empezar a entrenar",
+    "ajExpandAccessibility": "Pedir a AJ que explique el nuevo entrenamiento",
+    "ajCollapseAccessibility": "Cerrar la explicación de AJ",
+    "aj": {
+      "intro": "¡Listo, {{name}}! Rehice tu entrenamiento desde cero para {{count}} días por semana.",
+      "introNoName": "¡Listo! Rehice tu entrenamiento desde cero para {{count}} días por semana.",
+      "daysFixed": "Tus sesiones quedaron en {{days}}, con {{rest}} días de descanso para recuperar.",
+      "daysFlexible": "Sin días fijos: son {{count}} entrenamientos por semana, cuando puedas.",
+      "division": "La división es {{split}}, en {{count}} entrenamientos — {{breakdown}}.",
+      "volume": "En total son {{exercises}} ejercicios y {{sets}} series por semana.",
+      "volumeSingleRest": "En total son {{exercises}} ejercicios y {{sets}} series, con {{rest}}s de descanso.",
+      "volumeRestRange": "En total son {{exercises}} ejercicios y {{sets}} series, con {{rest}} a {{restMax}}s de descanso.",
+      "changes": "Comparado con el anterior: {{changes}}.",
+      "changeSessionsMore_one": "{{count}} entrenamiento nuevo en la semana",
+      "changeSessionsMore_other": "{{count}} entrenamientos nuevos en la semana",
+      "changeSessionsFewer_one": "{{count}} entrenamiento menos",
+      "changeSessionsFewer_other": "{{count}} entrenamientos menos",
+      "changeExercisesMore_one": "{{count}} ejercicio más",
+      "changeExercisesMore_other": "{{count}} ejercicios más",
+      "changeExercisesFewer_one": "{{count}} ejercicio menos",
+      "changeExercisesFewer_other": "{{count}} ejercicios menos",
+      "changeSplit": "ahora división {{split}}",
+      "closing": "Tu historial y tus cargas siguen todos aquí. ¡Vamos!"
+    }
   }
 }

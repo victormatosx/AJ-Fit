@@ -48,13 +48,74 @@ export const ANALYSIS_LAYOUT = {
   rowPaddingVertical: { regular: 13, compact: 11 },
 } as const;
 
+/**
+ * Tightened vertical rhythm, for a caller whose composition is shorter than
+ * the one the design sheet was drawn for.
+ *
+ * Only the gaps move; every *object* (ring, percentage, title, speech box,
+ * rows, review link) keeps its own size, so this reads as the same screen
+ * breathing less, not as a different layout. The onboarding analysis never
+ * uses it: its two-line title and five first-time steps genuinely fill the
+ * screen, and the original spacing is what the design specifies.
+ */
+export const ANALYSIS_DENSE_GAPS = {
+  paddingTop: 14,
+  paddingBottom: 28,
+  ringGap: 8,
+  percentGap: 12,
+  titleGap: 8,
+  speechGap: 14,
+  rowGap: 8,
+  reviewGap: 14,
+} as const;
+
+/**
+ * Plain `number`s, not `ANALYSIS_LAYOUT`'s literal types: `as const` makes
+ * `paddingTop` the type `17`, which a tightened `14` could never satisfy.
+ */
+export type AnalysisGaps = Record<
+  | 'paddingTop' | 'paddingBottom' | 'ringGap' | 'percentGap' | 'titleGap'
+  | 'speechMinHeight' | 'speechGap' | 'rowGap' | 'reviewGap' | 'reviewMinHeight',
+  number
+>;
+
+/** The resolved gap set. `dense: false` is `ANALYSIS_LAYOUT`, value for value. */
+export function analysisGaps(dense: boolean): AnalysisGaps {
+  const base: AnalysisGaps = {
+    paddingTop: ANALYSIS_LAYOUT.paddingTop,
+    paddingBottom: ANALYSIS_LAYOUT.paddingBottom,
+    ringGap: ANALYSIS_LAYOUT.ringGap,
+    percentGap: ANALYSIS_LAYOUT.percentGap,
+    titleGap: ANALYSIS_LAYOUT.titleGap,
+    speechMinHeight: ANALYSIS_LAYOUT.speechMinHeight,
+    speechGap: ANALYSIS_LAYOUT.speechGap,
+    rowGap: ANALYSIS_LAYOUT.rowGap,
+    reviewGap: ANALYSIS_LAYOUT.reviewGap,
+    reviewMinHeight: ANALYSIS_LAYOUT.reviewMinHeight,
+  };
+  return dense ? { ...base, ...ANALYSIS_DENSE_GAPS } : base;
+}
+
 export type AnalysisVariant = 'regular' | 'compact';
+
+export interface AnalysisCompositionOptions {
+  /**
+   * Lines the title occupies. Onboarding's is two ("Montando" / "seu plano");
+   * the swap's is one ("Trocando treino"), which is 46pt of reserved height
+   * that would otherwise become empty space above the checklist.
+   */
+  titleLines?: number;
+  dense?: boolean;
+}
 
 export interface AnalysisComposition {
   variant: AnalysisVariant;
   ring: AnalysisRingGeometry;
   titleSize: number;
   rowPaddingVertical: number;
+  /** Resolved gaps, so the screen renders the exact values this math used. */
+  gaps: AnalysisGaps;
+  titleLines: number;
 }
 
 /**
@@ -77,29 +138,40 @@ export interface AnalysisComposition {
 export function analysisComposition(
   availableHeight: number,
   stepCount: number,
+  options?: AnalysisCompositionOptions,
 ): AnalysisComposition {
+  const titleLines = options?.titleLines ?? 2;
+  const dense = options?.dense ?? false;
   const variant: AnalysisVariant =
-    analysisRequiredHeight('regular', stepCount) <= availableHeight ? 'regular' : 'compact';
+    analysisRequiredHeight('regular', stepCount, options) <= availableHeight ? 'regular' : 'compact';
   return {
     variant,
     ring: ANALYSIS_RING[variant],
     titleSize: ANALYSIS_LAYOUT.titleSize[variant],
     rowPaddingVertical: ANALYSIS_LAYOUT.rowPaddingVertical[variant],
+    gaps: analysisGaps(dense),
+    titleLines,
   };
 }
 
 /** Height the composition occupies at `variant`, top padding to bottom padding. */
-export function analysisRequiredHeight(variant: AnalysisVariant, stepCount: number): number {
+export function analysisRequiredHeight(
+  variant: AnalysisVariant,
+  stepCount: number,
+  options?: AnalysisCompositionOptions,
+): number {
   const L = ANALYSIS_LAYOUT;
+  const G = analysisGaps(options?.dense ?? false);
+  const titleLines = options?.titleLines ?? 2;
   const rowHeight = L.rowPaddingVertical[variant] * 2 + L.rowIndicator + L.rowBorder;
-  return L.paddingTop
-    + ANALYSIS_RING[variant].size + L.ringGap
-    + displayLineHeight(26) + L.percentGap
-    + displayLineHeight(L.titleSize[variant]) * 2 + L.titleGap
-    + L.speechMinHeight + L.speechGap
-    + stepCount * rowHeight + Math.max(0, stepCount - 1) * L.rowGap
-    + L.reviewMinHeight + L.reviewGap
-    + L.paddingBottom;
+  return G.paddingTop
+    + ANALYSIS_RING[variant].size + G.ringGap
+    + displayLineHeight(26) + G.percentGap
+    + displayLineHeight(L.titleSize[variant]) * titleLines + G.titleGap
+    + G.speechMinHeight + G.speechGap
+    + stepCount * rowHeight + Math.max(0, stepCount - 1) * G.rowGap
+    + G.reviewMinHeight + G.reviewGap
+    + G.paddingBottom;
 }
 
 /**

@@ -16,7 +16,17 @@ import { useTheme } from '../../theme';
 export function PlanWeekRow({
   columns,
 }: {
-  columns: { key: string; label: string; active: boolean }[];
+  columns: {
+    key: string;
+    label: string;
+    active: boolean;
+    /**
+     * Short mark printed inside the dot — the session letter ("A", "B") the
+     * plan sealed onto that weekday. Optional: onboarding has no plan to read
+     * a session off yet and passes none, keeping the dot blank as designed.
+     */
+    badge?: string | null;
+  }[];
 }) {
   const { theme } = useTheme();
   return (
@@ -48,8 +58,22 @@ export function PlanWeekRow({
               shadowOpacity: column.active ? 1 : 0,
               shadowRadius: column.active ? 14 : 0,
               shadowOffset: { width: 0, height: 0 },
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
-          />
+          >
+            {column.badge ? (
+              <Text
+                style={{
+                  fontFamily: theme.fonts.display,
+                  fontSize: 15,
+                  color: column.active ? theme.colors.primaryForeground : theme.colors.textFaint,
+                }}
+              >
+                {column.badge}
+              </Text>
+            ) : null}
+          </View>
         </View>
       ))}
     </View>
@@ -290,18 +314,32 @@ export function PlanPanelHeader({
   title,
   badge,
   subtitle,
+  badgeInline,
+  reserveRight,
 }: {
   title: string;
   badge?: string | null;
   subtitle?: string | null;
+  /**
+   * Sets the badge immediately beside the title instead of pushing it to the
+   * far edge of the row. For a caller that needs that edge for something
+   * else — the swap presentation parks AJ there.
+   */
+  badgeInline?: boolean;
+  /** Room kept clear on the right, for whatever the caller puts over it. */
+  reserveRight?: number;
 }) {
   const { theme } = useTheme();
   return (
-    <View>
+    <View style={reserveRight ? { paddingRight: reserveRight } : undefined}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
         <Text
           style={{
-            flex: 1,
+            // Inline: the title takes only the width it needs, so the badge
+            // sits against it. Default: it fills the row and the badge is
+            // pushed to the end.
+            flex: badgeInline ? undefined : 1,
+            flexShrink: 1,
             fontFamily: theme.fonts.uiSemi,
             fontSize: 24,
             lineHeight: 30,
