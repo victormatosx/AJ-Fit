@@ -60,11 +60,13 @@ export const STREAK_FLAME_TIERS: readonly StreakFlameTier[] = [
 ];
 
 /**
- * The six transitions that are allowed to show the transformation screen.
- * Reaching 1 (grey -> blue) is deliberately absent: the design excludes it.
- * 200 is deliberately absent too — it stays cyan, mid-tier.
+ * The seven transitions that are allowed to show the transformation screen.
+ * `1` is the "acender o foguinho" moment — apagada (no flame) -> azul — and is
+ * celebrated like every colour change above it; its "Antes" side is the UNLIT
+ * state, so `StreakMilestoneCelebration.from` is `null` for it and only for it.
+ * 200 is deliberately absent — it stays cyan, mid-tier.
  */
-export const STREAK_MILESTONES: readonly number[] = [3, 10, 30, 100, 250, 500];
+export const STREAK_MILESTONES: readonly number[] = [1, 3, 10, 30, 100, 250, 500];
 
 /** Highest tier whose `min` is <= `days`; `null` is the "apagada" (unlit) state. */
 export function streakFlameTierForDays(days: number): StreakFlameTier | null {
@@ -88,8 +90,12 @@ export function nextStreakMilestone(days: number): number | null {
 export interface StreakMilestoneCelebration {
   /** Always equal to the streak value that triggered it. */
   milestone: number;
-  /** Tier shown as "Antes" — the tier of `milestone - 1`. */
-  from: StreakFlameTier;
+  /**
+   * Tier shown as "Antes" — the tier of `milestone - 1`, or `null` for the
+   * `1` milestone, whose previous state is the unlit flame (no tier exists
+   * below `spark`).
+   */
+  from: StreakFlameTier | null;
   /** Tier shown as "Agora". */
   to: StreakFlameTier;
   /** "Próximo marco", or `null` at the maximum tier (rendered as "—"). */
@@ -124,10 +130,11 @@ export function resolveStreakMilestoneCelebration(
   if (input.alreadyCelebrated.includes(input.current)) return null;
 
   const to = streakFlameTierForDays(input.current);
+  // `from` is intentionally allowed to be `null`: the `1` milestone comes from
+  // the unlit state. `to` is non-null for every milestone (each one is a tier
+  // `min`), but the guard keeps the contract explicit.
   const from = streakFlameTierForDays(input.current - 1);
-  // Both are non-null for every milestone (the lowest is 3, so `from` is at
-  // least the `spark` tier), but the guard keeps the contract explicit.
-  if (!to || !from) return null;
+  if (!to) return null;
 
   return { milestone: input.current, from, to, next: nextStreakMilestone(input.current) };
 }

@@ -651,6 +651,7 @@
       "continue": "Continuar"
     },
     "color": {
+      "unlit": "apagada",
       "spark": "azul",
       "flame": "amarilla",
       "ember": "naranja",
@@ -660,6 +661,7 @@
       "stellar": "blanca"
     },
     "colorCap": {
+      "unlit": "Apagada",
       "spark": "Azul",
       "flame": "Amarilla",
       "ember": "Naranja",

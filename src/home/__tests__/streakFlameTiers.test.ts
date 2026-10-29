@@ -52,7 +52,8 @@ describe('streakFlameTierForDays', () => {
 
 describe('nextStreakMilestone', () => {
   it('points at the next transformation, and at nothing past the maximum', () => {
-    expect(nextStreakMilestone(0)).toBe(3);
+    expect(nextStreakMilestone(0)).toBe(1);
+    expect(nextStreakMilestone(1)).toBe(3);
     expect(nextStreakMilestone(2)).toBe(3);
     expect(nextStreakMilestone(3)).toBe(10);
     expect(nextStreakMilestone(10)).toBe(30);
@@ -71,7 +72,7 @@ describe('resolveStreakMilestoneCelebration', () => {
 
   // The exact table from the brief's "Mudança de nível" matrix.
   it.each([
-    [1, false, 'reaching 1 turns the flame blue but never celebrates'],
+    [1, true, 'unlit -> blue celebrates'],
     [2, false, 'an intermediate day is silent'],
     [3, true, 'blue -> yellow celebrates'],
     [4, false, 'the day after a milestone is silent'],
@@ -93,6 +94,14 @@ describe('resolveStreakMilestoneCelebration', () => {
     [700, false, 'far past the maximum tier it is silent'],
   ])('streak %i -> celebration: %s (%s)', (current, expected) => {
     expect(resolve(current) !== null).toBe(expected);
+  });
+
+  it('reports the unlit state as "Antes" for the very first day', () => {
+    const first = resolve(1);
+    expect(first).toMatchObject({ milestone: 1, to: { id: 'spark' }, next: 3 });
+    // `null`, not a tier: day 0 has no flame at all, which is exactly what the
+    // transformation screen must draw on the "Antes" side.
+    expect(first?.from).toBeNull();
   });
 
   it('reports the previous tier as "Antes" and the reached tier as "Agora"', () => {
