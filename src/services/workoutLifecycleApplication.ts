@@ -44,6 +44,7 @@ import {
   type WorkoutProgramSnapshot,
 } from './workoutPrograms';
 import { fromWorkoutTemplateDocument } from '../workoutPrescription/templateDocument';
+import { resolvePendingEvolutionTemplate } from './pendingEvolutionTemplate';
 import {
   logWorkoutLifecycleEvent,
   workoutLifecycleErrorCategory,
@@ -897,7 +898,7 @@ export async function activatePendingEvolution(input: {
     return { status: 'STALE_PENDING', reasonCodes: ['SOURCE_PRESCRIPTION_INPUTS_CHANGED'] };
   }
 
-  const template = await loadWorkoutTemplate(pending.targetTemplateId as TemplateId);
+  const template = await resolvePendingEvolutionTemplate(pending);
   if (
     !template
     || template.version !== pending.targetTemplateVersion
