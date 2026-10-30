@@ -229,6 +229,8 @@
     "fixedModeLink": "I want to choose the weekdays",
     "flexibleFrequency": "How many times per week?",
     "frequencyAccessibilityLabel": "{{count}} workouts per week",
+    "flexibleStatus_one": "{{count}} time a week · no fixed days",
+    "flexibleStatus_other": "{{count}} times a week · no fixed days",
     "options": {
       "2": {
         "label": "2 days",

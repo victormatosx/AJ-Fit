@@ -229,6 +229,8 @@
     "fixedModeLink": "Quero escolher os dias da semana",
     "flexibleFrequency": "Quantas vezes por semana?",
     "frequencyAccessibilityLabel": "{{count}} treinos por semana",
+    "flexibleStatus_one": "{{count}} vez por semana · sem dias fixos",
+    "flexibleStatus_other": "{{count}} vezes por semana · sem dias fixos",
     "options": {
       "2": {
         "label": "2 dias",
