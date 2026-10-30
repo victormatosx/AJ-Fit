@@ -995,6 +995,13 @@ describe.skipIf(!enabled)('Workout Lifecycle authority — real Firestore Emulat
         data: {
           operation: 'ADAPT', sourceProgramInstanceId: 'wpi_active', sourceCycleId: 'cyc_active',
           targetProgramInstanceId: 'wpi_placeholder', targetCycleId: 'cyc_active',
+          // The production path ALWAYS sends these for an ADAPT
+          // (`src/services/workoutPrograms.ts` — `input.nextCycle` is absent
+          // for an adaptation, so both fall back to the lifecycle's current
+          // values). Omitting them made this request trip
+          // `adaptation_cannot_change_cycle_semantics`, which is the guard
+          // doing its job on an incomplete request rather than a defect.
+          targetTrainingLevel: 'BEGINNER', targetCycleNumber: 1,
           questionnaireId: 'q1', questionnaireVersion: 1,
           targetProgramSource: 'program_adaptation', updatedFields: { duration: '45' },
           targetPrescriptionInputSnapshot: (() => {
@@ -1131,7 +1138,13 @@ describe.skipIf(!enabled)('Workout Lifecycle authority — real Firestore Emulat
   // content, the operation succeeds — but the SEALED content must be the
   // backend's own reasonable plan, never the attacker's absurd one.
   it('never seals a client-submitted 1,000,000-set exercise — the backend always seals its own canonical plan instead', async () => {
-    const inputs = completeInputs();
+    // Three days, not the shared fixture's four: this account's lifecycle is
+    // BEGINNER, and the per-level weekly bounds (2-3 for beginners — see
+    // `assertWeeklyDaysWithinLevelCeiling`) now reject a four-day beginner
+    // ADAPT before any plan is generated. The exploit under test is the
+    // absurd SET COUNT, which is independent of the weekly frequency, so the
+    // fixture is brought inside the allowed range to keep exercising it.
+    const inputs = completeInputs({ days: 3, trainingDays: ['MON', 'WED', 'FRI'] });
     await db.collection('users').doc(UID).collection('programInstances').doc('wpi_active').update({
       prescriptionInputSnapshot: {
         snapshotId: 'pis_active', schemaVersion: 1, source: 'QUESTIONNAIRE_BASELINE', inputs,
@@ -2179,17 +2192,39 @@ describe.skipIf(!enabled)('Workout Lifecycle authority — real Firestore Emulat
         const oracle = await authoritativeEarnedFact(UID, db, new Date());
         const tampered = { ...oracle, toLevel: 'ADVANCED' };
         const idempotencyKey = `evolution:wpi_active:${oracle.type}`;
+        // The TRANSITION's identity is still compared, so asking for a level
+        // the account did not earn is refused outright. Only the reason code
+        // changed: the authority no longer compares the whole fact
+        // byte-for-byte (which made two honest app builds mutually
+        // exclusive), it compares type/fromLevel/toLevel.
         await expect(authorizeWorkoutLifecycleMutationHandler(earnRequest(idempotencyKey, tampered), db))
-          .rejects.toMatchObject({ message: 'forged_earned_fact' });
+          .rejects.toMatchObject({ message: 'earned_fact_transition_mismatch' });
       });
 
-      it('QA_TRANSITION account: client inventing sessionsCompletedAtEarn/adherenceAtEarnBp is rejected', async () => {
+      it('QA_TRANSITION account: client-invented sessionsCompletedAtEarn/adherenceAtEarnBp can never reach the ledger', async () => {
         await setQaMode('TRANSITION');
         const oracle = await authoritativeEarnedFact(UID, db, new Date());
         const tampered = { ...oracle, sessionsCompletedAtEarn: 9999, adherenceAtEarnBp: 10_000 };
         const idempotencyKey = `evolution:wpi_active:${oracle.type}`;
-        await expect(authorizeWorkoutLifecycleMutationHandler(earnRequest(idempotencyKey, tampered), db))
-          .rejects.toMatchObject({ message: 'forged_earned_fact' });
+        // The counters a caller sends are IGNORED rather than compared — that
+        // is what lets an older build with different local arithmetic still
+        // earn. The security property is stronger than a rejection, and this
+        // asserts it directly: the grant the caller must write from carries
+        // the AUTHORITY's figures, and `firestore.rules` binds the ledger
+        // payload to the grant, so 9999/10000 is unreachable.
+        const result = await authorizeWorkoutLifecycleMutationHandler(
+          earnRequest(idempotencyKey, tampered), db);
+        expect(result.earned?.fact).toMatchObject({
+          sessionsCompletedAtEarn: oracle.sessionsCompletedAtEarn,
+          adherenceAtEarnBp: oracle.adherenceAtEarnBp,
+        });
+        expect(result.earned?.fact.sessionsCompletedAtEarn).not.toBe(9999);
+        const grant = (await db.collection('users').doc(UID)
+          .collection('workoutLifecycleAuthorityGrants').doc('current').get()).data();
+        expect(grant?.authoritativeEarnedFact).toMatchObject({
+          sessionsCompletedAtEarn: oracle.sessionsCompletedAtEarn,
+          adherenceAtEarnBp: oracle.adherenceAtEarnBp,
+        });
       });
 
       it('unauthenticated request is denied regardless of QA mode', async () => {

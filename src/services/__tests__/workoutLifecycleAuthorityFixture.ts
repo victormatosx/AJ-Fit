@@ -11,6 +11,7 @@ import {
   WORKOUT_LIFECYCLE_AUTHORITY_GRANT_ID,
   type InstallActiveWorkoutProgramRequest,
   type WorkoutLifecycleAuthorityCanonicalContent,
+  type WorkoutLifecycleAuthorityEarnedGrant,
   type WorkoutLifecycleAuthorityRequest,
 } from '../../workoutLifecycle/authorityProvider';
 import {
@@ -23,6 +24,10 @@ import {
   cycleIdForOperation, lifecycleEventId, programInstanceIdForOperation, startingLevelFromQuestionnaire,
 } from '../../workoutLifecycle/domain';
 import { buildPrescriptionInputSnapshot } from '../../workoutLifecycle/prescriptionInputs';
+import { resolveWorkoutLifecycleQaMode } from '../../workoutLifecycle/qaPolicy';
+import { adherenceBasisPoints } from '../../progressionEngineV2/adherence';
+import { evaluateProgressionV2ForUserFull } from '../workoutProgressionV2';
+import { loadWorkoutLifecycle } from '../workoutLifecycle';
 import { createHash } from 'node:crypto';
 import { generateWorkoutPrescriptionRouted } from '../../workoutPrescription/generatePrescription';
 import { getCanonicalTemplateV127ById } from '../../workoutPrescription/canonicalCatalog';
@@ -451,6 +456,97 @@ async function initializeWorkoutProgramV127ForTests(
   return outcome!;
 }
 
+/**
+ * The authority's EARN step, as a test stand-in.
+ *
+ * Two properties matter here, and only two:
+ *
+ *  1. It NEVER echoes the caller's counters. Every figure is recomputed from
+ *     the emulator's own documents through the shared engine, using the SAME
+ *     `adherenceBasisPoints` the real authority uses. Echoing is the exact
+ *     circularity that let the audit's basis-point divergence survive every
+ *     test in this repository.
+ *  2. It derives the event identity itself, so the client cannot author it.
+ *
+ * What it deliberately does NOT reproduce is the authority's ELIGIBILITY
+ * GATE's timing: the real callable has no injectable clock, while these
+ * suites simulate months of history against a wall clock they control. When
+ * its own evaluation (at the real clock) does not name a transition, it
+ * honours the claimed one and still supplies recomputed figures, rather than
+ * becoming a second, clock-sensitive gate. Eligibility against the real
+ * authority is covered by
+ * `functions/src/workoutLifecycle/__tests__/earnAuthorityParity.integration.test.ts`,
+ * which runs `authoritativeEarnedFact` itself.
+ */
+async function recomputeEarnedFact(
+  uid: string,
+  request: WorkoutLifecycleAuthorityRequest,
+): Promise<{
+  fact: WorkoutLifecycleAuthorityEarnedGrant['fact'];
+  eventId: string;
+  eventType: string;
+  idempotencyKey: string;
+} | undefined> {
+  const [full, lifecycle, qaMode] = await Promise.all([
+    evaluateProgressionV2ForUserFull(uid),
+    loadWorkoutLifecycle(uid),
+    resolveWorkoutLifecycleQaMode(uid).catch(() => 'NORMAL' as const),
+  ]);
+  if (!lifecycle) return undefined;
+  const decision = full?.decision;
+  const forced = qaMode === 'QA_TRANSITION';
+  let type: string | null = null;  // eslint-disable-line prefer-const
+  let toLevel: string = lifecycle.lifecycle.currentTrainingLevel;
+  if (decision?.type === 'LEVEL_PROMOTION_ELIGIBLE') { type = 'LEVEL_PROMOTION'; toLevel = decision.to; }
+  else if (decision?.type === 'EVOLUTION_ELIGIBLE') type = 'CYCLE_EVOLUTION';
+  else if (decision?.type === 'MOTIVATIONAL_RENEWAL_AVAILABLE') type = 'MOTIVATIONAL_RENEWAL';
+  else if (forced) {
+    // Mirrors the authority's QA_TRANSITION branch: the real level/target
+    // branching still runs off the account's REAL currentTrainingLevel.
+    type = lifecycle.lifecycle.currentTrainingLevel === 'BEGINNER' ? 'LEVEL_PROMOTION' : 'CYCLE_EVOLUTION';
+    toLevel = lifecycle.lifecycle.currentTrainingLevel === 'BEGINNER' ? 'INTERMEDIATE'
+      : lifecycle.lifecycle.currentTrainingLevel;
+  }
+  const claimedType = plainRecord(request.earnedFact)?.type;
+  if (type !== null && typeof claimedType === 'string' && claimedType !== type) {
+    // A caller asking for a transition this account did not earn is refused,
+    // exactly like the authority.
+    throw new Error('earned_fact_transition_mismatch');
+  }
+  if (type === null) {
+    if (typeof claimedType !== 'string') throw new Error('progression_not_eligible');
+    type = claimedType;
+    if (type === 'LEVEL_PROMOTION') {
+      toLevel = lifecycle.lifecycle.currentTrainingLevel === 'BEGINNER' ? 'INTERMEDIATE' : 'ADVANCED';
+    }
+  }
+  const eventType = (type === 'MOTIVATIONAL_RENEWAL' ? 'MOTIVATIONAL_RENEWAL_OFFERED' : 'EVOLUTION_EARNED') as 'MOTIVATIONAL_RENEWAL_OFFERED' | 'EVOLUTION_EARNED';
+  const idempotencyKey = `evolution:${lifecycle.programInstance.programInstanceId}:${type}`;
+  return {
+    fact: {
+      type,
+      fromLevel: lifecycle.lifecycle.currentTrainingLevel,
+      toLevel,
+      quality: full?.snapshot.adherence.quality ?? 'BELOW_TARGET',
+      sessionsCompletedAtEarn: full?.snapshot.validSessionCount ?? 0,
+      // THE shared integer function — never a local re-derivation.
+      adherenceAtEarnBp: adherenceBasisPoints(
+        full?.snapshot.validSessionCount ?? 0, full?.expectedSessions ?? 0,
+      ),
+      ...(forced ? { qaForced: true, triggerSource: 'QA_TRANSITION' } : {}),
+    } as WorkoutLifecycleAuthorityEarnedGrant['fact'],
+    eventId: lifecycleEventId(eventType, idempotencyKey),
+    eventType,
+    idempotencyKey,
+  };
+}
+
+function plainRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
 export function installWorkoutLifecycleAuthorityFixture(
   testEnv: RulesTestEnvironment,
   uid: string,
@@ -461,6 +557,17 @@ export function installWorkoutLifecycleAuthorityFixture(
     const expiresAtMs = Date.now() + 60_000;
     let responseCanonical: WorkoutLifecycleAuthorityCanonicalContent | undefined;
     let persistedResult: { programId: string; programInstanceId: string } | undefined;
+    // EARN: RECOMPUTE the fact, never echo the caller's. Echoing is exactly
+    // the circularity that let the client/authority basis-point divergence
+    // survive every test in the repo — the fixture confirmed whatever the
+    // client had just sent. This runs the SAME shared rule the real authority
+    // runs (`computeCycleProgression` via `evaluateProgressionV2ForUserFull`)
+    // over the SAME emulator documents, and its agreement with the real
+    // `authoritativeEarnedFact` is itself pinned by
+    // `functions/src/workoutLifecycle/__tests__/earnAuthorityParity.integration.test.ts`.
+    const authoritativeEarned = request.operation === 'EARN'
+      ? await recomputeEarnedFact(uid, request)
+      : undefined;
     await testEnv.withSecurityRulesDisabled(async (context) => {
       const fixtureDb = context.firestore();
       const activeState = await getDoc(doc(fixtureDb, 'users', uid, 'workoutProgramState', 'active'));
@@ -642,7 +749,16 @@ export function installWorkoutLifecycleAuthorityFixture(
         issuedAt: Timestamp.now(),
         expiresAt: Timestamp.fromMillis(expiresAtMs),
         createdAt: Timestamp.now(),
-        ...(authoritativeRequest.earnedFact ? { authoritativeEarnedFact: authoritativeRequest.earnedFact } : {}),
+        // The identity the client no longer authors must come from here, or
+        // Firestore Rules (`grant.eventId == eventId`) cannot evaluate.
+        ...(authoritativeEarned
+          ? {
+            authoritativeEarnedFact: authoritativeEarned.fact,
+            eventId: authoritativeEarned.eventId,
+            eventType: authoritativeEarned.eventType,
+            idempotencyKey: authoritativeEarned.idempotencyKey,
+          }
+          : {}),
         ...(request.operation === 'MIGRATE' && baselineContentIdentity && baselineProgram?.exists()
           ? {
             baselineProgramInstanceId: `wpi_${stableHash(`v1-baseline:${baselineContentIdentity}`)}`,
@@ -657,6 +773,7 @@ export function installWorkoutLifecycleAuthorityFixture(
       grantId: WORKOUT_LIFECYCLE_AUTHORITY_GRANT_ID,
       expiresAtMs,
       ...(responseCanonical ? { canonical: responseCanonical } : {}),
+      ...(authoritativeEarned ? { earned: authoritativeEarned } : {}),
     };
   });
 }

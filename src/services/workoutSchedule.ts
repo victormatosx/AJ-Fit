@@ -725,3 +725,30 @@ export async function listScheduleEventsForProgramInstance(
   ));
   return snapshot.docs.map((item) => item.data() as ScheduleEvent);
 }
+
+/**
+ * The schedule ledger of a whole TrainingCycle.
+ *
+ * Events live under `workoutPrograms/{contentIdentity}/scheduleEvents`, so a
+ * cycle that went through an ADAPT has its ledger split across the content
+ * identities of its instances. Each `(contentIdentity, instanceId)` pair is
+ * read explicitly and the result is deduplicated by document id — content
+ * reused by two instances therefore contributes each event exactly once, and
+ * an event belonging to another instance is never picked up.
+ */
+export async function listScheduleEventsForCycle(
+  uid: string,
+  windows: readonly { contentIdentity: string; programInstanceId: string }[],
+): Promise<ScheduleEvent[]> {
+  const pairs = [...new Map(windows.map((window) =>
+    [`${window.contentIdentity}:${window.programInstanceId}`, window])).values()];
+  const results = await Promise.all(pairs.map(async (pair) => {
+    countFirestoreRead('workout_schedule.events');
+    const snapshot = await getDocs(query(
+      scheduleEventsCollection(uid, pair.contentIdentity),
+      where('programInstanceId', '==', pair.programInstanceId),
+    ));
+    return snapshot.docs.map((item) => [item.ref.path, item.data() as ScheduleEvent] as const);
+  }));
+  return [...new Map(results.flat()).values()];
+}

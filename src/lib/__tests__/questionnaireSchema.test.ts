@@ -228,9 +228,21 @@ describe('trainingDays (Schedule Engine input)', () => {
     expect(normalizeWeekdays(['MON', 'MON', 'TUE'])).toEqual(['MON', 'TUE']);
   });
 
-  it('auto-fills all seven weekdays for days === 7 and needs no explicit answer', () => {
+  it('auto-fills the weekdays for days === 7, clamped to the level’s ceiling', () => {
+    // The full-week auto-fill still runs (no explicit answer is needed), but
+    // the weekly-day policy (`onboarding/weeklyDayAllowance.ts`) allows no
+    // level to train seven days, so the result lands on the ceiling for this
+    // quiz's level — `intermediate`, i.e. 6 — instead of all seven.
     const quiz = cleanApplicableAnswers(standardQuiz({ days: 7, trainingDays: null }));
-    expect(quiz.trainingDays).toEqual(['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']);
+    expect(quiz.days).toBe(6);
+    expect(quiz.trainingDays).toEqual(['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']);
+    expect(trainingDaysValid(quiz)).toBe(true);
+  });
+
+  it('clamps a seven-day beginner questionnaire to three', () => {
+    const quiz = cleanApplicableAnswers(standardQuiz({ level: 'beginner', days: 7, trainingDays: null }));
+    expect(quiz.days).toBe(3);
+    expect(quiz.trainingDays).toEqual(['MON', 'TUE', 'WED']);
     expect(trainingDaysValid(quiz)).toBe(true);
   });
 

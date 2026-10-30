@@ -1,21 +1,71 @@
-import { addDaysLocal, compareLocalDates, weekdayOfLocalDate, type LocalDate } from '../scheduleEngine/calendar';
-import type { ScheduleMode, Weekday } from '../state/AppState';
+import { addDaysLocal, compareLocalDates, type LocalDate } from '../scheduleEngine/calendar';
 import type { ActiveTime } from '../workoutLifecycle/types';
 import { PROGRESSION_V2_CONFIG, type ProgressionV2Config } from './config';
 
 /** Safety cap — no legitimate cycle is walked for more than ~10 years. */
 const MAX_WALK_DAYS = 3660;
 
+/** Weekly frequencies outside this range carry no usable inactivity signal. */
+const MIN_FREQUENCY = 1;
+const MAX_FREQUENCY = 7;
+
+/**
+ * How many consecutive days WITHOUT ANY TRAINING mean prolonged inactivity.
+ *
+ * `inactivityMissedOpportunityThreshold` is still expressed in *missed
+ * opportunities* — that config field and its purpose are unchanged. What
+ * changed is how an opportunity is located in the calendar: it is no longer a
+ * named weekday (which made a recommendation behave like an obligation) but
+ * the user's own training cadence, `7 / frequência` days. Three missed
+ * opportunities at 3x/week is therefore 3 × ceil(7/3) = 9 consecutive untrained
+ * days; at 6x/week it is 6 days; at 1x/week it is 21.
+ *
+ * `null` means "no usable signal, never pause" — an unknown or structurally
+ * invalid frequency must never be able to invent inactivity (docs
+ * progression/07).
+ */
+export function inactivityThresholdDays(
+  prescribedTrainingFrequency: number | null | undefined,
+  config: ProgressionV2Config = PROGRESSION_V2_CONFIG,
+): number | null {
+  if (!Number.isInteger(prescribedTrainingFrequency)) return null;
+  const frequency = prescribedTrainingFrequency as number;
+  if (frequency < MIN_FREQUENCY || frequency > MAX_FREQUENCY) return null;
+  return config.inactivityMissedOpportunityThreshold * Math.ceil(7 / frequency);
+}
+
 export interface ComputeActiveTimeInput {
   /** Local date the current Training Cycle started (inclusive). */
   startDateInclusive: LocalDate;
   /** "Now", already resolved to the user's local date (inclusive). */
   todayLocalDate: LocalDate;
-  /** Prescribed weekly training days. Empty/unknown schedule never triggers a pause (docs progression/07 — no signal, no false inactivity). */
-  trainingDays: readonly Weekday[];
-  /** Flexible has no weekday debt, so inactivity cannot be inferred from a missed weekday. */
-  scheduleMode?: ScheduleMode;
-  /** Every `scheduledLocalDate` with a recorded execution of ANY status in this cycle — proof of engagement, distinct from `isValidProgressionSession` (docs §26/§55). */
+  /**
+   * Consecutive untrained days that constitute prolonged inactivity, from
+   * `inactivityThresholdDays`. `null`/absent never pauses.
+   *
+   * Use this for a window with ONE prescribed frequency. A cycle that went
+   * through an ADAPT must pass `inactivityDayThresholdAt` instead, so each
+   * historical period is judged by the cadence that was actually in force
+   * then.
+   */
+  inactivityDayThreshold?: number | null;
+  /**
+   * Per-day threshold, for a window whose prescribed frequency changed
+   * partway through. Takes precedence over the scalar above.
+   *
+   * Resolved at the CURSOR's date, which is what makes a pause decision
+   * depend only on immutable facts: the window covering that day, and the
+   * length of the silence up to it. A later frequency change therefore cannot
+   * reinterpret an older stretch of inactivity — the defect that let a user
+   * who lowered their weekly goal retroactively lose active days, adherence
+   * and an eligibility they had already earned.
+   */
+  inactivityDayThresholdAt?: (date: LocalDate) => number | null;
+  /**
+   * Every local date with a recorded execution of ANY status in this cycle —
+   * proof of engagement, distinct from `isValidProgressionSession`
+   * (docs §26/§55).
+   */
   executionDates: ReadonlySet<LocalDate>;
 }
 
@@ -29,24 +79,29 @@ export interface ActiveTimeTrace {
  * Active Time (docs progression/07, ADR-002, ADR-007): calendar time elapsed
  * in the current cycle, minus any prolonged-inactivity pause.
  *
- * Algorithm (deterministic, explainable — the exact detection rule is left
- * open by the docs, resolved here and recorded in ADR-007):
+ * Algorithm (deterministic, explainable):
  *
  * Walk every calendar day from `startDateInclusive` to `todayLocalDate`.
  * - A day only counts toward `activeDays` while not paused.
- * - A *prescribed* day (per `trainingDays`) with no recorded execution
- *   increments a "consecutive missed opportunity" streak. Reaching
- *   `inactivityMissedOpportunityThreshold` freezes `activeDays` (pause).
- * - Rest days (not prescribed) never affect the streak — they are normal
- *   programming, not disengagement (docs §22, §25).
- * - ANY recorded execution (prescribed day or not) resets the streak and
- *   clears the pause — the user is back, active time resumes from where it
- *   froze, never resetting the accumulated total (docs §26).
+ * - An ELAPSED day with no recorded execution extends an idle streak.
+ *   Reaching `inactivityDayThreshold` freezes `activeDays` (pause).
+ * - ANY recorded execution resets the streak and clears the pause — the user
+ *   is back, active time resumes from where it froze, never resetting the
+ *   accumulated total (docs §26).
  *
- * The threshold is expressed in *missed prescribed opportunities*, not raw
- * calendar days, so a 2x/week and a 6x/week schedule are held to the same
- * standard of "how many expected sessions in a row were skipped", not the
- * same wall-clock gap.
+ * ## What this deliberately no longer does
+ *
+ * It no longer asks whether a RECOMMENDED weekday went by unused. Under the
+ * current training model the calendar is a suggestion, so "SEG/QUA/SEX
+ * recommended, TER/QUI/SÁB trained" used to accumulate three missed
+ * opportunities in the first week and pause a user who never stopped
+ * training. Inactivity is now measured as absence of training, which is the
+ * thing it was always meant to detect; training LESS than the weekly goal is
+ * a separate concept and is expressed by adherence alone, never by a pause.
+ *
+ * Today is never counted as a miss: only `cursor < todayLocalDate` days
+ * extend the idle streak, so neither a future date nor the day still in
+ * progress can be a consumed absence.
  */
 export function computeActiveTime(
   input: ComputeActiveTimeInput,
@@ -57,23 +112,28 @@ export function computeActiveTime(
 
 /**
  * Same domain calculation as `computeActiveTime`, with the exact civil-date
- * membership exposed for consumers that must enumerate real prescribed
- * opportunities. Keeping both outputs in one walk prevents adherence and the
- * active-time gate from developing subtly different pause/resume semantics.
+ * membership exposed for consumers that must enumerate real weekly targets.
+ * Keeping both outputs in one walk prevents adherence and the active-time
+ * gate from developing subtly different pause/resume semantics.
  */
 export function computeActiveTimeTrace(
   input: ComputeActiveTimeInput,
-  config: ProgressionV2Config = PROGRESSION_V2_CONFIG,
+  _config: ProgressionV2Config = PROGRESSION_V2_CONFIG,
 ): ActiveTimeTrace {
   if (compareLocalDates(input.startDateInclusive, input.todayLocalDate) > 0) {
     return { activeTime: { activeDays: 0, pausedAt: null }, countedDates: new Set() };
   }
 
-  const prescribedDays = new Set(input.trainingDays);
-  const threshold = config.inactivityMissedOpportunityThreshold;
+  const thresholdAt = input.inactivityDayThresholdAt
+    ?? ((): ((date: LocalDate) => number | null) => {
+      const fixed = input.inactivityDayThreshold ?? null;
+      return () => fixed;
+    })();
+  const usable = (value: number | null): value is number =>
+    typeof value === 'number' && Number.isFinite(value) && value > 0;
 
   let activeDays = 0;
-  let consecutiveMissed = 0;
+  let idleDays = 0;
   let paused = false;
   let pausedAt: LocalDate | null = null;
   const countedDates = new Set<LocalDate>();
@@ -82,11 +142,10 @@ export function computeActiveTimeTrace(
 
   while (compareLocalDates(cursor, input.todayLocalDate) <= 0 && guard < MAX_WALK_DAYS) {
     const isPastDay = compareLocalDates(cursor, input.todayLocalDate) < 0;
-    const isPrescribedDay = prescribedDays.has(weekdayOfLocalDate(cursor));
     const hasExecution = input.executionDates.has(cursor);
 
     if (hasExecution) {
-      consecutiveMissed = 0;
+      idleDays = 0;
       if (paused) {
         paused = false;
         pausedAt = null;
@@ -101,9 +160,15 @@ export function computeActiveTimeTrace(
       countedDates.add(cursor);
     }
 
-    if (input.scheduleMode !== 'flexible' && !hasExecution && isPrescribedDay && isPastDay) {
-      consecutiveMissed += 1;
-      if (consecutiveMissed >= threshold && !paused) {
+    if (!hasExecution && isPastDay) {
+      idleDays += 1;
+      // The threshold of the day being TESTED — not of the cycle, and never
+      // of a later period. The day that completes the streak is still counted
+      // (the check above already ran): the pause takes effect from the day
+      // AFTER it, which is the first day for which there is real evidence of
+      // absence.
+      const threshold = thresholdAt(cursor);
+      if (usable(threshold) && idleDays >= threshold && !paused) {
         paused = true;
         pausedAt = cursor;
       }

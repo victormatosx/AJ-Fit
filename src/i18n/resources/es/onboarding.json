@@ -121,6 +121,10 @@
     "completed": "Completado",
     "titleLine1": "Creando",
     "titleLine2": "tu plan",
+    "swap": {
+      "title": "Cambiando rutina",
+      "back": "Volver al entrenamiento"
+    },
     "steps": {
       "profile": "Leyendo tu perfil físico",
       "volume": "Calculando volumen e intensidad",

@@ -333,9 +333,15 @@ export function StreakEvolveScreen({
 
       <View style={styles.center}>
         <Animated.View style={[styles.flameArea, flameBlockStyle]}>
-          <Animated.View style={[styles.glow, oldGlowStyle]} pointerEvents="none">
-            <GlowCircle rgb={from.glowRgb} />
-          </Animated.View>
+          {/* `from === null` is the "acender o foguinho" case (0 -> 1): the
+              previous state is the UNLIT flame, which has no glow at all, so
+              the old glow layer is simply absent and only the new one fades
+              in. Every other transition cross-fades two tier glows. */}
+          {from && (
+            <Animated.View style={[styles.glow, oldGlowStyle]} pointerEvents="none">
+              <GlowCircle rgb={from.glowRgb} />
+            </Animated.View>
+          )}
           <Animated.View style={[styles.glow, newGlowStyle]} pointerEvents="none">
             <GlowCircle rgb={to.glowRgb} />
           </Animated.View>
@@ -358,7 +364,9 @@ export function StreakEvolveScreen({
 
           {!still && (
             <Animated.View style={[styles.flameLayer, oldFlameStyle]} pointerEvents="none">
-              <StreakFlame days={from.min} size={FLAME_SIZE} animated={false} glow={false} />
+              {/* `0` renders `StreakFlame`'s unlit outline — the same charge
+                  and burst play, starting from an empty flame. */}
+              <StreakFlame days={from?.min ?? 0} size={FLAME_SIZE} animated={false} glow={false} />
             </Animated.View>
           )}
           <Animated.View style={[styles.flameLayer, newFlameStyle]} pointerEvents="none">
@@ -386,9 +394,9 @@ export function StreakEvolveScreen({
       <Animated.View style={[styles.strip, stripStyle]}>
         <StripColumn
           label={t('streak.evolve.before')}
-          value={t(`streak.colorCap.${from.id}`)}
+          value={from ? t(`streak.colorCap.${from.id}`) : t('streak.colorCap.unlit')}
           valueColor="rgba(255,255,255,0.65)"
-          flameDays={from.min}
+          flameDays={from?.min ?? 0}
         />
         <View style={styles.divider} />
         <StripColumn

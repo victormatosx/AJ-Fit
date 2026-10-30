@@ -64,10 +64,41 @@ export interface WorkoutLifecycleAuthorityCanonicalContent {
   targetTemplateContentHash: string;
 }
 
+/**
+ * The EARNED EVOLUTION FACT, recomputed server-side from authoritative
+ * documents (the cycle's ProgramInstances, their sealed prescriptions, the
+ * real executions and the COMPLETED schedule ledger) and carried in the
+ * authority grant.
+ *
+ * This is the ONLY acceptable source for what gets persisted: `firestore.rules`
+ * binds the ledger payload and the event identity to the grant, so a caller
+ * that writes its own locally computed figures is rejected. It is also what
+ * makes two app builds with different local arithmetic interoperable — the
+ * client no longer has to agree with the server on a number, it just uses the
+ * server's.
+ */
+export interface WorkoutLifecycleAuthorityEarnedGrant {
+  fact: {
+    type: string;
+    fromLevel: string;
+    toLevel: string;
+    quality: string;
+    sessionsCompletedAtEarn: number;
+    adherenceAtEarnBp: number;
+    qaForced?: boolean;
+    triggerSource?: string;
+  };
+  eventId: string;
+  eventType: string;
+  idempotencyKey: string;
+}
+
 export interface WorkoutLifecycleAuthorityResult {
   grantId?: string;
   expiresAtMs?: number;
   canonical?: WorkoutLifecycleAuthorityCanonicalContent;
+  /** Present exclusively for `EARN`. */
+  earned?: WorkoutLifecycleAuthorityEarnedGrant;
   /**
    * Fase 16 — present exclusively for v1.27 ADAPT/ACTIVATE
    * (`authorizeWorkoutLifecycleMutationHandler`'s own doc comment): the

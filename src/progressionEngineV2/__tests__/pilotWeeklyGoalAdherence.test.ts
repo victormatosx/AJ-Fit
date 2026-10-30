@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { computeAdherence } from '../adherence';
+import { computeCycleProgression } from '../cycleProgression';
 import {
   buildFlexibleWeeklyTargets,
   buildPrescribedOpportunities,
+  countFulfilledFlexibleWeeklyTargets,
   countFulfilledPrescribedOpportunities,
   countFulfilledWeeklyTrainedDays,
 } from '../prescribedOpportunities';
@@ -137,8 +139,9 @@ describe('the defect this replaces', () => {
 
 describe('it measures the goal, not the weekday', () => {
   it('missing one of three still costs exactly one third', () => {
+    // 2/3 quantized to basis points: floor(20000/3) = 6666.
     expect(pilotRatio({ from: MON, to: SUN, frequency: 3, executions: [execution(TUE, 0), execution(SAT, 1)] }))
-      .toBeCloseTo(2 / 3, 10);
+      .toBe(0.6666);
   });
 
   it('a seventh workout cannot buy back a week that was skipped', () => {
@@ -160,7 +163,7 @@ describe('the week is the unit, and a partial week is honest about it', () => {
     // Active from Friday: that week has 3 active days (FRI, SAT, SUN), so the
     // goal of 5 is capped at 3. Training Friday and Saturday is 2/3.
     expect(pilotRatio({ from: FRI, to: SUN, frequency: 5, executions: [execution(FRI, 0), execution(SAT, 1)] }))
-      .toBeCloseTo(2 / 3, 10);
+      .toBe(0.6666);
   });
 
   it('the week still in progress is not scored against days that have not happened', () => {
@@ -252,6 +255,73 @@ describe('what counts as training is unchanged', () => {
       prescribedSessions: SESSIONS,
       weeklyTargets,
     })).toBe(0);
+  });
+});
+
+describe('every account is scored by the same rule', () => {
+  /**
+   * The three counters that used to be selected between, on identical input:
+   * a 3x/week goal with MON/WED/FRI recommended and TUE/THU/SAT trained.
+   */
+  const executions = [execution(TUE, 0), execution(THU, 1), execution(SAT, 2)];
+  const counted = activeDates(MON, SUN);
+  const weeklyTargets = buildFlexibleWeeklyTargets({
+    countedActiveDates: counted, prescribedTrainingFrequency: 3,
+  });
+  const scheduleEvents = executions.map((item) => ledgerEvent(item.scheduledLocalDate, item.sessionIndex));
+
+  it('the three old rules really did disagree — that is the defect', () => {
+    // Legacy fixed (every non-enrolled fixed account, and the notification
+    // observer for ALL fixed accounts): 0 of 3.
+    expect(legacyFixedRatio({ from: MON, to: SUN, trainingDays: ['MON', 'WED', 'FRI'], executions })).toBe(0);
+    // Legacy flexible: counts `(date, session)` opportunities on the
+    // SCHEDULED day, so it happened to agree here...
+    expect(countFulfilledFlexibleWeeklyTargets({
+      programInstanceId: INSTANCE, executions, scheduleEvents, prescribedSessions: SESSIONS, weeklyTargets,
+    })).toBe(3);
+    // ...but not once two sessions share a day: it credits two, the day rule
+    // credits one.
+    const twiceInOneDay = [execution(TUE, 0), execution(TUE, 1)];
+    const twiceEvents = twiceInOneDay.map((item) => ledgerEvent(item.scheduledLocalDate, item.sessionIndex));
+    expect(countFulfilledFlexibleWeeklyTargets({
+      programInstanceId: INSTANCE, executions: twiceInOneDay, scheduleEvents: twiceEvents,
+      prescribedSessions: SESSIONS, weeklyTargets,
+    })).toBe(2);
+    expect(countFulfilledWeeklyTrainedDays({
+      programInstanceId: INSTANCE, executions: twiceInOneDay, scheduleEvents: twiceEvents,
+      prescribedSessions: SESSIONS, weeklyTargets,
+    })).toBe(1);
+  });
+
+  it('a legacy fixed account, a flexible account and an ex-pilot account now score identically', () => {
+    // There is nothing left to differentiate them: `computeCycleProgression`
+    // takes no scheduleMode, no trainingDays and no enrolment flag. The three
+    // account shapes below differ only in data that the rule cannot read, so
+    // the SAME effort must produce the SAME number for all three.
+    const shapes = [
+      { label: 'fixo legado', frequency: 3 },
+      { label: 'flexível', frequency: 3 },
+      { label: 'ex-piloto', frequency: 3 },
+    ];
+    const results = shapes.map((shape) => computeCycleProgression({
+      windows: [{
+        programInstanceId: INSTANCE,
+        activatedAtLocalDate: MON,
+        supersededAtLocalDate: null,
+        prescribedTrainingFrequency: shape.frequency,
+        prescribedSessions: SESSIONS,
+      }],
+      todayLocalDate: SUN,
+      executions,
+      scheduleEvents,
+    })!);
+    for (const result of results) {
+      expect(result.adherence.ratio).toBe(1);
+      expect(result.validSessionCount).toBe(3);
+      expect(result.expectedSessions).toBe(3);
+    }
+    expect(results[0].adherence).toEqual(results[1].adherence);
+    expect(results[1].adherence).toEqual(results[2].adherence);
   });
 });
 

@@ -30,8 +30,9 @@ const STREAK_FLAME_PREVIEWS: readonly { days: number; label: string }[] = [
   { days: 500, label: 'Roxa (Lendária)' },
 ];
 
-/** The six celebrated transitions — mirrors `STREAK_MILESTONES`. */
+/** The seven celebrated transitions — mirrors `STREAK_MILESTONES`. */
 const STREAK_EVOLVE_PREVIEWS: readonly { milestone: number; label: string }[] = [
+  { milestone: 1, label: 'Apagada → Azul' },
   { milestone: 3, label: 'Azul → Amarela' },
   { milestone: 10, label: 'Amarela → Laranja' },
   { milestone: 30, label: 'Laranja → Vermelha' },

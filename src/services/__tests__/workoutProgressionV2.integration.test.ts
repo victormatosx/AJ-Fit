@@ -91,6 +91,9 @@ describe.skipIf(!enabled)('Progression Engine V2 — real Firestore Emulator int
       });
       await setDoc(doc(db, 'users', UID, 'workoutPrograms', 'program-a'), {
         programId: 'program-a', prescriptionId: 'rx-a', questionnaireId: 'q1', status: 'active',
+        // The sealed weekly goal is the adherence denominator now, so every
+        // fixture needs the real field rather than relying on a fallback.
+        prescribedTrainingFrequency: 3,
         sessions: [{ name: 'A', exercises: [{ exerciseId: 'ex1', sets: 1 }] }],
       });
       await setDoc(doc(db, 'users', UID, 'workoutProgramState', 'scheduleConfig'), {
@@ -249,10 +252,15 @@ describe.skipIf(!enabled)('Progression Engine V2 — real Firestore Emulator int
     expect(await loadWorkoutLifecycle(UID)).toMatchObject({ lifecycle: { activeProgramInstanceId: instanceId } });
   });
 
-  it('credits only fulfilled prescribed opportunities: 6 prescribed + 4 extra valid workouts remains 60%', async () => {
+  it('credits only ledger-proven days: 6 proven + 4 unproven workouts remains 60%', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'users', UID, 'workoutProgramState', 'scheduleConfig'), {
         trainingDays: ['MON', 'TUE', 'WED', 'THU', 'FRI'], timezone: 'UTC', scheduleVersion: 1,
+      });
+      await setDoc(doc(ctx.firestore(), 'users', UID, 'workoutPrograms', 'program-a'), {
+        programId: 'program-a', prescriptionId: 'rx-a', questionnaireId: 'q1', status: 'active',
+        prescribedTrainingFrequency: 5,
+        sessions: [{ name: 'A', exercises: [{ exerciseId: 'ex1', sets: 1 }] }],
       });
     });
     const bundle = await ensureWorkoutLifecycleForLegacyActiveProgram(UID, {
@@ -318,8 +326,253 @@ describe.skipIf(!enabled)('Progression Engine V2 — real Firestore Emulator int
     expect(decision).toMatchObject({ type: 'PROGRESS_CONTINUES' });
     if (decision?.type === 'PROGRESS_CONTINUES') {
       expect(decision.validSessionCount).toBe(5);
-      expect(decision.adherence.ratio).toBeCloseTo(5 / 6, 8);
+      // Quantized to basis points by design (one definition shared with the
+      // authority): floor(5 * 10000 / 6) = 8333.
+      expect(decision.adherence.ratio).toBe(0.8333);
       expect(decision.adherence.quality).toBe('GOOD');
     }
+  });
+
+  /**
+   * The gather layer must read the whole TrainingCycle. These seed a real
+   * second ProgramInstance in the SAME cycle — exactly the shape an ADAPT
+   * leaves behind — and assert that the progression window spans both.
+   */
+  describe('cycle continuity across a Program Adaptation', () => {
+    /** Supersedes the baseline instance and activates a 5x one in the same cycle. */
+    async function adaptToFiveTimesAWeek(input: {
+      previousInstanceId: string;
+      cycleId: string;
+      supersededAtOffset: number;
+      activatedAtOffset: number;
+    }) {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await updateDoc(doc(db, 'users', UID, 'programInstances', input.previousInstanceId), {
+          supersededAt: Timestamp.fromMillis(ACTIVATED_AT_MS + input.supersededAtOffset * MS_PER_DAY),
+          updatedAt: Timestamp.now(),
+        });
+        await setDoc(doc(db, 'users', UID, 'workoutPrograms', 'program-b'), {
+          programId: 'program-b', prescriptionId: 'rx-b', questionnaireId: 'q1', status: 'active',
+          prescribedTrainingFrequency: 5,
+          sessions: [{ name: 'A', exercises: [{ exerciseId: 'ex1', sets: 1 }] }],
+        });
+        await setDoc(doc(db, 'users', UID, 'programInstances', 'wpi_adapted'), {
+          programInstanceId: 'wpi_adapted',
+          cycleId: input.cycleId,
+          contentIdentity: 'program-b',
+          prescriptionIdentity: 'rx-b',
+          questionnaireId: 'q1',
+          activatedAt: Timestamp.fromMillis(ACTIVATED_AT_MS + input.activatedAtOffset * MS_PER_DAY),
+          supersededAt: null,
+          previousProgramInstanceId: input.previousInstanceId,
+          activationReason: 'PROGRAM_ADAPTATION',
+          schemaVersion: 2,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+        await updateDoc(doc(db, 'users', UID, 'workoutLifecycleState', 'current'), {
+          activeProgramInstanceId: 'wpi_adapted',
+          activeContentIdentity: 'program-b',
+          activePrescriptionIdentity: 'rx-b',
+          updatedAt: Timestamp.now(),
+        });
+      });
+    }
+
+    async function seedAdaptedExecution(offset: number, index: number) {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, 'users', UID, 'workoutExecutions', `adapted-${index}`), {
+          executionId: `adapted-${index}`,
+          programId: 'program-b',
+          programInstanceId: 'wpi_adapted',
+          templateId: 'T001',
+          sessionIndex: 0,
+          sessionName: 'A',
+          scheduledLocalDate: localDate(offset),
+          status: 'COMPLETED',
+          startedAt: Timestamp.now(),
+          finishedAt: Timestamp.now(),
+          exercises: [{
+            exerciseIndex: 0, exerciseId: 'ex1', prescribedSets: 1, prescribedReps: '10',
+            prescribedDuration: null, prescribedCycles: null,
+            sets: [{ setIndex: 0, status: 'COMPLETED', actualReps: 10, weightKg: 0, actualDurationSeconds: null }],
+          }],
+          executionSchemaVersion: 2,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+        await setDoc(doc(
+          db, 'users', UID, 'workoutPrograms', 'program-b', 'scheduleEvents',
+          `completed_wpi_adapted_0_${localDate(offset)}`,
+        ), {
+          type: 'COMPLETED', programInstanceId: 'wpi_adapted', sessionIndex: 0,
+          scheduledDate: localDate(offset), occurredAt: Timestamp.now(),
+        });
+      });
+    }
+
+    async function seedAdaptedInProgressExecution(offset: number) {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'users', UID, 'workoutExecutions', 'adapted-in-progress'), {
+          executionId: 'adapted-in-progress',
+          programId: 'program-b',
+          programInstanceId: 'wpi_adapted',
+          templateId: 'T001',
+          sessionIndex: 0,
+          sessionName: 'A',
+          scheduledLocalDate: localDate(offset),
+          status: 'IN_PROGRESS',
+          startedAt: Timestamp.now(),
+          finishedAt: null,
+          exercises: [{
+            exerciseIndex: 0, exerciseId: 'ex1', prescribedSets: 1, prescribedReps: '10',
+            prescribedDuration: null, prescribedCycles: null,
+            sets: [{ setIndex: 0, status: 'PENDING', actualReps: null, weightKg: null, actualDurationSeconds: null }],
+          }],
+          executionSchemaVersion: 2,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+      });
+    }
+
+    it('keeps the active days earned before the adaptation instead of restarting at the new instance', async () => {
+      const bundle = await ensureWorkoutLifecycleForLegacyActiveProgram(UID, {
+        contentIdentity: 'program-a', prescriptionIdentity: 'rx-a', questionnaireId: 'q1',
+        questionnaireExperienceLevel: 'beginner', activatedAt: Timestamp.fromMillis(ACTIVATED_AT_MS),
+      });
+      const previousInstanceId = bundle.programInstance.programInstanceId;
+      // Three weeks on the original 3x program, fully met.
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await Promise.all([0, 2, 4, 7, 9, 11, 14, 16, 18].map((offset, index) =>
+          seedExecution({
+            db, executionId: `before-${index}`, programInstanceId: previousInstanceId,
+            scheduledLocalDate: localDate(offset), status: 'COMPLETED',
+          })));
+      });
+      // ADAPT on day 21 (a Monday), then a met 5x week.
+      await adaptToFiveTimesAWeek({
+        previousInstanceId, cycleId: bundle.cycle.cycleId,
+        supersededAtOffset: 20, activatedAtOffset: 21,
+      });
+      for (const [index, offset] of [21, 22, 23, 24, 25].entries()) {
+        await seedAdaptedExecution(offset, index);
+      }
+
+      // 28 cycle days at 100% is the Beginner bar. Before this change the
+      // window restarted at the new instance's activation, so the same user
+      // was back at 7 active days and could not earn at all.
+      const decision = await evaluateProgressionV2ForUser(UID, new Date(ACTIVATED_AT_MS + 27 * MS_PER_DAY));
+      expect(decision).toMatchObject({
+        type: 'LEVEL_PROMOTION_ELIGIBLE', from: 'BEGINNER', to: 'INTERMEDIATE', quality: 'HIGH',
+      });
+      if (decision?.type === 'LEVEL_PROMOTION_ELIGIBLE') {
+        // 28 calendar days of the CYCLE, not the 7 since the new instance.
+        expect(decision.activeDays).toBe(28);
+        // Weeks 1-3 keep their 3x goal (9 of 9); week 4 gets the new 5x goal
+        // (5 of 5). Nothing was rewritten and nothing was lost.
+        expect(decision.validSessionCount).toBe(14);
+        expect(decision.adherence.ratio).toBe(1);
+      }
+      // The cycle number itself never moved.
+      expect(await loadWorkoutLifecycle(UID)).toMatchObject({
+        cycle: { cycleId: bundle.cycle.cycleId },
+        lifecycle: { activeProgramInstanceId: 'wpi_adapted' },
+      });
+    });
+
+    it('a mid-week frequency change gives that week one goal, never two', async () => {
+      const bundle = await ensureWorkoutLifecycleForLegacyActiveProgram(UID, {
+        contentIdentity: 'program-a', prescriptionIdentity: 'rx-a', questionnaireId: 'q1',
+        questionnaireExperienceLevel: 'beginner', activatedAt: Timestamp.fromMillis(ACTIVATED_AT_MS),
+      });
+      const previousInstanceId = bundle.programInstance.programInstanceId;
+      // Day 0 is a Monday. ADAPT on day 3 (Thursday) — mid-week.
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await Promise.all([0, 2].map((offset, index) =>
+          seedExecution({
+            db, executionId: `before-${index}`, programInstanceId: previousInstanceId,
+            scheduledLocalDate: localDate(offset), status: 'COMPLETED',
+          })));
+      });
+      await adaptToFiveTimesAWeek({
+        previousInstanceId, cycleId: bundle.cycle.cycleId,
+        supersededAtOffset: 3, activatedAtOffset: 3,
+      });
+      await seedAdaptedExecution(4, 0);
+
+      const decision = await evaluateProgressionV2ForUser(UID, new Date(ACTIVATED_AT_MS + 6 * MS_PER_DAY));
+      expect(decision).toMatchObject({ type: 'PROGRESS_CONTINUES' });
+      if (decision?.type === 'PROGRESS_CONTINUES') {
+        expect(decision.activeDays).toBe(7);
+        // ONE week, ONE goal: 3x covered Mon–Thu (4 days), 5x covered Thu–Sun
+        // (4 days) — the tie goes to the most recent activation, so 5.
+        // Three distinct days trained, none of them double-counted.
+        expect(decision.validSessionCount).toBe(3);
+        expect(decision.adherence.ratio).toBeCloseTo(3 / 5, 8);
+      }
+    });
+
+    it('a stale IN_PROGRESS execution on the superseded instance does not block progression', async () => {
+      const bundle = await ensureWorkoutLifecycleForLegacyActiveProgram(UID, {
+        contentIdentity: 'program-a', prescriptionIdentity: 'rx-a', questionnaireId: 'q1',
+        questionnaireExperienceLevel: 'beginner', activatedAt: Timestamp.fromMillis(ACTIVATED_AT_MS),
+      });
+      const previousInstanceId = bundle.programInstance.programInstanceId;
+      await adaptToFiveTimesAWeek({
+        previousInstanceId, cycleId: bundle.cycle.cycleId,
+        supersededAtOffset: 2, activatedAtOffset: 2,
+      });
+      // Superseding an instance never terminalizes its executions, so this
+      // document is real production debris. It belongs to the cycle window
+      // now, and must still not be mistaken for a session running right now.
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await seedExecution({
+          db: ctx.firestore(), executionId: 'stale-in-progress',
+          programInstanceId: previousInstanceId,
+          scheduledLocalDate: localDate(1), status: 'IN_PROGRESS',
+        });
+      });
+      await seedAdaptedExecution(3, 0);
+
+      const decision = await evaluateProgressionV2ForUser(UID, new Date(ACTIVATED_AT_MS + 6 * MS_PER_DAY));
+      expect(decision).not.toMatchObject({ type: 'NO_ACTION', reason: 'IN_PROGRESS_EXECUTION' });
+
+      // ...while one on the ACTIVE instance still blocks, as it always did.
+      await seedAdaptedInProgressExecution(4);
+      expect(await evaluateProgressionV2ForUser(UID, new Date(ACTIVATED_AT_MS + 6 * MS_PER_DAY)))
+        .toEqual({ type: 'NO_ACTION', reason: 'IN_PROGRESS_EXECUTION' });
+    });
+
+    it('does not credit a day twice when both instances hold a record for it', async () => {
+      const bundle = await ensureWorkoutLifecycleForLegacyActiveProgram(UID, {
+        contentIdentity: 'program-a', prescriptionIdentity: 'rx-a', questionnaireId: 'q1',
+        questionnaireExperienceLevel: 'beginner', activatedAt: Timestamp.fromMillis(ACTIVATED_AT_MS),
+      });
+      const previousInstanceId = bundle.programInstance.programInstanceId;
+      await adaptToFiveTimesAWeek({
+        previousInstanceId, cycleId: bundle.cycle.cycleId,
+        supersededAtOffset: 2, activatedAtOffset: 2,
+      });
+      // Both instances carry a credited record for day 2 — the ADAPT day.
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await seedExecution({
+          db: ctx.firestore(), executionId: 'overlap-old', programInstanceId: previousInstanceId,
+          scheduledLocalDate: localDate(2), status: 'COMPLETED',
+        });
+      });
+      await seedAdaptedExecution(2, 0);
+
+      const decision = await evaluateProgressionV2ForUser(UID, new Date(ACTIVATED_AT_MS + 6 * MS_PER_DAY));
+      if (decision?.type === 'PROGRESS_CONTINUES') {
+        expect(decision.validSessionCount).toBe(1);
+      } else {
+        throw new Error(`unexpected decision ${decision?.type}`);
+      }
+    });
   });
 });

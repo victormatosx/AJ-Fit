@@ -32,6 +32,7 @@ import {
 import { QuestionStepScreen } from '../components/onboarding/QuestionStepScreen';
 import { ScheduleModeLink, WeeklySchedulePicker } from '../components/onboarding/WeeklySchedulePicker';
 import { MuscleFocusBodyMapPicker } from '../components/onboarding/MuscleFocusBodyMapPicker';
+import { maxWeeklyDaysForLevel } from '../onboarding/weeklyDayAllowance';
 import { isWeeklyScheduleComplete, type WeeklyScheduleValue } from '../onboarding/weeklyScheduleSelection';
 import { DevFunnelNavigator } from '../components/onboarding/DevFunnelNavigator';
 import { AnimatedStepContainer } from '../components/onboarding/AnimatedStepContainer';
@@ -153,6 +154,11 @@ export function OnboardingFunnelScreen({
     scheduleMode: quiz.scheduleMode,
     trainingDays: quiz.trainingDays,
   };
+  // Derived from the answered level alone — the `level` step always precedes
+  // `days`, and `cleanApplicableAnswers` re-applies the same ceiling on every
+  // edit, so going back and changing the level cannot leave an over-ceiling
+  // schedule behind.
+  const maxWeeklyDays = maxWeeklyDaysForLevel(quiz.level);
   const setSchedule = (value: WeeklyScheduleValue) => setQuiz(cleanApplicableAnswers({ ...quiz, ...value }));
   const setMuscleGroups = (groups: MuscleFocusVisualGroup[]) => {
     setSelectedMuscleGroups(groups);
@@ -339,7 +345,7 @@ export function OnboardingFunnelScreen({
         onMeasurementUnitChange={setMeasurementUnit(currentStepId)}
         validateBeforeNext={() => onboardingSafetyBlock(currentStepId, quiz)}
         answerControl={isScheduleQuestion ? (
-          <WeeklySchedulePicker value={scheduleValue} onChange={setSchedule} />
+          <WeeklySchedulePicker value={scheduleValue} onChange={setSchedule} maxDays={maxWeeklyDays} />
         ) : isMuscleFocusQuestion && quiz.sex ? (
           <MuscleFocusBodyMapPicker
             sex={quiz.sex}
@@ -349,12 +355,12 @@ export function OnboardingFunnelScreen({
           />
         ) : undefined}
         answerFooter={isScheduleQuestion ? (
-          <ScheduleModeLink value={scheduleValue} onChange={setSchedule} />
+          <ScheduleModeLink value={scheduleValue} onChange={setSchedule} maxDays={maxWeeklyDays} />
         ) : undefined}
         centerAnswerControlOnScreen={isScheduleQuestion}
         stretchAnswerControl={isMuscleFocusQuestion}
         canContinueOverride={isScheduleQuestion
-          ? isWeeklyScheduleComplete(scheduleValue)
+          ? isWeeklyScheduleComplete(scheduleValue, maxWeeklyDays)
           : isMuscleFocusQuestion
             ? true
             : undefined}

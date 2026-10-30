@@ -52,7 +52,12 @@ const TS_FILES = [
   ['nutrition/engine', ['resolveGoalCategory', 'errors']],
   ['units', ['weightConversions']],
   ['lib', ['questionnaireSchema']],
-  ['onboarding', ['steps']],
+  // `weeklyDayAllowance`: the per-level weekly-day bounds. `lib/
+  // questionnaireSchema` (synced above) imports it to clamp `days`/
+  // `trainingDays` during normalization, so the mirror cannot compile
+  // without it — the backend resolves the exact same ceilings the client
+  // does, never a hand-copied constant.
+  ['onboarding', ['steps', 'weeklyDayAllowance']],
   ['workoutLifecycle', ['types', 'prescriptionInputs']],
   ['prescriptionEvolution', ['config', 'cycleEvolution', 'equivalence', 'levelPromotion']],
   // Phase 10D (docs/workout-lifecycle/v2/architecture/
@@ -66,10 +71,22 @@ const TS_FILES = [
   // hand-duplicated as literals in `authorizeMutation.ts`. Syncing the real
   // module removes that duplication — the backend's `authoritativeEarnedFact`
   // now imports the exact same `resolveProgressionV2Config`.
+  //
+  // `cycleProgression`: the TrainingCycle-scoped progression accounting. The
+  // backend's `authoritativeEarnedFact` and the evolution-approaching observer
+  // must apply the EXACT same cycle-continuity + unified-adherence rule the
+  // client displays, so the rule is imported, never reimplemented.
   ['progressionEngineV2', ['earnedCycles', 'config', 'types', 'resolver', 'activeTime',
-    'adherence', 'prescribedOpportunities', 'expectedSessionIndex', 'sessionQualification']],
+    'adherence', 'prescribedOpportunities', 'expectedSessionIndex', 'sessionQualification',
+    'cycleProgression']],
   // Notification observers consume the same pure progression/calendar functions.
   ['scheduleEngine', ['calendar', 'localDate']],
+  // `weeklyFrequency` owns the ONE reconstruction of "which weekly goal was in
+  // force during week W" from the instances' sealed activation windows, and
+  // `calendarWeek` the one Monday anchor. Both are pure calendar/goal math
+  // (their only imports are `state/AppState` and `scheduleEngine/calendar`,
+  // already synced) and both are read by `cycleProgression`.
+  ['home', ['calendarWeek', 'weeklyFrequency']],
 ];
 
 const dataDest = path.join(DEST_ROOT, 'data');

@@ -4,18 +4,12 @@ import { HttpsError, type CallableRequest } from 'firebase-functions/v2/https';
 import { db as defaultDb } from '../../lib/firebaseAdmin';
 import { requireAuth } from '../../lib/auth';
 import { resolveWorkoutLifecycleQaMode, progressionPolicyModeFor } from '../qaPolicy';
-import { computeActiveTimeTrace } from '../prescriptionEngine/progressionEngineV2/activeTime';
-import { computeAdherence } from '../prescriptionEngine/progressionEngineV2/adherence';
 import { countEarnedIntermediateCycles } from '../prescriptionEngine/progressionEngineV2/earnedCycles';
-import {
-  buildPrescribedOpportunities,
-  countFulfilledPrescribedOpportunities,
-} from '../prescriptionEngine/progressionEngineV2/prescribedOpportunities';
+import { computeCycleProgression } from '../prescriptionEngine/progressionEngineV2/cycleProgression';
 import { evaluateProgressionV2 } from '../prescriptionEngine/progressionEngineV2/resolver';
 import { resolveProgressionV2Config, PROGRESSION_V2_CONFIG } from '../prescriptionEngine/progressionEngineV2/config';
 import type { ProgressionSnapshotV2 } from '../prescriptionEngine/progressionEngineV2/types';
 import { localDateInTimezone } from '../prescriptionEngine/scheduleEngine/localDate';
-import type { Weekday } from '../prescriptionEngine/state/AppState';
 
 /**
  * Fase 5.0 (docs/33_fase5_0_estudo_latencia_server_side.md) — READ-ONLY
@@ -132,12 +126,6 @@ export async function buildProgressionSnapshotV2FromFirestore(
     throw new HttpsError('unimplemented', 'server_evaluate_progression_legacy_prescription_inputs_not_supported');
   }
 
-  const trainingDays: Weekday[] = Array.isArray(program.weeklySchedule) && program.weeklySchedule.length > 0
-    ? program.weeklySchedule
-      .filter((day: { state?: unknown; weekday?: unknown }) => day.state === 'TRAINING' && typeof day.weekday === 'string')
-      .map((day: { weekday: string }) => day.weekday as Weekday)
-    : Array.isArray(prescriptionInputs.trainingDays) ? prescriptionInputs.trainingDays as Weekday[] : [];
-
   // Mirrors `loadAuthoritativePrescribedSessions`
   // (`src/services/workoutProgressionV2.ts:33-60`): raw prescribed-session
   // documents store a per-exercise `sets` NUMBER, but
@@ -174,40 +162,40 @@ export async function buildProgressionSnapshotV2FromFirestore(
     scheduledDate: string;
   }[];
 
-  const executionDates = new Set(executions.map((execution) => execution.scheduledLocalDate));
-  const activeTrace = computeActiveTimeTrace({
-    startDateInclusive: progressionWindowStartLocalDate,
+  // The ONE shared rule (`computeCycleProgression`), applied to this
+  // prototype's one-instance window. `trainingDays` is deliberately not an
+  // input any more: adherence counts distinct days trained against the weekly
+  // goal, never weekday identity.
+  const progression = computeCycleProgression({
+    windows: [{
+      programInstanceId: activeProgramInstanceId,
+      activatedAtLocalDate: progressionWindowStartLocalDate,
+      supersededAtLocalDate: null,
+      prescribedTrainingFrequency: Number.isInteger(program.prescribedTrainingFrequency)
+        ? program.prescribedTrainingFrequency as number
+        : Number.isInteger(program.prescribedStructuredDays)
+          ? program.prescribedStructuredDays as number
+          : sessions.length,
+      prescribedSessions: sessions,
+    }],
     todayLocalDate,
-    trainingDays,
-    scheduleMode: 'fixed',
-    executionDates,
-  });
-  const prescribedOpportunities = buildPrescribedOpportunities({
-    programInstanceId: activeProgramInstanceId,
-    trainingDays,
-    countedActiveDates: activeTrace.countedDates,
-  });
-  const validSessionCount = countFulfilledPrescribedOpportunities({
-    programInstanceId: activeProgramInstanceId,
     executions,
     scheduleEvents,
-    prescribedOpportunities,
-    prescribedSessions: sessions,
-    trainingDays,
   });
-  const expectedSessions = prescribedOpportunities.length;
-  const adherence = computeAdherence(validSessionCount, expectedSessions);
+  if (!progression) {
+    throw new HttpsError('failed-precondition', 'server_evaluate_progression_window_unavailable');
+  }
   const earnedIntermediateCycleCount = currentTrainingLevel === 'INTERMEDIATE' && relevantCyclesSnapshot
     ? countEarnedIntermediateCycles(relevantCyclesSnapshot.docs.map((item) => item.data()) as never[])
     : 0;
 
   const snapshot: ProgressionSnapshotV2 = {
     level: currentTrainingLevel,
-    activeTime: activeTrace.activeTime,
-    adherence,
+    activeTime: progression.activeTime,
+    adherence: progression.adherence,
     earnedIntermediateCycleCount,
     hasInProgressExecution: executions.some((execution) => execution.status === 'IN_PROGRESS'),
-    validSessionCount,
+    validSessionCount: progression.validSessionCount,
   };
 
   return { snapshot, qaMode };

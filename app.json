@@ -3,7 +3,7 @@
     "name": "AJ Fit",
     "slug": "aj-fit",
     "scheme": "ajfit",
-    "version": "1.0.6",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/ajfit-newlogo-branca.png",
     "userInterfaceStyle": "dark",

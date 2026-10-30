@@ -88,6 +88,7 @@ export function TreinoAgendaSheet({
   initialScheduleMode,
   initialTrainingDays,
   currentFrequency,
+  maxDays = AGENDA_MAX_DAYS,
   weekOverview,
   sessions,
   resolution,
@@ -100,6 +101,13 @@ export function TreinoAgendaSheet({
   initialScheduleMode: ScheduleMode;
   initialTrainingDays: Weekday[];
   currentFrequency: number;
+  /**
+   * Weekly ceiling for the account's CURRENT lifecycle level
+   * (`weeklyDayAllowance.maxWeeklyDaysForTrainingLevel`). Defaults to the
+   * uncapped 7, so any caller that does not pass it keeps today's behaviour
+   * byte-for-byte.
+   */
+  maxDays?: number;
   /** The Schedule Engine's own week — the sheet's day numbers, never a second calendar. */
   weekOverview: WeekOverviewViewModel | null;
   /** `plan.sessions`, for the division letters and the flexible sequence. */
@@ -129,7 +137,7 @@ export function TreinoAgendaSheet({
   const flexible = value.scheduleMode === 'flexible';
   const selectedDays = value.scheduleMode === 'fixed' ? value.trainingDays ?? [] : [];
   const newCount = flexible ? value.days ?? currentFrequency : selectedDays.length;
-  const complete = isWeeklyScheduleComplete(value);
+  const complete = isWeeklyScheduleComplete(value, maxDays);
   const frequencyChanged = agendaChangeRequiresAdaptation(value, currentFrequency);
   const canSave = complete && !submitting;
   // Design §3.5: a selection identical to what is saved keeps the button
@@ -230,10 +238,17 @@ export function TreinoAgendaSheet({
   // already-real state (`complete`/`frequencyChanged`/`newCount`), never a
   // second validation rule.
   const summaryKind = agendaSummaryKind({ flexible, complete, frequencyChanged });
+  // At the level's own ceiling the status line explains why the next day does
+  // not latch — same Text, same slot, same style, only the message differs.
+  // Reported for every level (3 for beginners, 6 for the rest). Deliberately
+  // the LAST branch: an invalid range still blocks Salvar and a frequency
+  // change still has to announce itself, so neither is displaced by a hint.
+  const atMaximum = !flexible && complete && selectedDays.length >= maxDays;
   const summaryText =
-    summaryKind === 'INVALID' ? t('agenda.liveInvalidRange', { min: AGENDA_MIN_DAYS, max: AGENDA_MAX_DAYS }) :
+    summaryKind === 'INVALID' ? t('agenda.liveInvalidRange', { min: AGENDA_MIN_DAYS, max: maxDays }) :
     summaryKind === 'FLEXIBLE' ? t('agenda.liveFlexible', { sequence: sessionSequenceLabel(sessions.length) }) :
     summaryKind === 'FREQUENCY_CHANGE' ? t('agenda.liveFrequencyChange', { from: currentFrequency, to: newCount }) :
+    atMaximum ? t('agenda.liveMaximumReached', { max: maxDays }) :
     nextWorkoutLabel ? t('agenda.liveSameFrequencyNext', { count: newCount, when: nextWorkoutLabel }) :
     t('agenda.liveSameFrequency', { count: newCount });
   const summaryColor =
@@ -378,7 +393,7 @@ export function TreinoAgendaSheet({
                         .format(new Date(`${day.localDate}T12:00:00Z`)),
                       day: day.dayNumber,
                     })}
-                    onPress={() => setValue(toggleFixedTrainingDay(value, day.weekday))}
+                    onPress={() => setValue(toggleFixedTrainingDay(value, day.weekday, maxDays))}
                   />
                 ))}
               </Animated.View>
@@ -397,7 +412,7 @@ export function TreinoAgendaSheet({
                 accessibilityRole="button"
                 accessibilityState={{ selected: flexible }}
                 disabled={submitting}
-                onPress={() => setValue(flexible ? selectFixedSchedule() : selectFlexibleSchedule(value))}
+                onPress={() => setValue(flexible ? selectFixedSchedule() : selectFlexibleSchedule(value, maxDays))}
                 style={{ alignSelf: 'center', paddingVertical: 4, marginTop: 14 }}
               >
                 <Text style={{ color: theme.colors.textSecondary, fontFamily: theme.fonts.uiSemi, fontSize: 13 }}>

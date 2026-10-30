@@ -55,6 +55,7 @@
     "sheetHeading": "Schedule",
     "sheetInstruction": "Tap the days you train.",
     "liveInvalidRange": "Pick between {{min}} and {{max}} days",
+    "liveMaximumReached": "Up to {{max}} days per week for your level.",
     "liveSameFrequencyNext": "{{count}} days per week · next workout {{when}}",
     "liveFlexible": "No fixed days · the {{sequence}} sequence advances when you train",
     "freeModeLink": "Train without fixed days",
@@ -111,5 +112,40 @@
     "title": "Exercises",
     "showAll": "View all {{count}}",
     "showLess": "Show less"
+  },
+  "swapPresentation": {
+    "kicker": "YOUR NEW PLAN",
+    "panelTitle": "Workout updated",
+    "panelSubtitle": "{{split}} split",
+    "frequencyBadge_one": "{{count}}X/WEEK",
+    "frequencyBadge_other": "{{count}}X/WEEK",
+    "statsSessions_one": "{{count}} workout",
+    "statsSessions_other": "{{count}} workouts",
+    "statsExercises_one": "{{count}} exercise",
+    "statsExercises_other": "{{count}} exercises",
+    "cta": "Start training",
+    "ajExpandAccessibility": "Ask AJ to explain the new workout",
+    "ajCollapseAccessibility": "Close AJ's explanation",
+    "aj": {
+      "intro": "All set, {{name}}! I rebuilt your workout from scratch for {{count}} days a week.",
+      "introNoName": "All set! I rebuilt your workout from scratch for {{count}} days a week.",
+      "daysFixed": "Your sessions landed on {{days}}, with {{rest}} rest days to recover.",
+      "daysFlexible": "No fixed days: {{count}} workouts a week, whenever you can.",
+      "division": "The split is {{split}}, across {{count}} workouts — {{breakdown}}.",
+      "volume": "That's {{exercises}} exercises and {{sets}} sets a week.",
+      "volumeSingleRest": "That's {{exercises}} exercises and {{sets}} sets, with {{rest}}s rest between them.",
+      "volumeRestRange": "That's {{exercises}} exercises and {{sets}} sets, with {{rest}} to {{restMax}}s rest.",
+      "changes": "Compared to your last plan: {{changes}}.",
+      "changeSessionsMore_one": "{{count}} new workout in the week",
+      "changeSessionsMore_other": "{{count}} new workouts in the week",
+      "changeSessionsFewer_one": "{{count}} workout fewer",
+      "changeSessionsFewer_other": "{{count}} workouts fewer",
+      "changeExercisesMore_one": "{{count}} more exercise",
+      "changeExercisesMore_other": "{{count}} more exercises",
+      "changeExercisesFewer_one": "{{count}} exercise fewer",
+      "changeExercisesFewer_other": "{{count}} exercises fewer",
+      "changeSplit": "now a {{split}} split",
+      "closing": "Your history and your logged loads are all still here. Let's go!"
+    }
   }
 }

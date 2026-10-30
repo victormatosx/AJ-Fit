@@ -222,12 +222,15 @@
     "selectedCount_one": "{{count}} day selected",
     "selectedCount_other": "{{count}} days selected",
     "minimumSelectionHint": "Select at least 2 days.",
+    "maximumSelectionHint": "You can train at most {{max}} days per week.",
     "flexible": {
       "label": "I want to train freely"
     },
     "fixedModeLink": "I want to choose the weekdays",
     "flexibleFrequency": "How many times per week?",
     "frequencyAccessibilityLabel": "{{count}} workouts per week",
+    "flexibleStatus_one": "{{count}} time a week · no fixed days",
+    "flexibleStatus_other": "{{count}} times a week · no fixed days",
     "options": {
       "2": {
         "label": "2 days",

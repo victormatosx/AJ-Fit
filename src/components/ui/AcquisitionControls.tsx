@@ -491,6 +491,12 @@ export function AqSheet({
   reduceMotion = false,
   /** The safety notice uses the alternate, one-step-lighter sheet colour. */
   alternate,
+  /**
+   * Drops the grab handle, the rounded top and the top border, for a caller
+   * whose sheet IS the screen rather than a panel risen over one — there is no
+   * edge left to round and nothing to grab.
+   */
+  flush,
   /** Measured top edge, which AJ needs in order to perch on it. */
   onSheetLayout,
   style,
@@ -499,6 +505,7 @@ export function AqSheet({
   delay?: number;
   reduceMotion?: boolean;
   alternate?: boolean;
+  flush?: boolean;
   onSheetLayout?: (height: number) => void;
   style?: StyleProp<ViewStyle>;
 }) {
@@ -527,9 +534,9 @@ export function AqSheet({
       style={[
         {
           backgroundColor: alternate ? theme.colors.sheetBackgroundAlt : theme.colors.background,
-          borderTopLeftRadius: 28,
-          borderTopRightRadius: 28,
-          borderTopWidth: 1,
+          borderTopLeftRadius: flush ? 0 : 28,
+          borderTopRightRadius: flush ? 0 : 28,
+          borderTopWidth: flush ? 0 : 1,
           borderTopColor: theme.colors.divider,
           paddingTop: 28,
           paddingHorizontal: 22,
@@ -547,19 +554,21 @@ export function AqSheet({
         style,
       ]}
     >
-      <View
-        pointerEvents="none"
-        style={{
-          position: 'absolute',
-          top: 10,
-          left: '50%',
-          marginLeft: -18,
-          width: 36,
-          height: 4,
-          borderRadius: 2,
-          backgroundColor: theme.colors.textPrimary,
-        }}
-      />
+      {flush ? null : (
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: 10,
+            left: '50%',
+            marginLeft: -18,
+            width: 36,
+            height: 4,
+            borderRadius: 2,
+            backgroundColor: theme.colors.textPrimary,
+          }}
+        />
+      )}
       {children}
     </Animated.View>
   );

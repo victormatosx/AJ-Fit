@@ -69,7 +69,7 @@ export function TreinoWeekStrip({
       }}
     >
       {days.map((day) => (
-        <View key={day.localDate} style={{ flex: 1, alignItems: 'center', gap: 8 }}>
+        <View key={day.localDate} style={{ flex: 1, alignItems: 'center', gap: 4 }}>
           <Text
             accessibilityElementsHidden
             importantForAccessibility="no"
@@ -84,9 +84,9 @@ export function TreinoWeekStrip({
           </Text>
           <View
             style={{
-              width: 36,
-              height: 36,
-              borderRadius: 18,
+              width: 32,
+              height: 32,
+              borderRadius: 16,
               alignItems: 'center',
               justifyContent: 'center',
               backgroundColor: day.isToday ? theme.colors.inverseSurface : 'transparent',
@@ -106,7 +106,7 @@ export function TreinoWeekStrip({
               {day.dayNumber}
             </Text>
           </View>
-          <View style={{ height: 12, alignItems: 'center', justifyContent: 'center' }}>
+          <View style={{ height: 10, alignItems: 'center', justifyContent: 'center' }}>
             <DayGlyph day={day} />
           </View>
         </View>

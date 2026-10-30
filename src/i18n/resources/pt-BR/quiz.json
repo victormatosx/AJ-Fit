@@ -222,12 +222,15 @@
     "selectedCount_one": "{{count}} dia selecionado",
     "selectedCount_other": "{{count}} dias selecionados",
     "minimumSelectionHint": "Selecione pelo menos 2 dias.",
+    "maximumSelectionHint": "Você pode treinar no máximo {{max}} dias por semana.",
     "flexible": {
       "label": "Quero treinar de forma livre"
     },
     "fixedModeLink": "Quero escolher os dias da semana",
     "flexibleFrequency": "Quantas vezes por semana?",
     "frequencyAccessibilityLabel": "{{count}} treinos por semana",
+    "flexibleStatus_one": "{{count}} vez por semana · sem dias fixos",
+    "flexibleStatus_other": "{{count}} vezes por semana · sem dias fixos",
     "options": {
       "2": {
         "label": "2 dias",

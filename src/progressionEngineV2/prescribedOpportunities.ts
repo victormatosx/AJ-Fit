@@ -1,6 +1,7 @@
-import { addDaysLocal, type LocalDate } from '../scheduleEngine/calendar';
+import type { LocalDate } from '../scheduleEngine/calendar';
 import type { Weekday } from '../state/AppState';
 import { weekdayOfLocalDate } from '../scheduleEngine/calendar';
+import { mondayOfWeek } from '../home/calendarWeek';
 import { buildExpectedSessionIndexByDate } from './expectedSessionIndex';
 import {
   isValidProgressionSessionAgainstPrescription,
@@ -42,13 +43,9 @@ function opportunityKey(sessionIndex: number, localDate: string): string {
   return `${localDate}:${sessionIndex}`;
 }
 
-const WEEKDAY_OFFSET_FROM_MONDAY: Record<Weekday, number> = {
-  MON: 0, TUE: 1, WED: 2, THU: 3, FRI: 4, SAT: 5, SUN: 6,
-};
-
-function mondayOf(date: LocalDate): LocalDate {
-  return addDaysLocal(date, -WEEKDAY_OFFSET_FROM_MONDAY[weekdayOfLocalDate(date)]);
-}
+/** One Monday-anchoring definition for the whole app — the same one the Home
+ * frequency widget uses, so a week never means two different things. */
+const mondayOf = mondayOfWeek;
 
 /** Weekly prescription targets for flexible plans. Dates only delimit local
  * weeks; they never make a particular weekday mandatory. The current partial
@@ -228,13 +225,13 @@ export function buildPrescribedOpportunities(input: {
  * written before that field existed. The ledger lookup still uses the
  * scheduled key, because that is the key the ledger itself is written with.
  */
-export function countFulfilledWeeklyTrainedDays(input: {
+export function collectWeeklyTrainedDays(input: {
   programInstanceId: string;
   executions: readonly OpportunityExecution[];
   scheduleEvents: readonly OpportunityEvent[];
   prescribedSessions: readonly PrescribedSessionShape[];
   weeklyTargets: ReadonlyMap<LocalDate, number>;
-}): number {
+}): ReadonlyMap<LocalDate, ReadonlySet<LocalDate>> {
   const completedLedger = new Set(input.scheduleEvents
     .filter((event) => event.type === 'COMPLETED' && event.programInstanceId === input.programInstanceId)
     .map((event) => opportunityKey(event.sessionIndex, event.scheduledDate)));
@@ -259,6 +256,24 @@ export function countFulfilledWeeklyTrainedDays(input: {
     days.add(trainedDay);
     trainedDaysByWeek.set(week, days);
   }
+  return trainedDaysByWeek;
+}
+
+/**
+ * `collectWeeklyTrainedDays`, capped per week and summed — the single-instance
+ * form of the rule. A Training Cycle spanning several ProgramInstances must
+ * UNION the day sets before capping (see
+ * `src/progressionEngineV2/cycleProgression.ts`), otherwise two instances with
+ * a record on the same date would pay into the same week twice.
+ */
+export function countFulfilledWeeklyTrainedDays(input: {
+  programInstanceId: string;
+  executions: readonly OpportunityExecution[];
+  scheduleEvents: readonly OpportunityEvent[];
+  prescribedSessions: readonly PrescribedSessionShape[];
+  weeklyTargets: ReadonlyMap<LocalDate, number>;
+}): number {
+  const trainedDaysByWeek = collectWeeklyTrainedDays(input);
   let total = 0;
   for (const [week, target] of input.weeklyTargets) {
     total += Math.min(target, trainedDaysByWeek.get(week)?.size ?? 0);

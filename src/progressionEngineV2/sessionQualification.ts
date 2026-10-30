@@ -8,7 +8,23 @@ interface QualifiableSet {
 interface QualifiableExercise {
   exerciseIndex?: number;
   exerciseId?: string;
+  /**
+   * The plan's own exercise id, recorded alongside the EXECUTED one whenever
+   * the user substituted an exercise (`src/workoutExecution/types.ts`'s
+   * `prescribedExerciseIdOf`). It is what the immutable snapshot must be
+   * matched against — matching on `exerciseId` alone made every substituted
+   * session fail qualification here while the server's own
+   * `prescribedExecutionCounts` accepted it, so a legitimate workout counted
+   * for the EARN authority and not for the adherence the user was shown.
+   */
+  prescribedExerciseId?: string;
   sets: readonly QualifiableSet[];
+}
+
+/** "Foi prescrito A e executado B" — mirrors `prescribedExerciseIdOf`, kept
+ * here so this module stays dependency-free and syncable. */
+function prescribedIdOf(exercise: QualifiableExercise): string | undefined {
+  return exercise.prescribedExerciseId ?? exercise.exerciseId;
 }
 
 interface QualifiableExecution {
@@ -95,7 +111,7 @@ export function isValidProgressionSessionAgainstPrescription(input: {
     if (!Number.isInteger(exerciseIndex) || exerciseIndex == null || seenExercises.has(exerciseIndex)) return false;
     seenExercises.add(exerciseIndex);
     const prescribedExercise = prescribedSession.exercises[exerciseIndex];
-    if (!prescribedExercise || recordedExercise.exerciseId !== prescribedExercise.exerciseId) return false;
+    if (!prescribedExercise || prescribedIdOf(recordedExercise) !== prescribedExercise.exerciseId) return false;
     if (recordedExercise.sets.length !== prescribedExercise.setCount) return false;
     total += prescribedExercise.setCount;
 

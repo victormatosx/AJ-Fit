@@ -79,6 +79,9 @@ import {
 import { MissedSessionDecisionModal } from '../components/schedule/MissedSessionDecisionModal';
 import { TreinoScreen, type RepositionOutcome } from './TreinoScreen';
 import { TreinoAgendaSheet, type AgendaSaveOutcome } from './TreinoAgendaSheet';
+import { AnalyzingScreen, type PlanBuildTaskResult } from './AnalyzingScreen';
+import { WorkoutSwapPreviewScreen } from './WorkoutSwapPreviewScreen';
+import { AjFunnelStage } from '../components/onboarding/AjFunnelStage';
 import { effectiveNextSessionIndex } from '../scheduleEngine/effectiveNextSessionIndex';
 import { WorkoutExecutionPendingModal } from '../components/workout/WorkoutExecutionPendingModal';
 import { FullScreenLoading } from '../components/ui/FullScreenLoading';
@@ -148,6 +151,7 @@ import { useWidgetSnapshotSync } from '../widgets/useWidgetSnapshotSync';
 import { deriveHomeInitialReadiness } from '../home/homeInitialReadiness';
 import { useHomeInitialVisualReady } from '../home/useHomeInitialVisualReady';
 import { canUseTodayActions, canWriteHomePresentationSnapshot, chooseHomeFrequencyPresentation, shouldUseSnapshotPlaceholders } from '../home/homePresentationPolicy';
+import { maxWeeklyDaysForTrainingLevel } from '../onboarding/weeklyDayAllowance';
 import { adaptWorkoutProgram, processWorkoutLifecycleAfterSession } from '../services/workoutLifecycleApplication';
 import {
   applyExerciseSubstitution,
@@ -648,6 +652,24 @@ function AppShellContent({
   const [missedResolved, setMissedResolved] = useState<{ decision: MissDecision; sessionIndex: number } | null>(null);
   const [showAdvanceWorkoutConfirmation, setShowAdvanceWorkoutConfirmation] = useState(false);
   const [agendaEditorOpen, setAgendaEditorOpen] = useState(false);
+  /**
+   * Program swap (changing how many days a week the user trains).
+   *
+   * `running` shows the existing "Montando plano" screen retitled "Trocando
+   * treino" while the real ADAPT runs; `newPlan` fills in only when ADAPT has
+   * actually activated and persisted the new program. `preview` then shows the
+   * complete new plan. The preview is only ever reachable with a `newPlan` in
+   * hand, so it can never render the superseded one.
+   *
+   * Non-null is folded into `overlayOpen` below: the swap owns the screen end
+   * to end, so the TabBar must be inert and the unprompted AJ moments must stay
+   * quiet for exactly as long as any other full-screen overlay there.
+   */
+  const [workoutSwap, setWorkoutSwap] = useState<
+    | { phase: 'running'; request: { scheduleMode: ScheduleMode; trainingDays: Weekday[]; days: number }; previousPlan: WorkoutProgramSnapshot; newPlan: WorkoutProgramSnapshot | null }
+    | { phase: 'preview'; previousPlan: WorkoutProgramSnapshot; newPlan: WorkoutProgramSnapshot }
+    | null
+  >(null);
   const [missedDecisionPending, setMissedDecisionPending] = useState<MissDecision | null>(null);
   const [missedDecisionError, setMissedDecisionError] = useState(false);
   const [missedDecisionContext, setMissedDecisionContext] = useState<MissedSessionDecisionIdentity | null>(null);
@@ -893,6 +915,7 @@ function AppShellContent({
     showChangePassword ||
     showEditProfile ||
     showMyPlan ||
+    workoutSwap !== null ||
     showSubscriptionCenter ||
     showDeleteAccount ||
     showPremium ||
@@ -1131,32 +1154,80 @@ function AppShellContent({
     }
   }, [user, schedule, workoutInProgress, workoutStartPending, execution.starting]);
 
-  /** Frequency actually changed (docs §Alteração de frequência) — the authoritative ADAPT trail, never a manual template swap. */
-  const handleChangeFrequency = useCallback(async (value: { scheduleMode: ScheduleMode; trainingDays: Weekday[]; days: number }): Promise<AgendaSaveOutcome> => {
-    if (!user || !activeProgram) return 'ERROR';
-    if (workoutInProgress || workoutStartPending || execution.starting) return 'ERROR';
+  /**
+   * The real ADAPT call, unchanged in substance from when it ran inline inside
+   * `handleChangeFrequency` — same `idempotencyKey`, same `updatedFields`,
+   * same `reason`, same post-success `reloadPrescription()`, same warn log. It
+   * is only lifted out so the "Trocando treino" screen can be the thing that
+   * awaits it and the new snapshot can be handed straight to the preview.
+   *
+   * Returns the Prescription Engine's own result vocabulary because that is
+   * what `AnalyzingScreen` already presents. `adaptWorkoutProgram` collapses
+   * every failure into `FAILED` + `reasonCodes` (it does not surface the
+   * underlying prescription status), so there is no safety/answer outcome left
+   * to preserve here: `INVALID_CONFIGURATION` is the honest mapping — generic
+   * technical copy, and a retry that is harmless because ADAPT is idempotent
+   * on the same key.
+   */
+  const runProgramSwap = useCallback(async (
+    value: { scheduleMode: ScheduleMode; trainingDays: Weekday[]; days: number },
+    previousPlan: WorkoutProgramSnapshot,
+  ): Promise<PlanBuildTaskResult> => {
+    if (!user) return { status: 'INVALID_CONFIGURATION', reasonCodes: ['NO_USER'] };
     try {
-      const idempotencyKey = `agenda-frequency:${activeProgram.programInstanceId ?? activeProgram.programId}:${value.scheduleMode}:${value.days}:${[...value.trainingDays].sort().join('-')}`;
+      const idempotencyKey = `agenda-frequency:${previousPlan.programInstanceId ?? previousPlan.programId}:${value.scheduleMode}:${value.days}:${[...value.trainingDays].sort().join('-')}`;
       const result = await adaptWorkoutProgram({
         uid: user.uid,
         updatedFields: { days: value.days, scheduleMode: value.scheduleMode, trainingDays: value.scheduleMode === 'fixed' ? value.trainingDays : null },
         reason: 'AVAILABILITY',
         idempotencyKey,
       });
-      if (result.status !== 'SUCCESS') return 'ERROR';
+      if (result.status !== 'SUCCESS') {
+        logWarn('workout_lifecycle', 'adapt_workout_program_frequency_failed', {
+          errorReason: result.reasonCodes[0],
+        });
+        return { status: 'INVALID_CONFIGURATION', reasonCodes: result.reasonCodes };
+      }
       // ScheduleConfig is reconciled inside ADAPT before success returns.
       // Reload the prescription first; useWorkoutSchedule's program-scoped
       // effect then resolves the new instance, avoiding an eager reload that
       // still closes over the superseded program.
       await reloadPrescription();
-      return 'OK';
+      // Only now is the operation genuinely finished: the new program is
+      // active, persisted and loaded. `AnalyzingScreen` releases its ramp to
+      // 100% and calls `onDone` off the back of this, never before.
+      setWorkoutSwap((current) => (current && current.phase === 'running'
+        ? { ...current, newPlan: result.program }
+        : current));
+      return { status: 'SUCCESS' };
     } catch (error) {
       logWarn('workout_lifecycle', 'adapt_workout_program_frequency_failed', {
         errorCode: errorCode(error), errorClass: errorClass(error), errorReason: errorReason(error),
       });
-      return 'ERROR';
+      return { status: 'INVALID_CONFIGURATION', reasonCodes: ['EXCEPTION'] };
     }
-  }, [user, activeProgram, reloadPrescription, workoutInProgress, workoutStartPending, execution.starting]);
+  }, [user, reloadPrescription]);
+
+  /**
+   * Frequency actually changed (docs §Alteração de frequência) — the
+   * authoritative ADAPT trail, never a manual template swap.
+   *
+   * Hands the work off to the "Trocando treino" screen instead of awaiting it
+   * behind the sheet's button spinner. Returning `'OK'` is what closes the
+   * sheet (its own `if (outcome === 'OK') onClose()`); the operation itself has
+   * not run yet at that point, and its success or failure is presented by the
+   * loading screen, which is also what gates the preview.
+   */
+  const handleChangeFrequency = useCallback(async (value: { scheduleMode: ScheduleMode; trainingDays: Weekday[]; days: number }): Promise<AgendaSaveOutcome> => {
+    if (!user || !activeProgram) return 'ERROR';
+    if (workoutInProgress || workoutStartPending || execution.starting) return 'ERROR';
+    // Frozen before anything is activated: once ADAPT resolves, `activeProgram`
+    // is already the NEW program, so the antes→depois needs its own snapshot of
+    // the outgoing one — the same reason the evolution reveal captures its pair
+    // up front.
+    setWorkoutSwap({ phase: 'running', request: value, previousPlan: activeProgram, newPlan: null });
+    return 'OK';
+  }, [user, activeProgram, workoutInProgress, workoutStartPending, execution.starting]);
 
   useEffect(() => {
     // RootNavigator and the workout-readiness gate have already resolved by
@@ -2512,6 +2583,10 @@ function AppShellContent({
             initialScheduleMode={schedule.config?.scheduleMode ?? 'fixed'}
             initialTrainingDays={schedule.config?.trainingDays ?? []}
             currentFrequency={activeProgram.prescribedTrainingFrequency ?? activeProgram.prescribedStructuredDays ?? activeProgram.sessions.length}
+            // Keyed on the LIFECYCLE's current level, never the (possibly
+            // years-old) questionnaire answer: a promotion lifts the ceiling
+            // the moment `currentTrainingLevel` moves, with nothing to migrate.
+            maxDays={maxWeeklyDaysForTrainingLevel(evolution.currentTrainingLevel)}
             // Same week, same letters and same "próximo treino" the faixa da
             // semana (`TreinoScreen`) is already showing behind the sheet —
             // the inputs, not a second reading of them.
@@ -3044,6 +3119,51 @@ function AppShellContent({
           onRetry={() => { void reloadPrescription(); }}
         />
       </PersistentScreen>
+      {/*
+        Program swap (Editar agenda -> Nova divisão -> Confirmar). Not a
+        `PersistentScreen`: this is a one-shot flow that must mount fresh —
+        `AnalyzingScreen` starts its ramp and its task on mount, and a kept-alive
+        instance would either replay a finished animation or hold a stale
+        `previousPlan`. Unmounting on dismissal is the point.
+
+        zIndex 70 sits above every settings/plan overlay above (40-60) and below
+        the 80-band modals, so the swap takes the screen over without ever
+        covering the app's own blocking surfaces.
+      */}
+      {workoutSwap ? (
+        <View style={FULL_BLEED.overlayZ70}>
+          {workoutSwap.phase === 'running' ? (
+            <AnalyzingScreen
+              variant="swap"
+              run={() => runProgramSwap(workoutSwap.request, workoutSwap.previousPlan)}
+              // Reached only once the ramp is full AND ADAPT reported success,
+              // which is also the only way `newPlan` is populated. The `null`
+              // branch is a defensive dismissal, never a preview without a plan.
+              onDone={() => setWorkoutSwap((current) => (
+                current?.phase === 'running' && current.newPlan
+                  ? { phase: 'preview', previousPlan: current.previousPlan, newPlan: current.newPlan }
+                  : null
+              ))}
+              onReviewAnswers={() => setWorkoutSwap(null)}
+            />
+          ) : (
+            // The presentation reuses the onboarding plan moment wholesale,
+            // and that moment's mascot is the stage's single `AjBot` instance,
+            // positioned by the screen itself through `aj.direct()`. The stage
+            // is self-contained (window box + safe area + Reduce Motion, no
+            // funnel state), so mounting one here is what lets AJ appear
+            // outside the funnel. Without it `useAjFunnelDirector` falls back
+            // to `INERT_DIRECTOR` and the screen would render with no mascot.
+            <AjFunnelStage>
+              <WorkoutSwapPreviewScreen
+                previousPlan={workoutSwap.previousPlan}
+                newPlan={workoutSwap.newPlan}
+                onDone={() => setWorkoutSwap(null)}
+              />
+            </AjFunnelStage>
+          )}
+        </View>
+      ) : null}
       <PersistentScreen
         active={showSubscriptionCenter}
         prewarm={prewarmed.SUBSCRIPTION_CENTER}

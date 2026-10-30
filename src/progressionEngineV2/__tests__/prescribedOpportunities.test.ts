@@ -1,12 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { addDaysLocal, type LocalDate } from '../../scheduleEngine/calendar';
-import { computeActiveTimeTrace } from '../activeTime';
+import { computeActiveTimeTrace, inactivityThresholdDays } from '../activeTime';
 import {
   buildFlexibleWeeklyTargets,
   buildPrescribedOpportunities,
   countFulfilledFlexibleWeeklyTargets,
   countFulfilledPrescribedOpportunities,
 } from '../prescribedOpportunities';
+
+/**
+ * LEGACY COUNTERS — kept for the before/after comparisons in
+ * `pilotWeeklyGoalAdherence.test.ts` and for the structural guarantees they
+ * still document. They are NO LONGER on any decision path: progression now
+ * scores every account with the unified weekly-trained-days rule
+ * (`cycleProgression.ts`), where recommended weekdays are not an input.
+ */
 
 const prescribedSessions = [{ exercises: [{ exerciseId: 'a', setCount: 1 }] }];
 const ALL_DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'] as const;
@@ -160,7 +168,7 @@ describe('buildPrescribedOpportunities calendar boundaries', () => {
       for (const windowDays of [28, 85]) {
         const trace = computeActiveTimeTrace({
           startDateInclusive: start, todayLocalDate: addDaysLocal(start, windowDays - 1),
-          trainingDays, executionDates: new Set(),
+          inactivityDayThreshold: null, executionDates: new Set(),
         }, noPauseConfig);
         const actual = buildPrescribedOpportunities({ programInstanceId: 'wpi-a', trainingDays, countedActiveDates: trace.countedDates });
         expect(new Set(actual.map((item) => item.scheduledLocalDate)).size).toBe(actual.length);
@@ -172,7 +180,7 @@ describe('buildPrescribedOpportunities calendar boundaries', () => {
     const trainingDays = ['MON', 'TUE', 'THU', 'FRI'] as const;
     const trace = computeActiveTimeTrace({
       startDateInclusive: '2026-07-20', todayLocalDate: addDaysLocal('2026-07-20', 84),
-      trainingDays, executionDates: new Set(),
+      inactivityDayThreshold: null, executionDates: new Set(),
     }, noPauseConfig);
     expect(buildPrescribedOpportunities({ programInstanceId: 'wpi-a', trainingDays, countedActiveDates: trace.countedDates })).toHaveLength(49);
   });
@@ -182,7 +190,7 @@ describe('buildPrescribedOpportunities calendar boundaries', () => {
     const returnDate: LocalDate = '2026-07-27';
     const trace = computeActiveTimeTrace({
       startDateInclusive: '2026-07-20', todayLocalDate: returnDate,
-      trainingDays, executionDates: new Set([returnDate]),
+      inactivityDayThreshold: inactivityThresholdDays(7), executionDates: new Set([returnDate]),
     });
     const dates = buildPrescribedOpportunities({ programInstanceId: 'wpi-a', trainingDays, countedActiveDates: trace.countedDates })
       .map((item) => item.scheduledLocalDate);
@@ -191,11 +199,15 @@ describe('buildPrescribedOpportunities calendar boundaries', () => {
     expect(dates).not.toContain('2026-07-24');
   });
 
-  it('resets the opportunity window at the adapted ProgramInstance activation date', () => {
+  // Enumerates ONLY inside the window it is handed — it has no opinion about
+  // where a window starts. Cycle continuity across an ADAPT is a property of
+  // `computeCycleProgression`, which starts the window at the CYCLE's first
+  // activation; see `cycleProgression.test.ts`.
+  it('enumerates opportunities strictly inside the window it is given', () => {
     const trainingDays = ['MON', 'WED', 'FRI'] as const;
     const trace = computeActiveTimeTrace({
       startDateInclusive: '2026-08-03', todayLocalDate: '2026-08-09',
-      trainingDays, executionDates: new Set(),
+      inactivityDayThreshold: inactivityThresholdDays(3), executionDates: new Set(),
     });
     expect(buildPrescribedOpportunities({ programInstanceId: 'wpi-adapted', trainingDays, countedActiveDates: trace.countedDates }))
       .toEqual([

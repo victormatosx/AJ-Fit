@@ -107,7 +107,7 @@ export function TreinoTodayBlock({
   const completedEntering = useCompletedTodayEntrance(!ctaVisible && completedLabel != null, ctaVisible);
 
   return (
-    <View style={{ paddingHorizontal: 22, marginTop: 28, paddingTop: 24, borderTopWidth: 1, borderTopColor: theme.colors.divider }}>
+    <View style={{ paddingHorizontal: 22, marginTop: 16, paddingTop: 24, borderTopWidth: 1, borderTopColor: theme.colors.divider }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
         {kicker ? <MonoLabel>{kicker}</MonoLabel> : <View />}
         {sessionLabel && (
